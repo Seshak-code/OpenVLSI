@@ -10,13 +10,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Setup vcpkg
-        uses: lukka/get-vcpkg@v11
+        uses: lukka/run-vcpkg@v11
       - name: Install Qt via vcpkg
         run: |
-          .\vcpkg install qt6-base:x64-windows
+          vcpkg install qt6-base:x64-windows
       - name: Configure CMake
         run: |
-          cmake -S . -B out/build/windows-msvc -G Ninja -DCMAKE_TOOLCHAIN_FILE=.\vcpkg\scripts\buildsystems\vcpkg.cmake
+          cmake -S . -B out/build/windows-msvc -G Ninja -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
       - name: Build
         run: cmake --build out/build/windows-msvc --config Debug
 
