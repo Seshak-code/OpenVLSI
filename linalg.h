@@ -2,35 +2,32 @@
 
 #include <vector>
 #include <cmath>
-#include <iostream>
 #include <algorithm>
 #include <omp.h>
 
 /**
- * ==================================================================================
- * GUIDE: IMPLEMENTING A CPU-BASED SPARSE MATRIX SOLVER
- * ==================================================================================
+ * @file linalg.h
+ * @brief High-performance sparse linear algebra library for circuit simulation.
  * 
- * This file serves as a step-by-step blueprint for building a high-performance
- * sparse linear algebra library on the CPU.
- * 
- * OBJECTIVE: Solve Ax = b efficiently when A is large and sparse (mostly zeros).
+ * This library provides a complete toolchain for solving sparse linear systems (Ax = b):
+ * 1. CSR (Compressed Sparse Row) matrix storage format.
+ * 2. Triplet-based matrix assembly with duplicate handling.
+ * 3. OpenMP-parallelized Sparse Matrix-Vector Multiplication (SpMV).
+ * 4. Preconditioned Conjugate Gradient (PCG) iterative solver.
  */
 
-// ==================================================================================
-// STEP 1: DATA STRUCTURES - COMPRESSED SPARSE ROW (CSR)
-// ==================================================================================
-/*
- * The Standard Format: CSR
- * - 'values': The non-zero values (size N_nz)
- * - 'col_indices': The column index for each value (size N_nz)
- * - 'row_pointer': The index in 'values' where each row starts (size N + 1)
- * 
- * Accessing row i:
- *   Loop from k = row_pointer[i] to row_pointer[i+1] - 1.
- *   Value is values[k] at column col_indices[k].
- */
+// ============================================================================
+// DATA STRUCTURES
+// ============================================================================
 
+/**
+ * @brief Compressed Sparse Row (CSR) matrix representation.
+ * 
+ * This format stores only non-zero elements for memory efficiency.
+ * - values: Non-zero values array.
+ * - col_indices: Column index for each value.
+ * - row_pointer: Starting index of each row in `values` (size = rows + 1).
+ */
 struct Csr_matrix {
     std::vector<double> values;
     std::vector<int> col_indices;
@@ -40,208 +37,267 @@ struct Csr_matrix {
     int nnz; // Number of non-zeros
 };
 
-// ==================================================================================
-// STEP 2: MATRIX ASSEMBLY - THE "TRIPLET" METHOD
-// ==================================================================================
-/*
- * PROBLEM:
- * Inserting directly into CSR is O(N) because you have to shift arrays.
- * This is terrible for "stamping" components in a loop.
- * 
- * SOLUTION: Coordinate List (COO) / Triplet List
- * 1. Store every contribution as a tuple {row, col, value}. Allow duplicates! (e.g., two resistors connected to the same node).
- * 2. Once simulation setup is done, SORT and COMPRESS into CSR.
- * 
- * MATH:
- * A_ij = sum(all triplets where row==i and col==j)
+/**
+ * @brief A single matrix entry before compression.
  */
-
 struct Triplet {
     int row;
     int col;
     double value;
 };
 
-// PSEUDO-CODE IMPLEMENTATION:
-/*
-class MatrixBuilder {
-    vector<Triplet> triplets;
+// ============================================================================
+// MATRIX ASSEMBLY
+// ============================================================================
 
-    void add(r, c, val) {
-        triplets.push_back({r, c, val});
-    }
-
-        Csr_matrix buildCSR() {
-        1. Sort triplets by row, then by column.
-        2. Iterate through sorted triplets.
-        3. If current triplet (r,c) == previous (r,c), sum the values.
-        4. Else, push new value and column index to CSR arrays.
-        5. Update row_pointer array to track where row 'r' begins.
-        return csr;
-    }
-}
-*/
-
+/**
+ * @brief Builds a sparse matrix from individual triplet entries.
+ * 
+ * Allows adding duplicate (row, col) pairs; values are summed during CSR conversion.
+ * This is essential for circuit simulation where parallel components contribute
+ * to the same matrix entry.
+ */
 class MatrixConstructor {
 private:
-    std::vector<Triplet> t;
+    std::vector<Triplet> triplets;
     int numRows = 0;
     int numCols = 0;
 
 public:
-    void add(int r, int c, double val)
+    /**
+     * @brief Adds a value to the matrix at position (row, col).
+     * @param row Row index (0-indexed).
+     * @param col Column index (0-indexed).
+     * @param value The value to add.
+     */
+    void add(int row, int col, double value)
     {
-        t.push_back({r, c, val});
-        if (r >= numRows) 
-            numRows = r + 1;
-        if (c >= numCols) 
-            numCols = c + 1;
+        triplets.push_back({row, col, value});
+        if (row >= numRows) 
+            numRows = row + 1;
+        if (col >= numCols) 
+            numCols = col + 1;
     }
 
+    /**
+     * @brief Converts the accumulated triplets into a CSR matrix.
+     * 
+     * This method sorts triplets by (row, col), merges duplicates by summing
+     * their values, and constructs the final CSR arrays.
+     * @return Csr_matrix The resulting sparse matrix.
+     */
     Csr_matrix createCsr()
     {
-        Csr_matrix m;
-        m.rows = numRows;
-        m.cols = numCols;
+        Csr_matrix matrix;
+        matrix.rows = numRows;
+        matrix.cols = numCols;
 
-        if (t.empty()) {
-            m.row_pointer.assign(numRows + 1, 0);
-            return m;
+        if (triplets.empty()) {
+            matrix.row_pointer.assign(numRows + 1, 0);
+            return matrix;
         }
 
-        // 1. Sort triplets (needed for duplicate merging and row-major order)
-        std::sort(t.begin(), t.end(), [](const Triplet& first, const Triplet& last) 
+        // Sort triplets by row, then by column for duplicate merging
+        std::sort(triplets.begin(), triplets.end(), [](const Triplet& a, const Triplet& b) 
         {
-            return (first.row < last.row || (first.row == last.row && first.col < last.col));
+            return (a.row < b.row || (a.row == b.row && a.col < b.col));
         });
 
-        // 2. Prepare row_pointer (Histogram counts)
-        m.row_pointer.assign(numRows + 1, 0);
+        matrix.row_pointer.assign(numRows + 1, 0);
 
-        // 3. Merge duplicates and fill values
-        for(int i = 0; i < (int)t.size(); i++)
+        // Merge duplicates and fill values/columns
+        for (int tripletIndex = 0; tripletIndex < (int)triplets.size(); tripletIndex++)
         {
-            // If the current triplet is the same row/col as the previous one, sum the values.
-            if(i > 0 && t[i].row == t[i - 1].row && t[i].col == t[i - 1].col)
+            const Triplet& currentTriplet = triplets[tripletIndex];
+            
+            // Check if this triplet has the same (row, col) as the previous one
+            if (tripletIndex > 0 && 
+                currentTriplet.row == triplets[tripletIndex - 1].row && 
+                currentTriplet.col == triplets[tripletIndex - 1].col)
             {
-                if (!m.values.empty()) {
-                    m.values.back() += t[i].value;
+                // Sum values for duplicate entries
+                if (!matrix.values.empty()) {
+                    matrix.values.back() += currentTriplet.value;
                 }
             }
             else
             {
-                // New unique cell: add value/col and increment row count
-                m.values.push_back(t[i].value);
-                m.col_indices.push_back(t[i].col);
-                m.row_pointer[t[i].row + 1]++;
+                // New unique cell: store value and column, increment row count
+                matrix.values.push_back(currentTriplet.value);
+                matrix.col_indices.push_back(currentTriplet.col);
+                matrix.row_pointer[currentTriplet.row + 1]++;
             }
         }
 
-        // 4. Finalize row_pointer (Prefix Sum)
-        // This converts "counts per row" into "starting indices" for the CSR format.
-        for (int i = 0; i < numRows; ++i)
-            m.row_pointer[i + 1] += m.row_pointer[i];
+        // Convert histogram counts to starting indices (prefix sum)
+        for (int rowIndex = 0; rowIndex < numRows; ++rowIndex)
+            matrix.row_pointer[rowIndex + 1] += matrix.row_pointer[rowIndex];
 
-        m.nnz = (int)m.values.size();
-        return m;
+        matrix.nnz = (int)matrix.values.size();
+        return matrix;
     }
 };
 
-// ==================================================================================
-// STEP 3: SPARSE MATRIX-VECTOR MULTIPLICATION (SpMV)
-// ==================================================================================
-/*
- * IMPORTANCE:
- * This is the "inner loop" of any iterative solver. It consumes 90% of runtime.
- * 
- * MATH:
- * y = A * x
- * y_i = sum( A_ij * x_j ) for all non-zero A_ij in row i.
- *  
- * ACCESS PATTERN:
- * We iterate strictly through 'values' and 'col_indices' (streaming memory).
- */
+// ============================================================================
+// SPARSE MATRIX-VECTOR MULTIPLICATION (SpMV)
+// ============================================================================
 
-// Optimized SpMV:
-// 1. Pass by const reference to avoid expensive copying.
-// 2. Use OpenMP for multi-threading.
-inline void matrixMultiplication(const Csr_matrix& m, const double* x, double* y)
+/**
+ * @brief Computes y = A * x using the CSR format.
+ * 
+ * This is the core operation of iterative solvers. It is parallelized with OpenMP.
+ * @param matrix The sparse matrix A.
+ * @param inputVector The input vector x.
+ * @param outputVector The output vector y.
+ */
+inline void matrixMultiplication(const Csr_matrix& matrix, const double* inputVector, double* outputVector)
 {
-    // Use OpenMP for scaling across threads
     #pragma omp parallel for
-    for(int i = 0; i < m.rows; i++)
+    for (int rowIndex = 0; rowIndex < matrix.rows; rowIndex++)
     {
-        double sum = 0.0;
-        int start = m.row_pointer[i];
-        int end   = m.row_pointer[i+1];
+        double rowSum = 0.0;
+        int rowStart = matrix.row_pointer[rowIndex];
+        int rowEnd   = matrix.row_pointer[rowIndex + 1];
         
-        for (int k = start; k < end; ++k) {
-            sum += m.values[k] * x[ m.col_indices[k] ];
+        for (int elementIndex = rowStart; elementIndex < rowEnd; ++elementIndex) {
+            rowSum += matrix.values[elementIndex] * inputVector[matrix.col_indices[elementIndex]];
         }
-        y[i] = sum;
+        outputVector[rowIndex] = rowSum;
     }
 }
-// ==================================================================================
-// STEP 4: THE SOLVER - CONJUGATE GRADIENT (CG)
-// ==================================================================================
-/*
- * CONTEXT:
- * Direct solvers (LU) are hard to implement essentially for sparse matrices (fill-in).
- * Iterative solvers guess 'x', calculate error, and improve 'x'.
- * 
- * ALGORITHM: Conjugate Gradient
- * - Only works for Symmetric Positive Definite matrices (Resistive networks often are).
- * - Requires only matrix-vector multiplication (SpMV) and vector ops.
- * 
- * MATH:
- * We want to minimize Quadratic Form: f(x) = 0.5 * x^T A x - b^T x
- * The gradient is Ax - b (the residual).
- * We move along "conjugate" directions to reach the minimum efficiently.
+
+// ============================================================================
+// VECTOR OPERATIONS (OpenMP Optimized)
+// ============================================================================
+
+/**
+ * @brief Computes the dot product of two vectors.
  */
+inline double dotProduct(const std::vector<double>& vectorA, const std::vector<double>& vectorB) {
+    double sum = 0.0;
+    #pragma omp parallel for reduction(+:sum)
+    for (int index = 0; index < (int)vectorA.size(); index++) {
+        sum += vectorA[index] * vectorB[index];
+    }
+    return sum;
+}
 
-// PSEUDO-CODE IMPLEMENTATION:
-/*
-vector<double> solveCG(const CSRMatrix& A, const vector<double>& b) {
-    int n = A.rows;
-    vector<double> x(n, 0.0); // Initial guess
-    vector<double> r = b;     // Residual r = b - Ax (since x=0)
-    vector<double> p = r;     // Search direction
-    double rsold = dot_product(r, r);
+/**
+ * @brief Computes result = vectorA + scalar * vectorB.
+ */
+inline void vectorAdd(std::vector<double>& result, const std::vector<double>& vectorA, const std::vector<double>& vectorB, double scalar) {
+    #pragma omp parallel for
+    for (int index = 0; index < (int)vectorA.size(); index++) {
+        result[index] = vectorA[index] + scalar * vectorB[index];
+    }
+}
 
-    for (int i = 0; i < n; ++i) { // Max iterations usually N
-        vector<double> Ap(n);
-        spmv(A, p, Ap);       // The expensive part!
+/**
+ * @brief Extracts the inverse of the diagonal elements of a CSR matrix.
+ * 
+ * This is used for the Jacobi preconditioner. If a diagonal element is zero
+ * or very small, its inverse is set to 1.0 to avoid numerical issues.
+ * @param matrix The input CSR matrix.
+ * @return std::vector<double> A vector containing 1/A[i][i] for each row i.
+ */
+inline std::vector<double> getDiagonalInverse(const Csr_matrix& matrix) {
+    const double zeroThreshold = 1e-18;
+    std::vector<double> diagonalInverse(matrix.rows, 1.0);
+    
+    #pragma omp parallel for
+    for (int rowIndex = 0; rowIndex < matrix.rows; rowIndex++) {
+        for (int elementIndex = matrix.row_pointer[rowIndex]; elementIndex < matrix.row_pointer[rowIndex + 1]; elementIndex++) {
+            if (matrix.col_indices[elementIndex] == rowIndex) {
+                if (std::abs(matrix.values[elementIndex]) > zeroThreshold) {
+                    diagonalInverse[rowIndex] = 1.0 / matrix.values[elementIndex];
+                }
+                break; // Diagonal found, no need to check further in this row
+            }
+        }
+    }
+    return diagonalInverse;
+}
 
-        double alpha = rsold / dot_product(p, Ap);
+// ============================================================================
+// PRECONDITIONED CONJUGATE GRADIENT (PCG) SOLVER
+// ============================================================================
+
+/**
+ * @brief Solves Ax = b using the Preconditioned Conjugate Gradient method.
+ * 
+ * Uses a Jacobi (diagonal) preconditioner for faster convergence.
+ * 
+ * @param matrix The sparse matrix A (must be symmetric positive definite).
+ * @param rhsVector The right-hand side vector b.
+ * @param tolerance Convergence tolerance (stops when ||r|| < tolerance).
+ * @param maxIterations Maximum number of solver iterations.
+ * @return std::vector<double> The solution vector x.
+ */
+inline std::vector<double> solvePCG(
+    const Csr_matrix& matrix, 
+    const std::vector<double>& rhsVector, 
+    double tolerance = 1e-10, 
+    int maxIterations = 1000) 
+{
+    const double divisionByZeroThreshold = 1e-20;
+    const int numUnknowns = matrix.rows;
+    
+    std::vector<double> solution(numUnknowns, 0.0);
+    std::vector<double> residual = rhsVector; // residual = b - A*x, with x=0
+    
+    // Prepare Jacobi Preconditioner (M^-1 = 1/diag(A))
+    std::vector<double> preconditionerInverse = getDiagonalInverse(matrix);
+    
+    // Apply preconditioner: preconditionedResidual = M^-1 * residual
+    std::vector<double> preconditionedResidual(numUnknowns);
+    for (int i = 0; i < numUnknowns; i++) {
+        preconditionedResidual[i] = residual[i] * preconditionerInverse[i];
+    }
+    
+    std::vector<double> searchDirection = preconditionedResidual;
+    double residualDotPreconditioned = dotProduct(residual, preconditionedResidual);
+    
+    // Early exit if already converged
+    if (std::sqrt(residualDotPreconditioned) < tolerance) {
+        return solution;
+    }
+
+    for (int iteration = 0; iteration < maxIterations; iteration++) {
+        // matrixTimesSearchDirection = A * searchDirection
+        std::vector<double> matrixTimesSearchDirection(numUnknowns);
+        matrixMultiplication(matrix, searchDirection.data(), matrixTimesSearchDirection.data());
         
-        // Update x and r
-        x = x + alpha * p;
-        r = r - alpha * Ap;
+        double searchDirectionDotAp = dotProduct(searchDirection, matrixTimesSearchDirection);
+        if (std::abs(searchDirectionDotAp) < divisionByZeroThreshold) {
+            break; // Avoid division by zero
+        }
 
-        double rsnew = dot_product(r, r);
-        if (sqrt(rsnew) < 1e-10) break; // Converged!
+        double stepSize = residualDotPreconditioned / searchDirectionDotAp;
+        
+        // Update solution: x = x + stepSize * p
+        vectorAdd(solution, solution, searchDirection, stepSize);
+        // Update residual: r = r - stepSize * Ap
+        vectorAdd(residual, residual, matrixTimesSearchDirection, -stepSize);
+        
+        // Check for convergence
+        double residualNormSquared = dotProduct(residual, residual);
+        if (std::sqrt(residualNormSquared) < tolerance) {
+            break;
+        }
 
-        // Compute new search direction
-        p = r + (rsnew / rsold) * p;
-        rsold = rsnew;
+        // Apply Preconditioner: z = M^-1 * r
+        for (int i = 0; i < numUnknowns; i++) {
+            preconditionedResidual[i] = residual[i] * preconditionerInverse[i];
+        }
+        
+        double newResidualDotPreconditioned = dotProduct(residual, preconditionedResidual);
+        double directionUpdateFactor = newResidualDotPreconditioned / residualDotPreconditioned;
+        
+        // Update search direction: p = z + beta * p
+        vectorAdd(searchDirection, preconditionedResidual, searchDirection, directionUpdateFactor);
+        
+        residualDotPreconditioned = newResidualDotPreconditioned;
     }
-    return x;
+    
+    return solution;
 }
-*/
-
-// ==================================================================================
-// SUMMARY FOR IMPLEMENTATION
-// ==================================================================================
-/*
- * 1. Create a `SparseMatrix` class that holds triplets during assembly.
- * 2. Add a `finalize()` method that converts triplets to CSR format.
- * 3. Implement helper functions:
- *    - `vector_add(a, b)`
- *    - `vector_scale(a, s)`
- *    - `dot_product(a, b)`
- * 4. Implement `spmv(matrix, vector)`
- * 5. Implement `solve_cg(matrix, rhs)` using the blocks above.
- * 
- * This approach is efficient, cache-friendly, and relatively simple to write
- * compared to a full LU decomposition for sparse matrices.
- */
