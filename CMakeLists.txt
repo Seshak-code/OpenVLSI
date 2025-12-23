@@ -65,6 +65,12 @@ message(STATUS "CMAKE_PREFIX_PATH = ${CMAKE_PREFIX_PATH}")
 find_package(Qt6 COMPONENTS Core Widgets REQUIRED)
 message(STATUS "Found Qt6: ${Qt6_DIR}")
 
+# Find OpenMP (required for CPU multi-threading)
+find_package(OpenMP REQUIRED)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "Found OpenMP: ${OpenMP_CXX_FLAGS}")
+endif()
+
 # Enable CMake automoc/autouic/autorcc conveniences
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -73,10 +79,45 @@ set(CMAKE_AUTORCC ON)
 # NOTE: Eigen3 dependency removed. The project uses an internal linear algebra library.
 
 # Create executable
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} MACOSX_BUNDLE main.cpp)
 
-# Link Qt libraries (imported targets provide include directories and compile options)
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets)
+# Link Qt and OpenMP libraries
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+    Qt6::Core 
+    Qt6::Widgets
+    OpenMP::OpenMP_CXX
+)
 
-# Install rule (optional)
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+# macOS specific: Ensure system frameworks like AGL are found
+if(APPLE)
+    # Search for the AGL stub specifically to satisfy legacy Qt requirements
+    find_file(AGL_TBD NAMES AGL.tbd PATHS 
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AGL.framework"
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX14.4.sdk/System/Library/Frameworks/AGL.framework"
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX13.3.sdk/System/Library/Frameworks/AGL.framework"
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/AGL.framework"
+    )
+    
+    if(AGL_TBD)
+        message(STATUS "Found AGL stub: ${AGL_TBD}")
+        # Get the directory containing AGL.framework
+        get_filename_component(AGL_FRAMEWORK_DIR "${AGL_TBD}" DIRECTORY)
+        get_filename_component(AGL_SDK_FRAMEWORKS_PATH "${AGL_FRAMEWORK_DIR}" DIRECTORY)
+        
+        # Link the stub and add the search path for the framework
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${AGL_TBD})
+        target_link_options(${PROJECT_NAME} PRIVATE "-F${AGL_SDK_FRAMEWORKS_PATH}")
+    else()
+        # Fallback to searching as framework if stub is not found
+        find_library(AGL_LIBRARY AGL)
+        if(AGL_LIBRARY)
+            target_link_libraries(${PROJECT_NAME} PRIVATE ${AGL_LIBRARY})
+        endif()
+    endif()
+endif()
+
+# Install rule
+install(TARGETS ${PROJECT_NAME} 
+    BUNDLE DESTINATION .
+    RUNTIME DESTINATION bin
+)

@@ -10,10 +10,18 @@
       "name": "windows-msvc",
       "generator": "Visual Studio 18 2026",
       "binaryDir": "${sourceDir}/out/build/windows-msvc-vs",
-      "architecture": "x64",
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "Qt6_DIR": "C:/Qt/6.10.1/msvc2022_64/lib/cmake/Qt6"
+        "Qt6_DIR": "C:/Qt/6.8.0/msvc2022_64/lib/cmake/Qt6"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
       }
     },
     {
@@ -23,13 +31,36 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/qt/lib/cmake"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "macos-make",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/out/build/macos-make",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/qt/lib/cmake"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "default",
+      "name": "windows-build",
       "configurePreset": "windows-msvc"
+    },
+    {
+      "name": "macos-build",
+      "configurePreset": "macos-clang"
     }
   ]
 }
