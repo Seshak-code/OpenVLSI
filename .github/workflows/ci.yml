@@ -9,14 +9,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-      - name: Install Qt via vcpkg
-        run: |
-          vcpkg install qt6-base:x64-windows
+      
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.0'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          
       - name: Configure CMake
         run: |
-          cmake -S . -B out/build/windows-msvc -G Ninja -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+          cmake -S . -B out/build/windows-msvc -G "Visual Studio 17 2022" -A x64
       - name: Build
         run: cmake --build out/build/windows-msvc --config Debug
 
@@ -24,12 +28,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Qt with Homebrew
+      
+      - name: Install Qt and OpenMP with Homebrew
         run: |
           brew update
-          brew install qt
+          brew install qt libomp
+          
       - name: Configure CMake
         run: |
-          cmake -S . -B out/build/macos -G Ninja -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/qt/lib/cmake"
+          cmake -S . -B out/build/macos -G Ninja \
+            -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/qt/lib/cmake"
       - name: Build
         run: cmake --build out/build/macos

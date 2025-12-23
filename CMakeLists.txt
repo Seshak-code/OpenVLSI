@@ -66,7 +66,20 @@ find_package(Qt6 COMPONENTS Core Widgets REQUIRED)
 message(STATUS "Found Qt6: ${Qt6_DIR}")
 
 # Find OpenMP (required for CPU multi-threading)
-find_package(OpenMP REQUIRED)
+# On macOS with Apple Clang, we need to point to Homebrew's libomp
+if(APPLE)
+    # First attempt: check if it's already in the path or has a root hint
+    find_package(OpenMP)
+    
+    # If not found, try the common Homebrew location
+    if(NOT OpenMP_FOUND)
+        set(OpenMP_ROOT "/opt/homebrew/opt/libomp")
+        find_package(OpenMP REQUIRED)
+    endif()
+else()
+    find_package(OpenMP REQUIRED)
+endif()
+
 if(OpenMP_CXX_FOUND)
     message(STATUS "Found OpenMP: ${OpenMP_CXX_FLAGS}")
 endif()

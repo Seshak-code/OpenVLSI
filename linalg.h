@@ -24,17 +24,17 @@
  * The Standard Format: CSR
  * - 'values': The non-zero values (size N_nz)
  * - 'col_indices': The column index for each value (size N_nz)
- * - 'row_ptr': The index in 'values' where each row starts (size N + 1)
+ * - 'row_pointer': The index in 'values' where each row starts (size N + 1)
  * 
  * Accessing row i:
- *   Loop from k = row_ptr[i] to row_ptr[i+1] - 1.
+ *   Loop from k = row_pointer[i] to row_pointer[i+1] - 1.
  *   Value is values[k] at column col_indices[k].
  */
 
 struct Csr_matrix {
     std::vector<double> values;
     std::vector<int> col_indices;
-    std::vector<int> row_ptr;
+    std::vector<int> row_pointer;
     int rows;
     int cols;
     int nnz; // Number of non-zeros
@@ -76,7 +76,7 @@ class MatrixBuilder {
         2. Iterate through sorted triplets.
         3. If current triplet (r,c) == previous (r,c), sum the values.
         4. Else, push new value and column index to CSR arrays.
-        5. Update row_ptr array to track where row 'r' begins.
+        5. Update row_pointer array to track where row 'r' begins.
         return csr;
     }
 }
@@ -105,7 +105,7 @@ public:
         m.cols = numCols;
 
         if (t.empty()) {
-            m.row_ptr.assign(numRows + 1, 0);
+            m.row_pointer.assign(numRows + 1, 0);
             return m;
         }
 
@@ -115,8 +115,8 @@ public:
             return (first.row < last.row || (first.row == last.row && first.col < last.col));
         });
 
-        // 2. Prepare row_ptr (Histogram counts)
-        m.row_ptr.assign(numRows + 1, 0);
+        // 2. Prepare row_pointer (Histogram counts)
+        m.row_pointer.assign(numRows + 1, 0);
 
         // 3. Merge duplicates and fill values
         for(int i = 0; i < (int)t.size(); i++)
@@ -133,14 +133,14 @@ public:
                 // New unique cell: add value/col and increment row count
                 m.values.push_back(t[i].value);
                 m.col_indices.push_back(t[i].col);
-                m.row_ptr[t[i].row + 1]++;
+                m.row_pointer[t[i].row + 1]++;
             }
         }
 
-        // 4. Finalize row_ptr (Prefix Sum)
+        // 4. Finalize row_pointer (Prefix Sum)
         // This converts "counts per row" into "starting indices" for the CSR format.
         for (int i = 0; i < numRows; ++i)
-            m.row_ptr[i + 1] += m.row_ptr[i];
+            m.row_pointer[i + 1] += m.row_pointer[i];
 
         m.nnz = (int)m.values.size();
         return m;
@@ -172,8 +172,8 @@ inline void matrixMultiplication(const Csr_matrix& m, const double* x, double* y
     for(int i = 0; i < m.rows; i++)
     {
         double sum = 0.0;
-        int start = m.row_ptr[i];
-        int end   = m.row_ptr[i+1];
+        int start = m.row_pointer[i];
+        int end   = m.row_pointer[i+1];
         
         for (int k = start; k < end; ++k) {
             sum += m.values[k] * x[ m.col_indices[k] ];
