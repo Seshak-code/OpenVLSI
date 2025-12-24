@@ -8,8 +8,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT DEFINED Qt6_DIR)
     if(NOT DEFINED CMAKE_PREFIX_PATH)
         if(APPLE)
-            # Homebrew default path for Qt on Apple Silicon and Intel (Homebrew installs to /opt/homebrew on Apple Silicon)
-            list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt/lib/cmake" "/usr/local/opt/qt/lib/cmake")
+            # Prioritize qtbase (core) then full qt to match Homebrew's linked plugins
+            list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qtbase/lib/cmake" "/opt/homebrew/opt/qt/lib/cmake" "/usr/local/opt/qt/lib/cmake")
         elseif(WIN32)
             # On Windows, try to detect a Qt installation under C:/Qt and append likely cmake folders.
             set(_qt_root "C:/Qt")
