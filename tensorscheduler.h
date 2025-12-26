@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <iostream>
+#include <cassert>  // NASA Rule #5
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -21,55 +22,96 @@ enum class SolverBackend {
     WEBGPU_COMPUTE   // Future: GLSL/WGSL Compute Shaders
 };
 
-struct SolverJob {
-    const TensorBlock* blockTmpl;  // Pointer for fast access (reduces lookups)
-    std::vector<int> instanceIds;  // Indices of instances in TensorNetlist::instances
+// --- SOLID: Dependency Inversion - Abstract Interface ---
+
+/**
+ * @brief Interface for hardware detection (DIP - Dependency Inversion Principle).
+ * 
+ * Allows mocking in unit tests and swapping detection strategies.
+ */
+class IHardwareDetector {
+public:
+    virtual ~IHardwareDetector() = default;
+    virtual SolverBackend detectBestBackend() const = 0;
 };
 
-class HardwareManager {
+/**
+ * @brief Default implementation of IHardwareDetector.
+ */
+class HardwareManager : public IHardwareDetector {
 public:
-    static SolverBackend detectBestBackend() {
+    SolverBackend detectBestBackend() const override {
         #ifdef __EMSCRIPTEN__
-            // In WebAssembly, OpenMP is disabled by default unless specifically compiled for.
-            // For now, we default to Sequential CPU.
-            // Future: Check navigator.gpu for WebGPU support.
             return SolverBackend::CPU_SEQUENTIAL;
         #else
-            // Native C++ typically implies multi-core
             return SolverBackend::CPU_OPENMP;
         #endif
     }
 };
 
+/**
+ * @brief Represents a batch of identical-topology block instances to solve together.
+ */
+struct SolverJob {
+    const TensorBlock* blockTmpl;
+    std::vector<int> instanceIds;
+
+    double calculateCost() const {
+        assert(blockTmpl != nullptr && "SolverJob must have a valid block template");
+        double componentWeight = blockTmpl->resistors.size() + 
+                                blockTmpl->mosfets.size() * 5.0 + 
+                                blockTmpl->capacitors.size() * 2.0;
+        double nodeWeight = blockTmpl->numInternalNodes * 10.0;
+        return (componentWeight + nodeWeight) * instanceIds.size();
+    }
+};
+
+/**
+ * @brief TensorScheduler - Groups instances by topology for efficient batched solving.
+ * 
+ * SOLID: Uses IHardwareDetector for Dependency Inversion.
+ */
 class TensorScheduler {
 public:
     std::vector<SolverJob> jobs;
     SolverBackend activeBackend;
     
     TensorScheduler() {
-        activeBackend = HardwareManager::detectBestBackend();
+        HardwareManager defaultDetector;
+        activeBackend = defaultDetector.detectBestBackend();
+    }
+    
+    // SOLID: Dependency Injection constructor
+    explicit TensorScheduler(const IHardwareDetector& detector) {
+        activeBackend = detector.detectBestBackend();
     }
     
     /**
      * @brief Analyzes the netlist and groups identical blocks into jobs.
      * 
      * Optimizations:
-     * 1. Groups by Block Name (Topology).
-     * 2. Stores direct pointers to TensorBlock to avoid lookups during solve.
+     * 1. Groups by Topology Hash (Research-Grade Reuse).
+     * 2. Calculates expected Job Cost for backend load balancing.
      */
     void schedule(const TensorNetlist& netlist) {
         jobs.clear();
-        std::map<std::string, std::vector<int>> groupedInstances;
         
-        // Group instances by their block name
+        // Phase 4 research: Group by structural topology, not just block names.
+        // This allows instances of DIFFERENT blocks to be batched if their graphs match.
+        std::map<size_t, std::vector<int>> groupedByHash;
+        
         for (int i = 0; i < (int)netlist.instances.size(); ++i) {
-            groupedInstances[netlist.instances[i].blockName].push_back(i);
+            const auto& inst = netlist.instances[i];
+            auto it = netlist.blockDefinitions.find(inst.blockName);
+            if (it != netlist.blockDefinitions.end()) {
+                groupedByHash[it->second.topologyHash].push_back(i);
+            }
         }
         
-        // Create a SolverJob for each unique block type
-        for (auto const& [name, instances] : groupedInstances) {
-            // Find the template block ONE time
-            auto it = netlist.blockDefinitions.find(name);
+        for (auto const& [hash, instances] : groupedByHash) {
+            // Pick any instance from the group to get the template
+            const auto& firstInst = netlist.instances[instances[0]];
+            auto it = netlist.blockDefinitions.find(firstInst.blockName);
             if (it != netlist.blockDefinitions.end()) {
                 jobs.push_back({ &(it->second), instances });
             }

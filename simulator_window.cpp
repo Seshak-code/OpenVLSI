@@ -47,6 +47,8 @@ void SimulatorWindow::startSimulation() {
     // Reset Sim State
     sim = CircuitSim();
     currentTime = 0.0;
+    trace.clear();
+    trace.netlistName = "Quick RC Circuit";
     
     logArea->appendPlainText("\nStarting Transient Analysis...");
     logArea->appendPlainText("Time(ms) \t V_out (Node 2)");
@@ -66,14 +68,16 @@ void SimulatorWindow::stepSimulation() {
             return;
         }
 
-        // Perform one physics step (uses Scheduler inside!)
-        SimulationResult result = sim.stepTransient(netlist, timeStep);
+        // Perform one physics step
+        SimulationStep step = sim.stepTransient(netlist, timeStep, currentTime);
+        trace.addStep(currentTime, step.nodeVoltages, step.stats);
+        
         currentTime += timeStep;
 
         // Log output (decimate to avoid spamming the logs)
         if (std::abs(std::fmod(currentTime, 0.0001)) < timeStep / 2.0) {
              double v_out = 0.0;
-             if (result.nodeVoltages.size() >= 2) v_out = result.nodeVoltages[1];
+             if (step.nodeVoltages.size() >= 2) v_out = step.nodeVoltages[1];
 
              QString logLine = QString("%1 \t %2 V")
                 .arg(currentTime * 1000, 0, 'f', 3)

@@ -3,6 +3,7 @@
 #include <string>
 #include <algorithm>
 #include <map>
+#include <cassert>  // NASA Rule #5
 
 /**
  * @file circuit.h
@@ -282,46 +283,84 @@ struct TensorBlock {
     // Interconnects
     std::vector<TransmissionLine> transmissionLines;
 
+    bool isFrozen = false;       // Phase 1: Structural Immutability
+    size_t topologyHash = 0;     // Phase 4: Symbolic Reuse Key
+
     // --- Helper Methods ---
+    void freeze() {
+        if (isFrozen) return;
+        isFrozen = true;
+        computeTopologyHash();
+    }
+
+    void computeTopologyHash() {
+        // Research-Grade Hashing: Canonical string of component patterns
+        // For Phase 1, we use a simple string concatenation of counts and local node pairs.
+        std::string s = name + "|";
+        s += std::to_string(numInternalNodes) + "|R:";
+        for (const auto& r : resistors) s += std::to_string(r.nodeTerminal1) + "-" + std::to_string(r.nodeTerminal2) + ";";
+        s += "|M:";
+        for (const auto& m : mosfets) s += std::to_string(m.nodeDrain) + "-" + std::to_string(m.nodeGate) + ";";
+        
+        topologyHash = std::hash<std::string>{}(s);
+    }
+
     void updateNodeCount(int node) {
+        if (isFrozen) return; // Prevent node count updates on frozen blocks
         if (node > numInternalNodes) numInternalNodes = node;
     }
 
     void addResistor(int n1, int n2, double R) {
+        assert(n1 >= 0 && n2 >= 0 && "Node indices must be non-negative");
+        assert(R > 0 && "Resistance must be positive");
+        if (isFrozen) return;
         resistors.push_back({n1, n2, R});
         updateNodeCount(n1); updateNodeCount(n2);
     }
     void addCapacitor(int n1, int n2, double C) {
+        assert(n1 >= 0 && n2 >= 0 && "Node indices must be non-negative");
+        assert(C > 0 && "Capacitance must be positive");
+        if (isFrozen) return;
         capacitors.push_back({n1, n2, C});
         updateNodeCount(n1); updateNodeCount(n2);
     }
     void addInductor(int n1, int n2, double L) {
+        assert(n1 >= 0 && n2 >= 0 && "Node indices must be non-negative");
+        assert(L > 0 && "Inductance must be positive");
+        if (isFrozen) return;
         inductors.push_back({n1, n2, L});
         updateNodeCount(n1); updateNodeCount(n2);
     }
     void addVoltageSource(int nPos, int nNeg, double V) {
+        assert(nPos >= 0 && nNeg >= 0 && "Node indices must be non-negative");
+        if (isFrozen) return;
         voltageSources.push_back({nPos, nNeg, V});
         updateNodeCount(nPos); updateNodeCount(nNeg);
     }
     void addCurrentSource(int nPos, int nNeg, double I) {
+        if (isFrozen) return;
         currentSources.push_back({nPos, nNeg, I});
         updateNodeCount(nPos); updateNodeCount(nNeg);
     }
     void addDiode(int anode, int cathode, double Is, double N = 1.0, double Vt = 0.02585) {
+        if (isFrozen) return;
         diodes.push_back({anode, cathode, Is, N, Vt});
         updateNodeCount(anode); updateNodeCount(cathode);
     }
     void addMosfet(const std::string& name, int D, int G, int S, int B, 
                    const std::string& model, double W, double L) {
+        if (isFrozen) return;
         mosfets.push_back({name, D, G, S, B, model, W, L});
         updateNodeCount(D); updateNodeCount(G); updateNodeCount(S); updateNodeCount(B);
     }
     void addBJT(const std::string& name, int C, int B, int E, 
                 const std::string& model, bool isNPN = true) {
+        if (isFrozen) return;
         bjts.push_back({name, C, B, E, model, isNPN});
         updateNodeCount(C); updateNodeCount(B); updateNodeCount(E);
     }
     void addTransmissionLine(int p1p, int p1n, int p2p, int p2n, double Z0, double Td) {
+        if (isFrozen) return;
         transmissionLines.push_back({p1p, p1n, p2p, p2n, Z0, Td});
         updateNodeCount(p1p); updateNodeCount(p1n); updateNodeCount(p2p); updateNodeCount(p2n);
     }
@@ -348,7 +387,8 @@ public:
 
     TensorNetlist() { globalBlock.name = "GLOBAL"; }
 
-    void defineBlock(const TensorBlock& block) {
+    void defineBlock(TensorBlock block) {
+        block.freeze();
         blockDefinitions[block.name] = block;
     }
     

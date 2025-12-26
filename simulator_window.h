@@ -27,6 +27,7 @@ private:
     // Simulation State
     TensorNetlist netlist;
     CircuitSim sim;
+    SimulationTrace trace;
     double currentTime = 0.0;
     const double timeStep = 0.00001; // 10us
     const double totalTime = 0.002;  // 2ms

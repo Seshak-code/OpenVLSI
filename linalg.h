@@ -3,6 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <cassert>  // NASA Rule #5: Use assertions liberally
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -247,6 +248,12 @@ inline SolverResult solvePCG(
     double tolerance = 1e-10, 
     int maxIterations = 1000) 
 {
+    // NASA Rule #5: Validate inputs
+    assert(matrix.rows > 0 && "Matrix must have at least one row");
+    assert(matrix.rows == (int)rhsVector.size() && "Matrix rows must match RHS vector size");
+    assert(maxIterations > 0 && maxIterations < 100000 && "maxIterations must be in [1, 100000)");
+    assert(tolerance > 0 && "Tolerance must be positive");
+    
     const double divisionByZeroThreshold = 1e-20;
     const int numUnknowns = matrix.rows;
     

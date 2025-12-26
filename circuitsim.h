@@ -4,6 +4,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <cassert>  // NASA Rule #5
 
 /**
  * @file circuitsim.h
@@ -84,153 +85,150 @@ inline void stampMosfet(int d, int g, int s, int b, double gm, double gds, Matri
 // CIRCUITSIM CLASS
 // ============================================================================
 
-struct SimulationResult 
-{
-    std::vector<double> nodeVoltages;
-    double finalResidual;
-    int iterations;
-    bool converged;
-};
-
+#include "simtrace.h"
 #include "tensorscheduler.h"
 
-// ... (Existing stamp functions remain unchanged) ...
+// ============================================================================
+// CIRCUITSIM CLASS
+// ============================================================================
 
+/**
+ * @brief CircuitSim - Physics and Solver Engine.
+ * 
+ * In Phase 0/1, this produces SimulationResult (legacy) or writes to a 
+ * SimulationTrace (modern research-grade).
+ */
 class CircuitSim
 {
     public:
         CircuitSim() = default;
         
-        SimulationResult solveDC(TensorNetlist& netlist);
-        SimulationResult stepTransient(TensorNetlist& netlist, double timeStep);
+        SimulationStep solveDC(TensorNetlist& netlist);
+        SimulationStep stepTransient(TensorNetlist& netlist, double timeStep, double currentTime);
 
     private:
         MatrixConstructor matrixBuilder;
         std::vector<double> rhsVector;
-        TensorScheduler scheduler; // Phase 1.5: Integrated Scheduler
+        TensorScheduler scheduler;
+        
+        // --- SOLID/NASA: Extracted Helper Functions (SRP, Rule #4) ---
+        
+        /**
+         * @brief Stamps global DC components (resistors, voltage sources).
+         */
+        void stampGlobalDC(const TensorBlock& block) {
+            for (const auto& r : block.resistors) {
+                stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
+            }
+            for (const auto& v : block.voltageSources) {
+                stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
+            }
+        }
+        
+        /**
+         * @brief Stamps global transient components (resistors, capacitors, voltage sources).
+         */
+        void stampGlobalTransient(TensorBlock& block, double timeStep) {
+            for (const auto& r : block.resistors) {
+                stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
+            }
+            for (auto& c : block.capacitors) {
+                stampCapacitorTrapezoidal(c.nodePlate1, c.nodePlate2, c.capacitance_farads, timeStep, 
+                                           c.voltage_prev_V, c.current_prev_A, matrixBuilder, rhsVector);
+            }
+            for (const auto& v : block.voltageSources) {
+                stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
+            }
+        }
+        
+        /**
+         * @brief Stamps all batched jobs from the scheduler.
+         */
+        void stampBatchedJobs(const TensorNetlist& netlist, bool includeTransient, double timeStep = 0.0) {
+            for (const auto& job : scheduler.jobs) {
+                const TensorBlock& block = *job.blockTmpl;
+                
+                for (int instanceIdx : job.instanceIds) {
+                    const auto& instance = netlist.instances[instanceIdx];
+                    
+                    auto mapNode = [&](int localNode) {
+                        return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
+                    };
+
+                    for (const auto& r : block.resistors) {
+                        stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2), r.resistance_ohms, matrixBuilder);
+                    }
+                    
+                    for (const auto& m : block.mosfets) {
+                        double W = m.channelWidth_m;
+                        double L = m.channelLength_m;
+                        
+                        std::string paramW = m.instanceName + ".W";
+                        if (instance.parameters.count(paramW)) W = instance.parameters.at(paramW);
+                        
+                        std::string paramL = m.instanceName + ".L";
+                        if (instance.parameters.count(paramL)) L = instance.parameters.at(paramL);
+                        
+                        double Kp = 200e-6;
+                        double Vov = 0.5;
+                        double gm = Kp * (W/L) * Vov;
+                        double gds = gm / 100.0;
+                        
+                        stampMosfet(mapNode(m.nodeDrain), mapNode(m.nodeGate), mapNode(m.nodeSource), mapNode(m.nodeBody), gm, gds, matrixBuilder);
+                    }
+                }
+            }
+        }
+        
+        /**
+         * @brief Adds small diagonal for matrix conditioning.
+         */
+        void addDiagonalConditioning(int n) {
+            for (int i = 0; i < n; ++i) {
+                matrixBuilder.add(i, i, 1e-12);
+            }
+        }
 };
 
-inline SimulationResult CircuitSim::solveDC(TensorNetlist& netlist)
+inline SimulationStep CircuitSim::solveDC(TensorNetlist& netlist)
 {
-    if (netlist.numGlobalNodes == 0) return {{}, 0.0, 0, true};
+    // NASA Rule #4: Function kept under 60 lines via helper extraction
+    if (netlist.numGlobalNodes == 0) return {0.0, {}, {0, 0.0, true}};
 
     matrixBuilder = MatrixConstructor();
     rhsVector.assign(netlist.numGlobalNodes, 0.0);
     
-    // Phase 1.5: Run Scheduler to group instances
     scheduler.schedule(netlist);
-
-    // 1. Stamp Global Components
-    for (const auto& r : netlist.globalBlock.resistors) {
-        stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
-    }
-    for (const auto& v : netlist.globalBlock.voltageSources) {
-        stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
-    }
-
-    // 2. Stamp Batched Jobs (Intelligence!)
-    for (const auto& job : scheduler.jobs) {
-        const TensorBlock& block = *job.blockTmpl;
-        
-        for (int instanceIdx : job.instanceIds) {
-            const auto& instance = netlist.instances[instanceIdx];
-            
-            auto mapNode = [&](int localNode) {
-                return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
-            };
-
-            // Stamp Resistors
-            for (const auto& r : block.resistors) {
-                stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2), r.resistance_ohms, matrixBuilder);
-            }
-            
-            // Stamp MOSFETs (Placeholder for now - purely structural)
-            // Future logic: check instance.parameters["W"] to override block.mosfets[i].W
-        }
-    }
-    
-    // Add small diagonal term for robustness
-    for(int i=0; i<netlist.numGlobalNodes; ++i) {
-        matrixBuilder.add(i, i, 1e-12);
-    }
+    stampGlobalDC(netlist.globalBlock);
+    stampBatchedJobs(netlist, false);
+    addDiagonalConditioning(netlist.numGlobalNodes);
 
     Csr_matrix A = matrixBuilder.createCsr();
-    if (A.rows == 0) return {{}, 0.0, 0, true};
+    if (A.rows == 0) return {0.0, {}, {0, 0.0, true}};
     
     SolverResult solverRes = solvePCG(A, rhsVector);
-    return {solverRes.solution, solverRes.finalResidual, solverRes.iterations, solverRes.converged};
+    return {0.0, solverRes.solution, {solverRes.iterations, solverRes.finalResidual, solverRes.converged}};
 }
 
-inline SimulationResult CircuitSim::stepTransient(TensorNetlist& netlist, double timeStep)
+inline SimulationStep CircuitSim::stepTransient(TensorNetlist& netlist, double timeStep, double currentTime)
 {
-    if (netlist.numGlobalNodes == 0) return {{}, 0.0, 0, true};
+    // NASA Rule #4: Function kept under 60 lines via helper extraction
+    if (netlist.numGlobalNodes == 0) return {currentTime, {}, {0, 0.0, true}};
 
     matrixBuilder = MatrixConstructor();
     rhsVector.assign(netlist.numGlobalNodes, 0.0);
     
-    // Phase 1.5: Batch Scheduling
     scheduler.schedule(netlist);
-
-    // 1. Stamp Global Components
-    for (const auto& r : netlist.globalBlock.resistors) {
-        stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
-    }
-    for (auto& c : netlist.globalBlock.capacitors) {
-        stampCapacitorTrapezoidal(c.nodePlate1, c.nodePlate2, c.capacitance_farads, timeStep, 
-                                   c.voltage_prev_V, c.current_prev_A, matrixBuilder, rhsVector);
-    }
-    for (const auto& v : netlist.globalBlock.voltageSources) {
-        stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
-    }
-
-    // 2. Stamp Batched Jobs
-    for (const auto& job : scheduler.jobs) {
-        const TensorBlock& block = *job.blockTmpl;
-        
-        for (int instanceIdx : job.instanceIds) {
-            const auto& instance = netlist.instances[instanceIdx];
-            
-            auto mapNode = [&](int localNode) {
-                return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
-            };
-
-            for (const auto& r : block.resistors) {
-                stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2), r.resistance_ohms, matrixBuilder);
-            }
-            
-            // Stamp MOSFETs with Parameter Intelligence
-            for (const auto& m : block.mosfets) {
-                double W = m.channelWidth_m;
-                double L = m.channelLength_m;
-                
-                // Check for Instance Overrides (e.g. "M1.W")
-                std::string paramW = m.instanceName + ".W";
-                if (instance.parameters.count(paramW)) W = instance.parameters.at(paramW);
-                
-                std::string paramL = m.instanceName + ".L";
-                if (instance.parameters.count(paramL)) L = instance.parameters.at(paramL);
-                
-                // Simplified Small-Signal Model
-                double Kp = 200e-6; // uA/V^2
-                double Vov = 0.5;   // Overdrive assumption
-                double gm = Kp * (W/L) * Vov;
-                double gds = gm / 100.0;
-                
-                stampMosfet(mapNode(m.nodeDrain), mapNode(m.nodeGate), mapNode(m.nodeSource), mapNode(m.nodeBody), gm, gds, matrixBuilder);
-            }
-        }
-    }
-
-    for(int i=0; i<netlist.numGlobalNodes; ++i) {
-        matrixBuilder.add(i, i, 1e-12);
-    }
+    stampGlobalTransient(netlist.globalBlock, timeStep);
+    stampBatchedJobs(netlist, true, timeStep);
+    addDiagonalConditioning(netlist.numGlobalNodes);
 
     Csr_matrix A = matrixBuilder.createCsr();
-    if (A.rows == 0) return {{}, 0.0, 0, true};
+    if (A.rows == 0) return {currentTime, {}, {0, 0.0, true}};
     
     SolverResult solverRes = solvePCG(A, rhsVector);
 
-    // 3. Update Global History
+    // Update Global Capacitor History
     for (auto& c : netlist.globalBlock.capacitors) {
         double v_new = 0.0;
         if (c.nodePlate1 != 0) v_new += solverRes.solution[c.nodePlate1 - 1];
@@ -243,5 +241,5 @@ inline SimulationResult CircuitSim::stepTransient(TensorNetlist& netlist, double
         c.voltage_prev_V = v_new;
     }
 
-    return {solverRes.solution, solverRes.finalResidual, solverRes.iterations, solverRes.converged};
+    return {currentTime, solverRes.solution, {solverRes.iterations, solverRes.finalResidual, solverRes.converged}};
 }
