@@ -46,8 +46,12 @@ HelloWorld
 HelloWorld.js
 HelloWorld.wasm
 qtloader.js
+qtlogo.svg
+server.pid
 
 # Temporary files
 *.tmp
 *~
 *.log
+.DS_Store
+__pycache__/

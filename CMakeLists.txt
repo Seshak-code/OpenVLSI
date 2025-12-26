@@ -67,7 +67,11 @@ find_package(Qt6 COMPONENTS Core Widgets REQUIRED)
 qt_standard_project_setup()
 
 # Create executable
-qt_add_executable(${PROJECT_NAME} main.cpp)
+qt_add_executable(${PROJECT_NAME} 
+    main.cpp
+    simulator_window.cpp
+    simulator_window.h
+)
 
 # Link Qt libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE 

@@ -17,11 +17,13 @@
 inline void stampResistor(int nodeI, int nodeJ, double resistance, MatrixConstructor& matrixBuilder)
 {
     double g = 1.0 / resistance;
-    if (nodeI != 0) {
+    if (nodeI != 0) 
+    {
         matrixBuilder.add(nodeI - 1, nodeI - 1, g);
         if (nodeJ != 0) matrixBuilder.add(nodeI - 1, nodeJ - 1, -g);
     }
-    if (nodeJ != 0) {
+    if (nodeJ != 0) 
+    {
         matrixBuilder.add(nodeJ - 1, nodeJ - 1, g);
         if (nodeI != 0) matrixBuilder.add(nodeJ - 1, nodeI - 1, -g);
     }
@@ -60,79 +62,102 @@ inline void stampVoltageSourceAsNorton(int nodePos, int nodeNeg, double voltage,
     if (nodeNeg != 0) rhsVector[nodeNeg - 1] -= i_eq;
 }
 
+inline void stampMosfet(int d, int g, int s, int b, double gm, double gds, MatrixConstructor& mat) {
+    // Linearized Small-Signal Model Stamp
+    // i_d += gm * (vg - vs) + gds * (vd - vs)
+    // i_s -= gm * (vg - vs) - gds * (vd - vs)
+    
+    auto add = [&](int r, int c, double val) {
+        if (r != 0 && c != 0) mat.add(r-1, c-1, val);
+    };
+    
+    // GM Term (VCCS)
+    add(d, g, gm); add(d, s, -gm);
+    add(s, g, -gm); add(s, s, gm);
+    
+    // GDS Term (Resistor)
+    add(d, d, gds); add(d, s, -gds);
+    add(s, d, -gds); add(s, s, gds);
+}
+
 // ============================================================================
 // CIRCUITSIM CLASS
 // ============================================================================
 
-struct SimulationResult {
+struct SimulationResult 
+{
     std::vector<double> nodeVoltages;
     double finalResidual;
     int iterations;
     bool converged;
 };
 
+#include "tensorscheduler.h"
+
+// ... (Existing stamp functions remain unchanged) ...
+
 class CircuitSim
 {
-public:
-    CircuitSim() = default;
-    
-    SimulationResult solveDC(TensorNetlist& netlist);
-    SimulationResult stepTransient(TensorNetlist& netlist, double timeStep);
+    public:
+        CircuitSim() = default;
+        
+        SimulationResult solveDC(TensorNetlist& netlist);
+        SimulationResult stepTransient(TensorNetlist& netlist, double timeStep);
 
-private:
-    MatrixConstructor matrixBuilder;
-    std::vector<double> rhsVector;
+    private:
+        MatrixConstructor matrixBuilder;
+        std::vector<double> rhsVector;
+        TensorScheduler scheduler; // Phase 1.5: Integrated Scheduler
 };
-
-// ============================================================================
-// IMPLEMENTATION
-// ============================================================================
 
 inline SimulationResult CircuitSim::solveDC(TensorNetlist& netlist)
 {
-    // Ensure we have enough nodes in vectors
     if (netlist.numGlobalNodes == 0) return {{}, 0.0, 0, true};
 
     matrixBuilder = MatrixConstructor();
     rhsVector.assign(netlist.numGlobalNodes, 0.0);
+    
+    // Phase 1.5: Run Scheduler to group instances
+    scheduler.schedule(netlist);
 
     // 1. Stamp Global Components
     for (const auto& r : netlist.globalBlock.resistors) {
-        stampResistor(r.nodePos, r.nodeNeg, r.resistance, matrixBuilder);
+        stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
     }
     for (const auto& v : netlist.globalBlock.voltageSources) {
-        stampVoltageSourceAsNorton(v.nodePos, v.nodeNeg, v.voltage, matrixBuilder, rhsVector);
+        stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
     }
 
-    // 2. Stamp Instances
-    for (const auto& instance : netlist.instances) {
-        auto it = std::find_if(netlist.blockDefinitions.begin(), netlist.blockDefinitions.end(), 
-                               [&](const TensorBlock& b) { return b.name == instance.blockName; });
-        if (it == netlist.blockDefinitions.end()) continue;
+    // 2. Stamp Batched Jobs (Intelligence!)
+    for (const auto& job : scheduler.jobs) {
+        const TensorBlock& block = *job.blockTmpl;
+        
+        for (int instanceIdx : job.instanceIds) {
+            const auto& instance = netlist.instances[instanceIdx];
+            
+            auto mapNode = [&](int localNode) {
+                return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
+            };
 
-        const TensorBlock& block = *it;
-        auto mapNode = [&](int localNode) {
-            return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
-        };
-
-        for (const auto& r : block.resistors) {
-            stampResistor(mapNode(r.nodePos), mapNode(r.nodeNeg), r.resistance, matrixBuilder);
+            // Stamp Resistors
+            for (const auto& r : block.resistors) {
+                stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2), r.resistance_ohms, matrixBuilder);
+            }
+            
+            // Stamp MOSFETs (Placeholder for now - purely structural)
+            // Future logic: check instance.parameters["W"] to override block.mosfets[i].W
         }
     }
     
-    // Add small diagonal term to prevent singularity if nodes are floating
-    // (This is a simple hack for robustness)
+    // Add small diagonal term for robustness
     for(int i=0; i<netlist.numGlobalNodes; ++i) {
         matrixBuilder.add(i, i, 1e-12);
     }
 
     Csr_matrix A = matrixBuilder.createCsr();
-    
-    // Safety check for empty matrix (single node circuit)
     if (A.rows == 0) return {{}, 0.0, 0, true};
     
     SolverResult solverRes = solvePCG(A, rhsVector);
-    
     return {solverRes.solution, solverRes.finalResidual, solverRes.iterations, solverRes.converged};
 }
 
@@ -142,36 +167,58 @@ inline SimulationResult CircuitSim::stepTransient(TensorNetlist& netlist, double
 
     matrixBuilder = MatrixConstructor();
     rhsVector.assign(netlist.numGlobalNodes, 0.0);
+    
+    // Phase 1.5: Batch Scheduling
+    scheduler.schedule(netlist);
 
     // 1. Stamp Global Components
     for (const auto& r : netlist.globalBlock.resistors) {
-        stampResistor(r.nodePos, r.nodeNeg, r.resistance, matrixBuilder);
+        stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
     }
-    for (const auto& c : netlist.globalBlock.capacitors) {
-        stampCapacitorTrapezoidal(c.nodePos, c.nodeNeg, c.capacitance, timeStep, 
-                                   c.v_prev, c.i_prev, matrixBuilder, rhsVector);
+    for (auto& c : netlist.globalBlock.capacitors) {
+        stampCapacitorTrapezoidal(c.nodePlate1, c.nodePlate2, c.capacitance_farads, timeStep, 
+                                   c.voltage_prev_V, c.current_prev_A, matrixBuilder, rhsVector);
     }
     for (const auto& v : netlist.globalBlock.voltageSources) {
-        stampVoltageSourceAsNorton(v.nodePos, v.nodeNeg, v.voltage, matrixBuilder, rhsVector);
+        stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
     }
 
-    // 2. Stamp Instances
-    for (const auto& instance : netlist.instances) {
-        auto it = std::find_if(netlist.blockDefinitions.begin(), netlist.blockDefinitions.end(), 
-                               [&](const TensorBlock& b) { return b.name == instance.blockName; });
-        if (it == netlist.blockDefinitions.end()) continue;
+    // 2. Stamp Batched Jobs
+    for (const auto& job : scheduler.jobs) {
+        const TensorBlock& block = *job.blockTmpl;
+        
+        for (int instanceIdx : job.instanceIds) {
+            const auto& instance = netlist.instances[instanceIdx];
+            
+            auto mapNode = [&](int localNode) {
+                return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
+            };
 
-        const TensorBlock& block = *it;
-        auto mapNode = [&](int localNode) {
-            return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
-        };
-
-        for (const auto& r : block.resistors) {
-            stampResistor(mapNode(r.nodePos), mapNode(r.nodeNeg), r.resistance, matrixBuilder);
+            for (const auto& r : block.resistors) {
+                stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2), r.resistance_ohms, matrixBuilder);
+            }
+            
+            // Stamp MOSFETs with Parameter Intelligence
+            for (const auto& m : block.mosfets) {
+                double W = m.channelWidth_m;
+                double L = m.channelLength_m;
+                
+                // Check for Instance Overrides (e.g. "M1.W")
+                std::string paramW = m.instanceName + ".W";
+                if (instance.parameters.count(paramW)) W = instance.parameters.at(paramW);
+                
+                std::string paramL = m.instanceName + ".L";
+                if (instance.parameters.count(paramL)) L = instance.parameters.at(paramL);
+                
+                // Simplified Small-Signal Model
+                double Kp = 200e-6; // uA/V^2
+                double Vov = 0.5;   // Overdrive assumption
+                double gm = Kp * (W/L) * Vov;
+                double gds = gm / 100.0;
+                
+                stampMosfet(mapNode(m.nodeDrain), mapNode(m.nodeGate), mapNode(m.nodeSource), mapNode(m.nodeBody), gm, gds, matrixBuilder);
+            }
         }
-        // NOTE: Capacitors in instances are not stamped here in this simple version
-        // because they need distinct history states for each instance!
-        // This is Phase 1.5 work.
     }
 
     for(int i=0; i<netlist.numGlobalNodes; ++i) {
@@ -186,14 +233,14 @@ inline SimulationResult CircuitSim::stepTransient(TensorNetlist& netlist, double
     // 3. Update Global History
     for (auto& c : netlist.globalBlock.capacitors) {
         double v_new = 0.0;
-        if (c.nodePos != 0) v_new += solverRes.solution[c.nodePos - 1];
-        if (c.nodeNeg != 0) v_new -= solverRes.solution[c.nodeNeg - 1];
+        if (c.nodePlate1 != 0) v_new += solverRes.solution[c.nodePlate1 - 1];
+        if (c.nodePlate2 != 0) v_new -= solverRes.solution[c.nodePlate2 - 1];
 
-        double G_eq = (2.0 * c.capacitance) / timeStep;
-        double I_eq = -G_eq * c.v_prev - c.i_prev;
+        double G_eq = (2.0 * c.capacitance_farads) / timeStep;
+        double I_eq = -G_eq * c.voltage_prev_V - c.current_prev_A;
         
-        c.i_prev = G_eq * v_new + I_eq;
-        c.v_prev = v_new;
+        c.current_prev_A = G_eq * v_new + I_eq;
+        c.voltage_prev_V = v_new;
     }
 
     return {solverRes.solution, solverRes.finalResidual, solverRes.iterations, solverRes.converged};
