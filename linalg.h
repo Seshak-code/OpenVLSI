@@ -218,9 +218,15 @@ inline std::vector<double> getDiagonalInverse(const Csr_matrix& matrix) {
     return diagonalInverse;
 }
 
-// ============================================================================
-// PRECONDITIONED CONJUGATE GRADIENT (PCG) SOLVER
-// ============================================================================
+/**
+ * @brief contains the results of a linear solver execution.
+ */
+struct SolverResult {
+    std::vector<double> solution;
+    double finalResidual;
+    int iterations;
+    bool converged;
+};
 
 /**
  * @brief Solves Ax = b using the Preconditioned Conjugate Gradient method.
@@ -231,9 +237,9 @@ inline std::vector<double> getDiagonalInverse(const Csr_matrix& matrix) {
  * @param rhsVector The right-hand side vector b.
  * @param tolerance Convergence tolerance (stops when ||r|| < tolerance).
  * @param maxIterations Maximum number of solver iterations.
- * @return std::vector<double> The solution vector x.
+ * @return SolverResult The solution vector, final residual, and iteration count.
  */
-inline std::vector<double> solvePCG(
+inline SolverResult solvePCG(
     const Csr_matrix& matrix, 
     const std::vector<double>& rhsVector, 
     double tolerance = 1e-10, 
@@ -258,11 +264,15 @@ inline std::vector<double> solvePCG(
     double residualDotPreconditioned = dotProduct(residual, preconditionedResidual);
     
     // Early exit if already converged
-    if (std::sqrt(residualDotPreconditioned) < tolerance) {
-        return solution;
+    double initialResidualNorm = std::sqrt(dotProduct(residual, residual));
+    if (initialResidualNorm < tolerance) {
+        return {solution, initialResidualNorm, 0, true};
     }
 
-    for (int iteration = 0; iteration < maxIterations; iteration++) {
+    int iteration = 0;
+    double currentResidualNorm = initialResidualNorm;
+
+    for (iteration = 0; iteration < maxIterations; iteration++) {
         // matrixTimesSearchDirection = A * searchDirection
         std::vector<double> matrixTimesSearchDirection(numUnknowns);
         matrixMultiplication(matrix, searchDirection.data(), matrixTimesSearchDirection.data());
@@ -280,9 +290,9 @@ inline std::vector<double> solvePCG(
         vectorAdd(residual, residual, matrixTimesSearchDirection, -stepSize);
         
         // Check for convergence
-        double residualNormSquared = dotProduct(residual, residual);
-        if (std::sqrt(residualNormSquared) < tolerance) {
-            break;
+        currentResidualNorm = std::sqrt(dotProduct(residual, residual));
+        if (currentResidualNorm < tolerance) {
+            return {solution, currentResidualNorm, iteration + 1, true};
         }
 
         // Apply Preconditioner: z = M^-1 * r
@@ -299,5 +309,5 @@ inline std::vector<double> solvePCG(
         residualDotPreconditioned = newResidualDotPreconditioned;
     }
     
-    return solution;
+    return {solution, currentResidualNorm, iteration, false};
 }

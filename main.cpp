@@ -5,6 +5,7 @@
 #include <QPlainTextEdit>
 #include <QLabel>
 #include <QString>
+#include "circuit.h"
 #include "circuitsim.h"
 
 class SimulatorWindow : public QWidget {
@@ -38,51 +39,43 @@ private:
         logArea->clear();
         logArea->appendPlainText("Initializing Circuit...");
 
-        CircuitSim sim;
+        // --- Build the Circuit (Netlist) ---
+        Circuit circuit;
         
-        // Build RC Low-Pass Filter
-        // Node 0: Ground
-        // Node 1: Input Source (5V Step)
-        // Node 2: Output (across Capacitor)
-        
-        // 1. Voltage Source: 5V DC step at Node 1
-        sim.addVoltageSource(1, 0, 5.0);
+        circuit.addVoltageSource(1, 0, 5.0);
         logArea->appendPlainText("Added Voltage Source: 5V (Node 1 -> GND)");
 
-        // 2. Resistor: 1kΩ between Node 1 and Node 2
-        sim.addResistor(1, 2, 1000.0);
+        circuit.addResistor(1, 2, 1000.0);
         logArea->appendPlainText("Added Resistor: 1kΩ (Node 1 -> Node 2)");
 
-        // 3. Capacitor: 1µF between Node 2 and Ground
-        sim.addCapacitor(2, 0, 1e-6); // 1uF
+        circuit.addCapacitor(2, 0, 1e-6);
         logArea->appendPlainText("Added Capacitor: 1µF (Node 2 -> GND)");
         
-        double timeStep = 0.00001; // 0.01ms (10us) - Higher resolution
+        // --- Create Simulator (Physics Engine) ---
+        CircuitSim sim;
+        
+        double timeStep = 0.00001; // 0.01ms (10us)
         double totalTime = 0.002; // 2ms
         
         logArea->appendPlainText("\nStarting Transient Analysis (DC Step Response)...");
         logArea->appendPlainText("Time(ms) \t V_out (Node 2)");
         logArea->appendPlainText("--------------------------------");
         
-        // Print Initial Condition (t=0)
         logArea->appendPlainText(QString("0.000 \t 0.0000 V"));
 
         double currentTime = 0.0;
         
-        // Simulation Loop
         while (currentTime < totalTime) {
-            // Step the simulation
-            std::vector<double> voltages = sim.stepTransient(timeStep);
+            SimulationResult result = sim.stepTransient(circuit, timeStep);
             
             currentTime += timeStep; // Increment time AFTER step
 
             // Extract Node 2 output
-            if (voltages.size() >= 2) {
-                double v_out = voltages[1]; // V_node2
+            if (result.nodeVoltages.size() >= 2) {
+                double v_out = result.nodeVoltages[1]; // V_node2
                 
-                // Print only every 10th step to keep log readable (every 0.1ms)
-                // Or just print all if short. Let's print every 0.1ms
-                if (std::abs(std::fmod(currentTime, 0.1)) < timeStep / 2.0 || currentTime < 0.05) {
+                // Print only every 10th step (every 0.1ms)
+                if (std::abs(std::fmod(currentTime, 0.0001)) < timeStep / 2.0 || currentTime < 0.00005) {
                      QString logLine = QString("%1 \t %2 V")
                         .arg(currentTime * 1000, 0, 'f', 3)
                         .arg(v_out, 0, 'f', 4);
