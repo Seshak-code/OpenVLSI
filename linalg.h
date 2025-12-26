@@ -3,7 +3,9 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 
 /**
  * @file linalg.h

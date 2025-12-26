@@ -63,43 +63,30 @@ message(STATUS "CMAKE_PREFIX_PATH = ${CMAKE_PREFIX_PATH}")
 
 # Find Qt6 (required)
 find_package(Qt6 COMPONENTS Core Widgets REQUIRED)
-message(STATUS "Found Qt6: ${Qt6_DIR}")
 
-# Find OpenMP (required for CPU multi-threading)
-# On macOS with Apple Clang, we need to point to Homebrew's libomp
-if(APPLE)
-    # First attempt: check if it's already in the path or has a root hint
-    find_package(OpenMP)
-    
-    # If not found, try the common Homebrew location
-    if(NOT OpenMP_FOUND)
-        set(OpenMP_ROOT "/opt/homebrew/opt/libomp")
-        find_package(OpenMP REQUIRED)
-    endif()
-else()
-    find_package(OpenMP REQUIRED)
-endif()
-
-if(OpenMP_CXX_FOUND)
-    message(STATUS "Found OpenMP: ${OpenMP_CXX_FLAGS}")
-endif()
-
-# Enable CMake automoc/autouic/autorcc conveniences
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTORCC ON)
-
-# NOTE: Eigen3 dependency removed. The project uses an internal linear algebra library.
+qt_standard_project_setup()
 
 # Create executable
-add_executable(${PROJECT_NAME} MACOSX_BUNDLE main.cpp)
+qt_add_executable(${PROJECT_NAME} main.cpp)
 
-# Link Qt and OpenMP libraries
+# Link Qt libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     Qt6::Core 
     Qt6::Widgets
-    OpenMP::OpenMP_CXX
 )
+
+# Link OpenMP only if found (and not Wasm)
+if(NOT EMSCRIPTEN AND OpenMP_CXX_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
+# WebAssembly specific link flags
+if(EMSCRIPTEN)
+    target_link_options(${PROJECT_NAME} PRIVATE 
+        "--bind" 
+        "-sERROR_ON_UNDEFINED_SYMBOLS=0"
+    )
+endif()
 
 # macOS specific: Ensure system frameworks like AGL are found
 if(APPLE)

@@ -1,197 +1,67 @@
 #pragma once
 #include "linalg.h"
-#include "circuit.h"  // For component structs (not TensorNetlist yet - you implement that)
+#include "circuit.h"
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 /**
  * @file circuitsim.h
  * @brief Circuit Simulator - Physics and Solver Engine.
- * 
- * ============================================================================
- * IMPLEMENTATION GUIDE: TENSOR-AWARE MNA SOLVER
- * ============================================================================
- * 
- * This file should handle:
- *   1. Stamping components into the MNA matrix.
- *   2. Integration methods (Trapezoidal, Gear-2).
- *   3. Newton-Raphson for non-linear components.
- *   4. (Future) Hierarchical expansion of TensorNetlist instances.
  */
 
 // ============================================================================
-// STAMP FUNCTIONS (Already Implemented - Use as Reference)
+// STAMP FUNCTIONS (Component -> Matrix Entry)
 // ============================================================================
 
-/**
- * RESISTOR STAMP: i = G * v (G = 1/R)
- * Stamps conductance G into the MNA matrix for nodes i and j.
- * 
- * IMPLEMENTATION:
- *   if (nodeI != 0): A[nodeI-1][nodeI-1] += G
- *   if (nodeJ != 0): A[nodeJ-1][nodeJ-1] += G
- *   if (nodeI != 0 && nodeJ != 0):
- *       A[nodeI-1][nodeJ-1] -= G
- *       A[nodeJ-1][nodeI-1] -= G
- */
+inline void stampResistor(int nodeI, int nodeJ, double resistance, MatrixConstructor& matrixBuilder)
+{
+    double g = 1.0 / resistance;
+    if (nodeI != 0) {
+        matrixBuilder.add(nodeI - 1, nodeI - 1, g);
+        if (nodeJ != 0) matrixBuilder.add(nodeI - 1, nodeJ - 1, -g);
+    }
+    if (nodeJ != 0) {
+        matrixBuilder.add(nodeJ - 1, nodeJ - 1, g);
+        if (nodeI != 0) matrixBuilder.add(nodeJ - 1, nodeI - 1, -g);
+    }
+}
 
-/**
- * CAPACITOR STAMP (Trapezoidal Rule):
- * G_eq = 2C/h
- * I_eq = -G_eq * v_prev - i_prev
- * 
- * Stamps G_eq like a resistor, stamps I_eq into RHS.
- */
+inline void stampCapacitorTrapezoidal(int nodeI, int nodeJ, double C, double h, 
+                                       double v_prev, double i_prev, 
+                                       MatrixConstructor& matrixBuilder, std::vector<double>& rhsVector)
+{
+    double G_eq = (2.0 * C) / h;
+    double I_eq = -G_eq * v_prev - i_prev;
 
-/**
- * VOLTAGE SOURCE STAMP (Norton Equivalent for SPD):
- * Uses a very small resistance (1e-6 Ohm) to model an ideal source.
- * i_eq = V / r_int
- * 
- * Stamps r_int as a resistor, stamps i_eq into RHS.
- */
+    if (nodeI != 0) {
+        matrixBuilder.add(nodeI - 1, nodeI - 1, G_eq);
+        if (nodeJ != 0) matrixBuilder.add(nodeI - 1, nodeJ - 1, -G_eq);
+    }
+    if (nodeJ != 0) {
+        matrixBuilder.add(nodeJ - 1, nodeJ - 1, G_eq);
+        if (nodeI != 0) matrixBuilder.add(nodeJ - 1, nodeI - 1, -G_eq);
+    }
 
-// ============================================================================
-// TODO: IMPLEMENT PHASE 2 - DETERMINISTIC MATRIX ASSEMBLY
-// ============================================================================
-/**
- * WHY DETERMINISM?
- * In VLSI, we use "Topology Hashing" to identify duplicate blocks. If two 
- * threads stamp a matrix and one adds (A+B) while the other adds (B+A), 
- * floating point rounding errors might cause the resulting double to differ 
- * by 1 least-significant-bit. This breaks the hash.
- * 
- * PSEUDO-CODE:
- * 
- * void assembleMatrixDeterministically(TensorNetlist& netlist) {
- *     // 1. Collect all "Triplets" (row, col, value) into a list.
- *     // 2. SORT the triplets using a strict ordering (row first, then col).
- *     // 3. Perform a deterministic merge (sum values for identical row/col).
- *     // 4. Construct CSR matrix from the sorted, merged triplets.
- *     
- *     // IMPORTANT: Never use OpenMP 'atomic add' directly into the matrix
- *     // values array if bit-level determinism is required across different
- *     // thread counts.
- * }
- */
+    if (nodeI != 0) rhsVector[nodeI - 1] -= I_eq;
+    if (nodeJ != 0) rhsVector[nodeJ - 1] += I_eq;
+}
+
+inline void stampVoltageSourceAsNorton(int nodePos, int nodeNeg, double voltage, 
+                                        MatrixConstructor& matrixBuilder, std::vector<double>& rhsVector)
+{
+    double r_int = 1e-6;
+    double g_int = 1.0 / r_int;
+    double i_eq = voltage * g_int;
+
+    stampResistor(nodePos, nodeNeg, r_int, matrixBuilder);
+
+    if (nodePos != 0) rhsVector[nodePos - 1] += i_eq;
+    if (nodeNeg != 0) rhsVector[nodeNeg - 1] -= i_eq;
+}
 
 // ============================================================================
-// TODO: IMPLEMENT PHASE 2 - RESIDUAL MONITORING
-// ============================================================================
-/**
- * PSEUDO-CODE:
- * 
- * double calculateResidual(const Csr_matrix& A, const std::vector<double>& x, const std::vector<double>& b) {
- *     // Compute r = b - Ax
- *     // result = sqrt(dot_product(r, r))
- *     // If (result > TOLERANCE) -> Flag numerical instability or non-convergence
- * }
- */
-/**
- * PSEUDO-CODE for solveDC(TensorNetlist& netlist):
- * 
- * 1. Clear matrixBuilder and rhsVector
- * 2. Allocate rhsVector for netlist.numGlobalNodes
- * 
- * 3. STAMP GLOBAL COMPONENTS:
- *    for each resistor in netlist.globalBlock.resistors:
- *        stampResistor(r.nodePos, r.nodeNeg, r.resistance, matrixBuilder)
- *    for each voltageSource in netlist.globalBlock.voltageSources:
- *        stampVoltageSourceAsNorton(...)
- * 
- * 4. STAMP INSTANCES (Hierarchical Expansion):
- *    for each instance in netlist.instances:
- *        // Find the block definition
- *        TensorBlock& block = findBlockByName(netlist.blockDefinitions, instance.blockName)
- *        
- *        // Create a lambda to map local nodes to global nodes
- *        auto mapNode = [&](int localNode) -> int {
- *            if (localNode == 0) return 0;  // Ground stays ground
- *            return instance.nodeMapping[localNode - 1];
- *        };
- *        
- *        // Stamp each component in the block with mapped nodes
- *        for each resistor in block.resistors:
- *            stampResistor(mapNode(r.nodePos), mapNode(r.nodeNeg), r.resistance, matrixBuilder)
- *        // ... other components
- * 
- * 5. CREATE CSR MATRIX AND SOLVE:
- *    Csr_matrix A = matrixBuilder.createCsr()
- *    SolverResult solverRes = solvePCG(A, rhsVector)
- *    return SimulationResult{solverRes.solution, solverRes.finalResidual, ...}
- */
-
-// ============================================================================
-// TODO: IMPLEMENT TENSOR-INDEXED BATCHED SOLVING (Phase 3+)
-// ============================================================================
-/**
- * FUTURE PSEUDO-CODE for Batched Solving:
- * 
- * The key insight: If N instances of the same TensorBlock exist, they all have
- * the SAME internal structure (same matrix pattern). We can:
- * 
- * 1. SYMBOLIC FACTORIZATION (Once per unique block type):
- *    symbolicFactor = computeSymbolicFactorization(block)
- *    cache this for all instances of this block type
- * 
- * 2. NUMERICAL FACTORIZATION (Per instance):
- *    For each instance, fill in the actual values (which may differ due to
- *    process variation in multi-corner simulation).
- * 
- * 3. BATCHED SOLVE (Tensor Operation):
- *    Instead of:
- *        for instance in instances: solve(instance.matrix)  // N solves
- *    We do:
- *        batchSolve(instances, symbolicFactor)  // 1 "Tensor" solve on GPU
- */
-
-// ============================================================================
-// TODO: IMPLEMENT NEWTON-RAPHSON FOR NON-LINEAR COMPONENTS (Phase 2)
-// ============================================================================
-/**
- * PSEUDO-CODE for Newton-Raphson in solveDC:
- * 
- * std::vector<double> V_guess(numNodes, 0.0);  // Initial guess
- * 
- * for (int iter = 0; iter < MAX_NR_ITERATIONS; iter++) {
- *     // Clear and re-stamp the matrix
- *     matrixBuilder = MatrixConstructor();
- *     rhsVector.assign(numNodes, 0.0);
- *     
- *     // Stamp linear components (resistors, sources) - unchanged
- *     
- *     // Stamp non-linear components with LINEARIZED models at V_guess:
- *     for each diode in circuit.diodes:
- *         double V_d = V_guess[diode.nodePos - 1] - V_guess[diode.nodeNeg - 1];
- *         double I_d = Is * (exp(V_d / Vt) - 1);
- *         double g_d = (Is / Vt) * exp(V_d / Vt);  // Conductance at this point
- *         double I_eq = I_d - g_d * V_d;            // Equivalent current source
- *         
- *         stampResistor(diode.nodePos, diode.nodeNeg, 1.0/g_d, matrixBuilder);
- *         stampCurrentSource(diode.nodePos, diode.nodeNeg, I_eq, rhsVector);
- *     
- *     // Solve the linearized system
- *     Csr_matrix A = matrixBuilder.createCsr();
- *     SolverResult res = solvePCG(A, rhsVector);
- *     std::vector<double> V_new = res.solution;
- *     
- *     // Check convergence
- *     double maxDelta = 0.0;
- *     for (int i = 0; i < numNodes; i++) {
- *         maxDelta = std::max(maxDelta, std::abs(V_new[i] - V_guess[i]));
- *     }
- *     
- *     if (maxDelta < NR_TOLERANCE) {
- *         return V_new;  // Converged!
- *     }
- *     
- *     V_guess = V_new;  // Update for next iteration
- * }
- * return V_guess;  // Return best guess if not converged
- */
-
-// ============================================================================
-// STRUCT DEFINITIONS (Keep these for your implementation)
+// CIRCUITSIM CLASS
 // ============================================================================
 
 struct SimulationResult {
@@ -201,19 +71,130 @@ struct SimulationResult {
     bool converged;
 };
 
+class CircuitSim
+{
+public:
+    CircuitSim() = default;
+    
+    SimulationResult solveDC(TensorNetlist& netlist);
+    SimulationResult stepTransient(TensorNetlist& netlist, double timeStep);
+
+private:
+    MatrixConstructor matrixBuilder;
+    std::vector<double> rhsVector;
+};
+
 // ============================================================================
-// TODO: IMPLEMENT CircuitSim CLASS
+// IMPLEMENTATION
 // ============================================================================
-/**
- * PSEUDO-CODE:
- * 
- * class CircuitSim {
- * public:
- *     SimulationResult solveDC(TensorNetlist& netlist);
- *     SimulationResult stepTransient(TensorNetlist& netlist, double timeStep);
- * 
- * private:
- *     MatrixConstructor matrixBuilder;
- *     std::vector<double> rhsVector;
- * };
- */
+
+inline SimulationResult CircuitSim::solveDC(TensorNetlist& netlist)
+{
+    // Ensure we have enough nodes in vectors
+    if (netlist.numGlobalNodes == 0) return {{}, 0.0, 0, true};
+
+    matrixBuilder = MatrixConstructor();
+    rhsVector.assign(netlist.numGlobalNodes, 0.0);
+
+    // 1. Stamp Global Components
+    for (const auto& r : netlist.globalBlock.resistors) {
+        stampResistor(r.nodePos, r.nodeNeg, r.resistance, matrixBuilder);
+    }
+    for (const auto& v : netlist.globalBlock.voltageSources) {
+        stampVoltageSourceAsNorton(v.nodePos, v.nodeNeg, v.voltage, matrixBuilder, rhsVector);
+    }
+
+    // 2. Stamp Instances
+    for (const auto& instance : netlist.instances) {
+        auto it = std::find_if(netlist.blockDefinitions.begin(), netlist.blockDefinitions.end(), 
+                               [&](const TensorBlock& b) { return b.name == instance.blockName; });
+        if (it == netlist.blockDefinitions.end()) continue;
+
+        const TensorBlock& block = *it;
+        auto mapNode = [&](int localNode) {
+            return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
+        };
+
+        for (const auto& r : block.resistors) {
+            stampResistor(mapNode(r.nodePos), mapNode(r.nodeNeg), r.resistance, matrixBuilder);
+        }
+    }
+    
+    // Add small diagonal term to prevent singularity if nodes are floating
+    // (This is a simple hack for robustness)
+    for(int i=0; i<netlist.numGlobalNodes; ++i) {
+        matrixBuilder.add(i, i, 1e-12);
+    }
+
+    Csr_matrix A = matrixBuilder.createCsr();
+    
+    // Safety check for empty matrix (single node circuit)
+    if (A.rows == 0) return {{}, 0.0, 0, true};
+    
+    SolverResult solverRes = solvePCG(A, rhsVector);
+    
+    return {solverRes.solution, solverRes.finalResidual, solverRes.iterations, solverRes.converged};
+}
+
+inline SimulationResult CircuitSim::stepTransient(TensorNetlist& netlist, double timeStep)
+{
+    if (netlist.numGlobalNodes == 0) return {{}, 0.0, 0, true};
+
+    matrixBuilder = MatrixConstructor();
+    rhsVector.assign(netlist.numGlobalNodes, 0.0);
+
+    // 1. Stamp Global Components
+    for (const auto& r : netlist.globalBlock.resistors) {
+        stampResistor(r.nodePos, r.nodeNeg, r.resistance, matrixBuilder);
+    }
+    for (const auto& c : netlist.globalBlock.capacitors) {
+        stampCapacitorTrapezoidal(c.nodePos, c.nodeNeg, c.capacitance, timeStep, 
+                                   c.v_prev, c.i_prev, matrixBuilder, rhsVector);
+    }
+    for (const auto& v : netlist.globalBlock.voltageSources) {
+        stampVoltageSourceAsNorton(v.nodePos, v.nodeNeg, v.voltage, matrixBuilder, rhsVector);
+    }
+
+    // 2. Stamp Instances
+    for (const auto& instance : netlist.instances) {
+        auto it = std::find_if(netlist.blockDefinitions.begin(), netlist.blockDefinitions.end(), 
+                               [&](const TensorBlock& b) { return b.name == instance.blockName; });
+        if (it == netlist.blockDefinitions.end()) continue;
+
+        const TensorBlock& block = *it;
+        auto mapNode = [&](int localNode) {
+            return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
+        };
+
+        for (const auto& r : block.resistors) {
+            stampResistor(mapNode(r.nodePos), mapNode(r.nodeNeg), r.resistance, matrixBuilder);
+        }
+        // NOTE: Capacitors in instances are not stamped here in this simple version
+        // because they need distinct history states for each instance!
+        // This is Phase 1.5 work.
+    }
+
+    for(int i=0; i<netlist.numGlobalNodes; ++i) {
+        matrixBuilder.add(i, i, 1e-12);
+    }
+
+    Csr_matrix A = matrixBuilder.createCsr();
+    if (A.rows == 0) return {{}, 0.0, 0, true};
+    
+    SolverResult solverRes = solvePCG(A, rhsVector);
+
+    // 3. Update Global History
+    for (auto& c : netlist.globalBlock.capacitors) {
+        double v_new = 0.0;
+        if (c.nodePos != 0) v_new += solverRes.solution[c.nodePos - 1];
+        if (c.nodeNeg != 0) v_new -= solverRes.solution[c.nodeNeg - 1];
+
+        double G_eq = (2.0 * c.capacitance) / timeStep;
+        double I_eq = -G_eq * c.v_prev - c.i_prev;
+        
+        c.i_prev = G_eq * v_new + I_eq;
+        c.v_prev = v_new;
+    }
+
+    return {solverRes.solution, solverRes.finalResidual, solverRes.iterations, solverRes.converged};
+}

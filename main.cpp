@@ -5,13 +5,14 @@
 #include <QPlainTextEdit>
 #include <QLabel>
 #include <QString>
+#include <QTimer>
 #include "circuit.h"
 #include "circuitsim.h"
 
 class SimulatorWindow : public QWidget {
 public:
     SimulatorWindow() {
-        setWindowTitle("CuteApp - Circuit Simulator");
+        setWindowTitle("CuteApp - Circuit Simulator (Wasm Ready)");
         resize(600, 400);
 
         auto* layout = new QVBoxLayout(this);
@@ -29,62 +30,78 @@ public:
         btnRun->setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; font-size: 14px;");
         layout->addWidget(btnRun);
 
-        connect(btnRun, &QPushButton::clicked, this, &SimulatorWindow::runSimulation);
+        connect(btnRun, &QPushButton::clicked, this, &SimulatorWindow::startSimulation);
+
+        simTimer = new QTimer(this);
+        connect(simTimer, &QTimer::timeout, this, &SimulatorWindow::stepSimulation);
     }
 
 private:
     QPlainTextEdit* logArea;
+    QTimer* simTimer;
+    
+    // Simulation State
+    TensorNetlist netlist;
+    CircuitSim sim;
+    double currentTime = 0.0;
+    const double timeStep = 0.00001; // 10us
+    const double totalTime = 0.002;  // 2ms
 
-    void runSimulation() {
+    void startSimulation() {
         logArea->clear();
-        logArea->appendPlainText("Initializing Circuit...");
+        logArea->appendPlainText("Initializing Hierarchical Netlist...");
 
-        // --- Build the Circuit (Netlist) ---
-        Circuit circuit;
+        // --- Build or Reset the Hierarchical Netlist ---
+        netlist = TensorNetlist(); // Clear previous state
         
-        circuit.addVoltageSource(1, 0, 5.0);
-        logArea->appendPlainText("Added Voltage Source: 5V (Node 1 -> GND)");
+        // Add components to the global block for now (flattened test)
+        netlist.addVoltageSource(1, 0, 5.0);
+        logArea->appendPlainText("Added Voltage Source (Global): 5V");
 
-        circuit.addResistor(1, 2, 1000.0);
-        logArea->appendPlainText("Added Resistor: 1kΩ (Node 1 -> Node 2)");
+        netlist.addResistor(1, 2, 1000.0);
+        logArea->appendPlainText("Added Resistor (Global): 1kΩ");
 
-        circuit.addCapacitor(2, 0, 1e-6);
-        logArea->appendPlainText("Added Capacitor: 1µF (Node 2 -> GND)");
+        netlist.addCapacitor(2, 0, 1e-6);
+        logArea->appendPlainText("Added Capacitor (Global): 1µF");
         
-        // --- Create Simulator (Physics Engine) ---
-        CircuitSim sim;
+        // Reset Sim State
+        sim = CircuitSim();
+        currentTime = 0.0;
         
-        double timeStep = 0.00001; // 0.01ms (10us)
-        double totalTime = 0.002; // 2ms
-        
-        logArea->appendPlainText("\nStarting Transient Analysis (DC Step Response)...");
+        logArea->appendPlainText("\nStarting Transient Analysis...");
         logArea->appendPlainText("Time(ms) \t V_out (Node 2)");
         logArea->appendPlainText("--------------------------------");
-        
         logArea->appendPlainText(QString("0.000 \t 0.0000 V"));
 
-        double currentTime = 0.0;
-        
-        while (currentTime < totalTime) {
-            SimulationResult result = sim.stepTransient(circuit, timeStep);
-            
-            currentTime += timeStep; // Increment time AFTER step
+        // Start the non-blocking loop
+        simTimer->start(0); 
+    }
 
-            // Extract Node 2 output
-            if (result.nodeVoltages.size() >= 2) {
-                double v_out = result.nodeVoltages[1]; // V_node2
-                
-                // Print only every 10th step (every 0.1ms)
-                if (std::abs(std::fmod(currentTime, 0.0001)) < timeStep / 2.0 || currentTime < 0.00005) {
-                     QString logLine = QString("%1 \t %2 V")
-                        .arg(currentTime * 1000, 0, 'f', 3)
-                        .arg(v_out, 0, 'f', 4);
-                    logArea->appendPlainText(logLine);
-                }
+    void stepSimulation() {
+        // Run a batch of steps (e.g., 100) per frame to keep UI responsive but simulation fast
+        for (int i = 0; i < 100; ++i) {
+            if (currentTime >= totalTime) {
+                simTimer->stop();
+                logArea->appendPlainText("\nSimulation Complete.");
+                return;
+            }
+
+            // Perform one physics step
+            SimulationResult result = sim.stepTransient(netlist, timeStep);
+            currentTime += timeStep;
+
+            // Log output (decimate to avoid spamming the logs)
+             // Print only every 10th step (every 0.1ms)
+            if (std::abs(std::fmod(currentTime, 0.0001)) < timeStep / 2.0) {
+                 double v_out = 0.0;
+                 if (result.nodeVoltages.size() >= 2) v_out = result.nodeVoltages[1];
+
+                 QString logLine = QString("%1 \t %2 V")
+                    .arg(currentTime * 1000, 0, 'f', 3)
+                    .arg(v_out, 0, 'f', 4);
+                logArea->appendPlainText(logLine);
             }
         }
-        
-        logArea->appendPlainText("\nSimulation Complete.");
     }
 };
 

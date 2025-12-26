@@ -14,8 +14,10 @@ CMakeUserPresets.json
 
 # Build directories
 build/
+build_wasm/
 out/
 cmake-build-*/
+build-*/
 
 # Visual Studio
 .vs/
@@ -24,20 +26,28 @@ cmake-build-*/
 # Visual Studio Code
 .vscode/
 
-# Qt Creator
-*.pro.user
+# macOS
+.DS_Store
+*.app/
 
-# Qt generated moc files and build artifacts
-build-*/
+# Qt bits
+.qmake.stash
+*.pro.user
+moc_*.cpp
 *.moc
 *.qrc
 
-# macOS
-.DS_Store
+# Compiled Object files
+*.o
+*.obj
 
-# Logs
-*.log
+# Executables
+HelloWorld
+HelloWorld.js
+HelloWorld.wasm
+qtloader.js
 
 # Temporary files
 *.tmp
 *~
+*.log
