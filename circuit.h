@@ -49,9 +49,9 @@ struct Capacitor {
     int nodePlate2;               // Negative plate (node index)
     double capacitance_farads;    // Capacitance in Farads [F]
     
-    // Transient History State
-    double voltage_prev_V = 0.0;   // Previous voltage across capacitor [V]
-    double current_prev_A = 0.0;   // Previous current through capacitor [A]
+    // Generic History Buffer (Index 0 = t_n-1, Index 1 = t_n-2, etc.)
+    std::vector<double> voltage_history; 
+    std::vector<double> current_history;
 };
 
 /**
@@ -67,9 +67,9 @@ struct Inductor {
     int nodeCoil2;                // Second coil terminal (node index)
     double inductance_henries;    // Inductance in Henries [H]
     
-    // Transient History State
-    double current_prev_A = 0.0;   // Previous current through inductor [A]
-    double voltage_prev_V = 0.0;   // Previous voltage (for Trapezoidal) [V]
+    // Generic History Buffer
+    std::vector<double> current_history;
+    std::vector<double> voltage_history;
 };
 
 /**
@@ -321,14 +321,21 @@ struct TensorBlock {
         assert(n1 >= 0 && n2 >= 0 && "Node indices must be non-negative");
         assert(C > 0 && "Capacitance must be positive");
         if (isFrozen) return;
-        capacitors.push_back({n1, n2, C});
+        Capacitor cap = {n1, n2, C};
+        // Initialize history with 3 slots (enough for Gear 3)
+        cap.voltage_history.assign(3, 0.0);
+        cap.current_history.assign(3, 0.0);
+        capacitors.push_back(cap);
         updateNodeCount(n1); updateNodeCount(n2);
     }
     void addInductor(int n1, int n2, double L) {
         assert(n1 >= 0 && n2 >= 0 && "Node indices must be non-negative");
         assert(L > 0 && "Inductance must be positive");
         if (isFrozen) return;
-        inductors.push_back({n1, n2, L});
+        Inductor ind = {n1, n2, L};
+        ind.current_history.assign(3, 0.0);
+        ind.voltage_history.assign(3, 0.0);
+        inductors.push_back(ind);
         updateNodeCount(n1); updateNodeCount(n2);
     }
     void addVoltageSource(int nPos, int nNeg, double V) {
