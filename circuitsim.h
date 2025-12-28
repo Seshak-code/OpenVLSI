@@ -160,6 +160,8 @@ public:
         }
     }
 
+    const std::vector<double>& getPrevVoltages() const { return prev_voltages; }
+
     /**
      * @brief Monitors health and recommends Tier-1 (dt) or Tier-2 (method) switch.
      * @return 0: OK, 1: Reduce DT, 2: Switch Method
@@ -263,6 +265,21 @@ class CircuitSim
         std::vector<double> rhsVector;
         TensorScheduler scheduler;
         
+        // NR Parameters
+        const double RELTOL = 1e-3;
+        const double VNTOL  = 1e-6;
+        const int MAX_NR_ITER = 20;
+
+        bool checkConvergence(const std::vector<double>& v_new, const std::vector<double>& v_old) {
+            if (v_new.size() != v_old.size()) return false;
+            for (size_t i = 0; i < v_new.size(); ++i) {
+                double diff = std::abs(v_new[i] - v_old[i]);
+                double limit = RELTOL * std::max(std::abs(v_new[i]), std::abs(v_old[i])) + VNTOL;
+                if (diff > limit) return false;
+            }
+            return true;
+        }
+        
         // Phase 2: Numerical Integration Strategy
         std::unique_ptr<IIntegrationMethod> integrator;
         IntegratorArbiter arbiter; // The Arbiter instance
@@ -328,15 +345,62 @@ class CircuitSim
         void addDiagonalConditioning(int n) {
             for (int i = 0; i < n; ++i) matrixBuilder.add(i, i, 1e-12);
         }
+
+        void stampNonLinearDevices(TensorNetlist& netlist, const std::vector<double>& v_guess) 
+        {
+            // BLANK 1: Implement Non-Linear Stamping (Jacobian + Residual)
+            // Iterate over netlist.globalBlock.diodes, mosfets, etc.
+            // Use v_guess to calculate linearized equivalent conductance and current source.
+            TensorBlock& globalBlock = netlist.globalBlock;
+            
+            
+        }
 };
 
 // ... solveDC implementation ...
+
+inline SimulationStep CircuitSim::solveDC(TensorNetlist& netlist)
+{
+    if (netlist.numGlobalNodes == 0) return {0.0, {}, {0, 0.0, true}};
+
+    std::vector<double> v_guess(netlist.numGlobalNodes, 0.0);
+    // BLANK 2: Initial Guess Heuristics (Cold start vs Warm start)
+    
+    bool converged = false;
+    int total_iters = 0;
+
+    for (int it = 0; it < MAX_NR_ITER; ++it) {
+        matrixBuilder = MatrixConstructor();
+        rhsVector.assign(netlist.numGlobalNodes, 0.0);
+        
+        stampGlobalDC(netlist.globalBlock);
+        stampBatchedJobs(netlist, false);
+        stampNonLinearDevices(netlist, v_guess); 
+        addDiagonalConditioning(netlist.numGlobalNodes);
+
+        Csr_matrix A = matrixBuilder.createCsr();
+        SolverResult solverRes = solvePCG(A, rhsVector);
+        
+        std::vector<double> v_new = solverRes.solution;
+        // BLANK 3: NR Damping / Limiting (e.g. pnjlim for diodes)
+        
+        if (checkConvergence(v_new, v_guess)) {
+            v_guess = v_new;
+            converged = true;
+            total_iters = it + 1;
+            break;
+        }
+        v_guess = v_new;
+        total_iters = it + 1;
+    }
+
+    return {0.0, v_guess, {total_iters, 0.0, converged}};
+}
 
 inline SimulationStep CircuitSim::stepTransient(TensorNetlist& netlist, double timeStep, double currentTime)
 {
     if (netlist.numGlobalNodes == 0) return {currentTime, {}, {0, 0.0, true}};
 
-    // Initialization check for arbiter
     static bool arbiter_initialized = false;
     if (!arbiter_initialized) {
         arbiter.initialize(netlist);
@@ -346,80 +410,92 @@ inline SimulationStep CircuitSim::stepTransient(TensorNetlist& netlist, double t
     double achieved_dt = timeStep;
     int retries = 0;
     const int MAX_RETRIES = 4;
-    SolverResult solverRes;
+    
+    std::vector<double> v_final;
+    SolverResult lastSolverRes;
+    bool step_converged = false;
 
     while (retries < MAX_RETRIES) {
-        matrixBuilder = MatrixConstructor();
-        rhsVector.assign(netlist.numGlobalNodes, 0.0);
-        
-        scheduler.schedule(netlist);
-        stampGlobalTransient(netlist.globalBlock, achieved_dt);
-        stampBatchedJobs(netlist, true, achieved_dt);
-        addDiagonalConditioning(netlist.numGlobalNodes);
+        // NR Loop for current time step
+        std::vector<double> v_nr_guess = arbiter.getPrevVoltages(); // Start from last converged step
+        if (v_nr_guess.empty()) v_nr_guess.assign(netlist.numGlobalNodes, 0.0);
 
-        Csr_matrix A = matrixBuilder.createCsr();
-        if (A.rows == 0) return {currentTime, {}, {0, 0.0, true}};
-        
-        solverRes = solvePCG(A, rhsVector);
+        bool nr_converged = false;
+        for (int it = 0; it < MAX_NR_ITER; ++it) {
+            matrixBuilder = MatrixConstructor();
+            rhsVector.assign(netlist.numGlobalNodes, 0.0);
+            
+            scheduler.schedule(netlist);
+            stampGlobalTransient(netlist.globalBlock, achieved_dt);
+            stampBatchedJobs(netlist, true, achieved_dt);
+            stampNonLinearDevices(netlist, v_nr_guess);
+            addDiagonalConditioning(netlist.numGlobalNodes);
 
-        // --- Phase 2: Hardened Arbiter Logic ---
-        int suggestion = arbiter.analyzeStability(netlist, solverRes.solution, integrator.get());
+            Csr_matrix A = matrixBuilder.createCsr();
+            lastSolverRes = solvePCG(A, rhsVector);
+            
+            std::vector<double> v_new = lastSolverRes.solution;
+            // BLANK 3: NR Damping / Limiting
+            
+            if (checkConvergence(v_new, v_nr_guess)) {
+                v_nr_guess = v_new;
+                nr_converged = true;
+                break;
+            }
+            v_nr_guess = v_new;
+        }
 
-        if (suggestion == 1) { // Tier 1: Reduce DT
+        if (!nr_converged) {
+            // NR failed to converge at this DT, try Tier 1 reduction
             achieved_dt *= 0.5;
             retries++;
-            // std::cout << "[Arbiter] Instability detected. Reducing dt to " << achieved_dt << std::endl;
+            continue;
+        }
+
+        // NR converged, now check Physics Stability (Arbiter)
+        int suggestion = arbiter.analyzeStability(netlist, v_nr_guess, integrator.get());
+
+        if (suggestion == 1) { 
+            achieved_dt *= 0.5;
+            retries++;
             continue; 
-        } else if (suggestion == 2) { // Tier 2: Switch Method
+        } else if (suggestion == 2) { 
             if (integrator->getType() == IntegrationType::TRAPEZOIDAL) {
-                // std::cout << "[Arbiter] Ringing persists. Switching to Gear 2." << std::endl;
                 setIntegrationMethod(IntegrationType::GEAR_2);
-                // REDO solve once with new method? 
                 continue; 
             }
         }
         
-        // Suggestion 0 or reached limit
+        v_final = v_nr_guess;
+        step_converged = true;
         break;
     }
 
     // Update Global Capacitor History via Strategy
     for (auto& c : netlist.globalBlock.capacitors) {
         double v_new = 0.0;
-        if (c.nodePlate1 != 0) v_new += solverRes.solution[c.nodePlate1 - 1];
-        if (c.nodePlate2 != 0) v_new -= solverRes.solution[c.nodePlate2 - 1];
+        if (c.nodePlate1 != 0) v_new += v_final[c.nodePlate1 - 1];
+        if (c.nodePlate2 != 0) v_new -= v_final[c.nodePlate2 - 1];
 
-        // Back-calculate i_new for history consistency
         double i_new = 0.0; 
         IntegrationType type = integrator->getType();
         
         if (type == IntegrationType::TRAPEZOIDAL) {
              double G_eq = (2.0 * c.capacitance_farads) / achieved_dt;
-             double v_prev = c.voltage_history[0];
-             double i_prev = c.current_history[0];
-             i_new = G_eq * (v_new - v_prev) - i_prev;
+             i_new = G_eq * (v_new - c.voltage_history[0]) - c.current_history[0];
         } else if (type == IntegrationType::GEAR_1_EULER) {
              double G_eq = c.capacitance_farads / achieved_dt;
-             double v_prev = c.voltage_history[0];
-             i_new = G_eq * (v_new - v_prev);
+             i_new = G_eq * (v_new - c.voltage_history[0]);
         } else if (type == IntegrationType::GEAR_2) {
-             // BOOTSTRAP: If history[1] is 0 but we aren't at t=0, 
-             // we might need to fallback to Gear 1 for this update slot.
              if (c.voltage_history[1] == 0.0 && currentTime > achieved_dt) {
                   double G_eq = c.capacitance_farads / achieved_dt;
                   i_new = G_eq * (v_new - c.voltage_history[0]);
              } else {
-                  double v_n_minus_1 = c.voltage_history[0];
-                  double v_n_minus_2 = c.voltage_history[1];
-                  double term1 = 1.5 * v_new;
-                  double term2 = -2.0 * v_n_minus_1;
-                  double term3 = 0.5 * v_n_minus_2;
-                  i_new = (c.capacitance_farads / achieved_dt) * (term1 + term2 + term3);
+                  i_new = (c.capacitance_farads / achieved_dt) * (1.5 * v_new - 2.0 * c.voltage_history[0] + 0.5 * c.voltage_history[1]);
              }
         }
-        
         integrator->updateHistory(c.voltage_history, c.current_history, v_new, i_new);
     }
 
-    return {currentTime + achieved_dt, solverRes.solution, {solverRes.iterations, solverRes.finalResidual, solverRes.converged}};
+    return {currentTime + achieved_dt, v_final, {lastSolverRes.iterations, lastSolverRes.finalResidual, step_converged}};
 }

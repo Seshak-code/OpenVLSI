@@ -42,6 +42,10 @@ struct Csr_matrix {
 
 /**
  * @brief A single matrix entry before compression.
+ *
+ * This takes the nodes (rows) and the branches (columns) as indices and the value as an object to be stored in the CSR matrix.
+ * For Example, the node 1 and branch 2 will be stored as (1, 2, value). This will later be stamped into the CSR matrix.
+ * More or less compressed the matrix into a 1D array.
  */
 struct Triplet {
     int row;
@@ -101,11 +105,14 @@ public:
         }
 
         // Sort triplets by row, then by column for duplicate merging
+        // gamma function needs an arbitrary a & b in the sort function to calculate the sort order
         std::sort(triplets.begin(), triplets.end(), [](const Triplet& a, const Triplet& b) 
         {
             return (a.row < b.row || (a.row == b.row && a.col < b.col));
         });
 
+        // the row pointer is used to store the starting index of each row in the values array
+        // this is because the values array only stores non-zero values, essentially a flattened matrix (2d -> 1d)
         matrix.row_pointer.assign(numRows + 1, 0);
 
         // Merge duplicates and fill values/columns
