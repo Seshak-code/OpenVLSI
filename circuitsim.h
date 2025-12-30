@@ -6,10 +6,11 @@
 #include <algorithm>
 #include <cassert>  // NASA Rule #5
 
-/**
- * @file circuitsim.h
- * @brief Circuit Simulator - Physics and Solver Engine.
+/*
+ * circuitsim.h
+ * Circuit Simulator - Physics and Solver Engine.
  */
+
 
 // ============================================================================
 // STAMP FUNCTIONS (Component -> Matrix Entry)
@@ -92,22 +93,24 @@ inline void stampMosfet(int d, int g, int s, int b, double gm, double gds, Matri
 // CIRCUITSIM CLASS
 // ============================================================================
 
-/**
- * @brief CircuitSim - Physics and Solver Engine.
- * 
- * In Phase 0/1, this produces SimulationResult (legacy) or writes to a 
+/*
+ * CircuitSim - Physics and Solver Engine.
+ *
+ * In Phase 0/1, this produces SimulationResult (legacy) or writes to a
  * SimulationTrace (modern research-grade).
  */
+
 #include "integration_method.h"
 
 // ... (SimTrace/TensorScheduler includes)
 
 // ... (Previous includes) ...
 
-/**
- * @brief Heuristic Arbiter for Adaptive Integration (Hardened).
+/*
+ * Heuristic Arbiter for Adaptive Integration (Hardened).
  * Monitors energy stability, weighted ringing, and LTE.
  */
+
 class IntegratorArbiter {
 private:
     std::vector<double> prev_voltages;
@@ -162,10 +165,11 @@ public:
 
     const std::vector<double>& getPrevVoltages() const { return prev_voltages; }
 
-    /**
-     * @brief Monitors health and recommends Tier-1 (dt) or Tier-2 (method) switch.
-     * @return 0: OK, 1: Reduce DT, 2: Switch Method
+    /*
+     * Monitors health and recommends Tier-1 (dt) or Tier-2 (method) switch.
+     * Returns: 0 = OK, 1 = Reduce DT, 2 = Switch Method
      */
+
     int analyzeStability(const TensorNetlist& netlist, const std::vector<double>& current_voltages, IIntegrationMethod* integrator) {
         if (current_voltages.empty()) return 0;
         if (current_voltages.size() != prev_voltages.size()) {
@@ -266,9 +270,10 @@ class CircuitSim
         TensorScheduler scheduler;
         
         // NR Parameters
-        const double RELTOL = 1e-3;
-        const double VNTOL  = 1e-6;
-        const int MAX_NR_ITER = 20;
+        static constexpr double RELTOL = 1e-3;
+        static constexpr double VNTOL  = 1e-6;
+        static constexpr int MAX_NR_ITER = 20;
+
 
         bool checkConvergence(const std::vector<double>& v_new, const std::vector<double>& v_old) {
             if (v_new.size() != v_old.size()) return false;
@@ -369,7 +374,8 @@ inline SimulationStep CircuitSim::solveDC(TensorNetlist& netlist)
     bool converged = false;
     int total_iters = 0;
 
-    for (int it = 0; it < MAX_NR_ITER; ++it) {
+    for (int it = 0; it < MAX_NR_ITER; ++it) 
+    {
         matrixBuilder = MatrixConstructor();
         rhsVector.assign(netlist.numGlobalNodes, 0.0);
         

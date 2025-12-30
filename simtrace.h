@@ -3,29 +3,33 @@
 #include <string>
 #include <chrono>
 
-/**
- * @file simtrace.h
- * @brief Simulation Trace API - Decoupled data storage for simulation results.
- * 
+/*
+ * simtrace.h
+ * Simulation Trace API - Decoupled data storage for simulation results.
+ *
  * This enables:
  * 1. Headless runs (save trace to disk).
  * 2. GUI Replay (scrub through time).
  * 3. Debug Attribution (view residuals/stats per step).
  */
 
-struct SolverStats {
+
+struct SolverStats 
+{
     int iterations = 0;
     double residual = 0.0;
     bool converged = false;
 };
 
-struct SimulationStep {
+struct SimulationStep 
+{
     double time = 0.0;
     std::vector<double> nodeVoltages;
     SolverStats stats;
 };
 
-class SimulationTrace {
+class SimulationTrace 
+{
 public:
     std::string netlistName;
     std::string timestamp;

@@ -5,10 +5,10 @@
 #include <map>
 #include <cassert>  // NASA Rule #5
 
-/**
- * @file circuit.h
- * @brief Circuit Netlist - Component definitions and hierarchical storage.
- * 
+/*
+ * circuit.h
+ * Circuit Netlist - Component definitions and hierarchical storage.
+ *
  * Variable Naming Convention (EE Standard):
  *   - Resistor: nodeTerminal1/2
  *   - Capacitor: nodePlate1/2
@@ -19,12 +19,13 @@
  *   - Controlled Sources: nodeOutputPos/Neg, nodeControlPos/Neg
  */
 
+
 // ============================================================================
 // PASSIVE COMPONENTS
 // ============================================================================
 
-/**
- * @brief Resistor (R)
+/*
+ * Resistor (R)
  * Ohm's Law: V = I * R
  * MNA Stamp (Conductance Form):
  *   G[n1][n1] += 1/R, G[n2][n2] += 1/R
@@ -36,8 +37,8 @@ struct Resistor {
     double resistance_ohms;       // Resistance in Ohms [Ω]
 };
 
-/**
- * @brief Capacitor (C)
+/*
+ * Capacitor (C)
  * Physics: i_C = C * dv_C/dt
  * Trapezoidal Integration Model:
  *   G_eq = 2*C / dt
@@ -54,8 +55,8 @@ struct Capacitor {
     std::vector<double> current_history;
 };
 
-/**
- * @brief Inductor (L)
+/*
+ * Inductor (L)
  * Physics: v_L = L * di_L/dt
  * Backward Euler Integration Model:
  *   R_eq = L / dt
@@ -72,8 +73,8 @@ struct Inductor {
     std::vector<double> voltage_history;
 };
 
-/**
- * @brief Mutual Inductor (K) - Transformer Coupling
+/*
+ * Mutual Inductor (K) - Transformer Coupling
  * Physics:
  *   v1 = L1 * di1/dt + M * di2/dt
  *   v2 = M * di1/dt + L2 * di2/dt
@@ -89,8 +90,8 @@ struct MutualInductor {
 // INDEPENDENT SOURCES
 // ============================================================================
 
-/**
- * @brief Independent Voltage Source (V)
+/*
+ * Independent Voltage Source (V)
  * Ideal: Forces v(+) - v(-) = V_dc
  * Adds an auxiliary branch current to MNA.
  */
@@ -100,8 +101,8 @@ struct VoltageSource {
     double voltage_V;             // DC Voltage [V]
 };
 
-/**
- * @brief Independent Current Source (I)
+/*
+ * Independent Current Source (I)
  * Ideal: Forces i = I_dc (from + to -)
  * Stamps directly into RHS vector.
  */
@@ -115,8 +116,8 @@ struct CurrentSource {
 // CONTROLLED SOURCES (Linear Dependent Sources)
 // ============================================================================
 
-/**
- * @brief Voltage-Controlled Voltage Source (VCVS / E-element)
+/*
+ * Voltage-Controlled Voltage Source (VCVS / E-element)
  * v_out = voltageGain * v_control
  * Used for ideal op-amp models.
  */
@@ -127,8 +128,8 @@ struct VoltageControl_Voltage_Source
     double voltageGain;                   // Av (dimensionless)
 };
 
-/**
- * @brief Voltage-Controlled Current Source (VCCS / G-element)
+/*
+ * Voltage-Controlled Current Source (VCCS / G-element)
  * i_out = transconductance_siemens * v_control
  * Used for MOSFET small-signal models (gm).
  */
@@ -139,8 +140,8 @@ struct VoltageControl_Current_Source
     double transconductance_siemens;      // gm [S or A/V]
 };
 
-/**
- * @brief Current-Controlled Voltage Source (CCVS / H-element)
+/*
+ * Current-Controlled Voltage Source (CCVS / H-element)
  * v_out = transresistance_ohms * i_control
  * Requires sensing current through a zero-volt source.
  */
@@ -151,8 +152,8 @@ struct CurrentControl_Voltage_Source
     double transresistance_ohms;          // rm [Ω or V/A]
 };
 
-/**
- * @brief Current-Controlled Current Source (CCCS / F-element)
+/*
+ * Current-Controlled Current Source (CCCS / F-element)
  * i_out = currentGain * i_control
  * Used for BJT current mirror models (Beta).
  */
@@ -167,15 +168,15 @@ struct CurrentControl_Current_Source
 // NON-LINEAR SEMICONDUCTOR DEVICES
 // ============================================================================
 
-/**
- * @brief Diode (D) - PN Junction
+/*
+ * Diode (D) - PN Junction
  * Shockley Equation:
  *   I_D = I_S * (exp(V_D / (N * V_T)) - 1)
  * Where:
  *   I_S = Saturation current (typ. 1e-14 A)
  *   N   = Emission coefficient (1.0 for ideal, 1.5-2 for real)
- *   V_T = Thermal voltage (kT/q ≈ 25.85 mV @ 300K)
- * 
+ *   V_T = Thermal voltage (kT/q = 25.85 mV @ 300K)
+ *
  * Newton-Raphson Linearization:
  *   g_eq = dI/dV = (I_S / (N*V_T)) * exp(V_k / (N*V_T))
  *   I_eq = I(V_k) - g_eq * V_k
@@ -188,18 +189,18 @@ struct Diode {
     double thermalVoltage_V_T_V;          // V_T [V]
 };
 
-/**
- * @brief MOSFET (M) - Metal-Oxide-Semiconductor FET
+/*
+ * MOSFET (M) - Metal-Oxide-Semiconductor FET
  * Level 1 (Shichman-Hodges) Equations:
  *   Cutoff:     I_DS = 0                                       (V_GS < V_TH)
  *   Linear:     I_DS = K * [2*(V_GS-V_TH)*V_DS - V_DS^2]        (V_DS < V_GS-V_TH)
- *   Saturation: I_DS = K * (V_GS - V_TH)^2 * (1 + λ*V_DS)       (V_DS ≥ V_GS-V_TH)
- * Where K = (μ * C_ox / 2) * (W / L) = Kp * (W/L) / 2
- * 
+ *   Saturation: I_DS = K * (V_GS - V_TH)^2 * (1 + lambda*V_DS)  (V_DS >= V_GS-V_TH)
+ * Where K = (mu * C_ox / 2) * (W / L) = Kp * (W/L) / 2
+ *
  * Small-Signal Model (Linearized):
- *   g_m  = ∂I_DS/∂V_GS  (transconductance)
- *   g_ds = ∂I_DS/∂V_DS  (output conductance)
- *   g_mb = ∂I_DS/∂V_BS  (body transconductance)
+ *   g_m  = dI_DS/dV_GS  (transconductance)
+ *   g_ds = dI_DS/dV_DS  (output conductance)
+ *   g_mb = dI_DS/dV_BS  (body transconductance)
  */
 struct Mosfet {
     std::string instanceName;             // e.g., "M1"
@@ -215,11 +216,11 @@ struct Mosfet {
     double V_GS = 0.0, V_DS = 0.0, V_BS = 0.0;
 };
 
-/**
- * @brief BJT (Q) - Bipolar Junction Transistor
+/*
+ * BJT (Q) - Bipolar Junction Transistor
  * Ebers-Moll Equations (NPN):
- *   I_C = I_S * (exp(V_BE / V_T) - 1) - I_S/β_R * (exp(V_BC / V_T) - 1)
- *   I_E = I_S/β_F * (exp(V_BE / V_T) - 1) - I_S * (exp(V_BC / V_T) - 1)
+ *   I_C = I_S * (exp(V_BE / V_T) - 1) - I_S/beta_R * (exp(V_BC / V_T) - 1)
+ *   I_E = I_S/beta_F * (exp(V_BE / V_T) - 1) - I_S * (exp(V_BC / V_T) - 1)
  */
 struct BJT {
     std::string instanceName;
@@ -234,8 +235,8 @@ struct BJT {
 // INTERCONNECTS & TRANSMISSION LINES
 // ============================================================================
 
-/**
- * @brief Lossless Transmission Line (T)
+/*
+ * Lossless Transmission Line (T)
  * Telegrapher's Equations yield a time-delayed reflection model:
  *   v_1(t) + Z_0 * i_1(t) = v_2(t - T_d) + Z_0 * i_2(t - T_d)
  * Modeled as history-dependent current sources at each port.
@@ -251,10 +252,11 @@ struct TransmissionLine {
 // TENSOR HIERARCHY (Hierarchical Netlist Structure)
 // ============================================================================
 
-/**
- * @brief TensorBlock - A reusable sub-circuit definition (e.g., Inverter, SRAM cell).
+/*
+ * TensorBlock - A reusable sub-circuit definition (e.g., Inverter, SRAM cell).
  * Components use LOCAL node indices (0 = local ground, 1..N = internal nodes).
  */
+
 struct TensorBlock {
     std::string name;
     int numInternalNodes = 0;
@@ -373,18 +375,16 @@ struct TensorBlock {
     }
 };
 
-/**
- * @brief BlockInstance - A placed instance of a TensorBlock in the global netlist.
- */
+// BlockInstance - A placed instance of a TensorBlock in the global netlist.
+
 struct BlockInstance {
     std::string blockName;                // Name of the TensorBlock template
     std::vector<int> nodeMapping;         // Maps local node index -> global node index
     std::map<std::string, double> parameters; // Instance-specific parameters (e.g. "W", "L")
 };
 
-/**
- * @brief TensorNetlist - The top-level hierarchical circuit container.
- */
+// TensorNetlist - The top-level hierarchical circuit container.
+
 class TensorNetlist {
 public:
     std::map<std::string, TensorBlock> blockDefinitions; // Library of blocks

@@ -5,11 +5,12 @@
 #include <cmath>
 #include <memory>
 
-/**
- * @file integration_method.h
- * @brief Strategy Pattern for Numerical Integration Methods.
- * Supports Trapezoidal, Gear 1 (Euler), and Gear 2 with prediction.
+/*
+ * integration_method.h
+ * Strategy Pattern for Numerical Integration Methods.
+ * Supports Trapezoidal, Gear 1 (Backward Euler), and Gear 2 (BDF2) with predictors.
  */
+
 
 enum class IntegrationType {
     TRAPEZOIDAL,
@@ -17,9 +18,8 @@ enum class IntegrationType {
     GEAR_2
 };
 
-/**
- * @brief Abstract Base Class for Integration Strategies.
- */
+// Abstract Base Class for Integration Strategies.
+
 class IIntegrationMethod {
 public:
     virtual ~IIntegrationMethod() = default;

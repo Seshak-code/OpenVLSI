@@ -10,10 +10,11 @@
 #include <emscripten.h>
 #endif
 
-/**
- * @file tensorscheduler.h
- * @brief Tensor Scheduler - Manages batching, structural reuse, and hardware selection.
+/*
+ * tensorscheduler.h
+ * Tensor Scheduler - Manages batching, structural reuse, and hardware selection.
  */
+
 
 // Hardware Backend Types
 enum class SolverBackend {
@@ -24,20 +25,15 @@ enum class SolverBackend {
 
 // --- SOLID: Dependency Inversion - Abstract Interface ---
 
-/**
- * @brief Interface for hardware detection (DIP - Dependency Inversion Principle).
- * 
- * Allows mocking in unit tests and swapping detection strategies.
- */
+// Interface for hardware detection (DIP - Dependency Inversion Principle).
+// Allows mocking in unit tests and swapping detection strategies.
 class IHardwareDetector {
 public:
     virtual ~IHardwareDetector() = default;
     virtual SolverBackend detectBestBackend() const = 0;
 };
 
-/**
- * @brief Default implementation of IHardwareDetector.
- */
+// Default implementation of IHardwareDetector.
 class HardwareManager : public IHardwareDetector {
 public:
     SolverBackend detectBestBackend() const override {
@@ -49,9 +45,7 @@ public:
     }
 };
 
-/**
- * @brief Represents a batch of identical-topology block instances to solve together.
- */
+// SolverJob - Represents a batch of identical-topology block instances to solve together.
 struct SolverJob {
     const TensorBlock* blockTmpl;
     std::vector<int> instanceIds;
@@ -66,12 +60,11 @@ struct SolverJob {
     }
 };
 
-/**
- * @brief TensorScheduler - Groups instances by topology for efficient batched solving.
- * 
- * SOLID: Uses IHardwareDetector for Dependency Inversion.
- */
-class TensorScheduler {
+// TensorScheduler - Groups instances by topology for efficient batched solving.
+// Uses IHardwareDetector for Dependency Inversion.
+class TensorScheduler 
+{
+
 public:
     std::vector<SolverJob> jobs;
     SolverBackend activeBackend;
@@ -86,13 +79,14 @@ public:
         activeBackend = detector.detectBestBackend();
     }
     
-    /**
-     * @brief Analyzes the netlist and groups identical blocks into jobs.
-     * 
+    /*
+     * Analyzes the netlist and groups identical blocks into jobs.
+     *
      * Optimizations:
      * 1. Groups by Topology Hash (Research-Grade Reuse).
      * 2. Calculates expected Job Cost for backend load balancing.
      */
+
     void schedule(const TensorNetlist& netlist) {
         jobs.clear();
         
