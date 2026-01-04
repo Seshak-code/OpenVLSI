@@ -1,191 +1,186 @@
 #pragma once
+
 #include "circuit.h"
 #include <QComboBox>
-#include <QGraphicsEllipseItem>
+#include <QGraphicsItem>
 #include <QGraphicsLineItem>
-#include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <map>
+#include <numeric>
 #include <set>
+#include <tuple>
+#include <vector>
 
-
-/*
- * schematic_editor.h
- * Rudimentary Schematic Editor for CuteApp
- * Allows visual placement of circuit components on a grid.
- */
 
 // ============================================================================
-// COMPONENT TYPES
+// ENUM + UTILITIES
 // ============================================================================
 
 enum class SchematicComponentType {
+  WIRE,
   RESISTOR,
   CAPACITOR,
   DIODE,
+  MOSFET,
+  BJT,
   VOLTAGE_SOURCE,
-  GROUND
+  GROUND,
+  SELECT,
+  PAN,
+  DELETE_TOOL
 };
 
-// ============================================================================
-// COMPONENT ITEM (Visual Representation)
-// ============================================================================
+const int GRID_SIZE = 20;
+const int LAYER_WIRES = 10;
+const int LAYER_COMPONENTS = 20;
 
-class ComponentItem : public QGraphicsRectItem {
-public:
-  SchematicComponentType type;
-  double value;
-  int node1GridX, node1GridY; // Terminal 1 grid position
-  int node2GridX, node2GridY; // Terminal 2 grid position
-
-  ComponentItem(SchematicComponentType t, double val, int x1, int y1, int x2,
-                int y2, QGraphicsItem *parent = nullptr)
-      : QGraphicsRectItem(parent), type(t), value(val), node1GridX(x1),
-        node1GridY(y1), node2GridX(x2), node2GridY(y2) {
-
-    // Set visual size based on grid spacing
-    const int gridSize = 40;
-    int minX = std::min(x1, x2) * gridSize;
-    int minY = std::min(y1, y2) * gridSize;
-    int width = std::abs(x2 - x1) * gridSize + gridSize;
-    int height = std::abs(y2 - y1) * gridSize + gridSize;
-
-    setRect(minX, minY, width, height);
-
-    // Color by type
-    switch (type) {
-    case SchematicComponentType::RESISTOR:
-      setBrush(QBrush(QColor(200, 150, 100)));
-      break;
-    case SchematicComponentType::CAPACITOR:
-      setBrush(QBrush(QColor(100, 150, 200)));
-      break;
-    case SchematicComponentType::DIODE:
-      setBrush(QBrush(QColor(200, 100, 100)));
-      break;
-    case SchematicComponentType::VOLTAGE_SOURCE:
-      setBrush(QBrush(QColor(100, 200, 100)));
-      break;
-    case SchematicComponentType::GROUND:
-      setBrush(QBrush(QColor(50, 50, 50)));
-      break;
-    }
-    setPen(QPen(Qt::black, 2));
-    setFlag(QGraphicsItem::ItemIsSelectable);
+struct GridPoint {
+  int x, y;
+  bool operator<(const GridPoint &other) const {
+    return std::tie(x, y) < std::tie(other.x, other.y);
+  }
+  bool operator==(const GridPoint &other) const {
+    return x == other.x && y == other.y;
   }
 };
 
 // ============================================================================
-// SCHEMATIC SCENE
+// CONNECTIVITY MANAGER (Union-Find)
+// ============================================================================
+
+class ConnectivityManager {
+  std::map<GridPoint, GridPoint> parent;
+
+public:
+  GridPoint find(GridPoint p) {
+    if (parent.find(p) == parent.end())
+      return parent[p] = p;
+    if (parent[p] == p)
+      return p;
+    return parent[p] = find(parent[p]);
+  }
+
+  void unite(GridPoint a, GridPoint b) {
+    GridPoint rootA = find(a);
+    GridPoint rootB = find(b);
+    if (!(rootA == rootB)) {
+      parent[rootA] = rootB;
+    }
+  }
+};
+
+// ============================================================================
+// VISUAL ITEMS
+// ============================================================================
+
+class WireItem : public QGraphicsLineItem {
+public:
+  GridPoint start, end;
+  WireItem(GridPoint s, GridPoint e, QGraphicsItem *parent = nullptr);
+};
+
+class ComponentItem : public QGraphicsItem {
+public:
+  SchematicComponentType type;
+  QString value;
+  GridPoint pos; // Anchor grid point
+  std::vector<GridPoint> terminals;
+
+  ComponentItem(SchematicComponentType t, const QString &val, GridPoint p,
+                QGraphicsItem *parent = nullptr);
+
+  QRectF boundingRect() const override;
+  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+             QWidget *widget) override;
+
+  QVariant itemChange(GraphicsItemChange change,
+                      const QVariant &value) override;
+
+private:
+  void setupTerminals();
+  void drawResistor(QPainter *painter);
+  void drawCapacitor(QPainter *painter);
+  void drawDiode(QPainter *painter);
+  void drawVoltageSource(QPainter *painter);
+  void drawGround(QPainter *painter);
+  void drawMosfet(QPainter *painter);
+  void drawBjt(QPainter *painter);
+};
+
+// ============================================================================
+// SCENE + EDITOR
 // ============================================================================
 
 class SchematicScene : public QGraphicsScene {
   Q_OBJECT
 public:
-  std::vector<ComponentItem *> components;
-  SchematicComponentType currentTool = SchematicComponentType::RESISTOR;
-  double currentValue = 1000.0;
+  explicit SchematicScene(QObject *parent = nullptr);
 
-  int placementStartX = -1, placementStartY = -1;
-  bool isPlacing = false;
-
-  SchematicScene(QObject *parent = nullptr) : QGraphicsScene(parent) {
-    setSceneRect(0, 0, 800, 600);
-    drawGrid();
+  void setTool(SchematicComponentType tool, double val = 0) {
+    currentTool = tool;
+    componentValue = QString::number(val);
   }
+  void setComponentValue(const QString &val) { componentValue = val; }
+  TensorNetlist toNetlist() const;
 
-  void drawGrid() {
-    const int gridSize = 40;
-    QPen gridPen(QColor(220, 220, 220), 1);
-    for (int x = 0; x <= 800; x += gridSize) {
-      addLine(x, 0, x, 600, gridPen);
-    }
-    for (int y = 0; y <= 600; y += gridSize) {
-      addLine(0, y, 800, y, gridPen);
-    }
-  }
-
-  void setTool(SchematicComponentType t, double val) {
-    currentTool = t;
-    currentValue = val;
-  }
+signals:
+  void coordinateChanged(GridPoint p);
 
 protected:
+  void drawBackground(QPainter *painter, const QRectF &rect) override;
   void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+  void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
   void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
+  void keyPressEvent(QKeyEvent *event) override;
 
-public:
-  /**
-   * toNetlist
-   * Converts the visual schematic into a TensorNetlist for simulation.
-   */
-  TensorNetlist toNetlist() const {
-    TensorNetlist netlist;
-    std::map<std::pair<int, int>, int> nodeMap; // Grid coord -> Node ID
-    int nextNodeId = 1;                         // 0 is reserved for ground
+private:
+  SchematicComponentType currentTool = SchematicComponentType::SELECT;
+  QString componentValue = "1000";
+  bool isPlacing = false;
+  GridPoint placementStart;
+  QGraphicsLineItem *previewWire = nullptr;
+  ComponentItem *previewComponent = nullptr;
 
-    // Helper to get or assign a node ID
-    auto getNode = [&](int gx, int gy) -> int {
-      // Ground is always node 0 (convention: bottom row or explicit ground)
-      if (gy >= 14)
-        return 0; // Bottom of grid is ground
+  std::vector<ComponentItem *> components;
+  std::vector<WireItem *> wires;
 
-      auto key = std::make_pair(gx, gy);
-      if (nodeMap.find(key) == nodeMap.end()) {
-        nodeMap[key] = nextNodeId++;
-      }
-      return nodeMap[key];
-    };
-
-    for (const auto *c : components) {
-      int n1 = getNode(c->node1GridX, c->node1GridY);
-      int n2 = getNode(c->node2GridX, c->node2GridY);
-
-      switch (c->type) {
-      case SchematicComponentType::RESISTOR:
-        netlist.addResistor(n1, n2, c->value);
-        break;
-      case SchematicComponentType::CAPACITOR:
-        netlist.addCapacitor(n1, n2, c->value);
-        break;
-      case SchematicComponentType::DIODE:
-        netlist.addDiode(n1, n2, 1e-14); // Is, N=1, Vt=25.85mV default
-        break;
-      case SchematicComponentType::VOLTAGE_SOURCE:
-        netlist.addVoltageSource(n1, n2, c->value);
-        break;
-      case SchematicComponentType::GROUND:
-        // Ground marker, no action needed
-        break;
-      }
-    }
-    return netlist;
-  }
+  void updatePreview(GridPoint p);
+  void finalizePlacement(GridPoint p);
 };
-
-// ============================================================================
-// SCHEMATIC EDITOR WIDGET
-// ============================================================================
 
 class SchematicEditor : public QWidget {
   Q_OBJECT
 public:
+  explicit SchematicEditor(QWidget *parent = nullptr);
+
+  void zoomIn();
+  void zoomOut();
+  void zoomFit();
+  TensorNetlist toNetlist() { return scene->toNetlist(); }
+
+protected:
+  bool eventFilter(QObject *obj, QEvent *event) override;
+
+private:
   SchematicScene *scene;
   QGraphicsView *view;
-  QComboBox *toolSelector;
   QLineEdit *valueInput;
+  QLabel *statusCoords;
+  QLabel *statusInfo;
 
-  SchematicEditor(QWidget *parent = nullptr);
-
-  TensorNetlist toNetlist() const { return scene->toNetlist(); }
-
-signals:
-  void netlistChanged();
+  void setupTopToolbar(QHBoxLayout *layout);
+  void setupLeftToolbar(QVBoxLayout *layout);
+  void setupRightToolbar(QVBoxLayout *layout);
+  void setupStatusBar(QHBoxLayout *layout);
+  QPushButton *makeToolButton(const QString &text, SchematicComponentType type,
+                              bool isPlacement = true);
 };
