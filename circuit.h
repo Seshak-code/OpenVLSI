@@ -14,8 +14,8 @@
  *   - Capacitor: nodePlate1/2
  *   - Inductor: nodeCoil1/2
  *   - Diode: nodeAnode, nodeCathode
- *   - Mosfet: nodeDrain, nodeGate, nodeSource, nodeBody
- *   - BJT: nodeCollector, nodeBase, nodeEmitter
+ *   - Mosfet: drain, gate, source, body
+ *   - BJT: collector, base, emitter
  *   - Controlled Sources: nodeOutputPos/Neg, nodeControlPos/Neg
  */
 
@@ -182,8 +182,8 @@ struct CurrentControl_Current_Source
  *   I_eq = I(V_k) - g_eq * V_k
  */
 struct Diode {
-    int nodeAnode;                        // P-type side (+)
-    int nodeCathode;                      // N-type side (-)
+    int anode;                        // P-type side (+)
+    int cathode;                      // N-type side (-)
     double saturationCurrent_I_S_A;       // I_S [A]
     double emissionCoefficient_N;         // N (dimensionless)
     double thermalVoltage_V_T_V;          // V_T [V]
@@ -204,10 +204,10 @@ struct Diode {
  */
 struct Mosfet {
     std::string instanceName;             // e.g., "M1"
-    int nodeDrain;                        // D terminal
-    int nodeGate;                         // G terminal
-    int nodeSource;                       // S terminal
-    int nodeBody;                         // B (Bulk/Substrate) terminal
+    int drain;                        // D terminal
+    int gate;                         // G terminal
+    int source;                       // S terminal
+    int body;                         // B (Bulk/Substrate) terminal
     std::string modelName;                // Reference to .model card (e.g., "NMOS_SKY130")
     double channelWidth_m;                // W [meters]
     double channelLength_m;               // L [meters]
@@ -225,8 +225,8 @@ struct Mosfet {
 struct BJT {
     std::string instanceName;
     int nodeCollector;                    // C terminal
-    int nodeBase;                         // B terminal
-    int nodeEmitter;                      // E terminal
+    int base;                         // B terminal
+    int emitter;                      // E terminal
     std::string modelName;
     bool isNPN;                           // true=NPN, false=PNP
 };
@@ -302,7 +302,7 @@ struct TensorBlock {
         s += std::to_string(numInternalNodes) + "|R:";
         for (const auto& r : resistors) s += std::to_string(r.nodeTerminal1) + "-" + std::to_string(r.nodeTerminal2) + ";";
         s += "|M:";
-        for (const auto& m : mosfets) s += std::to_string(m.nodeDrain) + "-" + std::to_string(m.nodeGate) + ";";
+        for (const auto& m : mosfets) s += std::to_string(m.drain) + "-" + std::to_string(m.gate) + ";";
         
         topologyHash = std::hash<std::string>{}(s);
     }
@@ -313,14 +313,14 @@ struct TensorBlock {
     }
 
     void addResistor(int n1, int n2, double R) {
-        assert(n1 >= 0 && n2 >= 0 && "Node indices must be non-negative");
+        assert(n1 >= 0 && n2 >= 0 && "Node indices must be not negative");
         assert(R > 0 && "Resistance must be positive");
         if (isFrozen) return;
         resistors.push_back({n1, n2, R});
         updateNodeCount(n1); updateNodeCount(n2);
     }
     void addCapacitor(int n1, int n2, double C) {
-        assert(n1 >= 0 && n2 >= 0 && "Node indices must be non-negative");
+        assert(n1 >= 0 && n2 >= 0 && "Node indices must be not negative");
         assert(C > 0 && "Capacitance must be positive");
         if (isFrozen) return;
         Capacitor cap = {n1, n2, C};
@@ -331,7 +331,7 @@ struct TensorBlock {
         updateNodeCount(n1); updateNodeCount(n2);
     }
     void addInductor(int n1, int n2, double L) {
-        assert(n1 >= 0 && n2 >= 0 && "Node indices must be non-negative");
+        assert(n1 >= 0 && n2 >= 0 && "Node indices must be not negative");
         assert(L > 0 && "Inductance must be positive");
         if (isFrozen) return;
         Inductor ind = {n1, n2, L};
@@ -341,7 +341,7 @@ struct TensorBlock {
         updateNodeCount(n1); updateNodeCount(n2);
     }
     void addVoltageSource(int nPos, int nNeg, double V) {
-        assert(nPos >= 0 && nNeg >= 0 && "Node indices must be non-negative");
+        assert(nPos >= 0 && nNeg >= 0 && "Node indices must be not negative");
         if (isFrozen) return;
         voltageSources.push_back({nPos, nNeg, V});
         updateNodeCount(nPos); updateNodeCount(nNeg);

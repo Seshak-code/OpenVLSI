@@ -3,7 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
-#include <cassert>  // Following NASA coding rules
+#include <cassert>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -77,9 +77,9 @@ struct Triplet
 class MatrixConstructor 
 {
 private:
-    std::vector<Triplet> triplets;  // Internal storage for raw coordinates
-    
-    // Tracking maximum dimensions to define matrix size
+    // Internal storage for raw coordinates
+    std::vector<Triplet> triplets;  
+    // initializes the count of rows and columns
     int numRows = 0;
     int numCols = 0;
 
@@ -93,20 +93,21 @@ public:
 
     void add(int row, int col, double value)
     {
-        // Validate parameters
-        assert(row >= 0 && "Row index must be non-negative");
-        assert(col >= 0 && "Column index must be non-negative");
+        // debugging assumed charateristics of parameters
+        assert(row >= 0 && "Row index can't be negative");
+        assert(col >= 0 && "Column index can't be negative");
+        // value can be anything lol
 
-        // Record the entry in the triplet collection
+        // Records new entry into the triplet array
         triplets.push_back({row, col, value});
         
-        // Dynamically updates the matrix boundaries
+        // updating the matrix boundaries
         if (row >= numRows) 
             numRows = row + 1;
         if (col >= numCols) 
             numCols = col + 1;
 
-        // NASA Rule #5: High assertion density
+        // debugging to see if boundaries are updated correctly
         assert(numRows > row && "numRows logic error");
         assert(numCols > col && "numCols logic error");
     }
@@ -123,19 +124,20 @@ public:
 
     Csr_matrix createCsr()
     {
+        // matrix object
         Csr_matrix matrix;
 
         matrix.rows = numRows;
         matrix.cols = numCols;
 
-        // Ensures an empty return is properly handled
+        // Makes sure an empty matrix is returned correctly
         if (triplets.empty()) 
         {
             matrix.row_pointer.assign(numRows + 1, 0);
             return matrix;
         }
 
-        // Sorting is required to group same-cell entries and ensure row-major order
+        // Sorting to group same entries for later
         // a lambda comparator used to sort triplets by (row, then column) for CSR construction
         std::sort(triplets.begin(), triplets.end(), [](const Triplet& a, const Triplet& b) 
         {
@@ -211,7 +213,7 @@ inline void matrixMultiplication(const Csr_matrix& matrix, const double* inputVe
     // NASA Rule #7: Validate pointers and dimensions
     assert(inputVector != nullptr && "inputVector cannot be null");
     assert(outputVector != nullptr && "outputVector cannot be null");
-    assert(matrix.rows >= 0 && matrix.cols >= 0 && "Matrix dimensions must be non-negative");
+    assert(matrix.rows >= 0 && matrix.cols >= 0 && "Matrix dimensions must be not negative");
 
     // Runtime safety checks
     assert(matrix.row_pointer.size() >= (size_t)matrix.rows + 1 && "Row pointer size mismatch");
@@ -264,7 +266,6 @@ inline double dotProduct(const std::vector<double>& vectorA, const std::vector<d
 
 inline void vectorAdd(std::vector<double>& result, const std::vector<double>& vectorA, const std::vector<double>& vectorB, double scalar) 
 {
-
     assert(vectorA.size() == vectorB.size() && "Input vectors must be of same size");
     assert(result.size() == vectorA.size() && "Result vector must match input size");
 
@@ -288,7 +289,6 @@ inline void vectorAdd(std::vector<double>& result, const std::vector<double>& ve
 
 inline std::vector<double> getDiagonalInverse(const Csr_matrix& matrix) 
 {
-
     assert(matrix.rows >= 0 && "Matrix rows cannot be negative");
 
     const double zeroThreshold = 1e-18;
@@ -308,10 +308,9 @@ inline std::vector<double> getDiagonalInverse(const Csr_matrix& matrix)
             if (matrix.col_indices[elementIndex] == rowIndex) 
             {
                 if (std::abs(matrix.values[elementIndex]) > zeroThreshold) 
-                {
                     diagonalInverse[rowIndex] = 1.0 / matrix.values[elementIndex];
-                }
-                break; // Diagonal found, no need to check further in this row
+
+                break; // If a diagonal is found, no need to check further in this row
             }
         }
     }
@@ -358,7 +357,7 @@ inline SolverResult solvePCG(const Csr_matrix& matrix, const std::vector<double>
     
     assert(residual.size() == (size_t)numUnknowns && "Residual vector size error");
 
-    // Prepare Jacobi Preconditioner (M^-1 = 1/diag(A))
+    // Getting Jacobi Preconditioner (M^-1 = 1/diag(A))
     std::vector<double> preconditionerInverse = getDiagonalInverse(matrix);
     
     // Apply preconditioner: preconditionedResidual = M^-1 * residual
@@ -377,14 +376,15 @@ inline SolverResult solvePCG(const Csr_matrix& matrix, const std::vector<double>
     int iteration = 0;
     double currentResidualNorm = initialResidualNorm;
     const int maxIters = maxIterations;
-    for (iteration = 0; iteration < maxIters; iteration++) {
+    for (iteration = 0; iteration < maxIters; iteration++)
+    {
         // matrixTimesSearchDirection = A * searchDirection
         std::vector<double> matrixTimesSearchDirection(numUnknowns);
         matrixMultiplication(matrix, searchDirection.data(), matrixTimesSearchDirection.data());
         
         double searchDirectionDotAp = dotProduct(searchDirection, matrixTimesSearchDirection);
-        if (std::abs(searchDirectionDotAp) < divisionByZeroThreshold) {
-            // NASA Rule #5: Log/Assert on numerical failure
+        if (std::abs(searchDirectionDotAp) < divisionByZeroThreshold) 
+        {
             assert(false && "Numerical instability: searchDirectionDotAp near zero");
             break; 
         }

@@ -16,71 +16,7 @@
 // STAMP FUNCTIONS (Component -> Matrix Entry)
 // ============================================================================
 
-inline void stampResistor(int nodeI, int nodeJ, double resistance, MatrixConstructor& matrixBuilder)
-{
-    double g = 1.0 / resistance;
-    if (nodeI != 0) 
-    {
-        matrixBuilder.add(nodeI - 1, nodeI - 1, g);
-        if (nodeJ != 0) matrixBuilder.add(nodeI - 1, nodeJ - 1, -g);
-    }
-    if (nodeJ != 0) 
-    {
-        matrixBuilder.add(nodeJ - 1, nodeJ - 1, g);
-        if (nodeI != 0) matrixBuilder.add(nodeJ - 1, nodeI - 1, -g);
-    }
-}
-
-inline void stampCapacitorTrapezoidal(int nodeI, int nodeJ, double C, double h, 
-                                       double v_prev, double i_prev, 
-                                       MatrixConstructor& matrixBuilder, std::vector<double>& rhsVector)
-{
-    double G_eq = (2.0 * C) / h;
-    double I_eq = -G_eq * v_prev - i_prev;
-
-    if (nodeI != 0) {
-        matrixBuilder.add(nodeI - 1, nodeI - 1, G_eq);
-        if (nodeJ != 0) matrixBuilder.add(nodeI - 1, nodeJ - 1, -G_eq);
-    }
-    if (nodeJ != 0) {
-        matrixBuilder.add(nodeJ - 1, nodeJ - 1, G_eq);
-        if (nodeI != 0) matrixBuilder.add(nodeJ - 1, nodeI - 1, -G_eq);
-    }
-
-    if (nodeI != 0) rhsVector[nodeI - 1] -= I_eq;
-    if (nodeJ != 0) rhsVector[nodeJ - 1] += I_eq;
-}
-
-inline void stampVoltageSourceAsNorton(int nodePos, int nodeNeg, double voltage, 
-                                        MatrixConstructor& matrixBuilder, std::vector<double>& rhsVector)
-{
-    double r_int = 1e-6;
-    double g_int = 1.0 / r_int;
-    double i_eq = voltage * g_int;
-
-    stampResistor(nodePos, nodeNeg, r_int, matrixBuilder);
-
-    if (nodePos != 0) rhsVector[nodePos - 1] += i_eq;
-    if (nodeNeg != 0) rhsVector[nodeNeg - 1] -= i_eq;
-}
-
-inline void stampMosfet(int d, int g, int s, int b, double gm, double gds, MatrixConstructor& mat) {
-    // Linearized Small-Signal Model Stamp
-    // i_d += gm * (vg - vs) + gds * (vd - vs)
-    // i_s -= gm * (vg - vs) - gds * (vd - vs)
-    
-    auto add = [&](int r, int c, double val) {
-        if (r != 0 && c != 0) mat.add(r-1, c-1, val);
-    };
-    
-    // GM Term (VCCS)
-    add(d, g, gm); add(d, s, -gm);
-    add(s, g, -gm); add(s, s, gm);
-    
-    // GDS Term (Resistor)
-    add(d, d, gds); add(d, s, -gds);
-    add(s, d, -gds); add(s, s, gds);
-}
+#include "stamps.h"
 
 // ============================================================================
 // CIRCUITSIM CLASS
@@ -93,14 +29,11 @@ inline void stampMosfet(int d, int g, int s, int b, double gm, double gds, Matri
 // CIRCUITSIM CLASS
 // ============================================================================
 
-/*
- * CircuitSim - Physics and Solver Engine.
- *
- * In Phase 0/1, this produces SimulationResult (legacy) or writes to a
- * SimulationTrace (modern research-grade).
- */
-
 #include "integration_method.h"
+
+/**
+ * CircuitSim is the primary engine of the simulator.
+ */
 
 // ... (SimTrace/TensorScheduler includes)
 
@@ -121,7 +54,8 @@ private:
     static constexpr int INSTABILITY_THRESHOLD = 3; 
 
 public:
-    void initialize(const TensorNetlist& netlist) {
+    void initialize(const TensorNetlist& netlist) 
+    {
         int n = netlist.numGlobalNodes;
         prev_voltages.assign(n, 0.0);
         prev_prev_voltages.assign(n, 0.0);
@@ -130,56 +64,74 @@ public:
         instability_counter = 0;
 
         // Calculate Physical Weights: nodes with high C/G are more significant
-        auto addWeight = [&](int node, double w) {
-            if (node > 0 && node <= n) node_weights[node - 1] += std::abs(w);
+        auto addWeight = [&](int node, double w) 
+        {
+            if (node > 0 && node <= n) 
+                node_weights[node - 1] += std::abs(w);
         };
 
         // Scan Global Block
-        for (const auto& r : netlist.globalBlock.resistors) {
+        for (const auto& r : netlist.globalBlock.resistors) 
+        {
             double g = 1.0 / r.resistance_ohms;
-            addWeight(r.nodeTerminal1, g); addWeight(r.nodeTerminal2, g);
+            addWeight(r.nodeTerminal1, g); 
+            addWeight(r.nodeTerminal2, g);
         }
-        for (const auto& c : netlist.globalBlock.capacitors) {
-            addWeight(c.nodePlate1, c.capacitance_farads); addWeight(c.nodePlate2, c.capacitance_farads);
+        for (const auto& c : netlist.globalBlock.capacitors) 
+        {
+            addWeight(c.nodePlate1, c.capacitance_farads); 
+            addWeight(c.nodePlate2, c.capacitance_farads);
         }
 
         // Scan Instances (Tensors)
-        for (const auto& inst : netlist.instances) {
+        for (const auto& inst : netlist.instances) 
+        {
             auto it = netlist.blockDefinitions.find(inst.blockName);
-            if (it == netlist.blockDefinitions.end()) continue;
+            if (it == netlist.blockDefinitions.end()) 
+                continue;
             const auto& block = it->second;
             
-            auto mapNode = [&](int localNode) {
+            auto mapNode = [&](int localNode) 
+            {
                 return (localNode == 0) ? 0 : inst.nodeMapping[localNode - 1];
             };
 
-            for (const auto& r : block.resistors) {
+            for (const auto& r : block.resistors) 
+            {
                 double g = 1.0 / r.resistance_ohms;
-                addWeight(mapNode(r.nodeTerminal1), g); addWeight(mapNode(r.nodeTerminal2), g);
+                addWeight(mapNode(r.nodeTerminal1), g); 
+                addWeight(mapNode(r.nodeTerminal2), g);
             }
-            for (const auto& c : block.capacitors) {
-                addWeight(mapNode(c.nodePlate1), c.capacitance_farads); addWeight(mapNode(c.nodePlate2), c.capacitance_farads);
+            for (const auto& c : block.capacitors) 
+            {
+                addWeight(mapNode(c.nodePlate1), c.capacitance_farads); 
+                addWeight(mapNode(c.nodePlate2), c.capacitance_farads);
             }
         }
     }
 
     const std::vector<double>& getPrevVoltages() const { return prev_voltages; }
 
-    /*
-     * Monitors health and recommends Tier-1 (dt) or Tier-2 (method) switch.
-     * Returns: 0 = OK, 1 = Reduce DT, 2 = Switch Method
+    /**
+     * analyzeStability
+     * Monitors the simulation health and recommends if we need to cut the time-step (Tier 1)
+     * or switch integration methods entirely (Tier 2) to maintain convergence.
+     * 
+     * Returns: 0 = Stable, 1 = Needs smaller dt, 2 = Needs more robust method (Gear)
      */
 
     int analyzeStability(const TensorNetlist& netlist, const std::vector<double>& current_voltages, IIntegrationMethod* integrator) {
         if (current_voltages.empty()) return 0;
-        if (current_voltages.size() != prev_voltages.size()) {
+        if (current_voltages.size() != prev_voltages.size()) 
+        {
             initialize(netlist);
             return 0;
         }
 
         // 1. Calculate Circuit Energy: E = 0.5 * sum(C * v^2)
         double current_energy = 0.0;
-        for (const auto& c : netlist.globalBlock.capacitors) {
+        for (const auto& c : netlist.globalBlock.capacitors) 
+        {
             double v = 0.0;
             if (c.nodePlate1 != 0) v += current_voltages[c.nodePlate1 - 1];
             if (c.nodePlate2 != 0) v -= current_voltages[c.nodePlate2 - 1];
@@ -205,9 +157,8 @@ public:
             double dv = v - v_prev;
             double dv_prev = v_prev - v_prev2;
 
-            if (std::abs(dv) > 1e-6 && (dv * dv_prev < 0)) {
+            if (std::abs(dv) > 1e-6 && (dv * dv_prev < 0))
                 weighted_sign_flips += (int)(w * 1e9); // Scale weighting
-            }
         }
 
         bool energy_exploding = (current_energy > prev_energy * 1.5 + 1e-9 && prev_energy > 1e-12);
@@ -217,12 +168,24 @@ public:
         prev_voltages = current_voltages;
         prev_energy = current_energy;
 
-        if (energy_exploding) return 1; // Tier 1: Try reducing DT
-        if (weighted_sign_flips > 100) {
+        // If energy jumped by more than 50%, the solver is likely oscillating
+        if (energy_exploding) 
+            return 1; // Tier 1: Try a smaller time step (dt)
+
+        if (weighted_sign_flips > 100) 
+        {
             instability_counter++;
-            if (instability_counter >= INSTABILITY_THRESHOLD) return 2; // Tier 2: Switch Method
-            return 1; // Tier 1
-        } else {
+            
+            // If we've been unstable for a few steps, Trapezoidal is struggling.
+            // Switch to a more damped method like Gear.
+            if (instability_counter >= INSTABILITY_THRESHOLD) 
+                return 2; // Tier 2: Switch Method entirely
+            
+            return 1; // Tier 1: Try smaller dt first
+        } 
+        else
+        {
+            // Recover stability slowly
             instability_counter = std::max(0, instability_counter - 1);
         }
 
@@ -230,136 +193,180 @@ public:
     }
 };
 
-class CircuitSim
-{
-    public:
-        // ... (Constructor/SethMethod remain same) ...
-        
-        IntegrationType getIntegrationMethod() const { return integrator->getType(); }
+class CircuitSim {
+public:
+    // ... (Constructor/SethMethod remain same) ...
+    
+    IntegrationType getIntegrationMethod() const { return integrator->getType(); }
 
 // ... (Rest of class, adding arbiter member)
-        CircuitSim() {
-            // Default to Trapezoidal
-            integrator = std::make_unique<TrapezoidalIntegration>();
-        }
-        
-        // Allow moving (required for unique_ptr member)
-        CircuitSim(CircuitSim&&) = default;
-        CircuitSim& operator=(CircuitSim&&) = default;
-        
-        void setIntegrationMethod(IntegrationType type) {
-            switch(type) {
-                case IntegrationType::TRAPEZOIDAL:
-                    integrator = std::make_unique<TrapezoidalIntegration>();
-                    break;
-                case IntegrationType::GEAR_1_EULER:
-                    integrator = std::make_unique<Gear1Integration>();
-                    break;
-                case IntegrationType::GEAR_2:
-                    integrator = std::make_unique<Gear2Integration>();
-                    break;
-            }
-        }
-        
-        SimulationStep solveDC(TensorNetlist& netlist);
-        SimulationStep stepTransient(TensorNetlist& netlist, double timeStep, double currentTime);
-
-    private:
-        MatrixConstructor matrixBuilder;
-        std::vector<double> rhsVector;
-        TensorScheduler scheduler;
-        
-        // NR Parameters
-        static constexpr double RELTOL = 1e-3;
-        static constexpr double VNTOL  = 1e-6;
-        static constexpr int MAX_NR_ITER = 20;
-
-
-        bool checkConvergence(const std::vector<double>& v_new, const std::vector<double>& v_old) {
-            if (v_new.size() != v_old.size()) return false;
-            for (size_t i = 0; i < v_new.size(); ++i) {
-                double diff = std::abs(v_new[i] - v_old[i]);
-                double limit = RELTOL * std::max(std::abs(v_new[i]), std::abs(v_old[i])) + VNTOL;
-                if (diff > limit) return false;
-            }
-            return true;
-        }
-        
-        // Phase 2: Numerical Integration Strategy
-        std::unique_ptr<IIntegrationMethod> integrator;
-        IntegratorArbiter arbiter; // The Arbiter instance
-        
-        // --- SOLID/NASA Helper Functions ---
-        
-        void stampGlobalDC(const TensorBlock& block) {
-            for (const auto& r : block.resistors) {
-                stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
-            }
-            for (const auto& v : block.voltageSources) {
-                stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
-            }
-        }
-        
-        void stampGlobalTransient(TensorBlock& block, double timeStep) {
-            for (const auto& r : block.resistors) {
-                stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
-            }
-            for (auto& c : block.capacitors) {
-                // Delegate to Strategy
-                integrator->stampCapacitor(
-                    c.nodePlate1, c.nodePlate2, c.capacitance_farads, timeStep,
-                    c.voltage_history, c.current_history,
-                    matrixBuilder, rhsVector
-                );
-            }
-            for (const auto& v : block.voltageSources) {
-                stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
-            }
-        }
-
-        void stampBatchedJobs(const TensorNetlist& netlist, bool includeTransient, double timeStep = 0.0) {
-            // ... (Same as before) ...
-            for (const auto& job : scheduler.jobs) {
-                const TensorBlock& block = *job.blockTmpl;
-                for (int instanceIdx : job.instanceIds) {
-                     const auto& instance = netlist.instances[instanceIdx];
-                     auto mapNode = [&](int localNode) { return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1]; };
-                     for (const auto& r : block.resistors) {
-                         stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2), r.resistance_ohms, matrixBuilder);
-                     }
-                     // Instance Capacitors would go here (omitted for brevity as per previous logic)
-                     for (const auto& m : block.mosfets) {
-                         // ... (Mosfet logic same as before) ...
-                         double W = m.channelWidth_m;
-                         double L = m.channelLength_m;
-                         std::string paramW = m.instanceName + ".W";
-                         if (instance.parameters.count(paramW)) W = instance.parameters.at(paramW);
-                         std::string paramL = m.instanceName + ".L";
-                         if (instance.parameters.count(paramL)) L = instance.parameters.at(paramL);
-                         
-                         double Kp = 200e-6;
-                         double Vov = 0.5;
-                         double gm = Kp * (W/L) * Vov;
-                         double gds = gm / 100.0;
-                         stampMosfet(mapNode(m.nodeDrain), mapNode(m.nodeGate), mapNode(m.nodeSource), mapNode(m.nodeBody), gm, gds, matrixBuilder);
-                     }
-                }
-            }
-        }
-        
-        void addDiagonalConditioning(int n) {
-            for (int i = 0; i < n; ++i) matrixBuilder.add(i, i, 1e-12);
-        }
-
-        void stampNonLinearDevices(TensorNetlist& netlist, const std::vector<double>& v_guess) 
+    CircuitSim() 
+    {
+        // Default to Trapezoidal
+        integrator = std::make_unique<TrapezoidalIntegration>();
+    }
+    
+    // Allow moving (required for unique_ptr member)
+    CircuitSim(CircuitSim&&) = default;
+    CircuitSim& operator=(CircuitSim&&) = default;
+    
+    void setIntegrationMethod(IntegrationType type) 
+    {
+        switch(type) 
         {
-            // BLANK 1: Implement Non-Linear Stamping (Jacobian + Residual)
-            // Iterate over netlist.globalBlock.diodes, mosfets, etc.
-            // Use v_guess to calculate linearized equivalent conductance and current source.
-            TensorBlock& globalBlock = netlist.globalBlock;
-            
-            
+            case IntegrationType::TRAPEZOIDAL:
+                integrator = std::make_unique<TrapezoidalIntegration>();
+                break;
+            case IntegrationType::GEAR_1_EULER:
+                integrator = std::make_unique<Gear1Integration>();
+                break;
+            case IntegrationType::GEAR_2:
+                integrator = std::make_unique<Gear2Integration>();
+                break;
         }
+    }
+    
+    SimulationStep solveDC(TensorNetlist& netlist);
+    SimulationStep stepTransient(TensorNetlist& netlist, double timeStep, double currentTime);
+
+private:
+    MatrixConstructor matrixBuilder;
+    std::vector<double> rhsVector;
+    TensorScheduler scheduler;
+    
+    // NR Parameters
+    static constexpr double RELTOL = 1e-3;
+    static constexpr double VNTOL  = 1e-6;
+    static constexpr int MAX_NR_ITER = 20;
+
+
+    bool checkConvergence(const std::vector<double>& v_new, const std::vector<double>& v_old) {
+        if (v_new.size() != v_old.size()) return false;
+        for (size_t i = 0; i < v_new.size(); ++i) {
+            double diff = std::abs(v_new[i] - v_old[i]);
+            double limit = RELTOL * std::max(std::abs(v_new[i]), std::abs(v_old[i])) + VNTOL;
+            if (diff > limit) return false;
+        }
+        return true;
+    }
+    
+    // Phase 2: Numerical Integration Strategy
+    std::unique_ptr<IIntegrationMethod> integrator;
+    IntegratorArbiter arbiter; // The Arbiter instance
+    
+    // --- SOLID/NASA Helper Functions ---
+    
+    void stampGlobalDC(const TensorBlock& block) {
+        for (const auto& r : block.resistors) {
+            stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
+        }
+        for (const auto& v : block.voltageSources) {
+            stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
+        }
+    }
+    
+    void stampGlobalTransient(TensorBlock& block, double timeStep) {
+        for (const auto& r : block.resistors) {
+            stampResistor(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms, matrixBuilder);
+        }
+        for (auto& c : block.capacitors) {
+            // Delegate to Strategy
+            integrator->stampCapacitor(
+                c.nodePlate1, c.nodePlate2, c.capacitance_farads, timeStep,
+                c.voltage_history, c.current_history,
+                matrixBuilder, rhsVector
+            );
+        }
+        for (const auto& v : block.voltageSources) {
+            stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
+        }
+    }
+
+    void stampBatchedJobs(const TensorNetlist& netlist, bool includeTransient, double timeStep = 0.0) {
+        // ... (Same as before) ...
+        for (const auto& job : scheduler.jobs) {
+            const TensorBlock& block = *job.blockTmpl;
+            for (int instanceIdx : job.instanceIds) {
+                    const auto& instance = netlist.instances[instanceIdx];
+                    auto mapNode = [&](int localNode) { return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1]; };
+                    for (const auto& r : block.resistors) {
+                        stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2), r.resistance_ohms, matrixBuilder);
+                    }
+                    // Instance Capacitors would go here (omitted for brevity as per previous logic)
+                    for (const auto& m : block.mosfets) {
+                        // ... (Mosfet logic same as before) ...
+                        double W = m.channelWidth_m;
+                        double L = m.channelLength_m;
+                        std::string paramW = m.instanceName + ".W";
+                        if (instance.parameters.count(paramW)) W = instance.parameters.at(paramW);
+                        std::string paramL = m.instanceName + ".L";
+                        if (instance.parameters.count(paramL)) L = instance.parameters.at(paramL);
+                        
+                        double Kp = 200e-6;
+                        double Vov = 0.5;
+                        double gm = Kp * (W/L) * Vov;
+                        double gds = gm / 100.0;
+                        stampMosfet(mapNode(m.drain), mapNode(m.gate), mapNode(m.source), mapNode(m.body), gm, gds, matrixBuilder);
+                    }
+            }
+        }
+    }
+    
+    void addDiagonalConditioning(int n) {
+        for (int i = 0; i < n; ++i) matrixBuilder.add(i, i, 1e-12);
+    }
+
+    /**
+     * stampNonLinearDevices
+     * Iterates through the netlist and linearizes non-linear components (like diodes)
+     * based on the current voltage guess.
+     */
+    void stampNonLinearDevices(TensorNetlist& netlist, const std::vector<double>& voltageEstimate) 
+    {
+        for (auto& diode : netlist.globalBlock.diodes)
+        {
+            // First, find what voltage the diode "thinks" it seeing
+            double v_a = (diode.anode == 0)   ? 0.0 : voltageEstimate[diode.anode - 1];
+            double v_c = (diode.cathode == 0) ? 0.0 : voltageEstimate[diode.cathode - 1];
+            double v_diff = v_a - v_c;
+
+            // Use the Shockley equation to find the current and its derivative
+            double thermalFactor = diode.emissionCoefficient_N * diode.thermalVoltage_V_T_V;
+            
+            // We clamp the exponent at 40 to prevent 'inf' or 'nan' crashes in early iterations
+            double expVal = std::exp(std::min(v_diff / thermalFactor, 40.0));
+            double i_diode = diode.saturationCurrent_I_S_A * (expVal - 1.0);
+
+            // The 'Jacobian' is just the slope of the I-V curve at this point
+            double conductance_eq = (diode.saturationCurrent_I_S_A / thermalFactor) * expVal;
+            
+            // The equivalent source compensates for the linearization offset
+            double current_eq = i_diode - conductance_eq * v_diff;
+
+            // Stamp the linearized conductance into the matrix
+            if (diode.anode != 0 && diode.cathode != 0) 
+            {
+                matrixBuilder.add(diode.anode - 1, diode.anode - 1, conductance_eq);
+                matrixBuilder.add(diode.cathode - 1, diode.cathode - 1, conductance_eq);
+                matrixBuilder.add(diode.anode - 1, diode.cathode - 1, -conductance_eq);
+                matrixBuilder.add(diode.cathode - 1, diode.anode - 1, -conductance_eq);
+            } 
+            else if (diode.anode != 0) 
+            {
+                matrixBuilder.add(diode.anode - 1, diode.anode - 1, conductance_eq);
+            } 
+            else if (diode.cathode != 0) 
+            {
+                matrixBuilder.add(diode.cathode - 1, diode.cathode - 1, conductance_eq);
+            }
+
+            // Stamp the current into the RHS vector
+            if (diode.anode != 0)   
+                rhsVector[diode.anode - 1] -= current_eq;
+            if (diode.cathode != 0) 
+                rhsVector[diode.cathode - 1] += current_eq;
+        }
+    }
 };
 
 // ... solveDC implementation ...
@@ -368,140 +375,215 @@ inline SimulationStep CircuitSim::solveDC(TensorNetlist& netlist)
 {
     if (netlist.numGlobalNodes == 0) return {0.0, {}, {0, 0.0, true}};
 
-    std::vector<double> v_guess(netlist.numGlobalNodes, 0.0);
-    // BLANK 2: Initial Guess Heuristics (Cold start vs Warm start)
+    std::vector<double> voltageEstimate(netlist.numGlobalNodes, 0.0);
     
-    bool converged = false;
-    int total_iters = 0;
-
-    for (int it = 0; it < MAX_NR_ITER; ++it) 
+    // Seed the solver with initial guesses to speed up convergence
+    for (const auto& source : netlist.globalBlock.voltageSources) 
     {
+        if (source.nodePositive != 0) 
+            voltageEstimate[source.nodePositive - 1] = source.voltage_V;
+    }
+    
+    for (const auto& diode : netlist.globalBlock.diodes) 
+    {
+        // 0.6V is a safe starting guess for silicon diodes to avoid high-impedance "cold start" issues
+        if (diode.anode != 0) 
+            voltageEstimate[diode.anode - 1] = std::max(voltageEstimate[diode.anode - 1], 0.6);
+    }
+
+    bool converged = false;
+    int total_iterations = 0;
+
+    for (int iteration = 0; iteration < MAX_NR_ITER; ++iteration) 
+    {
+        // Reset matrix for each new linearization
         matrixBuilder = MatrixConstructor();
         rhsVector.assign(netlist.numGlobalNodes, 0.0);
         
         stampGlobalDC(netlist.globalBlock);
         stampBatchedJobs(netlist, false);
-        stampNonLinearDevices(netlist, v_guess); 
+        stampNonLinearDevices(netlist, voltageEstimate); 
         addDiagonalConditioning(netlist.numGlobalNodes);
 
-        Csr_matrix A = matrixBuilder.createCsr();
-        SolverResult solverRes = solvePCG(A, rhsVector);
+        Csr_matrix matrix = matrixBuilder.createCsr();
+        SolverResult result = solvePCG(matrix, rhsVector);
         
-        std::vector<double> v_new = solverRes.solution;
-        // BLANK 3: NR Damping / Limiting (e.g. pnjlim for diodes)
-        
-        if (checkConvergence(v_new, v_guess)) {
-            v_guess = v_new;
+        std::vector<double> v_new = result.solution;
+
+        // PN Junction Limiting (pnjlim)
+        // We limit the voltage change across diodes to prevent the exponential current
+        // from overshooting into astronomical values that crash the solver.
+        const double thermalVoltage = 0.02585; 
+        const double maxDelta = 2.0 * thermalVoltage;
+
+        for (const auto& d : netlist.globalBlock.diodes) 
+        {
+            int a_idx = d.anode - 1;
+            int c_idx = d.cathode - 1;
+            
+            double old_v_diode = (a_idx >= 0 ? voltageEstimate[a_idx] : 0.0) - (c_idx >= 0 ? voltageEstimate[c_idx] : 0.0);
+            double new_v_diode = (a_idx >= 0 ? v_new[a_idx] : 0.0) - (c_idx >= 0 ? v_new[c_idx] : 0.0);
+            
+            double delta = new_v_diode - old_v_diode;
+            
+            if (std::abs(delta) > maxDelta) 
+            {
+                double limitedDelta = std::copysign(maxDelta, delta);
+                double correction = delta - limitedDelta;
+                
+                // Back-propagate the correction to the node voltages
+                if (a_idx >= 0) v_new[a_idx] -= correction;
+                if (c_idx >= 0) v_new[c_idx] += correction;
+            }
+        }
+
+        if (checkConvergence(v_new, voltageEstimate)) 
+        {
+            voltageEstimate = v_new;
             converged = true;
-            total_iters = it + 1;
+            total_iterations = iteration + 1;
             break;
         }
-        v_guess = v_new;
-        total_iters = it + 1;
+
+        voltageEstimate = v_new;
+        total_iterations = iteration + 1;
     }
 
-    return {0.0, v_guess, {total_iters, 0.0, converged}};
+    return {0.0, voltageEstimate, {total_iterations, 0.0, converged}};
 }
 
 inline SimulationStep CircuitSim::stepTransient(TensorNetlist& netlist, double timeStep, double currentTime)
 {
-    if (netlist.numGlobalNodes == 0) return {currentTime, {}, {0, 0.0, true}};
+    if (netlist.numGlobalNodes == 0) 
+        return {currentTime, {}, {0, 0.0, true}};
 
-    static bool arbiter_initialized = false;
-    if (!arbiter_initialized) {
+    // Initialize the stability arbiter on the first run
+    static bool arbiterInitialized = false;
+    if (!arbiterInitialized) 
+    {
         arbiter.initialize(netlist);
-        arbiter_initialized = true;
+        arbiterInitialized = true;
     }
 
-    double achieved_dt = timeStep;
-    int retries = 0;
-    const int MAX_RETRIES = 4;
+    double actualTimeStep = timeStep;
+    int attempt = 0;
+    const int MAX_ATTEMPTS = 4;
     
-    std::vector<double> v_final;
-    SolverResult lastSolverRes;
-    bool step_converged = false;
+    std::vector<double> finalVoltages;
+    SolverResult lastResult;
+    bool simulationConverged = false;
 
-    while (retries < MAX_RETRIES) {
-        // NR Loop for current time step
-        std::vector<double> v_nr_guess = arbiter.getPrevVoltages(); // Start from last converged step
-        if (v_nr_guess.empty()) v_nr_guess.assign(netlist.numGlobalNodes, 0.0);
+    // The Time-Stepping Loop: We try to solve the circuit at 'actualTimeStep'.
+    // If the physics become unstable or the math fails, we shrink the step and try again.
+    while (attempt < MAX_ATTEMPTS) 
+    {
+        // Newton-Raphson Loop for the current time point
+        std::vector<double> nrEstimate = arbiter.getPrevVoltages(); 
+        if (nrEstimate.empty()) 
+            nrEstimate.assign(netlist.numGlobalNodes, 0.0);
 
-        bool nr_converged = false;
-        for (int it = 0; it < MAX_NR_ITER; ++it) {
+        bool nrConverged = false;
+        for (int iteration = 0; iteration < MAX_NR_ITER; ++iteration) 
+        {
             matrixBuilder = MatrixConstructor();
             rhsVector.assign(netlist.numGlobalNodes, 0.0);
             
+            // Re-schedule and stamp based on the 'actualTimeStep'
             scheduler.schedule(netlist);
-            stampGlobalTransient(netlist.globalBlock, achieved_dt);
-            stampBatchedJobs(netlist, true, achieved_dt);
-            stampNonLinearDevices(netlist, v_nr_guess);
+            stampGlobalTransient(netlist.globalBlock, actualTimeStep);
+            stampBatchedJobs(netlist, true, actualTimeStep);
+            stampNonLinearDevices(netlist, nrEstimate);
             addDiagonalConditioning(netlist.numGlobalNodes);
 
             Csr_matrix A = matrixBuilder.createCsr();
-            lastSolverRes = solvePCG(A, rhsVector);
+            lastResult = solvePCG(A, rhsVector);
             
-            std::vector<double> v_new = lastSolverRes.solution;
-            // BLANK 3: NR Damping / Limiting
+            std::vector<double> v_new = lastResult.solution;
             
-            if (checkConvergence(v_new, v_nr_guess)) {
-                v_nr_guess = v_new;
-                nr_converged = true;
+            // Note: We could apply pnjlim damping here as well for even higher stability
+            
+            if (checkConvergence(v_new, nrEstimate)) 
+            {
+                nrEstimate = v_new;
+                nrConverged = true;
                 break;
             }
-            v_nr_guess = v_new;
+            nrEstimate = v_new;
         }
 
-        if (!nr_converged) {
-            // NR failed to converge at this DT, try Tier 1 reduction
-            achieved_dt *= 0.5;
-            retries++;
+        if (!nrConverged) 
+        {
+            // If the math failed to converge, cut the time step in half and retry
+            actualTimeStep *= 0.5;
+            attempt++;
             continue;
         }
 
-        // NR converged, now check Physics Stability (Arbiter)
-        int suggestion = arbiter.analyzeStability(netlist, v_nr_guess, integrator.get());
+        // The math converged, but is it physically stable?
+        int suggestion = arbiter.analyzeStability(netlist, nrEstimate, integrator.get());
 
-        if (suggestion == 1) { 
-            achieved_dt *= 0.5;
-            retries++;
+        if (suggestion == 1) 
+        { 
+            // Tier 1: Physics are getting 'noisy', shrink the time step
+            actualTimeStep *= 0.5;
+            attempt++;
             continue; 
-        } else if (suggestion == 2) { 
-            if (integrator->getType() == IntegrationType::TRAPEZOIDAL) {
+        } 
+        else if (suggestion == 2) 
+        { 
+            // Tier 2: Trapezoidal is oscillating (ringing). Switch to a more stable BDF/Gear method.
+            if (integrator->getType() == IntegrationType::TRAPEZOIDAL) 
+            {
                 setIntegrationMethod(IntegrationType::GEAR_2);
                 continue; 
             }
         }
         
-        v_final = v_nr_guess;
-        step_converged = true;
+        // Success! We found a stable, converged solution.
+        finalVoltages = nrEstimate;
+        simulationConverged = true;
         break;
     }
 
-    // Update Global Capacitor History via Strategy
-    for (auto& c : netlist.globalBlock.capacitors) {
-        double v_new = 0.0;
-        if (c.nodePlate1 != 0) v_new += v_final[c.nodePlate1 - 1];
-        if (c.nodePlate2 != 0) v_new -= v_final[c.nodePlate2 - 1];
+    // Now that the step is accepted, we update the integration history (voltages/currents) 
+    // so the next step has the proper context.
+    for (auto& cap : netlist.globalBlock.capacitors) 
+    {
+        double v_current = 0.0;
+        if (cap.nodePlate1 != 0) v_current += finalVoltages[cap.nodePlate1 - 1];
+        if (cap.nodePlate2 != 0) v_current -= finalVoltages[cap.nodePlate2 - 1];
 
-        double i_new = 0.0; 
-        IntegrationType type = integrator->getType();
+        double i_current = 0.0; 
+        IntegrationType currentType = integrator->getType();
         
-        if (type == IntegrationType::TRAPEZOIDAL) {
-             double G_eq = (2.0 * c.capacitance_farads) / achieved_dt;
-             i_new = G_eq * (v_new - c.voltage_history[0]) - c.current_history[0];
-        } else if (type == IntegrationType::GEAR_1_EULER) {
-             double G_eq = c.capacitance_farads / achieved_dt;
-             i_new = G_eq * (v_new - c.voltage_history[0]);
-        } else if (type == IntegrationType::GEAR_2) {
-             if (c.voltage_history[1] == 0.0 && currentTime > achieved_dt) {
-                  double G_eq = c.capacitance_farads / achieved_dt;
-                  i_new = G_eq * (v_new - c.voltage_history[0]);
-             } else {
-                  i_new = (c.capacitance_farads / achieved_dt) * (1.5 * v_new - 2.0 * c.voltage_history[0] + 0.5 * c.voltage_history[1]);
-             }
+        // Calculate the branch current based on the specific integration formula used
+        if (currentType == IntegrationType::TRAPEZOIDAL) 
+        {
+             double conductance = (2.0 * cap.capacitance_farads) / actualTimeStep;
+             i_current = conductance * (v_current - cap.voltage_history[0]) - cap.current_history[0];
+        } 
+        else if (currentType == IntegrationType::GEAR_1_EULER) 
+        {
+             double conductance = cap.capacitance_farads / actualTimeStep;
+             i_current = conductance * (v_current - cap.voltage_history[0]);
+        } 
+        else if (currentType == IntegrationType::GEAR_2) 
+        {
+            // Special case: Gear 2 needs two points of history. If we don't have them yet, we bootstrap with Euler.
+            if (cap.voltage_history[1] == 0.0 && currentTime > actualTimeStep) 
+            {
+                double conductance = cap.capacitance_farads / actualTimeStep;
+                i_current = conductance * (v_current - cap.voltage_history[0]);
+            } 
+            else 
+            {
+                double factor = cap.capacitance_farads / actualTimeStep;
+                i_current = factor * (1.5 * v_current - 2.0 * cap.voltage_history[0] + 0.5 * cap.voltage_history[1]);
+            }
         }
-        integrator->updateHistory(c.voltage_history, c.current_history, v_new, i_new);
+        
+        integrator->updateHistory(cap.voltage_history, cap.current_history, v_current, i_current);
     }
 
-    return {currentTime + achieved_dt, v_final, {lastSolverRes.iterations, lastSolverRes.finalResidual, step_converged}};
+    return {currentTime + actualTimeStep, finalVoltages, {lastResult.iterations, lastResult.finalResidual, simulationConverged}};
 }
