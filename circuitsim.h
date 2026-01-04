@@ -17,6 +17,7 @@
 // ============================================================================
 
 #include "stamps.h"
+#include "device_physics.h"
 
 // ============================================================================
 // CIRCUITSIM CLASS
@@ -237,17 +238,89 @@ private:
     // NR Parameters
     static constexpr double RELTOL = 1e-3;
     static constexpr double VNTOL  = 1e-6;
+    static constexpr double ABSTOL = 1e-12; // 1 pico-Ampere resolution
     static constexpr int MAX_NR_ITER = 20;
 
-
-    bool checkConvergence(const std::vector<double>& v_new, const std::vector<double>& v_old) {
+    /**
+     * checkConvergence
+     * Verifies BOTH voltage stability (approximate) AND physical charge conservation (exact).
+     */
+    bool checkConvergence(const std::vector<double>& v_new, const std::vector<double>& v_old, double max_kcl_error) 
+    {
+        // 1. Check Voltage Updates (Standard RELTOL/VNTOL)
         if (v_new.size() != v_old.size()) return false;
         for (size_t i = 0; i < v_new.size(); ++i) {
             double diff = std::abs(v_new[i] - v_old[i]);
             double limit = RELTOL * std::max(std::abs(v_new[i]), std::abs(v_old[i])) + VNTOL;
             if (diff > limit) return false;
         }
+
+        // 2. Check Physical KCL Conservation (Research-Grade)
+        if (max_kcl_error > ABSTOL) return false;
+
         return true;
+    }
+
+    /**
+     * calculatePhysicalResiduals
+     * Audits the solution by checking Kirchhoff's Current Law using EXACT non-linear equations.
+     * Returns the maximum KCL violation (in Amperes) across all nodes.
+     */
+    double calculatePhysicalResiduals(const TensorNetlist& netlist, const std::vector<double>& v_candidate)
+    {
+        int n = netlist.numGlobalNodes;
+        if (n == 0) return 0.0;
+        
+        std::vector<double> node_residuals(n, 0.0);
+
+        // helper to get node voltage
+        auto getV = [&](int nodeIdx) {
+            return (nodeIdx == 0) ? 0.0 : v_candidate[nodeIdx - 1];
+        };
+
+        // 1. Resistors (Ohm's Law: I = V/R)
+        for (const auto& r : netlist.globalBlock.resistors) {
+            double v1 = getV(r.nodeTerminal1);
+            double v2 = getV(r.nodeTerminal2);
+            double i_r = (v1 - v2) / r.resistance_ohms;
+            if (r.nodeTerminal1 != 0) node_residuals[r.nodeTerminal1 - 1] -= i_r; // Current LEAVING node
+            if (r.nodeTerminal2 != 0) node_residuals[r.nodeTerminal2 - 1] += i_r; // Current ENTERING node
+        }
+
+        // 2. Voltage Sources (Norton Equivalent for Check)
+        // Since we model voltage sources as minimal-resistance Thevenin/Norton in the matrix,
+        // we must check them similarly here to avoid false positives. 
+        // In a pure nodal formulation, specific V-source current checking requires MNA current variables.
+        // For this Norton-based engine, we treat them as stiff resistors (R=1uOhm).
+        for (const auto& v : netlist.globalBlock.voltageSources) {
+            double v1 = getV(v.nodePositive);
+            double v2 = getV(v.nodeNegative);
+            double r_int = 1e-6; // Match the stamp's internal resistance
+            double i_src = (v1 - v2 - v.voltage_V) / r_int; 
+            if (v.nodePositive != 0) node_residuals[v.nodePositive - 1] -= i_src;
+            if (v.nodeNegative != 0) node_residuals[v.nodeNegative - 1] += i_src;
+        }
+
+        // 3. Diodes (Shockley Equation: I = Is * (exp(V/Vt) - 1))
+        for (const auto& d : netlist.globalBlock.diodes) {
+            double v_anode = getV(d.anode);
+            double v_cathode = getV(d.cathode);
+            double v_d = v_anode - v_cathode;
+            
+            // Use exact physics kernel (no clamping for residual check)
+            DiodeParams params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N, d.thermalVoltage_V_T_V};
+            double i_d = diode_current(v_d, params);
+            
+            if (d.anode != 0) node_residuals[d.anode - 1] -= i_d;
+            if (d.cathode != 0) node_residuals[d.cathode - 1] += i_d;
+        }
+
+        // 4. Find Max Residual
+        double max_err = 0.0;
+        for (double val : node_residuals) {
+            max_err = std::max(max_err, std::abs(val));
+        }
+        return max_err;
     }
     
     // Phase 2: Numerical Integration Strategy
@@ -325,22 +398,17 @@ private:
     {
         for (auto& diode : netlist.globalBlock.diodes)
         {
-            // First, find what voltage the diode "thinks" it seeing
+            // Get voltage across the diode
             double v_a = (diode.anode == 0)   ? 0.0 : voltageEstimate[diode.anode - 1];
             double v_c = (diode.cathode == 0) ? 0.0 : voltageEstimate[diode.cathode - 1];
             double v_diff = v_a - v_c;
 
-            // Use the Shockley equation to find the current and its derivative
-            double thermalFactor = diode.emissionCoefficient_N * diode.thermalVoltage_V_T_V;
+            // Use clamped physics kernels for NR stability
+            DiodeParams params = {diode.saturationCurrent_I_S_A, diode.emissionCoefficient_N, diode.thermalVoltage_V_T_V};
+            double i_diode = diode_current_clamped(v_diff, params);
+            double conductance_eq = diode_conductance_clamped(v_diff, params);
             
-            // We clamp the exponent at 40 to prevent 'inf' or 'nan' crashes in early iterations
-            double expVal = std::exp(std::min(v_diff / thermalFactor, 40.0));
-            double i_diode = diode.saturationCurrent_I_S_A * (expVal - 1.0);
-
-            // The 'Jacobian' is just the slope of the I-V curve at this point
-            double conductance_eq = (diode.saturationCurrent_I_S_A / thermalFactor) * expVal;
-            
-            // The equivalent source compensates for the linearization offset
+            // Equivalent current source for companion model
             double current_eq = i_diode - conductance_eq * v_diff;
 
             // Stamp the linearized conductance into the matrix
@@ -437,7 +505,10 @@ inline SimulationStep CircuitSim::solveDC(TensorNetlist& netlist)
             }
         }
 
-        if (checkConvergence(v_new, voltageEstimate)) 
+        // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
+        double kcl_error = calculatePhysicalResiduals(netlist, v_new);
+
+        if (checkConvergence(v_new, voltageEstimate, kcl_error)) 
         {
             voltageEstimate = v_new;
             converged = true;
@@ -502,7 +573,10 @@ inline SimulationStep CircuitSim::stepTransient(TensorNetlist& netlist, double t
             
             // Note: We could apply pnjlim damping here as well for even higher stability
             
-            if (checkConvergence(v_new, nrEstimate)) 
+            // Verify Physical Laws
+            double kcl_error = calculatePhysicalResiduals(netlist, v_new);
+            
+            if (checkConvergence(v_new, nrEstimate, kcl_error)) 
             {
                 nrEstimate = v_new;
                 nrConverged = true;
