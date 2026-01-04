@@ -3,6 +3,7 @@ project(HelloWorld VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Platform-aware default Qt prefix hints (can be overridden by CMAKE_PREFIX_PATH or Qt6_DIR)
 if(NOT DEFINED Qt6_DIR)
@@ -49,11 +50,7 @@ if(WIN32 AND NOT DEFINED Qt6_DIR)
 endif()
 
 # If the user has a known Qt installation path, prefer that (useful when automatic detection fails)
-if(WIN32 AND NOT DEFINED Qt6_DIR)
-    # Use the user's provided Qt path unconditionally when Qt6_DIR is not set.
-    set(Qt6_DIR "C:/Qt/6.10.1/msvc2022_64/lib/cmake/Qt6Core")
-    message(STATUS "Using explicit Qt6_DIR: ${Qt6_DIR}")
-endif()
+# Removed hardcoded fallback to allow presets to control the path.
 
 # Allow user to pass Qt6_DIR or CMAKE_PREFIX_PATH on command line or via CMake presets
 if(DEFINED Qt6_DIR)

@@ -16,7 +16,7 @@
       },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "Qt6_DIR": "C:/Qt/6.8.0/msvc2022_64/lib/cmake/Qt6"
+        "Qt6_DIR": "C:/Qt/6.9.3/msvc2022_64/lib/cmake/Qt6"
       },
       "condition": {
         "type": "equals",

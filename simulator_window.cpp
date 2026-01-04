@@ -46,6 +46,7 @@ void SimulatorWindow::startSimulation() {
     
     // Reset Sim State
     sim = CircuitSim();
+    sim.resetArbiter();
     currentTime = 0.0;
     trace.clear();
     trace.netlistName = "Quick RC Circuit";
