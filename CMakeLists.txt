@@ -68,6 +68,8 @@ qt_add_executable(${PROJECT_NAME}
     main.cpp
     simulator_window.cpp
     simulator_window.h
+    schematic_editor.cpp
+    schematic_editor.h
 )
 
 # Link Qt libraries

@@ -1,89 +1,113 @@
 #include "simulator_window.h"
+#include <QSplitter>
 
 SimulatorWindow::SimulatorWindow(QWidget *parent) : QWidget(parent) {
-    setWindowTitle("CuteApp - Circuit Simulator (Wasm Ready)");
-    resize(600, 400);
+  setWindowTitle("CuteApp - Circuit Simulator (Wasm Ready)");
+  resize(1000, 600);
 
-    auto* layout = new QVBoxLayout(this);
+  auto *mainLayout = new QHBoxLayout(this);
 
-    auto* title = new QLabel("RC Circuit: Step Response (5V Input, 1kΩ, 1µF)", this);
-    title->setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;");
-    layout->addWidget(title);
+  // Splitter for Schematic and Log
+  auto *splitter = new QSplitter(Qt::Horizontal, this);
 
-    logArea = new QPlainTextEdit(this);
-    logArea->setReadOnly(true);
-    logArea->setPlaceholderText("Simulation results will appear here...");
-    layout->addWidget(logArea);
+  // Left: Schematic Editor
+  schematic = new SchematicEditor(this);
+  splitter->addWidget(schematic);
 
-    auto* btnRun = new QPushButton("Run Simulation", this);
-    btnRun->setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; font-size: 14px;");
-    layout->addWidget(btnRun);
+  // Right: Log and Controls
+  auto *rightPanel = new QWidget(this);
+  auto *rightLayout = new QVBoxLayout(rightPanel);
+  rightLayout->setContentsMargins(5, 5, 5, 5);
 
-    connect(btnRun, &QPushButton::clicked, this, &SimulatorWindow::startSimulation);
+  auto *title = new QLabel("Simulation Output", rightPanel);
+  title->setStyleSheet(
+      "font-size: 16px; font-weight: bold; margin-bottom: 10px;");
+  rightLayout->addWidget(title);
 
-    simTimer = new QTimer(this);
-    connect(simTimer, &QTimer::timeout, this, &SimulatorWindow::stepSimulation);
+  logArea = new QPlainTextEdit(rightPanel);
+  logArea->setReadOnly(true);
+  logArea->setPlaceholderText("Simulation results will appear here...");
+  rightLayout->addWidget(logArea);
+
+  auto *btnRun = new QPushButton("Run Simulation", rightPanel);
+  btnRun->setStyleSheet("background-color: #4CAF50; color: white; padding: "
+                        "10px; font-size: 14px;");
+  rightLayout->addWidget(btnRun);
+
+  splitter->addWidget(rightPanel);
+  splitter->setSizes({600, 400}); // Default sizes
+
+  mainLayout->addWidget(splitter);
+
+  connect(btnRun, &QPushButton::clicked, this,
+          &SimulatorWindow::startSimulation);
+
+  simTimer = new QTimer(this);
+  connect(simTimer, &QTimer::timeout, this, &SimulatorWindow::stepSimulation);
 }
 
 void SimulatorWindow::startSimulation() {
-    logArea->clear();
-    logArea->appendPlainText("Initializing Hierarchical Netlist...");
-    
-    // --- Phase 1.5: Build Netlist with Parameterized Intelligence ---
-    netlist = TensorNetlist(); 
-    
-    // Global Components
-    netlist.addVoltageSource(1, 0, 5.0);
-    logArea->appendPlainText("Added Voltage Source (Global): 5V");
+  logArea->clear();
+  logArea->appendPlainText("Building Netlist from Schematic...");
 
-    netlist.addResistor(1, 2, 1000.0);
-    logArea->appendPlainText("Added Resistor (Global): 1kΩ");
+  // Convert Schematic to Netlist
+  netlist = schematic->toNetlist();
 
-    netlist.addCapacitor(2, 0, 1e-6);
-    logArea->appendPlainText("Added Capacitor (Global): 1µF");
-    
-    // TODO: Verify parameter passing here when we have blocks with parameters
-    
-    // Reset Sim State
-    sim = CircuitSim();
-    sim.resetArbiter();
-    currentTime = 0.0;
-    trace.clear();
-    trace.netlistName = "Quick RC Circuit";
-    
-    logArea->appendPlainText("\nStarting Transient Analysis...");
-    logArea->appendPlainText("Time(ms) \t V_out (Node 2)");
-    logArea->appendPlainText("--------------------------------");
-    logArea->appendPlainText(QString("0.000 \t 0.0000 V"));
+  if (netlist.numGlobalNodes == 0) {
+    logArea->appendPlainText("ERROR: No components placed on schematic!");
+    return;
+  }
 
-    // Start the non-blocking loop
-    simTimer->start(0); 
+  logArea->appendPlainText(QString("  Nodes: %1").arg(netlist.numGlobalNodes));
+  logArea->appendPlainText(
+      QString("  Resistors: %1").arg(netlist.globalBlock.resistors.size()));
+  logArea->appendPlainText(
+      QString("  Capacitors: %1").arg(netlist.globalBlock.capacitors.size()));
+  logArea->appendPlainText(
+      QString("  Diodes: %1").arg(netlist.globalBlock.diodes.size()));
+  logArea->appendPlainText(QString("  Voltage Sources: %1")
+                               .arg(netlist.globalBlock.voltageSources.size()));
+
+  // Reset Sim State
+  sim = CircuitSim();
+  sim.resetArbiter();
+  currentTime = 0.0;
+  trace.clear();
+  trace.netlistName = "Schematic Circuit";
+
+  logArea->appendPlainText("\nStarting Transient Analysis...");
+  logArea->appendPlainText("Time(ms) \t V(Node 1)");
+  logArea->appendPlainText("--------------------------------");
+
+  // Start the non-blocking loop
+  simTimer->start(0);
 }
 
 void SimulatorWindow::stepSimulation() {
-    // Run a batch of steps (e.g., 100) per frame to keep UI responsive
-    for (int i = 0; i < 100; ++i) {
-        if (currentTime >= totalTime) {
-            simTimer->stop();
-            logArea->appendPlainText("\nSimulation Complete.");
-            return;
-        }
-
-        // Perform one physics step
-        SimulationStep step = sim.stepTransient(netlist, timeStep, currentTime);
-        trace.addStep(currentTime, step.nodeVoltages, step.stats);
-        
-        currentTime += timeStep;
-
-        // Log output (decimate to avoid spamming the logs)
-        if (std::abs(std::fmod(currentTime, 0.0001)) < timeStep / 2.0) {
-             double v_out = 0.0;
-             if (step.nodeVoltages.size() >= 2) v_out = step.nodeVoltages[1];
-
-             QString logLine = QString("%1 \t %2 V")
-                .arg(currentTime * 1000, 0, 'f', 3)
-                .arg(v_out, 0, 'f', 4);
-            logArea->appendPlainText(logLine);
-        }
+  // Run a batch of steps (e.g., 100) per frame to keep UI responsive
+  for (int i = 0; i < 100; ++i) {
+    if (currentTime >= totalTime) {
+      simTimer->stop();
+      logArea->appendPlainText("\nSimulation Complete.");
+      return;
     }
+
+    // Perform one physics step
+    SimulationStep step = sim.stepTransient(netlist, timeStep, currentTime);
+    trace.addStep(currentTime, step.nodeVoltages, step.stats);
+
+    currentTime += timeStep;
+
+    // Log output (decimate to avoid spamming the logs)
+    if (std::abs(std::fmod(currentTime, 0.0001)) < timeStep / 2.0) {
+      double v_out = 0.0;
+      if (step.nodeVoltages.size() >= 1)
+        v_out = step.nodeVoltages[0];
+
+      QString logLine = QString("%1 \t %2 V")
+                            .arg(currentTime * 1000, 0, 'f', 3)
+                            .arg(v_out, 0, 'f', 4);
+      logArea->appendPlainText(logLine);
+    }
+  }
 }

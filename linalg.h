@@ -85,6 +85,13 @@ private:
   int numCols = 0;
 
 public:
+  // Resets the constructor for a new matrix assembly
+  void clear() {
+    triplets.clear();
+    numRows = 0;
+    numCols = 0;
+  }
+
   /*
    * Stamps a numerical value at the specified (row, col) coordinate.
    * row: 0-indexed row position.
