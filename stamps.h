@@ -58,7 +58,7 @@ inline void stampVoltageSourceAsNorton(int nodePos, int nodeNeg, double voltage,
 {
     // We treat independent voltage sources as high-conductance Norton equivalents 
     // to keep the MNA matrix entirely in the voltage domain.
-    double r_int = 1e-6;
+    double r_int = 1e-3;
     double g_int = 1.0 / r_int;
     double i_eq = voltage * g_int;
 

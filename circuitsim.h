@@ -261,6 +261,7 @@ private:
         return true;
     }
 
+public:
     /**
      * calculatePhysicalResiduals
      * Audits the solution by checking Kirchhoff's Current Law using EXACT non-linear equations.
@@ -295,10 +296,10 @@ private:
         for (const auto& v : netlist.globalBlock.voltageSources) {
             double v1 = getV(v.nodePositive);
             double v2 = getV(v.nodeNegative);
-            double r_int = 1e-6; // Match the stamp's internal resistance
-            double i_src = (v1 - v2 - v.voltage_V) / r_int; 
-            if (v.nodePositive != 0) node_residuals[v.nodePositive - 1] -= i_src;
-            if (v.nodeNegative != 0) node_residuals[v.nodeNegative - 1] += i_src;
+            double r_int = 1e-3; // Match the stamp's internal resistance
+            double i_src = (v.voltage_V - (v1 - v2)) / r_int; 
+            if (v.nodePositive != 0) node_residuals[v.nodePositive - 1] += i_src;
+            if (v.nodeNegative != 0) node_residuals[v.nodeNegative - 1] -= i_src;
         }
 
         // 3. Diodes (Shockley Equation: I = Is * (exp(V/Vt) - 1))
@@ -335,6 +336,26 @@ private:
         }
         for (const auto& v : block.voltageSources) {
             stampVoltageSourceAsNorton(v.nodePositive, v.nodeNegative, v.voltage_V, matrixBuilder, rhsVector);
+        }
+        for (const auto& i : block.currentSources) {
+            if (i.nodePositive != 0) rhsVector[i.nodePositive - 1] -= i.current_A; // Leaving Positive
+            if (i.nodeNegative != 0) rhsVector[i.nodeNegative - 1] += i.current_A; // Entering Negative
+            // Wait, standard definition: "Independent Current Source... flows from Positive node to Negative node through the source".
+            // So on the external circuit: Current LEAVES Positive node, ENTERS Negative node.
+            // KCL at Positive Node: Sum I_out = 0.
+            // If source pushes current OUT of P, that's +I in the KCL sum?
+            // "RHS = -Known_Currents".
+            // If current LEAVES node P, it is a negative term on LHS?
+            // Let's stick to standard MNA:
+            // RHS[n] += Current_Entering_n
+            // Source I flows P -> N.
+            // So it LEAVES P (RHS -= I) and ENTERS N (RHS += I)?
+            // Standard SPICE I_src connect N+ N- val. Flows N+ to N- thru source.
+            // So entering N- from source. Leaving N+ into source.
+            // Yes.
+            // Logic:
+            if (i.nodePositive != 0) rhsVector[i.nodePositive - 1] -= i.current_A; 
+            if (i.nodeNegative != 0) rhsVector[i.nodeNegative - 1] += i.current_A; 
         }
     }
     

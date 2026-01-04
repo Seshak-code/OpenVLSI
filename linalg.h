@@ -385,8 +385,8 @@ inline SolverResult solvePCG(const Csr_matrix& matrix, const std::vector<double>
         double searchDirectionDotAp = dotProduct(searchDirection, matrixTimesSearchDirection);
         if (std::abs(searchDirectionDotAp) < divisionByZeroThreshold) 
         {
-            assert(false && "Numerical instability: searchDirectionDotAp near zero");
-            break; 
+            // Numerical instability detected. Instead of crashing, return partial result as failed.
+            return {solution, currentResidualNorm, iteration, false};
         }
 
         double stepSize = residualDotPreconditioned / searchDirectionDotAp;
@@ -410,7 +410,10 @@ inline SolverResult solvePCG(const Csr_matrix& matrix, const std::vector<double>
         
         double newResidualDotPreconditioned = dotProduct(residual, preconditionedResidual);
         
-        assert(std::abs(residualDotPreconditioned) > divisionByZeroThreshold && "Dot product underflow");
+        if (std::abs(residualDotPreconditioned) < divisionByZeroThreshold) 
+        {
+            return {solution, currentResidualNorm, iteration, false};
+        }
         
         double directionUpdateFactor = newResidualDotPreconditioned / residualDotPreconditioned;
         
