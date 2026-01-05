@@ -86,9 +86,12 @@ void SimulatorWindow::stepSimulation() {
 
     // Perform one physics step
     SimulationStep step = sim.stepTransient(netlist, timeStep, currentTime);
-    trace.addStep(currentTime, step.nodeVoltages, step.stats);
+    
+    // Update state based on actual step taken
+    double actualDt = step.time - currentTime;
+    currentTime = step.time;
 
-    currentTime += timeStep;
+    trace.addStep(currentTime, step.nodeVoltages, step.stats);
 
     // Log output (decimate to avoid spamming the logs)
     if (std::abs(std::fmod(currentTime, 0.0001)) < timeStep / 2.0) {

@@ -139,3 +139,11 @@ install(TARGETS ${PROJECT_NAME}
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
+
+# Regression Test Suite (Standalone Backend)
+add_executable(test_regression regression_main.cpp)
+target_include_directories(test_regression PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+)
+target_compile_features(test_regression PUBLIC cxx_std_17)

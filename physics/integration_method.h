@@ -33,6 +33,8 @@ public:
         std::vector<double>& v_hist, std::vector<double>& i_hist,
         double v_new, double i_new_calculated) = 0;
 
+    virtual void prepareStep(double dt) {}
+
     virtual double predict(const std::vector<double>& v_hist) = 0;
         
     virtual IntegrationType getType() const = 0;

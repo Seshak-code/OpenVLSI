@@ -1,6 +1,7 @@
 #include "ai_assistant.h"
 #include <QScrollBar>
 #include <QDebug>
+#include <QJsonDocument>
 
 AiAssistantPanel::AiAssistantPanel(SchematicEditor* editor, QWidget* parent) 
     : QWidget(parent), editorContext(editor) 
@@ -60,8 +61,9 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
     }
 
     if (cmd == "/dump") {
-        QString state = editorContext->dumpSceneState();
-        appendMessage("Copilot", "Current Scene State:\n" + state);
+        QJsonObject state = editorContext->getCircuitState();
+        QJsonDocument doc(state);
+        appendMessage("Copilot", "Current Scene State (JSON):\n" + doc.toJson(QJsonDocument::Indented));
     } 
     else if (cmd == "/wire") {
         // Demo: Place a simple L-shaped wire

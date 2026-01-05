@@ -803,24 +803,105 @@ QStringList SchematicEditor::getAvailableComponents() {
     };
 }
 
+void SchematicEditor::placeWirePath(const QVector<QPointF>& points) {
+    scene->placeWirePath(points);
+}
+
+QJsonObject SchematicEditor::getCircuitState() {
+    return scene->getCircuitState();
+}
+
 QString SchematicEditor::dumpSceneState() {
+    QJsonObject state = getCircuitState();
+    
+    // Dump Components
     QString dump;
-    auto items = scene->items();
-    for(auto* item : items) {
-        if(auto* wc = dynamic_cast<VisualComponent*>(item)) {
-            dump += QString("COMPONENT: %1 Type:%2 Pos:(%3,%4) Rot:%5 Value:%6\n")
-                    .arg(wc->name).arg((int)wc->type)
-                    .arg(wc->pos().x()).arg(wc->pos().y())
-                    .arg(wc->rotation()).arg(wc->value);
-        }
-        else if(auto* ww = dynamic_cast<VisualWire*>(item)) {
+    QJsonArray components = state["components"].toArray();
+    for (const auto& val : components) {
+        QJsonObject c = val.toObject();
+        dump += QString("COMPONENT: %1 Type:%2 Pos:(%3,%4) Rot:%5 Value:%6\n")
+                .arg(c["name"].toString())
+                .arg(c["type"].toString())
+                .arg(c["x"].toDouble()).arg(c["y"].toDouble())
+                .arg(c["rotation"].toDouble())
+                .arg(c["properties"].toObject()["value"].toString());
+    }
+    
+    // Dump Wires
+    QJsonArray wires = state["wires"].toArray();
+    for (const auto& val : wires) {
+        QJsonObject w = val.toObject();
+        QJsonArray points = w["points"].toArray();
+        if (points.size() >= 2) {
+             QJsonObject p1 = points[0].toObject();
+             QJsonObject p2 = points[points.size()-1].toObject();
              dump += QString("WIRE: Net:%1 P1:(%2,%3) P2:(%4,%5)\n")
-                     .arg(ww->getName().isEmpty() ? "UNNAMED" : ww->getName())
-                     .arg(ww->line().p1().x()).arg(ww->line().p1().y())
-                     .arg(ww->line().p2().x()).arg(ww->line().p2().y());
+                     .arg(w["netName"].toString())
+                     .arg(p1["x"].toDouble()).arg(p1["y"].toDouble())
+                     .arg(p2["x"].toDouble()).arg(p2["y"].toDouble());
         }
     }
+    
     return dump;
+}
+
+// ============================================================================
+// GRID SCENE JSON SERIALIZATION
+// ============================================================================
+QJsonObject GridScene::getCircuitState() {
+    QJsonObject root;
+    
+    // 1. Components
+    QJsonArray components;
+    for (auto* item : items()) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            QJsonObject compInfo;
+            compInfo["id"] = QString::number((uintptr_t)c); // Use pointer address as temp ID
+            compInfo["name"] = c->name;
+            compInfo["type"] = QString::number((int)c->type); // Can convert to string enum later
+            compInfo["x"] = c->pos().x();
+            compInfo["y"] = c->pos().y();
+            compInfo["rotation"] = c->rotation();
+            
+            QJsonObject props;
+            props["value"] = c->value;
+            compInfo["properties"] = props;
+            
+            components.append(compInfo);
+        }
+    }
+    root["components"] = components;
+    
+    // 2. Wires
+    QJsonArray wires;
+    for (auto* item : items()) {
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+             QJsonObject wireInfo;
+             wireInfo["netName"] = w->getName().isEmpty() ? "UNNAMED" : w->getName();
+             
+             QJsonArray points;
+             QLineF line = w->line();
+             
+             QJsonObject p1, p2;
+             p1["x"] = line.p1().x(); p1["y"] = line.p1().y();
+             p2["x"] = line.p2().x(); p2["y"] = line.p2().y();
+             
+             points.append(p1);
+             points.append(p2);
+             wireInfo["points"] = points;
+             
+             wires.append(wireInfo);
+        }
+    }
+    root["wires"] = wires;
+    
+    // 3. Metadata
+    QJsonObject meta;
+    meta["gridVisible"] = gridVisible;
+    meta["snappingEnabled"] = snappingEnabled;
+    root["metadata"] = meta;
+    
+    return root;
 }
 
 
@@ -828,6 +909,4 @@ QStringList SchematicEditor::runERC() {
     return scene->runERC();
 }
 
-void SchematicEditor::placeWirePath(const QVector<QPointF>& points) {
-    scene->placeWirePath(points);
-}
+

@@ -18,6 +18,9 @@
 #include "circuit.h" // Logical circuit definitions (from components/)
 
 
+#include <QJsonObject>
+#include <QJsonArray>
+
 // ============================================================================
 // SCENE (Grid Handling + Validation)
 // ============================================================================
@@ -35,6 +38,9 @@ public:
     QStringList runERC();
     
     // Automation API (GenAI Hook)
+    // Returns full circuit state for AI context
+    QJsonObject getCircuitState();
+    
     void placeWirePath(const QVector<QPointF>& points);
 
 protected:
@@ -81,6 +87,9 @@ public:
     // Automation API (GenAI Hook)
     // Returns a JSON-like string description of the circuit
     QString dumpSceneState();
+    
+    // Returns full circuit state as JSON object
+    QJsonObject getCircuitState();
     
     // Returns a list of all available component types
     QStringList getAvailableComponents();
