@@ -33,6 +33,13 @@ public:
     
     // Snapping support
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+
+    // Net Naming
+    void setName(const QString& name);
+    QString getName() const { return netName; }
+
+    QString netName;
+    QGraphicsTextItem* labelItem = nullptr;
 };
 
 // ============================================================================

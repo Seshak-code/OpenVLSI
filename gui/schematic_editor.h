@@ -45,6 +45,7 @@ signals:
     void messageLogged(const QString& msg);
     void toolChanged(ComponentType newTool);
     void componentSelected(VisualComponent* component); 
+    void wireSelected(VisualWire* wire);
 
 private:
     QPointF snapToGrid(const QPointF& pos);
@@ -76,11 +77,19 @@ private:
 class SchematicEditor : public QWidget {
     Q_OBJECT
 public:
+    // Automation API (GenAI Hook)
+    // Returns a JSON-like string description of the circuit
+    QString dumpSceneState();
+    
+    // Wire naming API
+    void setWireName(VisualWire* wire, const QString& name);
+    
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
 
 signals:
     void itemSelected(VisualComponent* item); 
+    void wireSelected(VisualWire* wire);
 
 private slots:
     void onGridToggled(bool checked);

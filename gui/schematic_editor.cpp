@@ -21,18 +21,21 @@ GridScene::GridScene(QObject* parent) : QGraphicsScene(parent) {
     connect(this, &QGraphicsScene::selectionChanged, this, [this](){
         auto items = selectedItems();
         if (items.isEmpty()) {
-            emit componentSelected(nullptr);
+            emit componentSelected(nullptr); // Clears everything
         } else {
-            // Priority to one item
+            // Priority selection
             QGraphicsItem* item = items.first();
             if (auto* sc = dynamic_cast<VisualComponent*>(item)) {
                 emit componentSelected(sc);
+            } else if (auto* w = dynamic_cast<VisualWire*>(item)) {
+                emit wireSelected(w);
             } else {
                 emit componentSelected(nullptr);
             }
         }
     });
 }
+
 
 void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
     painter->fillRect(rect, QColor("#1e1e1e")); 
@@ -345,6 +348,7 @@ SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {
     });
 
     connect(scene, &GridScene::componentSelected, this, &SchematicEditor::itemSelected);
+    connect(scene, &GridScene::wireSelected, this, &SchematicEditor::wireSelected);
 }
 
 QWidget* SchematicEditor::createRibbon() {
@@ -446,4 +450,30 @@ void SchematicEditor::onGridToggled(bool checked) {
 
 void SchematicEditor::onSnappingToggled(bool checked) {
     scene->setSnappingEnabled(checked);
+}
+
+void SchematicEditor::setWireName(VisualWire* wire, const QString& name) {
+    if (wire) {
+        wire->setName(name);
+    }
+}
+
+QString SchematicEditor::dumpSceneState() {
+    QString dump;
+    auto items = scene->items();
+    for(auto* item : items) {
+        if(auto* wc = dynamic_cast<VisualComponent*>(item)) {
+            dump += QString("COMPONENT: %1 Type:%2 Pos:(%3,%4) Rot:%5 Value:%6\n")
+                    .arg(wc->name).arg((int)wc->type)
+                    .arg(wc->pos().x()).arg(wc->pos().y())
+                    .arg(wc->rotation()).arg(wc->value);
+        }
+        else if(auto* ww = dynamic_cast<VisualWire*>(item)) {
+             dump += QString("WIRE: Net:%1 P1:(%2,%3) P2:(%4,%5)\n")
+                     .arg(ww->getName().isEmpty() ? "UNNAMED" : ww->getName())
+                     .arg(ww->line().p1().x()).arg(ww->line().p1().y())
+                     .arg(ww->line().p2().x()).arg(ww->line().p2().y());
+        }
+    }
+    return dump;
 }

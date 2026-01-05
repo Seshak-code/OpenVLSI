@@ -54,9 +54,11 @@ private:
 
 private slots:
     void updateProperties(VisualComponent* item);
+    void updateWireProperties(VisualWire* wire);
     void onPropertyEdited(QTableWidgetItem* item);
 
 private:
     VisualComponent* activeComponent = nullptr;
+    VisualWire* activeWire = nullptr;
     bool isUpdating = false; // Prevent feedback loop
 };

@@ -9,6 +9,27 @@ VisualWire::VisualWire(QLineF line) : QGraphicsLineItem(line) {
     setPen(QPen(Qt::lightGray, 2));
     setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
     setZValue(1); // Wires below components 
+    
+    // Initialize label
+    labelItem = new QGraphicsTextItem(this);
+    labelItem->setDefaultTextColor(Qt::yellow);
+    QFont f = labelItem->font();
+    f.setPointSize(10);
+    labelItem->setFont(f);
+    labelItem->setVisible(false); // Hidden by default if empty
+}
+
+void VisualWire::setName(const QString& name) {
+    netName = name;
+    if (name.isEmpty()) {
+        labelItem->setVisible(false);
+    } else {
+        labelItem->setPlainText(name);
+        labelItem->setVisible(true);
+        // Center label
+        QPointF mid = line().pointAt(0.5);
+        labelItem->setPos(mid.x(), mid.y() - 15); // Slightly above
+    }
 }
 
 void VisualWire::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) {

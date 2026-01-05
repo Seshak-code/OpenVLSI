@@ -29,7 +29,10 @@ void MainWindow::setupCentralWidget() {
     
     // Connect Selection
     connect(schematicEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+    connect(schematicEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
 }
+
+
 
 void MainWindow::setupDocks() {
     // --- Project Browser (Left) ---
@@ -98,6 +101,7 @@ void MainWindow::updateProperties(VisualComponent* item) {
     isUpdating = true;
     
     activeComponent = item;
+    activeWire = nullptr; // Ensure exclusive selection
     propertiesTable->clearContents();
     
     if (!item) {
@@ -149,20 +153,28 @@ void MainWindow::updateProperties(VisualComponent* item) {
 }
 
 void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
-    if (isUpdating || !activeComponent) return;
+    if (isUpdating) return;
     
     int row = item->row();
     int col = item->column();
     
-    if (col == 1) { // Value column
-        if (row == 0) {
-            activeComponent->name = item->text();
-        } else if (row == 1) {
-            activeComponent->value = item->text();
-        } else if (row > 2) {
-            // Dynamic Param
-            QString key = propertiesTable->item(row, 0)->text();
-            activeComponent->params[key] = item->text();
+    if (activeComponent) {
+        if (col == 1) { // Value column
+            if (row == 0) {
+                activeComponent->name = item->text();
+            } else if (row == 1) {
+                activeComponent->value = item->text();
+            } else if (row > 2) {
+                // Dynamic Param
+                QString key = propertiesTable->item(row, 0)->text();
+                activeComponent->params[key] = item->text();
+            }
+        }
+    } 
+    else if (activeWire) {
+        if (col == 1 && row == 0) {
+            // Renaming Net
+            schematicEditor->setWireName(activeWire, item->text());
         }
     }
 }
@@ -227,4 +239,33 @@ void MainWindow::runSimulation() {
 void MainWindow::closeEvent(QCloseEvent *event) {
     // Save layout state here
     QMainWindow::closeEvent(event);
+}
+
+void MainWindow::updateWireProperties(VisualWire* wire) {
+    if (isUpdating) return;
+    isUpdating = true;
+    
+    activeWire = wire;
+    activeComponent = nullptr; // Exclusive selection
+    propertiesTable->clearContents();
+    
+    if (!wire) {
+        propertiesTable->setRowCount(0);
+        isUpdating = false;
+        return;
+    }
+    
+    propertiesTable->setRowCount(2);
+    
+    // 0: Name (Editable)
+    propertiesTable->setItem(0, 0, new QTableWidgetItem("Name"));
+    propertiesTable->setItem(0, 1, new QTableWidgetItem(wire->getName()));
+    
+    // 1: Length (Read Only)
+    propertiesTable->setItem(1, 0, new QTableWidgetItem("Length"));
+    QTableWidgetItem* lenItem = new QTableWidgetItem(QString::number(wire->line().length()));
+    lenItem->setFlags(lenItem->flags() & ~Qt::ItemIsEditable);
+    propertiesTable->setItem(1, 1, lenItem);
+    
+    isUpdating = false;
 }
