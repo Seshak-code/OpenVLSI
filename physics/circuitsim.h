@@ -163,6 +163,33 @@ public:
       return max_err;
   }
 
+  // M4: Formal Passivity Checks (Static)
+  bool checkPassivity(const TensorNetlist &netlist) {
+      // 1. Check Global Block
+      if (!checkBlockPassivity(netlist.globalBlock)) return false;
+      // 2. Check Instances
+      for (const auto &inst : netlist.instances) {
+          auto it = netlist.blockDefinitions.find(inst.blockName);
+          if (it != netlist.blockDefinitions.end()) {
+              if (!checkBlockPassivity(it->second)) return false;
+          }
+      }
+      return true;
+  }
+
+  bool checkBlockPassivity(const TensorBlock &block) {
+      for (const auto &r : block.resistors) {
+          if (r.resistance_ohms <= 0.0) return false;
+      }
+      for (const auto &c : block.capacitors) {
+          if (c.capacitance_farads < 0.0) return false;
+      }
+      for (const auto &m : block.mosfets) {
+          if (m.channelWidth_m <= 0.0 || m.channelLength_m <= 0.0) return false;
+      }
+      return true;
+  }
+
   // Returns: 0=Stable, 1=Reduce dt, 2=Switch Method
   int analyzeStability(const TensorNetlist &netlist,
                        const std::vector<double> &current_voltages,
@@ -202,7 +229,26 @@ public:
         }
     }
 
-    bool energy_exploding = (current_energy > prev_energy * 2.0 + 1e-9 && prev_energy > 1e-12);
+
+
+    // M4: Lyapunov Energy Monitor
+    // Calculate Work Done by Sources (Approximate Pin)
+    double power_in = 0.0;
+    // Current Sources
+    for (const auto &i : netlist.globalBlock.currentSources) {
+         double v_diff = 0.0;
+         if (i.nodePositive > 0 && i.nodePositive <= (int)current_voltages.size()) v_diff += current_voltages[i.nodePositive-1];
+         if (i.nodeNegative > 0 && i.nodeNegative <= (int)current_voltages.size()) v_diff -= current_voltages[i.nodeNegative-1];
+         power_in += std::abs(i.current_A * v_diff);
+    }
+    // Safety Margin for Voltage Sources/Norton Equivalents (Heuristic)
+    // We allow energy to grow if there is significant voltage activity, scaling with system size
+    double energy_tolerance = 1e-9 + power_in * dt * 1.5; 
+    
+    // Strict Lyapunov Bound: E(t) <= E(t-1) + Pin*dt + tolerance
+    // We use a relaxed bound here to account for numeric noise and voltage source estimation gaps
+    bool energy_exploding = (current_energy > prev_energy + energy_tolerance + 1e-6) && 
+                            (current_energy > prev_energy * 1.5);
     
     if (high_lte || energy_exploding) {
         instability_counter++;
@@ -786,6 +832,12 @@ inline SimulationStep CircuitSim::stepTransient(TensorNetlist &netlist, double &
     if (!arbiterInitialized) {
       arbiter.initialize(netlist);
       arbiterInitialized = true;
+      
+      // M4: Enforce Formal Passivity
+      if (!arbiter.checkPassivity(netlist)) {
+           // Halt simulation if physically impossible device parameters found
+           return {currentTime, {}, {0, 0.0, false}};
+      }
     }
 
     double actualTimeStep = timeStep;

@@ -24,6 +24,8 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget *parent = nullptr);
 
+    SchematicEditor* getSchematicEditor() const { return schematicEditor; }
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 

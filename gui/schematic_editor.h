@@ -105,6 +105,16 @@ public:
     
     // Validation
     QStringList runERC();
+    
+    // AI API Implementation
+    QString placeComponent(const QString& type, QPointF pos, double rotation, const QJsonObject& params);
+    bool moveComponent(const QString& id, double x, double y);
+    bool rotateComponent(const QString& id, double degrees);
+    bool deleteComponent(const QString& id);
+    VisualComponent* findComponent(const QString& id);
+    
+    // Helper to generate unique ID
+    QString generateUniqueId(ComponentType type);
 
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }

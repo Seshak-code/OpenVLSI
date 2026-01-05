@@ -79,12 +79,18 @@ qt_add_executable(${PROJECT_NAME}
     gui/ai_assistant.h
     gui/component_library.cpp
     gui/component_library.h
+    # AI API Implementations
+    gui/schematic_editor_api.cpp
+    ai_api/schema_api.cpp
+    ai_api/schema_api.h
+    ai_api/simulation_api.h
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
 )
 
 # Link Qt libraries
