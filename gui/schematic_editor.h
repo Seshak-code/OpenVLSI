@@ -58,7 +58,13 @@ private:
     
     // Wire drawing
     QPointF wireStart;
-    VisualWire* tempWire = nullptr;
+    bool isWiring = false; // State flag
+    QList<VisualWire*> ghostWires; // Multiple ghost segments
+    
+    void clearGhostWires();
+    
+    // Automation API (GenAI Hook)
+    void placeWirePath(const QVector<QPointF>& points);
     
     // Ghost for placement
     VisualComponent* ghostItem = nullptr; 

@@ -71,6 +71,16 @@ QPointF GridScene::snapToGrid(const QPointF& pos) {
     return QPointF(x, y);
 }
 
+void GridScene::clearGhostWires() {
+    for (auto* wire : ghostWires) {
+        if (wire && wire->scene()) {
+            removeItem(wire);
+        }
+        delete wire;
+    }
+    ghostWires.clear();
+}
+
 void GridScene::setTool(ComponentType t) {
     currentTool = t;
     if (ghostItem) {
@@ -78,11 +88,10 @@ void GridScene::setTool(ComponentType t) {
         delete ghostItem;
         ghostItem = nullptr;
     }
-    if (tempWire) {
-        removeItem(tempWire);
-        delete tempWire;
-        tempWire = nullptr; 
-    }
+    
+    // Cleanup any partial wiring
+    isWiring = false;
+    clearGhostWires();
     
     if (t != ComponentType::Select && t != ComponentType::Wire) {
         ghostItem = new VisualComponent(t);
@@ -129,7 +138,7 @@ bool GridScene::isPlacementValid(const QPointF& pos, QGraphicsItem* item) {
 
     auto collisions = items(shape);
     for (auto* col : collisions) {
-        if (col == item || col == ghostItem || col == tempWire) continue;
+        if (col == item || col == ghostItem || ghostWires.contains(static_cast<VisualWire*>(col))) continue;
         if (col->type() == item->type()) return false; 
     }
     return true;
@@ -143,9 +152,46 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             QGraphicsScene::mousePressEvent(event);
         }
         else if (currentTool == ComponentType::Wire) {
-            wireStart = p;
-            tempWire = new VisualWire(QLineF(p, p));
-            addItem(tempWire);
+            if (!isWiring) {
+                // START WIRING
+                isWiring = true;
+                wireStart = p;
+                clearGhostWires();
+                emit messageLogged("Started wiring.");
+            } else {
+                // COMMIT SEGMENTS (Click)
+                // We convert current ghosts to permanent wires
+                // Update wireStart to current p
+                
+                // Validate ghosts first
+                bool allValid = true;
+                for(auto* w : ghostWires) {
+                    if (w->line().length() > 0 && !isWireValid(w)) {
+                        allValid = false; 
+                        break;
+                    }
+                }
+                
+                if (allValid) {
+                     for(auto* w : ghostWires) {
+                         if (w->isVisible() && w->line().length() > 0) {
+                             // Create permanent copy
+                             VisualWire* perm = new VisualWire(w->line());
+                             addItem(perm);
+                         }
+                     }
+                     wireStart = p;
+                     // Clean to prep next segment
+                     clearGhostWires();
+                     emit messageLogged("Segment placed.");
+                     
+                     // Check if we hit a terminal? (Simplified: Just check if we hit a component pin)
+                     // If so, finish.
+                     // For now, let user double click or ESC to finish.
+                } else {
+                    emit messageLogged("Cannot place wire here!");
+                }
+            }
         }
         else {
             // Placement
@@ -155,7 +201,11 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             bool colliding = false;
             auto itemsAt = items(predictedBounds, Qt::IntersectsItemBoundingRect);
             for(auto* i : itemsAt) {
-                 if (i != ghostItem && i != tempWire) { colliding = true; break; }
+                 if (i != ghostItem) { 
+                     // Ignore wires during component placement? Usually yes.
+                     // But for now, strict.
+                     if (dynamic_cast<VisualComponent*>(i)) { colliding = true; break; }
+                 }
             }
 
             if (!colliding) {
@@ -169,8 +219,20 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             }
         }
     } else if (event->button() == Qt::RightButton) {
-        setTool(ComponentType::Select);
+        if (isWiring) {
+            // Cancel/Finish wiring
+            isWiring = false;
+            clearGhostWires();
+            emit messageLogged("Wiring finished.");
+        } else {
+            setTool(ComponentType::Select);
+        }
     }
+}
+
+void GridScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+    // No-op for wiring now (click-click interaction)
+    QGraphicsScene::mouseReleaseEvent(event);
 }
 
 void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
@@ -182,14 +244,37 @@ void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
         return;
     }
 
-    if (tempWire) {
-        tempWire->setLine(QLineF(wireStart, p));
-        // Visualize Validity
-        if (isWireValid(tempWire)) {
-             tempWire->setPen(QPen(Qt::cyan, 2));
-        } else {
-             tempWire->setPen(QPen(Qt::red, 2));
-             emit messageLogged("Invalid Wire Path!");
+    if (currentTool == ComponentType::Wire && isWiring) {
+        // Orthogonal L-Shape Routing
+        // Path: wireStart -> Corner -> p
+        // Corner is (p.x, wireStart.y) -> Horizontal first
+        
+        QPointF corner(p.x(), wireStart.y());
+        
+        // We reuse or create ghost wires as needed
+        // Case 1: Straight horizontal (y aligned) or vertical (x aligned)
+        // Case 2: L-shape
+        
+        if (ghostWires.isEmpty()) {
+            ghostWires.append(new VisualWire(QLineF(wireStart, wireStart))); // 1
+            ghostWires.append(new VisualWire(QLineF(wireStart, wireStart))); // 2
+            addItem(ghostWires[0]);
+            addItem(ghostWires[1]);
+        }
+        
+        // Update Segments
+        ghostWires[0]->setLine(QLineF(wireStart, corner));
+        ghostWires[1]->setLine(QLineF(corner, p));
+        
+        // Validity Check (Red/Cyan)
+        for(auto* w : ghostWires) {
+            if (w->line().length() > 0) {
+                 w->setVisible(true);
+                 if (isWireValid(w)) w->setPen(QPen(Qt::cyan, 2));
+                 else w->setPen(QPen(Qt::red, 2));
+            } else {
+                 w->setVisible(false); // Hide zero length segments
+            }
         }
     }
     
@@ -198,19 +283,7 @@ void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     }
 }
 
-void GridScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
-    if (event->button() == Qt::LeftButton && tempWire) {
-        if (tempWire->line().length() < 1 || !isWireValid(tempWire)) {
-            removeItem(tempWire);
-            delete tempWire;
-            emit messageLogged("Invalid wire cancelled.");
-        } else {
-            emit messageLogged("Wire placed.");
-        }
-        tempWire = nullptr; 
-    }
-    QGraphicsScene::mouseReleaseEvent(event);
-}
+
 
 void GridScene::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
