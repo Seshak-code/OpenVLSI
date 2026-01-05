@@ -1,186 +1,137 @@
 #pragma once
 
-#include "circuit.h"
-#include <QComboBox>
-#include <QGraphicsItem>
-#include <QGraphicsLineItem>
-#include <QGraphicsScene>
+#include <QWidget>
 #include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QGraphicsItem>
+#include <QMainWindow>
+#include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMouseEvent>
-#include <QPushButton>
-#include <QString>
-#include <QVBoxLayout>
-#include <QWidget>
-#include <map>
-#include <numeric>
-#include <set>
-#include <tuple>
-#include <vector>
-
+#include <QCheckBox>
+#include <QGroupBox>
+#include <QMap>
+#include <QKeyEvent>
+#include "circuit.h"
 
 // ============================================================================
-// ENUM + UTILITIES
+// CONSTANTS & ENUMS
 // ============================================================================
+const int GRID_STEP = 20;
 
-enum class SchematicComponentType {
-  WIRE,
-  RESISTOR,
-  CAPACITOR,
-  DIODE,
-  MOSFET,
-  BJT,
-  VOLTAGE_SOURCE,
-  GROUND,
-  SELECT,
-  PAN,
-  DELETE_TOOL
-};
-
-const int GRID_SIZE = 20;
-const int LAYER_WIRES = 10;
-const int LAYER_COMPONENTS = 20;
-
-struct GridPoint {
-  int x, y;
-  bool operator<(const GridPoint &other) const {
-    return std::tie(x, y) < std::tie(other.x, other.y);
-  }
-  bool operator==(const GridPoint &other) const {
-    return x == other.x && y == other.y;
-  }
+enum class ComponentType {
+    Select,
+    Wire,
+    Resistor,
+    Capacitor,
+    Inductor,
+    VoltageSource,
+    Ground,
+    Diode,
+    Mosfet,
+    Bjt
 };
 
 // ============================================================================
-// CONNECTIVITY MANAGER (Union-Find)
+// WIRE COMPONENT
 // ============================================================================
-
-class ConnectivityManager {
-  std::map<GridPoint, GridPoint> parent;
-
+class WireComponent : public QGraphicsLineItem {
 public:
-  GridPoint find(GridPoint p) {
-    if (parent.find(p) == parent.end())
-      return parent[p] = p;
-    if (parent[p] == p)
-      return p;
-    return parent[p] = find(parent[p]);
-  }
+    WireComponent(QLineF line);
 
-  void unite(GridPoint a, GridPoint b) {
-    GridPoint rootA = find(a);
-    GridPoint rootB = find(b);
-    if (!(rootA == rootB)) {
-      parent[rootA] = rootB;
-    }
-  }
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) override;
+    
+    // Snapping support
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 };
 
 // ============================================================================
-// VISUAL ITEMS
+// SIMPLE COMPONENT
 // ============================================================================
-
-class WireItem : public QGraphicsLineItem {
+class SimpleComponent : public QGraphicsItem {
 public:
-  GridPoint start, end;
-  WireItem(GridPoint s, GridPoint e, QGraphicsItem *parent = nullptr);
-};
+    ComponentType type;
+    SimpleComponent(ComponentType t);
 
-class ComponentItem : public QGraphicsItem {
-public:
-  SchematicComponentType type;
-  QString value;
-  GridPoint pos; // Anchor grid point
-  std::vector<GridPoint> terminals;
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override; // For precise collision
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) override;
+    
+    QVector<QPointF> getTerminals() const; // Helper for alignment/drawing
 
-  ComponentItem(SchematicComponentType t, const QString &val, GridPoint p,
-                QGraphicsItem *parent = nullptr);
-
-  QRectF boundingRect() const override;
-  void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
-             QWidget *widget) override;
-
-  QVariant itemChange(GraphicsItemChange change,
-                      const QVariant &value) override;
-
-private:
-  void setupTerminals();
-  void drawResistor(QPainter *painter);
-  void drawCapacitor(QPainter *painter);
-  void drawDiode(QPainter *painter);
-  void drawVoltageSource(QPainter *painter);
-  void drawGround(QPainter *painter);
-  void drawMosfet(QPainter *painter);
-  void drawBjt(QPainter *painter);
+    // Snapping support
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+    
+    void rotate90(); 
 };
 
 // ============================================================================
-// SCENE + EDITOR
+// SCENE (Grid Handling + Validation)
 // ============================================================================
-
-class SchematicScene : public QGraphicsScene {
-  Q_OBJECT
+class GridScene : public QGraphicsScene {
+    Q_OBJECT
 public:
-  explicit SchematicScene(QObject *parent = nullptr);
+    explicit GridScene(QObject* parent = nullptr);
 
-  void setTool(SchematicComponentType tool, double val = 0) {
-    currentTool = tool;
-    componentValue = QString::number(val);
-  }
-  void setComponentValue(const QString &val) { componentValue = val; }
-  TensorNetlist toNetlist() const;
+    void setTool(ComponentType t);
+    void setGridVisible(bool visible);
+    void setSnappingEnabled(bool enabled);
+    bool isSnappingEnabled() const { return snappingEnabled; }
+    
+    TensorNetlist generateNetlist();
+
+protected:
+    void drawBackground(QPainter* painter, const QRectF& rect) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
+    void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 signals:
-  void coordinateChanged(GridPoint p);
-
-protected:
-  void drawBackground(QPainter *painter, const QRectF &rect) override;
-  void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
-  void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
-  void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
-  void keyPressEvent(QKeyEvent *event) override;
+    void mouseMoved(int x, int y);
+    void messageLogged(const QString& msg);
+    void toolChanged(ComponentType newTool);
 
 private:
-  SchematicComponentType currentTool = SchematicComponentType::SELECT;
-  QString componentValue = "1000";
-  bool isPlacing = false;
-  GridPoint placementStart;
-  QGraphicsLineItem *previewWire = nullptr;
-  ComponentItem *previewComponent = nullptr;
+    QPointF snapToGrid(const QPointF& pos);
+    bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
+    bool isWireValid(QGraphicsLineItem* wire); // New validation
 
-  std::vector<ComponentItem *> components;
-  std::vector<WireItem *> wires;
+    bool gridVisible = true;
+    bool snappingEnabled = true;
 
-  void updatePreview(GridPoint p);
-  void finalizePlacement(GridPoint p);
+    ComponentType currentTool = ComponentType::Select;
+    
+    // Wire drawing
+    QPointF wireStart;
+    WireComponent* tempWire = nullptr;
+    
+    // Ghost for placement
+    SimpleComponent* ghostItem = nullptr; 
 };
 
+// ============================================================================
+// MAIN EDITOR WIDGET
+// ============================================================================
 class SchematicEditor : public QWidget {
-  Q_OBJECT
+    Q_OBJECT
 public:
-  explicit SchematicEditor(QWidget *parent = nullptr);
+    explicit SchematicEditor(QWidget* parent = nullptr);
+    TensorNetlist toNetlist() { return scene->generateNetlist(); }
 
-  void zoomIn();
-  void zoomOut();
-  void zoomFit();
-  TensorNetlist toNetlist() { return scene->toNetlist(); }
-
-protected:
-  bool eventFilter(QObject *obj, QEvent *event) override;
+private slots:
+    void onGridToggled(bool checked);
+    void onSnappingToggled(bool checked);
 
 private:
-  SchematicScene *scene;
-  QGraphicsView *view;
-  QLineEdit *valueInput;
-  QLabel *statusCoords;
-  QLabel *statusInfo;
-
-  void setupTopToolbar(QHBoxLayout *layout);
-  void setupLeftToolbar(QVBoxLayout *layout);
-  void setupRightToolbar(QVBoxLayout *layout);
-  void setupStatusBar(QHBoxLayout *layout);
-  QPushButton *makeToolButton(const QString &text, SchematicComponentType type,
-                              bool isPlacement = true);
+    GridScene* scene;
+    QGraphicsView* view;
+    QLabel* statusLabel;
+    
+    void setupUi();
+    QWidget* createRibbon();
+    QPushButton* createToolButton(const QString& text, ComponentType type);
+    QMap<ComponentType, QPushButton*> toolButtons;
 };

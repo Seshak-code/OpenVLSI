@@ -66,6 +66,8 @@ qt_standard_project_setup()
 # Create executable
 qt_add_executable(${PROJECT_NAME} 
     main.cpp
+    mainwindow.cpp
+    mainwindow.h
     simulator_window.cpp
     simulator_window.h
     schematic_editor.cpp

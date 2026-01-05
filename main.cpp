@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string>
-#include "simulator_window.h"
+#include "mainwindow.h"
 #include "stress_test.h"
 #include "monte_carlo.h"
 #include "benchmark_suite.h"
@@ -33,8 +33,11 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
     
-    SimulatorWindow window;
-    window.show();
-    
+    // Qt styling
+    app.setStyle("Fusion");
+
+    MainWindow w;
+    w.show();
+
     return app.exec();
 }

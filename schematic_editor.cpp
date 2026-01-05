@@ -1,620 +1,535 @@
 #include "schematic_editor.h"
-#include <QCoreApplication>
-#include <QFrame>
-#include <QGraphicsSceneMouseEvent>
-#include <QKeyEvent>
 #include <QPainter>
-#include <QStyleOptionGraphicsItem>
-#include <QWheelEvent>
-
-// GRID_SIZE, LAYER_WIRES, LAYER_COMPONENTS are defined in schematic_editor.h
-
-// ============================================================================
-// WIRE ITEM
-// ============================================================================
-
-WireItem::WireItem(GridPoint s, GridPoint e, QGraphicsItem *parent)
-    : QGraphicsLineItem(parent), start(s), end(e) {
-  setLine(s.x * GRID_SIZE, s.y * GRID_SIZE, e.x * GRID_SIZE, e.y * GRID_SIZE);
-  // Cyan wire with 80% opacity for Unreal/Unity style
-  setPen(QPen(QColor(0, 191, 255, 200), 2));
-  setZValue(LAYER_WIRES);
-  setFlag(QGraphicsItem::ItemIsSelectable);
-}
+#include <QGraphicsSceneMouseEvent>
+#include <QGraphicsLineItem>
+#include <QGraphicsRectItem>
+#include <cmath>
+#include <QDebug>
 
 // ============================================================================
-// COMPONENT ITEM
+// WIRE COMPONENT
 // ============================================================================
-
-ComponentItem::ComponentItem(SchematicComponentType t, const QString &v,
-                             GridPoint p, QGraphicsItem *parent)
-    : QGraphicsItem(parent), type(t), value(v), pos(p) {
-  setZValue(LAYER_COMPONENTS);
-  setupTerminals();
-  setFlag(QGraphicsItem::ItemIsSelectable);
-  setFlag(QGraphicsItem::ItemIsMovable);
-  setFlag(QGraphicsItem::ItemSendsGeometryChanges);
-  setPos(pos.x * GRID_SIZE, pos.y * GRID_SIZE);
+WireComponent::WireComponent(QLineF line) : QGraphicsLineItem(line) {
+    setPen(QPen(Qt::cyan, 2));
+    setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
+    setZValue(1); // Wires below components (which will be Z=2)
 }
 
-void ComponentItem::setupTerminals() {
-  switch (type) {
-  case SchematicComponentType::RESISTOR:
-  case SchematicComponentType::CAPACITOR:
-  case SchematicComponentType::DIODE:
-  case SchematicComponentType::VOLTAGE_SOURCE:
-    terminals = {pos, {pos.x + 4, pos.y}};
-    break;
-  case SchematicComponentType::MOSFET:
-  case SchematicComponentType::BJT:
-    terminals = {pos, {pos.x, pos.y + 4}, {pos.x + 4, pos.y + 2}};
-    break;
-  case SchematicComponentType::GROUND:
-    terminals = {pos};
-    break;
-  default:
-    break;
-  }
-}
-QVariant ComponentItem::itemChange(GraphicsItemChange change,
-                                   const QVariant &value) {
-  if (change == ItemPositionChange && scene()) {
-    QPointF newPos = value.toPointF();
-    qreal x = std::round(newPos.x() / GRID_SIZE) * GRID_SIZE;
-    qreal y = std::round(newPos.y() / GRID_SIZE) * GRID_SIZE;
-    return QPointF(x, y);
-  }
-  return QGraphicsItem::itemChange(change, value);
-}
-
-QRectF ComponentItem::boundingRect() const {
-  return QRectF(0, 0, 3 * GRID_SIZE, 3 * GRID_SIZE).adjusted(-10, -10, 10, 10);
-}
-
-void ComponentItem::paint(QPainter *painter,
-                          const QStyleOptionGraphicsItem *option,
-                          QWidget *widget) {
-  Q_UNUSED(option);
-  Q_UNUSED(widget);
-  painter->setRenderHint(QPainter::Antialiasing);
-
-  if (isSelected()) {
-    painter->setPen(
-        QPen(QColor(0, 122, 204), 2, Qt::DashLine)); // Blue accent selection
-    painter->drawRect(boundingRect());
-  }
-
-  painter->setPen(QPen(QColor(170, 170, 170), 2)); // Light gray for dark theme
-  painter->setBrush(Qt::NoBrush);
-
-  switch (type) {
-  case SchematicComponentType::RESISTOR:
-    drawResistor(painter);
-    break;
-  case SchematicComponentType::CAPACITOR:
-    drawCapacitor(painter);
-    break;
-  case SchematicComponentType::DIODE:
-    drawDiode(painter);
-    break;
-  case SchematicComponentType::VOLTAGE_SOURCE:
-    drawVoltageSource(painter);
-    break;
-  case SchematicComponentType::GROUND:
-    drawGround(painter);
-    break;
-  case SchematicComponentType::MOSFET:
-    drawMosfet(painter);
-    break;
-  case SchematicComponentType::BJT:
-    drawBjt(painter);
-    break;
-  default:
-    break;
-  }
-
-  painter->setBrush(QColor(0, 191, 255)); // Cyan terminal dots
-  painter->setPen(Qt::NoPen);
-  for (const auto &t : terminals) {
-    painter->drawEllipse(
-        QPointF((t.x - pos.x) * GRID_SIZE, (t.y - pos.y) * GRID_SIZE), 3, 3);
-  }
-}
-
-void ComponentItem::drawResistor(QPainter *painter) {
-  painter->setPen(QPen(Qt::black, 2));
-  painter->drawRect(10, 10, 60, 20);
-  painter->drawLine(0, 15, 10, 15);
-  painter->drawLine(70, 15, 80, 15);
-}
-
-void ComponentItem::drawCapacitor(QPainter *painter) {
-  painter->setPen(QPen(Qt::black, 2));
-  painter->drawLine(0, 15, 35, 15);
-  painter->drawLine(45, 15, 80, 15);
-  painter->drawLine(35, 5, 35, 25);
-  painter->drawLine(45, 5, 45, 25);
-}
-
-void ComponentItem::drawDiode(QPainter *painter) {
-  painter->setPen(QPen(Qt::black, 2));
-  painter->drawLine(0, 15, 30, 15);
-  painter->drawLine(50, 15, 80, 15);
-  static const QPointF points[3] = {{30, 5}, {50, 15}, {30, 25}};
-  painter->setBrush(Qt::black);
-  painter->drawPolygon(points, 3);
-  painter->drawLine(50, 5, 50, 25);
-}
-
-void ComponentItem::drawVoltageSource(QPainter *painter) {
-  painter->setPen(QPen(Qt::black, 2));
-  painter->drawEllipse(20, 0, 40, 40);
-  painter->drawLine(0, 20, 20, 20);
-  painter->drawLine(60, 20, 80, 20);
-  painter->drawText(QRectF(20, 0, 40, 40), Qt::AlignCenter, "V");
-}
-
-void ComponentItem::drawGround(QPainter *painter) {
-  painter->setPen(QPen(Qt::black, 2));
-  painter->drawLine(0, 0, 0, 20);
-  painter->drawLine(-15, 20, 15, 20);
-  painter->drawLine(-10, 25, 10, 25);
-  painter->drawLine(-5, 30, 5, 30);
-}
-
-void ComponentItem::drawMosfet(QPainter *painter) {
-  painter->setPen(QPen(Qt::black, 2));
-  painter->drawLine(0, 0, 0, 80);
-  painter->drawLine(-20, 40, 0, 40);
-  painter->drawLine(20, 10, 20, 70);
-  painter->drawLine(20, 10, 80, 0);
-  painter->drawLine(20, 70, 80, 80);
-}
-
-void ComponentItem::drawBjt(QPainter *painter) {
-  painter->setPen(QPen(Qt::black, 2));
-  painter->drawLine(10, 10, 10, 70);
-  painter->drawLine(-10, 40, 10, 40);
-  painter->drawLine(10, 20, 80, 0);
-  painter->drawLine(10, 60, 80, 80);
-}
-
-// ============================================================================
-// SCENE IMPLEMENTATION
-// ============================================================================
-
-SchematicScene::SchematicScene(QObject *parent) : QGraphicsScene(parent) {
-  setSceneRect(0, 0, 4000, 4000);
-}
-
-void SchematicScene::drawBackground(QPainter *painter, const QRectF &rect) {
-  // Unreal/Unity style dark canvas
-  painter->fillRect(rect, QColor(30, 30, 30));
-
-  const int gridSize = 20;
-  const int majorGridSize = gridSize * 5;
-
-  painter->save();
-
-  qreal left = std::floor(rect.left() / gridSize) * gridSize;
-  qreal right = std::ceil(rect.right() / gridSize) * gridSize;
-  qreal top = std::floor(rect.top() / gridSize) * gridSize;
-  qreal bottom = std::ceil(rect.bottom() / gridSize) * gridSize;
-
-  // Minor grid - subtle
-  painter->setPen(QPen(QColor(45, 45, 45), 0));
-  for (qreal x = left; x <= right; x += gridSize)
-    painter->drawLine(QPointF(x, top), QPointF(x, bottom));
-  for (qreal y = top; y <= bottom; y += gridSize)
-    painter->drawLine(QPointF(left, y), QPointF(right, y));
-
-  // Major grid - slightly more visible
-  painter->setPen(QPen(QColor(58, 58, 58), 0));
-  qreal mLeft = std::floor(rect.left() / majorGridSize) * majorGridSize;
-  qreal mTop = std::floor(rect.top() / majorGridSize) * majorGridSize;
-  for (qreal x = mLeft; x <= right; x += majorGridSize)
-    painter->drawLine(QPointF(x, top), QPointF(x, bottom));
-  for (qreal y = mTop; y <= bottom; y += majorGridSize)
-    painter->drawLine(QPointF(left, y), QPointF(right, y));
-
-  painter->restore();
-}
-
-void SchematicScene::mousePressEvent(QGraphicsSceneMouseEvent *event) {
-  GridPoint p = {(int)std::round(event->scenePos().x() / GRID_SIZE),
-                 (int)std::round(event->scenePos().y() / GRID_SIZE)};
-
-  if (event->button() == Qt::LeftButton) {
-    if (currentTool == SchematicComponentType::SELECT) {
-      QGraphicsScene::mousePressEvent(event);
-    } else if (currentTool == SchematicComponentType::DELETE_TOOL) {
-      auto itemsAtPos = items(event->scenePos());
-      for (auto *item : itemsAtPos) {
-        auto itComp = std::find(components.begin(), components.end(),
-                                (ComponentItem *)item);
-        if (itComp != components.end())
-          components.erase(itComp);
-        auto itWire = std::find(wires.begin(), wires.end(), (WireItem *)item);
-        if (itWire != wires.end())
-          wires.erase(itWire);
-        removeItem(item);
-        delete item;
-      }
-    } else {
-      placementStart = p;
-      isPlacing = true;
+void WireComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) {
+    Q_UNUSED(option);
+    Q_UNUSED(widget);
+    
+    painter->setPen(pen());
+    if (isSelected()) {
+        painter->setPen(QPen(Qt::green, 2, Qt::DashLine));
     }
-  } else {
-    QGraphicsScene::mousePressEvent(event);
-  }
+    painter->drawLine(line());
 }
 
-void SchematicScene::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
-  GridPoint p = {(int)std::round(event->scenePos().x() / GRID_SIZE),
-                 (int)std::round(event->scenePos().y() / GRID_SIZE)};
-  emit coordinateChanged(p);
-  QGraphicsScene::mouseMoveEvent(event);
-}
-
-void SchematicScene::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
-  if (event->button() == Qt::LeftButton && isPlacing) {
-    GridPoint end = {(int)std::round(event->scenePos().x() / GRID_SIZE),
-                     (int)std::round(event->scenePos().y() / GRID_SIZE)};
-    if (currentTool == SchematicComponentType::WIRE) {
-      if (!(placementStart == end)) {
-        // Manhattan Routing (L-bend)
-        if (placementStart.x != end.x && placementStart.y != end.y) {
-          // Create horizontal then vertical
-          // segment
-          GridPoint mid = {end.x, placementStart.y};
-          auto *hWire = new WireItem(placementStart, mid);
-          auto *vWire = new WireItem(mid, end);
-          addItem(hWire);
-          wires.push_back(hWire);
-          addItem(vWire);
-          wires.push_back(vWire);
-        } else {
-          auto *wire = new WireItem(placementStart, end);
-          addItem(wire);
-          wires.push_back(wire);
+QVariant WireComponent::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionChange && scene()) {
+        GridScene* gs = qobject_cast<GridScene*>(scene());
+        if (gs && gs->isSnappingEnabled()) {
+            QPointF newPos = value.toPointF();
+            qreal x = std::round(newPos.x() / GRID_STEP) * GRID_STEP;
+            qreal y = std::round(newPos.y() / GRID_STEP) * GRID_STEP;
+            return QPointF(x, y);
         }
-      }
-    } else if (currentTool != SchematicComponentType::SELECT &&
-               currentTool != SchematicComponentType::PAN &&
-               currentTool != SchematicComponentType::DELETE_TOOL) {
-      auto *comp =
-          new ComponentItem(currentTool, componentValue, placementStart);
-      addItem(comp);
-      components.push_back(comp);
-      comp->setPos(placementStart.x * GRID_SIZE, placementStart.y * GRID_SIZE);
     }
-    isPlacing = false;
-  }
-  QGraphicsScene::mouseReleaseEvent(event);
+    return QGraphicsItem::itemChange(change, value);
 }
 
-void SchematicScene::keyPressEvent(QKeyEvent *event) {
-  if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
-    for (auto *item : selectedItems()) {
-      auto itComp = std::find(components.begin(), components.end(),
-                              (ComponentItem *)item);
-      if (itComp != components.end())
-        components.erase(itComp);
-      auto itWire = std::find(wires.begin(), wires.end(), (WireItem *)item);
-      if (itWire != wires.end())
-        wires.erase(itWire);
-      removeItem(item);
-      delete item;
-    }
-  } else {
-    QGraphicsScene::keyPressEvent(event);
-  }
+// ============================================================================
+// SIMPLE COMPONENT IMPLEMENTATION
+// ============================================================================
+SimpleComponent::SimpleComponent(ComponentType t) : type(t) {
+    setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
+    setTransformOriginPoint(0, 0); 
+    setZValue(2); // Components above wires
 }
 
-TensorNetlist SchematicScene::toNetlist() const {
-  TensorNetlist netlist;
-  ConnectivityManager cm;
-  for (const auto *w : wires)
-    cm.unite(w->start, w->end);
+QRectF SimpleComponent::boundingRect() const {
+    return QRectF(-50, -50, 100, 100);
+}
 
-  std::set<GridPoint> grounds;
-  for (const auto *c : components) {
-    GridPoint currentPos = {(int)std::round(c->x() / GRID_SIZE),
-                            (int)std::round(c->y() / GRID_SIZE)};
-    if (c->type == SchematicComponentType::GROUND)
-      grounds.insert(cm.find(currentPos));
-  }
+void SimpleComponent::rotate90() {
+    setRotation(rotation() + 90);
+}
 
-  std::map<GridPoint, int> netMap;
-  int nextNodeId = 1;
-  auto getNetId = [&](GridPoint p) -> int {
-    GridPoint root = cm.find(p);
-    if (grounds.count(root))
-      return 0;
-    if (netMap.find(root) == netMap.end())
-      netMap[root] = nextNodeId++;
-    return netMap[root];
-  };
-
-  for (const auto *c : components) {
-    if (c->type == SchematicComponentType::GROUND)
-      continue;
-    GridPoint curPos = {(int)std::round(c->x() / GRID_SIZE),
-                        (int)std::round(c->y() / GRID_SIZE)};
-    std::vector<int> nodes;
-    for (const auto &t : c->terminals) {
-      GridPoint shiftedT = {curPos.x + (t.x - c->pos.x),
-                            curPos.y + (t.y - c->pos.y)};
-      nodes.push_back(getNetId(shiftedT));
+QVector<QPointF> SimpleComponent::getTerminals() const {
+    // Terminals MUST land on 20px grid (GRID_STEP)
+    QVector<QPointF> t;
+    switch(type) {
+        case ComponentType::Resistor:
+        case ComponentType::Inductor:
+            t << QPointF(-40, 0) << QPointF(40, 0);
+            break;
+        case ComponentType::Capacitor:
+        case ComponentType::Diode:
+            t << QPointF(-20, 0) << QPointF(20, 0);
+            break;
+        case ComponentType::VoltageSource:
+        case ComponentType::Bjt: // BJT NPN: C, B, E? Simplified for now
+            t << QPointF(0, -40) << QPointF(0, 40);
+            break;
+        case ComponentType::Ground:
+            t << QPointF(0, -20); // Top connection
+            break;
+        case ComponentType::Mosfet:
+             t << QPointF(-20, 0) << QPointF(20, 0) << QPointF(0, 20); // G D S
+             break;
+        default:
+            break;
     }
-    if (nodes.size() < 2 && c->type != SchematicComponentType::GROUND)
-      continue;
+    return t;
+}
 
-    switch (c->type) {
-    case SchematicComponentType::RESISTOR:
-      netlist.addResistor(nodes[0], nodes[1], c->value.toDouble());
-      break;
-    case SchematicComponentType::CAPACITOR:
-      netlist.addCapacitor(nodes[0], nodes[1], c->value.toDouble());
-      break;
-    case SchematicComponentType::DIODE:
-      netlist.addDiode(nodes[0], nodes[1], 1e-14);
-      break;
-    case SchematicComponentType::VOLTAGE_SOURCE:
-      netlist.addVoltageSource(nodes[0], nodes[1], c->value.toDouble());
-      break;
-    case SchematicComponentType::MOSFET:
-      netlist.addMosfet("M" +
-                            std::to_string(netlist.globalBlock.mosfets.size()),
-                        nodes[0], nodes[1], nodes[2], 0, "DEFAULT", 1e-4, 1e-6);
-      break;
-    case SchematicComponentType::BJT:
-      netlist.addBJT("Q" + std::to_string(netlist.globalBlock.bjts.size()),
-                     nodes[0], nodes[1], nodes[2], "DEFAULT", true);
-      break;
-    default:
-      break;
+QPainterPath SimpleComponent::shape() const {
+    QPainterPath path;
+    // Define the "Solid Body" that wires cannot cross
+    // Must be smaller than terminal reach so wires can get to terminals
+    switch(type) {
+        case ComponentType::Resistor:
+        case ComponentType::Inductor:
+            path.addRect(-20, -10, 40, 20);
+            break;
+        case ComponentType::Capacitor:
+        case ComponentType::Diode:
+            path.addRect(-10, -15, 20, 30);
+            break;
+        case ComponentType::VoltageSource:
+            path.addEllipse(-20, -20, 40, 40);
+            break;
+        case ComponentType::Ground:
+            path.addRect(-10, -5, 20, 10); // Plate
+            break;
+        default:
+            path.addRect(-15, -15, 30, 30);
+            break;
     }
-  }
-  return netlist;
+    return path;
+}
+
+QVariant SimpleComponent::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionChange && scene()) {
+        GridScene* gs = qobject_cast<GridScene*>(scene());
+        if (gs && gs->isSnappingEnabled()) {
+            QPointF newPos = value.toPointF();
+            qreal x = std::round(newPos.x() / GRID_STEP) * GRID_STEP;
+            qreal y = std::round(newPos.y() / GRID_STEP) * GRID_STEP;
+            return QPointF(x, y);
+        }
+    }
+    return QGraphicsItem::itemChange(change, value);
+}
+
+void SimpleComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
+    painter->setPen(QPen(Qt::white, 2));
+    painter->setBrush(QColor("#1e1e1e")); 
+    
+    // Draw Components (Grid Aligned)
+    switch(type) {
+        case ComponentType::Resistor:
+            painter->drawRect(-20, -6, 40, 12);
+            painter->drawLine(-40, 0, -20, 0); // Reach to 40
+            painter->drawLine(20, 0, 40, 0);
+            break;
+        case ComponentType::Capacitor:
+            painter->drawLine(-5, -15, -5, 15);
+            painter->drawLine(5, -15, 5, 15);
+            painter->drawLine(-20, 0, -5, 0);
+            painter->drawLine(5, 0, 20, 0);
+            break;
+        case ComponentType::Ground:
+            painter->drawLine(-15, 0, 15, 0);
+            painter->drawLine(-8, 5, 8, 5);
+            painter->drawLine(-2, 10, 2, 10);
+            painter->drawLine(0, -20, 0, 0); // Reach to -20
+            break;
+        case ComponentType::VoltageSource:
+            painter->drawEllipse(-20, -20, 40, 40);
+            painter->drawText(QRectF(-15, -15, 30, 30), Qt::AlignCenter, "V");
+            painter->drawLine(0, -40, 0, -20);
+            painter->drawLine(0, 20, 0, 40);
+            break;
+        case ComponentType::Diode:
+            painter->drawLine(-5, -10, -5, 10); // Cathode line
+            {
+                QPointF poly[] = {{10, 0}, {-5, -10}, {-5, 10}};
+                painter->drawPolygon(poly, 3);
+            }
+            painter->drawLine(-20, 0, -5, 0);
+            painter->drawLine(10, 0, 20, 0);
+            break;
+        default:
+            painter->drawRect(-15, -15, 30, 30);
+            break;
+    }
+    
+    // VISUAL INDICATORS: Red X at terminals
+    // Always draw them so user knows where to connect
+    painter->setPen(QPen(Qt::red, 1));
+    QVector<QPointF> terms = getTerminals();
+    for(const QPointF& p : terms) {
+         painter->drawLine(p.x()-4, p.y()-4, p.x()+4, p.y()+4);
+         painter->drawLine(p.x()-4, p.y()+4, p.x()+4, p.y()-4);
+    }
+
+    if (isSelected()) {
+        painter->setPen(QPen(QColor(0, 255, 0), 1, Qt::DashLine));
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRect(boundingRect());
+    }
+}
+
+// ============================================================================
+// GRID SCENE IMPLEMENTATION
+// ============================================================================
+GridScene::GridScene(QObject* parent) : QGraphicsScene(parent) {
+    setSceneRect(-5000, -5000, 10000, 10000);
+}
+
+void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
+    painter->fillRect(rect, QColor("#1e1e1e")); 
+
+    if (!gridVisible) return;
+
+    const int gridSize = GRID_STEP;
+    int left = static_cast<int>(std::floor(rect.left()));
+    int top = static_cast<int>(std::floor(rect.top()));
+    int right = static_cast<int>(std::ceil(rect.right()));
+    int bottom = static_cast<int>(std::ceil(rect.bottom()));
+
+    left -= (left % gridSize);
+    top -= (top % gridSize);
+
+    QPen gridPen(QColor(60, 60, 60));
+    gridPen.setCosmetic(true);
+    painter->setPen(gridPen);
+
+    for (int x = left; x <= right; x += gridSize) {
+        painter->drawLine(x, top, x, bottom);
+    }
+    for (int y = top; y <= bottom; y += gridSize) {
+        painter->drawLine(left, y, right, y);
+    }
+    
+    painter->setPen(QPen(Qt::white, 2));
+    painter->drawLine(0, top, 0, bottom);
+    painter->drawLine(left, 0, right, 0);
+}
+
+QPointF GridScene::snapToGrid(const QPointF& pos) {
+    if (!snappingEnabled) return pos;
+    double x = std::round(pos.x() / GRID_STEP) * GRID_STEP;
+    double y = std::round(pos.y() / GRID_STEP) * GRID_STEP;
+    return QPointF(x, y);
+}
+
+void GridScene::setTool(ComponentType t) {
+    currentTool = t;
+    if (ghostItem) {
+        removeItem(ghostItem);
+        delete ghostItem;
+        ghostItem = nullptr;
+    }
+    if (tempWire) {
+        removeItem(tempWire);
+        delete tempWire;
+        tempWire = nullptr; 
+    }
+    
+    if (t != ComponentType::Select && t != ComponentType::Wire) {
+        ghostItem = new SimpleComponent(t);
+        ghostItem->setOpacity(0.5);
+        // Ensure ghost ignores collisions so checking code works on other stuff
+        ghostItem->setZValue(100); 
+        addItem(ghostItem);
+    }
+    
+    emit toolChanged(t);
+}
+
+void GridScene::setGridVisible(bool visible) {
+    gridVisible = visible;
+    update();
+}
+
+void GridScene::setSnappingEnabled(bool enabled) {
+    snappingEnabled = enabled;
+}
+
+bool GridScene::isWireValid(QGraphicsLineItem* wire) {
+    if (!wire) return false;
+    // Check collision with all items that are SimpleComponents
+    QList<QGraphicsItem*> collisions = wire->collidingItems();
+    for (auto* item : collisions) {
+        if (item == wire || item == ghostItem) continue;
+        if (dynamic_cast<SimpleComponent*>(item)) {
+            // Found a component body collision
+            return false; 
+        }
+    }
+    // Also check self-intersection if we had multiple segments (future)
+    return true;
+}
+
+bool GridScene::isPlacementValid(const QPointF& pos, QGraphicsItem* item) {
+    // Check if drawing/placing here intersects existing items
+    QPainterPath shape;
+    if (item) {
+        shape = item->shape();
+        shape.translate(pos); 
+    } else {
+        shape.addRect(pos.x()-2, pos.y()-2, 4, 4); 
+    }
+
+    auto collisions = items(shape);
+    for (auto* col : collisions) {
+        if (col == item || col == ghostItem || col == tempWire) continue;
+        
+        // Fail on any collision for now
+        if (col->type() == item->type()) return false; 
+    }
+    return true;
+}
+
+void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        QPointF p = snapToGrid(event->scenePos());
+        
+        if (currentTool == ComponentType::Select) {
+            QGraphicsScene::mousePressEvent(event);
+        }
+        else if (currentTool == ComponentType::Wire) {
+            wireStart = p;
+            tempWire = new WireComponent(QLineF(p, p));
+            addItem(tempWire);
+        }
+        else {
+            // Placement
+            QRectF predictedBounds = ghostItem->boundingRect();
+            predictedBounds.translate(p.x(), p.y());
+            
+            bool colliding = false;
+            auto itemsAt = items(predictedBounds, Qt::IntersectsItemBoundingRect);
+            for(auto* i : itemsAt) {
+                 if (i != ghostItem && i != tempWire) { colliding = true; break; }
+            }
+
+            if (!colliding) {
+                auto* item = new SimpleComponent(currentTool);
+                item->setPos(p);
+                item->setRotation(ghostItem->rotation());
+                addItem(item);
+                emit messageLogged("Placed component.");
+            } else {
+                emit messageLogged("Invalid Placement: Overlap!");
+            }
+        }
+    } else if (event->button() == Qt::RightButton) {
+        setTool(ComponentType::Select);
+    }
+}
+
+void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+    QPointF p = snapToGrid(event->scenePos());
+    emit mouseMoved((int)p.x(), (int)p.y());
+
+    if (currentTool == ComponentType::Select) {
+        QGraphicsScene::mouseMoveEvent(event);
+        return;
+    }
+
+    if (tempWire) {
+        tempWire->setLine(QLineF(wireStart, p));
+        // Visualize Validity
+        if (isWireValid(tempWire)) {
+             tempWire->setPen(QPen(Qt::cyan, 2));
+        } else {
+             tempWire->setPen(QPen(Qt::red, 2));
+             emit messageLogged("Invalid Wire Path!");
+        }
+    }
+    
+    if (ghostItem) {
+        ghostItem->setPos(p);
+    }
+}
+
+void GridScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+    if (event->button() == Qt::LeftButton && tempWire) {
+        // Finalize Wire
+        if (tempWire->line().length() < 1 || !isWireValid(tempWire)) {
+            removeItem(tempWire);
+            delete tempWire;
+            emit messageLogged("Invalid wire cancelled.");
+        } else {
+            emit messageLogged("Wire placed.");
+        }
+        tempWire = nullptr; 
+    }
+    QGraphicsScene::mouseReleaseEvent(event);
+}
+
+void GridScene::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
+        auto selection = selectedItems();
+        for (auto* item : selection) {
+            removeItem(item);
+            delete item;
+        }
+    }
+    else if (event->key() == Qt::Key_Escape) {
+        setTool(ComponentType::Select);
+    }
+    else if (event->key() == Qt::Key_R || event->key() == Qt::Key_Space) {
+        if (ghostItem) {
+            ghostItem->rotate90();
+        } else {
+            for (auto* item : selectedItems()) {
+                if (auto* sc = dynamic_cast<SimpleComponent*>(item)) {
+                    sc->rotate90();
+                }
+            }
+        }
+    }
+    else {
+        QGraphicsScene::keyPressEvent(event);
+    }
+}
+
+TensorNetlist GridScene::generateNetlist() {
+    return TensorNetlist(); 
 }
 
 // ============================================================================
 // EDITOR WIDGET
 // ============================================================================
+SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {
+    scene = new GridScene(this);
+    view = new QGraphicsView(scene, this);
+    
+    setupUi();
+    
+    connect(scene, &GridScene::mouseMoved, this, [this](int x, int y){
+        statusLabel->setText(QString("X: %1, Y: %2").arg(x).arg(y));
+    });
+    connect(scene, &GridScene::messageLogged, this, [this](const QString& msg){
+        statusLabel->setText(msg);
+    });
+    connect(scene, &GridScene::toolChanged, this, [this](ComponentType t){
+        if(toolButtons.contains(t)) {
+            toolButtons[t]->setChecked(true);
+            for(auto type : toolButtons.keys()) {
+                if(type != t) toolButtons[type]->setChecked(false);
+            }
+             if (t == ComponentType::Select)
+                view->setDragMode(QGraphicsView::RubberBandDrag);
+            else
+                view->setDragMode(QGraphicsView::NoDrag);
+        }
+    });
 
-SchematicEditor::SchematicEditor(QWidget *parent) : QWidget(parent) {
-  // Unreal/Unity dark professional theme
-  setStyleSheet("background-color: #1E1E1E; color: #CCCCCC; font-family: "
-                "'Segoe UI', sans-serif;");
-
-  auto *mainLayout = new QVBoxLayout(this);
-  mainLayout->setContentsMargins(0, 0, 0, 0);
-  mainLayout->setSpacing(0);
-
-  // Top Toolbar - Dark panel
-  auto *topContainer = new QWidget(this);
-  topContainer->setFixedHeight(40);
-  topContainer->setStyleSheet(
-      "background-color: #252526; border-bottom: 1px solid #3C3C3C;");
-  auto *topLayout = new QHBoxLayout(topContainer);
-  topLayout->setContentsMargins(8, 0, 8, 0);
-  setupTopToolbar(topLayout);
-  mainLayout->addWidget(topContainer);
-
-  auto *middleLayout = new QHBoxLayout();
-  middleLayout->setSpacing(0);
-
-  // Left Toolbar - Dark panel
-  auto *leftContainer = new QWidget(this);
-  leftContainer->setFixedWidth(40);
-  leftContainer->setStyleSheet(
-      "background-color: #252526; border-right: 1px solid #3C3C3C;");
-  auto *leftLayout = new QVBoxLayout(leftContainer);
-  leftLayout->setContentsMargins(4, 8, 4, 8);
-  leftLayout->setAlignment(Qt::AlignTop);
-  setupLeftToolbar(leftLayout);
-  middleLayout->addWidget(leftContainer);
-
-  // Center Scene
-  scene = new SchematicScene(this);
-  view = new QGraphicsView(scene, this);
-  view->setRenderHint(QPainter::Antialiasing);
-  view->setBackgroundBrush(Qt::transparent);
-  view->setFrameShape(QFrame::NoFrame);
-  view->setDragMode(QGraphicsView::NoDrag);
-  view->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
-  view->installEventFilter(this);
-  middleLayout->addWidget(view);
-
-  // Right Toolbar - Dark panel
-  auto *rightContainer = new QWidget(this);
-  rightContainer->setFixedWidth(40);
-  rightContainer->setStyleSheet(
-      "background-color: #252526; border-left: 1px solid #3C3C3C;");
-  auto *rightLayout = new QVBoxLayout(rightContainer);
-  rightLayout->setContentsMargins(4, 8, 4, 8);
-  rightLayout->setAlignment(Qt::AlignTop);
-  setupRightToolbar(rightLayout);
-  middleLayout->addWidget(rightContainer);
-
-  mainLayout->addLayout(middleLayout);
-
-  // Status Bar - Dark panel
-  auto *statusContainer = new QWidget(this);
-  statusContainer->setFixedHeight(24);
-  statusContainer->setStyleSheet(
-      "background-color: #007ACC; border-top: 1px solid #005A9E;");
-  auto *statusLayout = new QHBoxLayout(statusContainer);
-  statusLayout->setContentsMargins(10, 0, 10, 0);
-  setupStatusBar(statusLayout);
-  mainLayout->addWidget(statusContainer);
-
-  connect(scene, &SchematicScene::coordinateChanged, this, [=](GridPoint p) {
-    statusCoords->setText(QString("X: %1  Y: %2").arg(p.x).arg(p.y));
-  });
 }
 
-void SchematicEditor::setupTopToolbar(QHBoxLayout *layout) {
-  auto *title = new QLabel("AcuteSim Schematic", this);
-  title->setStyleSheet("font-weight: bold; color: #333; "
-                       "margin-right: 20px;");
-  layout->addWidget(title);
+QWidget* SchematicEditor::createRibbon() {
+    QGroupBox* ribbon = new QGroupBox("Tools");
+    ribbon->setStyleSheet("QGroupBox { border: 1px solid #444; margin-top: 5px; font-weight: bold; color: #BBB; } "
+                          "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top center; }");
+    
+    QHBoxLayout* layout = new QHBoxLayout(ribbon);
+    layout->setContentsMargins(5, 10, 5, 5);
+    layout->setSpacing(5);
 
-  // Zoom Controls
-  auto *btnIn = new QPushButton("+", this);
-  btnIn->setFixedSize(30, 30);
-  btnIn->setToolTip("Zoom In");
-  btnIn->setStyleSheet("background-color: #EEE; border: 1px "
-                       "solid #AAA; color: black;");
-  connect(btnIn, &QPushButton::clicked, this, &SchematicEditor::zoomIn);
-  layout->addWidget(btnIn);
+    toolButtons[ComponentType::Select] = createToolButton("Select (Esc)", ComponentType::Select);
+    layout->addWidget(toolButtons[ComponentType::Select]);
+    
+    QFrame* line = new QFrame(); 
+    line->setFrameShape(QFrame::VLine); line->setStyleSheet("color: #555;");
+    layout->addWidget(line);
 
-  auto *btnOut = new QPushButton("-", this);
-  btnOut->setFixedSize(30, 30);
-  btnOut->setToolTip("Zoom Out");
-  btnOut->setStyleSheet("background-color: #EEE; border: 1px "
-                        "solid #AAA; color: black;");
-  connect(btnOut, &QPushButton::clicked, this, &SchematicEditor::zoomOut);
-  layout->addWidget(btnOut);
+    toolButtons[ComponentType::Wire] = createToolButton("Wire", ComponentType::Wire);
+    layout->addWidget(toolButtons[ComponentType::Wire]);
+    
+    toolButtons[ComponentType::Resistor] = createToolButton("Resistor", ComponentType::Resistor);
+    layout->addWidget(toolButtons[ComponentType::Resistor]);
+    
+    toolButtons[ComponentType::Capacitor] = createToolButton("Capacitor", ComponentType::Capacitor);
+    layout->addWidget(toolButtons[ComponentType::Capacitor]);
 
-  auto *btnFit = new QPushButton("Fit", this);
-  btnFit->setFixedSize(40, 30);
-  btnFit->setToolTip("Zoom to Fit");
-  btnFit->setStyleSheet("background-color: #EEE; border: 1px "
-                        "solid #AAA; "
-                        "color: black; font-size: 10px;");
-  connect(btnFit, &QPushButton::clicked, this, &SchematicEditor::zoomFit);
-  layout->addWidget(btnFit);
+    toolButtons[ComponentType::VoltageSource] = createToolButton("Source", ComponentType::VoltageSource);
+    layout->addWidget(toolButtons[ComponentType::VoltageSource]);
+    
+    toolButtons[ComponentType::Ground] = createToolButton("GND", ComponentType::Ground);
+    layout->addWidget(toolButtons[ComponentType::Ground]);
 
-  layout->addSpacing(20);
-
-  valueInput = new QLineEdit("1000", this);
-  valueInput->setFixedWidth(100);
-  valueInput->setPlaceholderText("Value");
-  valueInput->setStyleSheet("background-color: #FFF; border: 1px "
-                            "solid "
-                            "#AAA; padding: 2px; color: #000;");
-  layout->addWidget(new QLabel("Value:", this));
-  layout->addWidget(valueInput);
-
-  layout->addStretch();
+    layout->addStretch();
+    return ribbon;
 }
 
-void SchematicEditor::zoomIn() { view->scale(1.2, 1.2); }
-
-void SchematicEditor::zoomOut() { view->scale(1.0 / 1.2, 1.0 / 1.2); }
-
-void SchematicEditor::zoomFit() {
-  view->resetTransform();
-  view->fitInView(scene->itemsBoundingRect(), Qt::KeepAspectRatio);
+QPushButton* SchematicEditor::createToolButton(const QString& text, ComponentType type) {
+    QPushButton* btn = new QPushButton(text);
+    btn->setCheckable(true);
+    btn->setFixedHeight(35);
+    btn->setStyleSheet(
+        "QPushButton { background: #333; color: white; border: 1px solid #555; border-radius: 3px; padding: 5px; }"
+        "QPushButton:checked { background: #007ACC; border: 1px solid #0099FF; }"
+        "QPushButton:hover { background: #444; }"
+    );
+    connect(btn, &QPushButton::clicked, this, [this, type](){
+        scene->setTool(type);
+    });
+    return btn;
 }
 
-bool SchematicEditor::eventFilter(QObject *watched, QEvent *event) {
-  if (watched == view && event->type() == QEvent::Wheel) {
-    auto *wheelEvent = static_cast<QWheelEvent *>(event);
-    if (wheelEvent->modifiers() & Qt::ControlModifier) {
-      if (wheelEvent->angleDelta().y() > 0)
-        zoomIn();
-      else
-        zoomOut();
-      return true;
-    }
-  }
-  return QWidget::eventFilter(watched, event);
+void SchematicEditor::setupUi() {
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(0,0,0,0);
+    mainLayout->setSpacing(0);
+    
+    QWidget* topArea = new QWidget();
+    topArea->setStyleSheet("background-color: #252526;");
+    QVBoxLayout* topLayout = new QVBoxLayout(topArea);
+    
+    QHBoxLayout* settingsLayout = new QHBoxLayout();
+    QCheckBox* gridCheck = new QCheckBox("Show Grid");
+    gridCheck->setChecked(true);
+    gridCheck->setStyleSheet("color: #DDD;");
+    connect(gridCheck, &QCheckBox::toggled, this, &SchematicEditor::onGridToggled);
+    
+    QCheckBox* snapCheck = new QCheckBox("Snap to Grid");
+    snapCheck->setChecked(true);
+    snapCheck->setStyleSheet("color: #DDD;");
+    connect(snapCheck, &QCheckBox::toggled, this, &SchematicEditor::onSnappingToggled);
+
+    settingsLayout->addWidget(gridCheck);
+    settingsLayout->addWidget(snapCheck);
+    settingsLayout->addStretch();
+    
+    topLayout->addLayout(settingsLayout);
+    topLayout->addWidget(createRibbon());
+    mainLayout->addWidget(topArea);
+
+    view->setRenderHint(QPainter::Antialiasing);
+    view->setBackgroundBrush(Qt::NoBrush); 
+    view->setFrameShape(QFrame::NoFrame);
+    // FORCE FULL VIEWPORT UPDATE TO FIX VISUAL BUGS
+    view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+
+    mainLayout->addWidget(view);
+
+    statusLabel = new QLabel("Ready");
+    statusLabel->setStyleSheet("background: #007ACC; color: white; padding: 4px; font-weight: bold;");
+    mainLayout->addWidget(statusLabel);
+    
+    scene->setTool(ComponentType::Select);
 }
 
-void SchematicEditor::setupLeftToolbar(QVBoxLayout *layout) {
-  auto *sel = makeToolButton("S", SchematicComponentType::SELECT, false);
-  sel->setToolTip("Selection Tool");
-  sel->setChecked(true);
-  layout->addWidget(sel);
-
-  auto *pan = makeToolButton("P", SchematicComponentType::PAN, false);
-  pan->setToolTip("Pan View");
-  layout->addWidget(pan);
-
-  auto *del = makeToolButton("D", SchematicComponentType::DELETE_TOOL, false);
-  del->setToolTip("Delete Tool");
-  layout->addWidget(del);
+void SchematicEditor::onGridToggled(bool checked) {
+    scene->setGridVisible(checked);
 }
 
-void SchematicEditor::setupRightToolbar(QVBoxLayout *layout) {
-  layout->addWidget(makeToolButton("W", SchematicComponentType::WIRE));
-  layout->addWidget(makeToolButton("R", SchematicComponentType::RESISTOR));
-  layout->addWidget(makeToolButton("C", SchematicComponentType::CAPACITOR));
-  layout->addWidget(makeToolButton("D", SchematicComponentType::DIODE));
-  layout->addWidget(makeToolButton("M", SchematicComponentType::MOSFET));
-  layout->addWidget(makeToolButton("Q", SchematicComponentType::BJT));
-  layout->addWidget(
-      makeToolButton("V", SchematicComponentType::VOLTAGE_SOURCE));
-  layout->addWidget(makeToolButton("G", SchematicComponentType::GROUND));
-}
-
-void SchematicEditor::setupStatusBar(QHBoxLayout *layout) {
-  statusCoords = new QLabel("X: 0  Y: 0", this);
-  statusCoords->setFixedWidth(120);
-  statusCoords->setStyleSheet("color: white; font-size: 11px;");
-  layout->addWidget(statusCoords);
-
-  statusInfo = new QLabel("Ready", this);
-  statusInfo->setStyleSheet("color: white; font-size: 11px;");
-  layout->addWidget(statusInfo);
-
-  layout->addStretch();
-  auto *gridLabel = new QLabel("Grid: 20px", this);
-  gridLabel->setStyleSheet("color: white; font-size: 11px;");
-  layout->addWidget(gridLabel);
-}
-
-QPushButton *SchematicEditor::makeToolButton(const QString &text,
-                                             SchematicComponentType type,
-                                             bool isPlacement) {
-  auto *btn = new QPushButton(text, this);
-  btn->setFixedSize(32, 32);
-  btn->setCheckable(true);
-  btn->setCursor(Qt::PointingHandCursor);
-
-  // Unreal/Unity style flat buttons with glow hover
-  QString baseStyle = R"(
-    QPushButton {
-      background-color: transparent;
-      border: 1px solid transparent;
-      border-radius: 4px;
-      font-weight: bold;
-      font-size: 12px;
-      color: #AAAAAA;
-    }
-    QPushButton:hover {
-      background-color: #3E3E42;
-      border: 1px solid #007ACC;
-      color: #FFFFFF;
-    }
-    QPushButton:checked {
-      background-color: #007ACC;
-      border: 1px solid #005A9E;
-      color: #FFFFFF;
-    }
-  )";
-  btn->setStyleSheet(baseStyle);
-
-  connect(btn, &QPushButton::clicked, this, [=]() {
-    scene->setTool(type, valueInput->text().toDouble());
-
-    // Uncheck others
-    for (auto *other : findChildren<QPushButton *>()) {
-      if (other != btn)
-        other->setChecked(false);
-    }
-
-    if (type == SchematicComponentType::PAN) {
-      view->setDragMode(QGraphicsView::ScrollHandDrag);
-    } else {
-      view->setDragMode(QGraphicsView::NoDrag);
-    }
-
-    statusInfo->setText(isPlacement ? "Placing Component" : "Tool Active");
-  });
-
-  return btn;
+void SchematicEditor::onSnappingToggled(bool checked) {
+    scene->setSnappingEnabled(checked);
 }
