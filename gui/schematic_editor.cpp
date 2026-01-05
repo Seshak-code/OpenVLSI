@@ -9,193 +9,29 @@
 // ============================================================================
 // WIRE COMPONENT
 // ============================================================================
-WireComponent::WireComponent(QLineF line) : QGraphicsLineItem(line) {
-    setPen(QPen(Qt::cyan, 2));
-    setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
-    setZValue(1); // Wires below components (which will be Z=2)
-}
+// Implementations moved to visual_component.cpp
 
-void WireComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) {
-    Q_UNUSED(option);
-    Q_UNUSED(widget);
-    
-    painter->setPen(pen());
-    if (isSelected()) {
-        painter->setPen(QPen(Qt::green, 2, Qt::DashLine));
-    }
-    painter->drawLine(line());
-}
-
-QVariant WireComponent::itemChange(GraphicsItemChange change, const QVariant &value) {
-    if (change == ItemPositionChange && scene()) {
-        GridScene* gs = qobject_cast<GridScene*>(scene());
-        if (gs && gs->isSnappingEnabled()) {
-            QPointF newPos = value.toPointF();
-            qreal x = std::round(newPos.x() / GRID_STEP) * GRID_STEP;
-            qreal y = std::round(newPos.y() / GRID_STEP) * GRID_STEP;
-            return QPointF(x, y);
-        }
-    }
-    return QGraphicsItem::itemChange(change, value);
-}
-
-// ============================================================================
-// SIMPLE COMPONENT IMPLEMENTATION
-// ============================================================================
-SimpleComponent::SimpleComponent(ComponentType t) : type(t) {
-    setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
-    setTransformOriginPoint(0, 0); 
-    setZValue(2); // Components above wires
-    
-    // Default Properties
-    switch(t) {
-        case ComponentType::Resistor: name = "R?"; value = "1k"; break;
-        case ComponentType::Capacitor: name = "C?"; value = "1uF"; break;
-        case ComponentType::Inductor: name = "L?"; value = "1mH"; break;
-        case ComponentType::VoltageSource: name = "V?"; value = "5V"; break;
-        default: name = "U?"; value = "0"; break;
-    }
-}
-
-QRectF SimpleComponent::boundingRect() const {
-    return QRectF(-50, -50, 100, 100);
-}
-
-void SimpleComponent::rotate90() {
-    setRotation(rotation() + 90);
-}
-
-QVector<QPointF> SimpleComponent::getTerminals() const {
-    // Terminals MUST land on 20px grid (GRID_STEP)
-    QVector<QPointF> t;
-    switch(type) {
-        case ComponentType::Resistor:
-        case ComponentType::Inductor:
-            t << QPointF(-40, 0) << QPointF(40, 0);
-            break;
-        case ComponentType::Capacitor:
-        case ComponentType::Diode:
-            t << QPointF(-20, 0) << QPointF(20, 0);
-            break;
-        case ComponentType::VoltageSource:
-        case ComponentType::Bjt: // BJT NPN: C, B, E? Simplified for now
-            t << QPointF(0, -40) << QPointF(0, 40);
-            break;
-        case ComponentType::Ground:
-            t << QPointF(0, -20); // Top connection
-            break;
-        case ComponentType::Mosfet:
-             t << QPointF(-20, 0) << QPointF(20, 0) << QPointF(0, 20); // G D S
-             break;
-        default:
-            break;
-    }
-    return t;
-}
-
-QPainterPath SimpleComponent::shape() const {
-    QPainterPath path;
-    // Define the "Solid Body" that wires cannot cross
-    // Must be smaller than terminal reach so wires can get to terminals
-    switch(type) {
-        case ComponentType::Resistor:
-        case ComponentType::Inductor:
-            path.addRect(-20, -10, 40, 20);
-            break;
-        case ComponentType::Capacitor:
-        case ComponentType::Diode:
-            path.addRect(-10, -15, 20, 30);
-            break;
-        case ComponentType::VoltageSource:
-            path.addEllipse(-20, -20, 40, 40);
-            break;
-        case ComponentType::Ground:
-            path.addRect(-10, -5, 20, 10); // Plate
-            break;
-        default:
-            path.addRect(-15, -15, 30, 30);
-            break;
-    }
-    return path;
-}
-
-QVariant SimpleComponent::itemChange(GraphicsItemChange change, const QVariant &value) {
-    if (change == ItemPositionChange && scene()) {
-        GridScene* gs = qobject_cast<GridScene*>(scene());
-        if (gs && gs->isSnappingEnabled()) {
-            QPointF newPos = value.toPointF();
-            qreal x = std::round(newPos.x() / GRID_STEP) * GRID_STEP;
-            qreal y = std::round(newPos.y() / GRID_STEP) * GRID_STEP;
-            return QPointF(x, y);
-        }
-    }
-    return QGraphicsItem::itemChange(change, value);
-}
-
-void SimpleComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
-    painter->setPen(QPen(Qt::white, 2));
-    painter->setBrush(QColor("#1e1e1e")); 
-    
-    // Draw Components (Grid Aligned)
-    switch(type) {
-        case ComponentType::Resistor:
-            painter->drawRect(-20, -6, 40, 12);
-            painter->drawLine(-40, 0, -20, 0); // Reach to 40
-            painter->drawLine(20, 0, 40, 0);
-            break;
-        case ComponentType::Capacitor:
-            painter->drawLine(-5, -15, -5, 15);
-            painter->drawLine(5, -15, 5, 15);
-            painter->drawLine(-20, 0, -5, 0);
-            painter->drawLine(5, 0, 20, 0);
-            break;
-        case ComponentType::Ground:
-            painter->drawLine(-15, 0, 15, 0);
-            painter->drawLine(-8, 5, 8, 5);
-            painter->drawLine(-2, 10, 2, 10);
-            painter->drawLine(0, -20, 0, 0); // Reach to -20
-            break;
-        case ComponentType::VoltageSource:
-            painter->drawEllipse(-20, -20, 40, 40);
-            painter->drawText(QRectF(-15, -15, 30, 30), Qt::AlignCenter, "V");
-            painter->drawLine(0, -40, 0, -20);
-            painter->drawLine(0, 20, 0, 40);
-            break;
-        case ComponentType::Diode:
-            painter->drawLine(-5, -10, -5, 10); // Cathode line
-            {
-                QPointF poly[] = {{10, 0}, {-5, -10}, {-5, 10}};
-                painter->drawPolygon(poly, 3);
-            }
-            painter->drawLine(-20, 0, -5, 0);
-            painter->drawLine(10, 0, 20, 0);
-            break;
-        default:
-            painter->drawRect(-15, -15, 30, 30);
-            break;
-    }
-    
-    // VISUAL INDICATORS: Red X at terminals
-    // Always draw them so user knows where to connect
-    painter->setPen(QPen(Qt::red, 1));
-    QVector<QPointF> terms = getTerminals();
-    for(const QPointF& p : terms) {
-         painter->drawLine(p.x()-4, p.y()-4, p.x()+4, p.y()+4);
-         painter->drawLine(p.x()-4, p.y()+4, p.x()+4, p.y()-4);
-    }
-
-    if (isSelected()) {
-        painter->setPen(QPen(QColor(0, 255, 0), 1, Qt::DashLine));
-        painter->setBrush(Qt::NoBrush);
-        painter->drawRect(boundingRect());
-    }
-}
 
 // ============================================================================
 // GRID SCENE IMPLEMENTATION
 // ============================================================================
 GridScene::GridScene(QObject* parent) : QGraphicsScene(parent) {
     setSceneRect(-5000, -5000, 10000, 10000);
+    
+    connect(this, &QGraphicsScene::selectionChanged, this, [this](){
+        auto items = selectedItems();
+        if (items.isEmpty()) {
+            emit componentSelected(nullptr);
+        } else {
+            // Priority to one item
+            QGraphicsItem* item = items.first();
+            if (auto* sc = dynamic_cast<VisualComponent*>(item)) {
+                emit componentSelected(sc);
+            } else {
+                emit componentSelected(nullptr);
+            }
+        }
+    });
 }
 
 void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
@@ -249,7 +85,7 @@ void GridScene::setTool(ComponentType t) {
     }
     
     if (t != ComponentType::Select && t != ComponentType::Wire) {
-        ghostItem = new SimpleComponent(t);
+        ghostItem = new VisualComponent(t);
         ghostItem->setOpacity(0.5);
         // Ensure ghost ignores collisions so checking code works on other stuff
         ghostItem->setZValue(100); 
@@ -270,21 +106,19 @@ void GridScene::setSnappingEnabled(bool enabled) {
 
 bool GridScene::isWireValid(QGraphicsLineItem* wire) {
     if (!wire) return false;
-    // Check collision with all items that are SimpleComponents
+    // Check collision with all items that are VisualComponents
     QList<QGraphicsItem*> collisions = wire->collidingItems();
     for (auto* item : collisions) {
         if (item == wire || item == ghostItem) continue;
-        if (dynamic_cast<SimpleComponent*>(item)) {
+        if (dynamic_cast<VisualComponent*>(item)) {
             // Found a component body collision
             return false; 
         }
     }
-    // Also check self-intersection if we had multiple segments (future)
     return true;
 }
 
 bool GridScene::isPlacementValid(const QPointF& pos, QGraphicsItem* item) {
-    // Check if drawing/placing here intersects existing items
     QPainterPath shape;
     if (item) {
         shape = item->shape();
@@ -296,8 +130,6 @@ bool GridScene::isPlacementValid(const QPointF& pos, QGraphicsItem* item) {
     auto collisions = items(shape);
     for (auto* col : collisions) {
         if (col == item || col == ghostItem || col == tempWire) continue;
-        
-        // Fail on any collision for now
         if (col->type() == item->type()) return false; 
     }
     return true;
@@ -312,7 +144,7 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
         }
         else if (currentTool == ComponentType::Wire) {
             wireStart = p;
-            tempWire = new WireComponent(QLineF(p, p));
+            tempWire = new VisualWire(QLineF(p, p));
             addItem(tempWire);
         }
         else {
@@ -327,7 +159,7 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             }
 
             if (!colliding) {
-                auto* item = new SimpleComponent(currentTool);
+                auto* item = new VisualComponent(currentTool);
                 item->setPos(p);
                 item->setRotation(ghostItem->rotation());
                 addItem(item);
@@ -368,7 +200,6 @@ void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 
 void GridScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     if (event->button() == Qt::LeftButton && tempWire) {
-        // Finalize Wire
         if (tempWire->line().length() < 1 || !isWireValid(tempWire)) {
             removeItem(tempWire);
             delete tempWire;
@@ -397,7 +228,7 @@ void GridScene::keyPressEvent(QKeyEvent* event) {
             ghostItem->rotate90();
         } else {
             for (auto* item : selectedItems()) {
-                if (auto* sc = dynamic_cast<SimpleComponent*>(item)) {
+                if (auto* sc = dynamic_cast<VisualComponent*>(item)) {
                     sc->rotate90();
                 }
             }

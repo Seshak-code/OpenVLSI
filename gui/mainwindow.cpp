@@ -93,7 +93,7 @@ void MainWindow::createPropertiesDock() {
     propertiesDock->setWidget(propertiesTable);
 }
 
-void MainWindow::updateProperties(SimpleComponent* item) {
+void MainWindow::updateProperties(VisualComponent* item) {
     if (isUpdating) return;
     isUpdating = true;
     
@@ -106,21 +106,44 @@ void MainWindow::updateProperties(SimpleComponent* item) {
         return;
     }
     
-    propertiesTable->setRowCount(3);
+    // Dynamic fields count: Name + Value + Type + Params
+    int paramCount = item->params.size();
+    propertiesTable->setRowCount(3 + paramCount);
     
     // 0: Name
     propertiesTable->setItem(0, 0, new QTableWidgetItem("Name"));
     propertiesTable->setItem(0, 1, new QTableWidgetItem(item->name));
     
-    // 1: Value
-    propertiesTable->setItem(1, 0, new QTableWidgetItem("Value"));
+    // 1: Value (Context Aware Label)
+    QString valueLabel = "Value";
+    switch(item->type) {
+        case ComponentType::Resistor: valueLabel = "Resistance"; break;
+        case ComponentType::Capacitor: valueLabel = "Capacitance"; break;
+        case ComponentType::Inductor: valueLabel = "Inductance"; break;
+        case ComponentType::VoltageSource: valueLabel = "DC Voltage"; break;
+        default: break;
+    }
+    
+    propertiesTable->setItem(1, 0, new QTableWidgetItem(valueLabel));
     propertiesTable->setItem(1, 1, new QTableWidgetItem(item->value));
     
     // 2: Type (Read only)
     propertiesTable->setItem(2, 0, new QTableWidgetItem("Type"));
-    QTableWidgetItem* typeItem = new QTableWidgetItem(QString::number((int)item->type)); // Could map to string
+    QTableWidgetItem* typeItem = new QTableWidgetItem(QString::number((int)item->type)); 
     typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
     propertiesTable->setItem(2, 1, typeItem);
+    
+    // 3+: Dynamic Params
+    int row = 3;
+    QMapIterator<QString, QString> i(item->params);
+    while (i.hasNext()) {
+        i.next();
+        QTableWidgetItem* keyItem = new QTableWidgetItem(i.key());
+        keyItem->setFlags(keyItem->flags() & ~Qt::ItemIsEditable); // Keys distinct
+        propertiesTable->setItem(row, 0, keyItem);
+        propertiesTable->setItem(row, 1, new QTableWidgetItem(i.value()));
+        row++;
+    }
     
     isUpdating = false;
 }
@@ -136,8 +159,11 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
             activeComponent->name = item->text();
         } else if (row == 1) {
             activeComponent->value = item->text();
+        } else if (row > 2) {
+            // Dynamic Param
+            QString key = propertiesTable->item(row, 0)->text();
+            activeComponent->params[key] = item->text();
         }
-        // Ideally trigger a redraw or netlist update if needed
     }
 }
 

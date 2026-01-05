@@ -14,61 +14,9 @@
 #include <QGroupBox>
 #include <QMap>
 #include <QKeyEvent>
-#include "circuit.h"
+#include "visual_component.h"
+#include "circuit.h" // Logical circuit definitions (from components/)
 
-// ============================================================================
-// CONSTANTS & ENUMS
-// ============================================================================
-const int GRID_STEP = 20;
-
-enum class ComponentType {
-    Select,
-    Wire,
-    Resistor,
-    Capacitor,
-    Inductor,
-    VoltageSource,
-    Ground,
-    Diode,
-    Mosfet,
-    Bjt
-};
-
-// ============================================================================
-// WIRE COMPONENT
-// ============================================================================
-class WireComponent : public QGraphicsLineItem {
-public:
-    WireComponent(QLineF line);
-
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) override;
-    
-    // Snapping support
-    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
-};
-
-// ============================================================================
-// SIMPLE COMPONENT
-// ============================================================================
-class SimpleComponent : public QGraphicsItem {
-public:
-    ComponentType type;
-    QString name;
-    QString value;
-
-    SimpleComponent(ComponentType t);
-
-    QRectF boundingRect() const override;
-    QPainterPath shape() const override; 
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) override;
-    
-    QVector<QPointF> getTerminals() const; 
-
-    // Snapping support
-    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
-    
-    void rotate90(); 
-};
 
 // ============================================================================
 // SCENE (Grid Handling + Validation)
@@ -96,7 +44,7 @@ signals:
     void mouseMoved(int x, int y);
     void messageLogged(const QString& msg);
     void toolChanged(ComponentType newTool);
-    void componentSelected(SimpleComponent* component); // New Signal
+    void componentSelected(VisualComponent* component); 
 
 private:
     QPointF snapToGrid(const QPointF& pos);
@@ -110,10 +58,10 @@ private:
     
     // Wire drawing
     QPointF wireStart;
-    WireComponent* tempWire = nullptr;
+    VisualWire* tempWire = nullptr;
     
     // Ghost for placement
-    SimpleComponent* ghostItem = nullptr; 
+    VisualComponent* ghostItem = nullptr; 
 };
 
 // ============================================================================
@@ -126,7 +74,7 @@ public:
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
 
 signals:
-    void itemSelected(SimpleComponent* item); // Bubbled up signal
+    void itemSelected(VisualComponent* item); 
 
 private slots:
     void onGridToggled(bool checked);

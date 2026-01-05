@@ -64,14 +64,23 @@ find_package(Qt6 COMPONENTS Core Widgets REQUIRED)
 qt_standard_project_setup()
 
 # Create executable
+# Create executable
 qt_add_executable(${PROJECT_NAME} 
     main.cpp
-    mainwindow.cpp
-    mainwindow.h
-    simulator_window.cpp
-    simulator_window.h
-    schematic_editor.cpp
-    schematic_editor.h
+    gui/mainwindow.cpp
+    gui/mainwindow.h
+    gui/simulator_window.cpp
+    gui/simulator_window.h
+    gui/schematic_editor.cpp
+    gui/schematic_editor.h
+    gui/visual_component.cpp
+    gui/visual_component.h
+)
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
 )
 
 # Link Qt libraries
