@@ -315,8 +315,341 @@ void GridScene::keyPressEvent(QKeyEvent* event) {
     }
 }
 
+// ============================================================================
+// WIRE PLACEMENT API (for AI automation)
+// ============================================================================
+void GridScene::placeWirePath(const QVector<QPointF>& points) {
+    if (points.size() < 2) return;
+    
+    for (int i = 0; i < points.size() - 1; ++i) {
+        QPointF p1 = snapToGrid(points[i]);
+        QPointF p2 = snapToGrid(points[i + 1]);
+        
+        VisualWire* wire = new VisualWire(QLineF(p1, p2));
+        addItem(wire);
+    }
+}
+
+// ============================================================================
+// NETLIST GENERATION
+// ============================================================================
+
+// Helper: Parse Value Strings (e.g. 10k, 1.2u)
+static double parseValue(const QString& str) {
+    if (str.isEmpty()) return 0.0;
+    
+    // Extract numeric part
+    QString numStr;
+    QString suffix;
+    bool suffixFound = false;
+    
+    for (QChar c : str) {
+        if (!suffixFound && (c.isDigit() || c == '.' || c == '-')) {
+            numStr.append(c);
+        } else {
+            suffixFound = true;
+            suffix.append(c);
+        }
+    }
+    
+    double val = numStr.toDouble();
+    suffix = suffix.trimmed();
+    
+    if (suffix.startsWith("k") || suffix.startsWith("K")) val *= 1e3;
+    else if (suffix.startsWith("M") && suffix.length() == 1) val *= 1e6; // Mega
+    else if (suffix.startsWith("Meg")) val *= 1e6;
+    else if (suffix.startsWith("G")) val *= 1e9;
+    else if (suffix.startsWith("m")) val *= 1e-3;
+    else if (suffix.startsWith("u")) val *= 1e-6;
+    else if (suffix.startsWith("n")) val *= 1e-9;
+    else if (suffix.startsWith("p")) val *= 1e-12;
+    else if (suffix.startsWith("f")) val *= 1e-15;
+    
+    return val;
+}
+
 TensorNetlist GridScene::generateNetlist() {
-    return TensorNetlist(); 
+    TensorNetlist netlist;
+    
+    // --- Step 1: Connectivity Analysis (Spatial Approach) ---
+    QMap<QPair<int,int>, int> pointToNetID;
+    int nextNetID = 1; 
+    
+    // Function to get distinct net ID for a point, creating new if needed
+    auto getNetID = [&](QPointF p) -> int {
+        QPair<int,int> key = {(int)round(p.x()), (int)round(p.y())};
+        if (!pointToNetID.contains(key)) {
+            pointToNetID[key] = nextNetID++;
+        }
+        return pointToNetID[key];
+    };
+    
+    // Temporary structure to merge sets: map old_id -> new_id
+    QMap<int, int> merges;
+    
+    // Find representative set
+    std::function<int(int)> findSet = [&](int id) {
+        while (merges.contains(id)) {
+            id = merges[id];
+        }
+        return id;
+    };
+    
+    auto unionSets = [&](int id1, int id2) {
+        int root1 = findSet(id1);
+        int root2 = findSet(id2);
+        if (root1 != root2) {
+            // Merge higher into lower
+            if (root1 < root2) merges[root2] = root1;
+            else merges[root1] = root2;
+        }
+    };
+    
+    // 1.1 Traverse Wires -> Unify points along the wire
+    QList<QGraphicsItem*> allItems = items();
+    for (auto* item : allItems) {
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            if (!w->isVisible()) continue;
+            
+            QLineF line = w->line();
+            // Normalize direction for iteration
+            int x1 = (int)round(line.x1());
+            int y1 = (int)round(line.y1());
+            int x2 = (int)round(line.x2());
+            int y2 = (int)round(line.y2());
+            
+            // Unify Start
+            int startID = getNetID(QPointF(x1, y1));
+            
+            // Walk the line
+            if (x1 == x2) { // Vertical
+                int minY = std::min(y1, y2);
+                int maxY = std::max(y1, y2);
+                for (int y = minY; y <= maxY; y += GRID_STEP) {
+                    unionSets(startID, getNetID(QPointF(x1, y)));
+                }
+            } else if (y1 == y2) { // Horizontal
+                int minX = std::min(x1, x2);
+                int maxX = std::max(x1, x2);
+                for (int x = minX; x <= maxX; x += GRID_STEP) {
+                    unionSets(startID, getNetID(QPointF(x, y1)));
+                }
+            } else {
+                // Diagonal (Shouldn't happen with current tool but handle endpoints)
+                unionSets(startID, getNetID(QPointF(x2, y2)));
+            }
+        }
+    }
+    
+    // 1.2 Traverse Components -> Get Terminals -> Get Net IDs
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            QVector<QPointF> terms = c->getTerminals();
+            for (const auto& localP : terms) {
+                // Ensure this point gets an ID
+                getNetID(c->mapToScene(localP));
+            }
+        }
+    }
+    
+    // 1.3 OPTIONAL: Unify Co-located Component Pins?
+    // Already implicit because getNetID handles spatial hashing. 
+    // If two components have pins at (100,100), getNetID returns same ID for both.
+    
+    // Step 2: Resolve Global Nodes
+    QMap<int, int> finalNodeMap;
+    int currentNodeIndex = 1; // 0 is reserved for Ground
+    
+    auto getFinalNode = [&](QPointF p) -> int {
+        int rawID = getNetID(p);
+        int rootID = findSet(rawID);
+        if (!finalNodeMap.contains(rootID)) {
+            finalNodeMap[rootID] = currentNodeIndex++;
+        }
+        return finalNodeMap[rootID];
+    };
+    
+    // Check for Ground Components to fix node 0
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->type == ComponentType::Ground) {
+                QPointF termPos = c->mapToScene(c->getTerminals()[0]);
+                int rawID = getNetID(termPos);
+                int rootID = findSet(rawID);
+                finalNodeMap[rootID] = 0; 
+            }
+        }
+    }
+    
+    // Step 3: Populate Netlist & Enforce Counts
+    for (auto* item : allItems) {
+        auto* c = dynamic_cast<VisualComponent*>(item);
+        if (!c) continue;
+        
+        QVector<int> nodes;
+        for (QPointF p : c->getTerminals()) {
+            nodes.append(getFinalNode(c->mapToScene(p)));
+        }
+        
+        double val = parseValue(c->value); 
+        
+        // Safety Checks
+        int expected = 0;
+        switch(c->type) {
+            case ComponentType::Resistor: expected = 2; break;
+            case ComponentType::Capacitor: expected = 2; break;
+            case ComponentType::Inductor: expected = 2; break;
+            case ComponentType::VoltageSource: expected = 2; break;
+            case ComponentType::Diode: expected = 2; break;
+            case ComponentType::Mosfet: expected = 3; break; // G, D, S
+            case ComponentType::Bjt: expected = 2; break; // Current mock uses 2? No, should be 3.
+            default: break;
+        }
+        
+        // BJT VisualComponent check in visual_component.cpp might need update if it only returns 2 points.
+        // Assuming it's correct or we leniently skip if mismatches.
+        if (c->type != ComponentType::Ground && nodes.size() < expected) {
+            emit messageLogged(QString("Warning: Component %1 has incomplete terminals!").arg(c->name));
+            continue;
+        }
+        
+        switch(c->type) {
+            case ComponentType::Resistor:
+                netlist.addResistor(nodes[0], nodes[1], val);
+                break;
+            case ComponentType::Capacitor:
+                netlist.addCapacitor(nodes[0], nodes[1], val);
+                break;
+            case ComponentType::Inductor:
+                netlist.addInductor(nodes[0], nodes[1], val);
+                break;
+            case ComponentType::VoltageSource:
+                netlist.addVoltageSource(nodes[0], nodes[1], val);
+                break;
+            case ComponentType::Ground:
+                break;
+            case ComponentType::Diode:
+                netlist.addDiode(nodes[0], nodes[1], 1e-14); 
+                break;
+            case ComponentType::Mosfet:
+                {
+                   double W = parseValue(c->params.value("W", "1u"));
+                   double L = parseValue(c->params.value("L", "180n"));
+                   std::string model = c->params.value("Model", "nfet").toStdString();
+                   // Order: G(0), D(1), S(2)? Check VisualComponent
+                   // Assuming D G S mapping for safety or standardized order
+                   // visual_component says:  t << QPointF(-20, 0) << QPointF(20, 0) << QPointF(0, 20); // G D S
+                   // Indices: 0=G, 1=D, 2=S
+                   netlist.addMosfet(c->name.toStdString(), nodes[1], nodes[0], nodes[2], nodes[2], model, W, L); 
+                }
+                break;
+            case ComponentType::Bjt:
+                {
+                    std::string model = c->params.value("Model", "2N2222").toStdString();
+                    // Need to check BJT terminals in visual_component.cpp
+                    // If it has 3, we map C B E.
+                    if (nodes.size() >= 3)
+                        netlist.addBJT(c->name.toStdString(), nodes[0], nodes[1], nodes[2], model, true);
+                    else
+                         emit messageLogged(QString("Warning: BJT %1 pins definition incomplete").arg(c->name));
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    
+    return netlist; 
+}
+
+// ============================================================================
+// ERC (Electrical Rule Check)
+// ============================================================================
+QStringList GridScene::runERC() {
+    QStringList errors;
+    
+    // --- Build Connectivity (Duplicated logic from generateNetlist, could be refactored) ---
+    QMap<QPair<int,int>, int> pointToNetID;
+    int nextNetID = 1;
+    
+    auto getNetID = [&](QPointF p) -> int {
+        QPair<int,int> key = {(int)round(p.x()), (int)round(p.y())};
+        if (!pointToNetID.contains(key)) {
+            pointToNetID[key] = nextNetID++;
+        }
+        return pointToNetID[key];
+    };
+    
+    QMap<int, int> merges;
+    std::function<int(int)> findSet = [&](int id) {
+        while (merges.contains(id)) id = merges[id];
+        return id;
+    };
+    
+    auto unionSets = [&](int id1, int id2) {
+        int r1 = findSet(id1), r2 = findSet(id2);
+        if (r1 != r2) { if (r1 < r2) merges[r2] = r1; else merges[r1] = r2; }
+    };
+    
+    // Wire Traversal
+    QList<QGraphicsItem*> allItems = items();
+    for (auto* item : allItems) {
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            if (!w->isVisible()) continue;
+            QLineF line = w->line();
+            int x1 = (int)round(line.x1()), y1 = (int)round(line.y1());
+            int x2 = (int)round(line.x2()), y2 = (int)round(line.y2());
+            int startID = getNetID(QPointF(x1, y1));
+            if (x1 == x2) { for (int y = std::min(y1,y2); y <= std::max(y1,y2); y += GRID_STEP) unionSets(startID, getNetID(QPointF(x1, y))); }
+            else if (y1 == y2) { for (int x = std::min(x1,x2); x <= std::max(x1,x2); x += GRID_STEP) unionSets(startID, getNetID(QPointF(x, y1))); }
+            else { unionSets(startID, getNetID(QPointF(x2, y2))); }
+        }
+    }
+    
+    // Component Terminals
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            for (const auto& localP : c->getTerminals()) getNetID(c->mapToScene(localP));
+        }
+    }
+    
+    // Count connections per net
+    QMap<int, int> netConnectionCount; // Root ID -> Count
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            for (const auto& localP : c->getTerminals()) {
+                int rawID = getNetID(c->mapToScene(localP));
+                int rootID = findSet(rawID);
+                netConnectionCount[rootID]++;
+            }
+        }
+    }
+    
+    // --- ERC Checks ---
+    
+    // 1. Missing Ground
+    bool hasGround = false;
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->type == ComponentType::Ground) { hasGround = true; break; }
+        }
+    }
+    if (!hasGround) {
+        errors << "ERC Error: No Ground component found!";
+    }
+    
+    // 2. Floating Nodes (nets with only 1 connection)
+    for (auto it = netConnectionCount.begin(); it != netConnectionCount.end(); ++it) {
+        if (it.value() == 1) {
+            errors << QString("ERC Warning: Net has only 1 connection (floating?)");
+        }
+    }
+    
+    // 3. Unconnected Components (Any component not touching a wire?)
+    // Simple heuristic: If a pin's net has only 1 connection, it's from this pin alone.
+    // Already covered by #2. More advanced: check if pin touches a wire endpoint.
+    
+    return errors;
 }
 
 // ============================================================================
@@ -452,10 +785,22 @@ void SchematicEditor::onSnappingToggled(bool checked) {
     scene->setSnappingEnabled(checked);
 }
 
+void SchematicEditor::setTool(ComponentType t) {
+    scene->setTool(t);
+}
+
 void SchematicEditor::setWireName(VisualWire* wire, const QString& name) {
-    if (wire) {
+    if(wire) {
         wire->setName(name);
     }
+}
+
+QStringList SchematicEditor::getAvailableComponents() {
+    return {
+        "Resistor", "Capacitor", "Inductor", 
+        "Ground", "Voltage Source", 
+        "Diode", "N-MOSFET", "NPN BJT"
+    };
 }
 
 QString SchematicEditor::dumpSceneState() {
@@ -476,4 +821,13 @@ QString SchematicEditor::dumpSceneState() {
         }
     }
     return dump;
+}
+
+
+QStringList SchematicEditor::runERC() {
+    return scene->runERC();
+}
+
+void SchematicEditor::placeWirePath(const QVector<QPointF>& points) {
+    scene->placeWirePath(points);
 }

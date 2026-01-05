@@ -70,11 +70,13 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             name = "R?"; 
             value = "1k"; 
             params["Tolerance"] = "5%";
+            paramOptions["Tolerance"] = {"1%", "5%", "10%", "20%"};
             break;
         case ComponentType::Capacitor: 
             name = "C?"; 
             value = "1uF"; 
             params["Voltage Rating"] = "50V"; 
+            paramOptions["Voltage Rating"] = {"6.3V", "10V", "16V", "25V", "50V", "100V"};
             break;
         case ComponentType::Inductor: 
             name = "L?"; 
@@ -92,11 +94,13 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             params["W"] = "1u";
             params["L"] = "180n";
             params["Model"] = "nfet_01v8";
+            paramOptions["Model"] = {"nfet_01v8", "pfet_01v8", "nfet_03v3", "pfet_03v3"};
             break;
         case ComponentType::Bjt:
             name = "Q?";
             value = "NPN";
             params["Model"] = "2N2222";
+            paramOptions["Model"] = {"2N2222", "2N3904", "2N3906", "BC547"};
             break;
         default: 
             name = "U?"; 

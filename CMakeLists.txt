@@ -75,6 +75,10 @@ qt_add_executable(${PROJECT_NAME}
     gui/schematic_editor.h
     gui/visual_component.cpp
     gui/visual_component.h
+    gui/ai_assistant.cpp
+    gui/ai_assistant.h
+    gui/component_library.cpp
+    gui/component_library.h
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

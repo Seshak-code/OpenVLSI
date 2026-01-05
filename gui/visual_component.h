@@ -51,6 +51,7 @@ public:
     QString name;
     QString value;
     QMap<QString, QString> params; // Dynamic parameters
+    QMap<QString, QStringList> paramOptions; // Options for parameters (Key -> List of Choices)
 
     VisualComponent(ComponentType t);
 

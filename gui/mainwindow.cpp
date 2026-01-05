@@ -3,6 +3,8 @@
 #include <QHeaderView>
 #include <QStatusBar>
 #include <QDebug>
+#include <QComboBox>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("AcuteSim - Professional Circuit Designer");
@@ -22,10 +24,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 }
 
 void MainWindow::setupCentralWidget() {
-    // Ideally this is a QTabWidget for multi-file support
-    // For MVP, we stick the SchematicEditor directly here
+    // Tabbed interface for Schematic and Simulator
+    centralTabs = new QTabWidget(this);
+    
+    // Tab 1: Schematic Editor
     schematicEditor = new SchematicEditor(this);
-    setCentralWidget(schematicEditor);
+    centralTabs->addTab(schematicEditor, "📐 Schematic");
+    
+    // Tab 2: Simulator (embedded, not popup)
+    simulatorPanel = new SimulatorWindow(this);
+    centralTabs->addTab(simulatorPanel, "⚡ Simulation");
+    
+    setCentralWidget(centralTabs);
     
     // Connect Selection
     connect(schematicEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
@@ -39,35 +49,76 @@ void MainWindow::setupDocks() {
     createProjectDock();
     addDockWidget(Qt::LeftDockWidgetArea, projectDock);
 
+    // --- Component Library (Left, Tabbed or Below) ---
+    createLibraryDock();
+    addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
+    tabifyDockWidget(projectDock, libraryDock);
+
     // --- Properties Inspector (Right) ---
     createPropertiesDock();
     addDockWidget(Qt::RightDockWidgetArea, propertiesDock);
+
+    // --- Copilot AI (Right, Tabbed) ---
+    createAiDock();
+    addDockWidget(Qt::RightDockWidgetArea, aiDock);
+    tabifyDockWidget(propertiesDock, aiDock); // Tab them together by default
 
     // --- Message Console (Bottom) ---
     createMessagesDock();
     addDockWidget(Qt::BottomDockWidgetArea, messagesDock);
 }
 
+void MainWindow::createAiDock() {
+    aiDock = new QDockWidget("Copilot Assistant", this);
+    aiDock->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
+    
+    aiPanel = new AiAssistantPanel(schematicEditor, this);
+    aiDock->setWidget(aiPanel);
+}
+
 void MainWindow::createProjectDock() {
     projectDock = new QDockWidget("Project Browser", this);
     projectDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     
-    projectTree = new QTreeWidget(projectDock);
-    projectTree->setHeaderLabel("Files");
-    projectTree->setAlternatingRowColors(true);
+    // File Model
+    fileModel = new QFileSystemModel(this);
+    fileModel->setRootPath(QDir::currentPath());
+    fileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
     
-    // Dummy Data
-    auto* root = new QTreeWidgetItem(projectTree, {"MyDesign"});
-    root->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_DirIcon));
+    // View
+    projectView = new QTreeView(projectDock);
+    projectView->setModel(fileModel);
+    projectView->setRootIndex(fileModel->index(QDir::currentPath()));
+    projectView->setSortingEnabled(true);
+    projectView->setColumnHidden(1, true); // Hide Size
+    projectView->setColumnHidden(2, true); // Hide Type
+    projectView->setColumnHidden(3, true); // Hide Date
+    projectView->setAlternatingRowColors(true);
     
-    auto* schem = new QTreeWidgetItem(root, {"main_circuit.sch"});
-    schem->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_FileIcon));
+    // Style
+    projectView->setStyleSheet("QTreeView { font-size: 11pt; }");
     
-    auto* lib = new QTreeWidgetItem(root, {"models.lib"});
-    lib->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_FileIcon));
+    // Connect double click to open (Action placeholder)
+    connect(projectView, &QTreeView::doubleClicked, this, [this](const QModelIndex& index){
+        QString path = fileModel->filePath(index);
+        statusBar()->showMessage("Selected file: " + path);
+    });
     
-    projectTree->expandAll();
-    projectDock->setWidget(projectTree);
+    projectDock->setWidget(projectView);
+}
+
+void MainWindow::createLibraryDock() {
+    libraryDock = new QDockWidget("Component Library", this);
+    libraryDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    
+    libraryPanel = new ComponentLibrary(this);
+    
+    // Connect Selection
+    connect(libraryPanel, &ComponentLibrary::componentSelected, this, [this](ComponentType type){
+         schematicEditor->setTool(type);
+    });
+    
+    libraryDock->setWidget(libraryPanel);
 }
 
 void MainWindow::createPropertiesDock() {
@@ -142,10 +193,35 @@ void MainWindow::updateProperties(VisualComponent* item) {
     QMapIterator<QString, QString> i(item->params);
     while (i.hasNext()) {
         i.next();
-        QTableWidgetItem* keyItem = new QTableWidgetItem(i.key());
+        QString key = i.key();
+        QString val = i.value();
+        
+        QTableWidgetItem* keyItem = new QTableWidgetItem(key);
         keyItem->setFlags(keyItem->flags() & ~Qt::ItemIsEditable); // Keys distinct
         propertiesTable->setItem(row, 0, keyItem);
-        propertiesTable->setItem(row, 1, new QTableWidgetItem(i.value()));
+        
+        // Check if we have options for this specific parameter
+        if (item->paramOptions.contains(key)) {
+            QComboBox* combo = new QComboBox();
+            combo->addItems(item->paramOptions[key]);
+            combo->setCurrentText(val);
+            
+            // Validate: if value is custom/not in list, add it or just set it?
+            // For now, assume strict list or standard behavior.
+            
+            connect(combo, &QComboBox::currentTextChanged, this, [this, item, key](const QString& text){
+                // Safety check: ensure item is still valid (simplified)
+                if (item && activeComponent == item) {
+                   item->params[key] = text;
+                   // Trigger re-draw or logic update if needed?
+                }
+            });
+            
+            propertiesTable->setCellWidget(row, 1, combo);
+        } else {
+            // Standard Text Edit
+            propertiesTable->setItem(row, 1, new QTableWidgetItem(val));
+        }
         row++;
     }
     
@@ -216,6 +292,7 @@ void MainWindow::setupMenus() {
     QMenu* viewMenu = mb->addMenu("&View");
     viewMenu->addAction(projectDock->toggleViewAction());
     viewMenu->addAction(propertiesDock->toggleViewAction());
+    viewMenu->addAction(aiDock->toggleViewAction());
     viewMenu->addAction(messagesDock->toggleViewAction());
 
     // Simulation
@@ -232,8 +309,22 @@ void MainWindow::openProject() {
 }
 
 void MainWindow::runSimulation() {
-    statusBar()->showMessage("Running Simulation...");
-    // Ideally call schematicEditor->toNetlist() and pass to solver
+    statusBar()->showMessage("Running ERC...");
+    
+    // Run ERC
+    QStringList ercErrors = schematicEditor->runERC();
+    if (!ercErrors.isEmpty()) {
+        QString msg = "ERC Issues Found:\n" + ercErrors.join("\n");
+        QMessageBox::warning(this, "ERC Warnings", msg);
+    }
+    
+    statusBar()->showMessage("Generating Netlist...");
+    TensorNetlist netlist = schematicEditor->toNetlist();
+    statusBar()->showMessage(QString("Netlist Generated: %1 nodes").arg(netlist.numGlobalNodes));
+
+    // Pass netlist to simulator panel and switch tab
+    simulatorPanel->setNetlist(netlist); 
+    centralTabs->setCurrentWidget(simulatorPanel);
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {

@@ -32,6 +32,10 @@ public:
     bool isSnappingEnabled() const { return snappingEnabled; }
     
     TensorNetlist generateNetlist();
+    QStringList runERC();
+    
+    // Automation API (GenAI Hook)
+    void placeWirePath(const QVector<QPointF>& points);
 
 protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override;
@@ -64,9 +68,6 @@ private:
     
     void clearGhostWires();
     
-    // Automation API (GenAI Hook)
-    void placeWirePath(const QVector<QPointF>& points);
-    
     // Ghost for placement
     VisualComponent* ghostItem = nullptr; 
 };
@@ -81,9 +82,21 @@ public:
     // Returns a JSON-like string description of the circuit
     QString dumpSceneState();
     
+    // Returns a list of all available component types
+    QStringList getAvailableComponents();
+    
     // Wire naming API
     void setWireName(VisualWire* wire, const QString& name);
     
+    // Wire placement API (for AI auto-routing)
+    void placeWirePath(const QVector<QPointF>& points);
+    
+    // Tool Selection API
+    void setTool(ComponentType t);
+    
+    // Validation
+    QStringList runERC();
+
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
 

@@ -1,7 +1,6 @@
 #pragma once
 #include "circuit.h"
 #include "circuitsim.h"
-#include "schematic_editor.h"
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -11,10 +10,13 @@
 #include <QWidget>
 
 class SimulatorWindow : public QWidget {
-Q_OBJECT // Macro required for signals & slots
+Q_OBJECT
 
-    public : SimulatorWindow(QWidget *parent = nullptr);
+public:
+  SimulatorWindow(QWidget *parent = nullptr);
   ~SimulatorWindow() = default;
+
+  void setNetlist(const TensorNetlist& n) { netlist = n; }
 
 private slots:
   void startSimulation();
@@ -22,6 +24,8 @@ private slots:
 
 private:
   QPlainTextEdit *logArea;
+  QLabel *statusLabel;
+  QPushButton *btnRun;
   QTimer *simTimer;
 
   // Simulation State
@@ -31,7 +35,4 @@ private:
   double currentTime = 0.0;
   const double timeStep = 0.00001; // 10us
   const double totalTime = 0.002;  // 2ms
-
-  // Schematic Editor
-  SchematicEditor *schematic;
 };
