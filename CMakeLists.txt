@@ -83,6 +83,8 @@ qt_add_executable(${PROJECT_NAME}
     gui/schematic_editor_api.cpp
     ai_api/schema_api.cpp
     ai_api/schema_api.h
+    ai_api/context_engine.cpp
+    ai_api/context_engine.h
     ai_api/simulation_api.h
 )
 

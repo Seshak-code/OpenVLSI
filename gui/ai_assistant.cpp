@@ -1,4 +1,5 @@
 #include "ai_assistant.h"
+#include "../ai_api/context_engine.h"
 #include <QScrollBar>
 #include <QDebug>
 #include <QJsonDocument>
@@ -85,7 +86,11 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
         }
     }
     else if (cmd == "/help") {
-         appendMessage("Copilot", "Commands:\n/dump - JSON Dump\n/wire - (Demo) Auto Wire\n/parts - List Components\n/erc - Run ERC\n/help - This msg");
+         appendMessage("Copilot", "Commands:\n/context - Show AI System Prompt\n/dump - JSON Dump\n/wire - (Demo) Auto Wire\n/parts - List Components\n/erc - Run ERC\n/help - This msg");
+    }
+    else if (cmd == "/context") {
+        QString ctx = AIAPI::ContextEngine::generateSystemPrompt();
+        appendMessage("Copilot", "<b>AI System Context:</b>\n" + ctx);
     }
     else {
         appendMessage("Copilot", "I'm a simple mock AI. I don't understand natural language yet, but I will soon!");

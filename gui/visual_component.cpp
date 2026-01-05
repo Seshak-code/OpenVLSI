@@ -2,6 +2,34 @@
 #include "schematic_editor.h" 
 #include <cmath>
 
+QString componentTypeToString(ComponentType t) {
+    switch(t) {
+        case ComponentType::Resistor: return "Resistor";
+        case ComponentType::Capacitor: return "Capacitor";
+        case ComponentType::Inductor: return "Inductor";
+        case ComponentType::VoltageSource: return "VoltageSource";
+        case ComponentType::Ground: return "Ground";
+        case ComponentType::Diode: return "Diode";
+        case ComponentType::Mosfet: return "Mosfet";
+        case ComponentType::Bjt: return "Bjt";
+        case ComponentType::Wire: return "Wire";
+        default: return "Unknown";
+    }
+}
+
+ComponentType stringToComponentType(const QString& s) {
+    if (s == "Resistor") return ComponentType::Resistor;
+    if (s == "Capacitor") return ComponentType::Capacitor;
+    if (s == "Inductor") return ComponentType::Inductor;
+    if (s == "VoltageSource" || s == "Source") return ComponentType::VoltageSource;
+    if (s == "Ground" || s == "GND") return ComponentType::Ground;
+    if (s == "Diode") return ComponentType::Diode;
+    if (s == "Mosfet" || s == "NMOS" || s == "PMOS") return ComponentType::Mosfet;
+    if (s == "Bjt" || s == "NPN" || s == "PNP") return ComponentType::Bjt;
+    if (s == "Wire") return ComponentType::Wire;
+    return ComponentType::Select;
+}
+
 // ============================================================================
 // VISUAL WIRE
 // ============================================================================

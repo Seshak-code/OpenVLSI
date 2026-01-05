@@ -22,6 +22,9 @@ enum class ComponentType {
     Bjt
 };
 
+QString componentTypeToString(ComponentType t);
+ComponentType stringToComponentType(const QString& s);
+
 // ============================================================================
 // VISUAL WIRE
 // ============================================================================

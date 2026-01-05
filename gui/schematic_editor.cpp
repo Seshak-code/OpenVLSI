@@ -856,15 +856,19 @@ QJsonObject GridScene::getCircuitState() {
     for (auto* item : items()) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
             QJsonObject compInfo;
-            compInfo["id"] = QString::number((uintptr_t)c); // Use pointer address as temp ID
+            compInfo["id"] = c->name; // Use component Name as stable ID (e.g. R1)
             compInfo["name"] = c->name;
-            compInfo["type"] = QString::number((int)c->type); // Can convert to string enum later
+            compInfo["type"] = componentTypeToString(c->type); 
             compInfo["x"] = c->pos().x();
             compInfo["y"] = c->pos().y();
             compInfo["rotation"] = c->rotation();
             
             QJsonObject props;
             props["value"] = c->value;
+            // Serialize all dynamic parameters (e.g. W, L, Model)
+            for(auto it = c->params.begin(); it != c->params.end(); ++it) {
+                props[it.key()] = it.value();
+            }
             compInfo["properties"] = props;
             
             components.append(compInfo);
