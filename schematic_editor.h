@@ -53,13 +53,16 @@ public:
 class SimpleComponent : public QGraphicsItem {
 public:
     ComponentType type;
+    QString name;
+    QString value;
+
     SimpleComponent(ComponentType t);
 
     QRectF boundingRect() const override;
-    QPainterPath shape() const override; // For precise collision
+    QPainterPath shape() const override; 
     void paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) override;
     
-    QVector<QPointF> getTerminals() const; // Helper for alignment/drawing
+    QVector<QPointF> getTerminals() const; 
 
     // Snapping support
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
@@ -93,11 +96,12 @@ signals:
     void mouseMoved(int x, int y);
     void messageLogged(const QString& msg);
     void toolChanged(ComponentType newTool);
+    void componentSelected(SimpleComponent* component); // New Signal
 
 private:
     QPointF snapToGrid(const QPointF& pos);
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
-    bool isWireValid(QGraphicsLineItem* wire); // New validation
+    bool isWireValid(QGraphicsLineItem* wire); 
 
     bool gridVisible = true;
     bool snappingEnabled = true;
@@ -120,6 +124,9 @@ class SchematicEditor : public QWidget {
 public:
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
+
+signals:
+    void itemSelected(SimpleComponent* item); // Bubbled up signal
 
 private slots:
     void onGridToggled(bool checked);

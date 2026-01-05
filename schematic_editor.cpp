@@ -46,6 +46,15 @@ SimpleComponent::SimpleComponent(ComponentType t) : type(t) {
     setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
     setTransformOriginPoint(0, 0); 
     setZValue(2); // Components above wires
+    
+    // Default Properties
+    switch(t) {
+        case ComponentType::Resistor: name = "R?"; value = "1k"; break;
+        case ComponentType::Capacitor: name = "C?"; value = "1uF"; break;
+        case ComponentType::Inductor: name = "L?"; value = "1mH"; break;
+        case ComponentType::VoltageSource: name = "V?"; value = "5V"; break;
+        default: name = "U?"; value = "0"; break;
+    }
 }
 
 QRectF SimpleComponent::boundingRect() const {
@@ -431,6 +440,7 @@ SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {
         }
     });
 
+    connect(scene, &GridScene::componentSelected, this, &SchematicEditor::itemSelected);
 }
 
 QWidget* SchematicEditor::createRibbon() {

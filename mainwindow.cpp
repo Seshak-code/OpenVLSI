@@ -26,6 +26,9 @@ void MainWindow::setupCentralWidget() {
     // For MVP, we stick the SchematicEditor directly here
     schematicEditor = new SchematicEditor(this);
     setCentralWidget(schematicEditor);
+    
+    // Connect Selection
+    connect(schematicEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
 }
 
 void MainWindow::setupDocks() {
@@ -84,7 +87,58 @@ void MainWindow::createPropertiesDock() {
     propertiesTable->setItem(2, 0, new QTableWidgetItem("Tolerance"));
     propertiesTable->setItem(2, 1, new QTableWidgetItem("5%"));
 
+    // Connect editing signal
+    connect(propertiesTable, &QTableWidget::itemChanged, this, &MainWindow::onPropertyEdited);
+
     propertiesDock->setWidget(propertiesTable);
+}
+
+void MainWindow::updateProperties(SimpleComponent* item) {
+    if (isUpdating) return;
+    isUpdating = true;
+    
+    activeComponent = item;
+    propertiesTable->clearContents();
+    
+    if (!item) {
+        propertiesTable->setRowCount(0);
+        isUpdating = false;
+        return;
+    }
+    
+    propertiesTable->setRowCount(3);
+    
+    // 0: Name
+    propertiesTable->setItem(0, 0, new QTableWidgetItem("Name"));
+    propertiesTable->setItem(0, 1, new QTableWidgetItem(item->name));
+    
+    // 1: Value
+    propertiesTable->setItem(1, 0, new QTableWidgetItem("Value"));
+    propertiesTable->setItem(1, 1, new QTableWidgetItem(item->value));
+    
+    // 2: Type (Read only)
+    propertiesTable->setItem(2, 0, new QTableWidgetItem("Type"));
+    QTableWidgetItem* typeItem = new QTableWidgetItem(QString::number((int)item->type)); // Could map to string
+    typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
+    propertiesTable->setItem(2, 1, typeItem);
+    
+    isUpdating = false;
+}
+
+void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
+    if (isUpdating || !activeComponent) return;
+    
+    int row = item->row();
+    int col = item->column();
+    
+    if (col == 1) { // Value column
+        if (row == 0) {
+            activeComponent->name = item->text();
+        } else if (row == 1) {
+            activeComponent->value = item->text();
+        }
+        // Ideally trigger a redraw or netlist update if needed
+    }
 }
 
 void MainWindow::createMessagesDock() {

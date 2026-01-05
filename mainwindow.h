@@ -51,4 +51,12 @@ private:
     void newProject();
     void openProject();
     void runSimulation();
+
+private slots:
+    void updateProperties(SimpleComponent* item);
+    void onPropertyEdited(QTableWidgetItem* item);
+
+private:
+    SimpleComponent* activeComponent = nullptr;
+    bool isUpdating = false; // Prevent feedback loop
 };
