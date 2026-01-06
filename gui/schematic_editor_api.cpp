@@ -105,3 +105,52 @@ bool SchematicEditor::deleteComponent(const QString& id) {
     delete comp;
     return true;
 }
+
+QRectF SchematicEditor::getSceneBounds() {
+    if (!scene) return QRectF(0, 0, 100, 100);
+    
+    QRectF bounds;
+    for (auto* item : scene->items()) {
+        if (dynamic_cast<VisualComponent*>(item) || dynamic_cast<VisualWire*>(item)) {
+            if (bounds.isNull()) {
+                bounds = item->sceneBoundingRect();
+            } else {
+                bounds = bounds.united(item->sceneBoundingRect());
+            }
+        }
+    }
+    
+    if (bounds.isNull()) {
+        return QRectF(0, 0, 100, 100); // Default if empty
+    }
+    return bounds;
+}
+
+bool SchematicEditor::placeComponent(const QString& type, int x, int y, const QString& id, const QString& params) {
+    // Convert to JSON params if provided
+    QJsonObject jsonParams;
+    if (!params.isEmpty()) {
+        // Try to parse as JSON first
+        QJsonDocument doc = QJsonDocument::fromJson(params.toUtf8());
+        if (doc.isObject()) {
+            jsonParams = doc.object();
+        } else {
+            // Treat as simple value string
+            jsonParams["value"] = params;
+        }
+    }
+    
+    QPointF pos(x, y);
+    QString resultId = placeComponent(type, pos, 0.0, jsonParams);
+    
+    // If a specific ID was requested, rename the component
+    if (!id.isEmpty() && !resultId.isEmpty()) {
+        VisualComponent* comp = findComponent(resultId);
+        if (comp) {
+            comp->name = id;
+        }
+    }
+    
+    return !resultId.isEmpty();
+}
+

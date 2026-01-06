@@ -115,6 +115,12 @@ public:
     
     // Helper to generate unique ID
     QString generateUniqueId(ComponentType type);
+    
+    // Get scene bounding box (for auto-placement)
+    QRectF getSceneBounds();
+    
+    // Overloaded placement for AI assistant (string-based)
+    bool placeComponent(const QString& type, int x, int y, const QString& id = "", const QString& params = "");
 
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
