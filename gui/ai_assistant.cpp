@@ -325,7 +325,11 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
             }
             
             bool success = editorContext->placeComponent(type, x, y, id, params);
-            if (success) successCount++;
+            if (success) {
+                successCount++;
+            } else {
+                appendMessage("Copilot", QString("⚠️ Failed to place %1 at (%2, %3). Area might be occupied.").arg(type).arg(x).arg(y));
+            }
         }
         else if (actionType == "deleteComponent") {
             QString id = action["id"].toString();

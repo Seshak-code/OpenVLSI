@@ -41,6 +41,9 @@ public:
     // Returns full circuit state for AI context
     QJsonObject getCircuitState();
     
+    // Check if a region is occupied by components or wires
+    bool isOccupied(const QRectF& rect, QGraphicsItem* exclude = nullptr);
+    
     void placeWirePath(const QVector<QPointF>& points);
 
 protected:
@@ -105,6 +108,9 @@ public:
     
     // Validation
     QStringList runERC();
+    
+    // Geometric Query for AI
+    bool collidesWithAny(int x, int y, int w, int h, const QString& excludeId = "");
     
     // AI API Implementation
     QString placeComponent(const QString& type, QPointF pos, double rotation, const QJsonObject& params);

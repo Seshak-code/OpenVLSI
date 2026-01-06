@@ -127,15 +127,22 @@ QRectF SchematicEditor::getSceneBounds() {
 }
 
 bool SchematicEditor::placeComponent(const QString& type, int x, int y, const QString& id, const QString& params) {
-    // Convert to JSON params if provided
+    // 1. Collision check (Obstruction Awareness)
+    // Assume standard component size 40x40 for check if not specified
+    if (collidesWithAny(x - 20, y - 20, 40, 40)) {
+        qDebug() << "AI Placement Rejected: Collision detected at (" << x << "," << y << ")";
+        // In a real implementation, we would emit a signal captured by the AI Assistant to show a warning
+        return false; 
+    }
+
+    // 2. Convert to JSON params if provided
     QJsonObject jsonParams;
     if (!params.isEmpty()) {
-        // Try to parse as JSON first
+        // ... (rest of the existing logic)
         QJsonDocument doc = QJsonDocument::fromJson(params.toUtf8());
         if (doc.isObject()) {
             jsonParams = doc.object();
         } else {
-            // Treat as simple value string
             jsonParams["value"] = params;
         }
     }
@@ -143,14 +150,19 @@ bool SchematicEditor::placeComponent(const QString& type, int x, int y, const QS
     QPointF pos(x, y);
     QString resultId = placeComponent(type, pos, 0.0, jsonParams);
     
-    // If a specific ID was requested, rename the component
     if (!id.isEmpty() && !resultId.isEmpty()) {
         VisualComponent* comp = findComponent(resultId);
-        if (comp) {
-            comp->name = id;
-        }
+        if (comp) comp->name = id;
     }
     
     return !resultId.isEmpty();
 }
+
+bool SchematicEditor::collidesWithAny(int x, int y, int w, int h, const QString& excludeId) {
+    if (!scene) return false;
+    
+    VisualComponent* excludeComp = excludeId.isEmpty() ? nullptr : findComponent(excludeId);
+    return scene->isOccupied(QRectF(x, y, w, h), excludeComp);
+}
+
 

@@ -908,6 +908,20 @@ QJsonObject GridScene::getCircuitState() {
     return root;
 }
 
+bool GridScene::isOccupied(const QRectF& rect, QGraphicsItem* exclude) {
+    // Search for items in this region
+    QList<QGraphicsItem*> itemsInRect = items(rect, Qt::IntersectsItemBoundingRect);
+    
+    for (auto* item : itemsInRect) {
+        if (item == exclude) continue;
+        
+        // Only count components and wires as "obstructions"
+        if (dynamic_cast<VisualComponent*>(item) || dynamic_cast<VisualWire*>(item)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 QStringList SchematicEditor::runERC() {
     return scene->runERC();
