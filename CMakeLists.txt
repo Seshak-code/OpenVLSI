@@ -68,11 +68,15 @@ if(EMSCRIPTEN)
 endif()
 
 # Find Qt6 (required)
-find_package(Qt6 COMPONENTS Core Widgets REQUIRED)
+find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
+
+# Find OpenMP (Optional, for physics engine performance)
+if(NOT EMSCRIPTEN)
+    find_package(OpenMP)
+endif()
 
 qt_standard_project_setup()
 
-# Create executable
 # Create executable
 qt_add_executable(${PROJECT_NAME} 
     main.cpp
@@ -88,16 +92,16 @@ qt_add_executable(${PROJECT_NAME}
     gui/ai_assistant.h
     gui/component_library.cpp
     gui/component_library.h
-    # AI API Implementations
     gui/schematic_editor_api.cpp
     ai_api/schema_api.cpp
     ai_api/schema_api.h
     ai_api/context_engine.cpp
     ai_api/context_engine.h
     ai_api/simulation_api.h
+    components/circuit.h
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE
+target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/components
@@ -107,6 +111,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Link Qt libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     Qt6::Core 
+    Qt6::Gui
     Qt6::Widgets
 )
 
@@ -119,8 +124,13 @@ endif()
 if(EMSCRIPTEN)
     target_link_options(${PROJECT_NAME} PRIVATE 
         "--bind" 
+        "-sWASM=1"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sEXIT_RUNTIME=1"
         "-sERROR_ON_UNDEFINED_SYMBOLS=0"
     )
+    # Ensure the output filename is predictable for the HTML shell
+    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
 endif()
 
 # macOS specific: Ensure system frameworks like AGL are found

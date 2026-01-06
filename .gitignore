@@ -15,6 +15,7 @@ CMakeUserPresets.json
 # Build directories
 build/
 build_wasm/
+build2/
 out/
 cmake-build-*/
 build-*/
