@@ -1,58 +1,44 @@
-# CMake artifacts
-CMakeLists.txt.user
-CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-Testing/
-Makefile
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-_deps/
-CMakeUserPresets.json
-
-# Build directories
+# Build Directories
 build/
 build_wasm/
-build2/
-out/
 cmake-build-*/
-build-*/
+bin/
+lib/
 
-# Visual Studio
-.vs/
-*.vcxproj.user
+# CMake Artifacts (In-Source Builds)
+CMakeCache.txt
+CMakeFiles/
+Makefile
+*.cmake
+install_manifest.txt
+compile_commands.json
 
-# Visual Studio Code
+# IDE / Editor
 .vscode/
-
-# macOS
+.idea/
 .DS_Store
+*.swp
+*~
+
+# Compiled Executables
 *.app/
-
-# Qt bits
-.qmake.stash
-*.pro.user
-moc_*.cpp
-*.moc
-*.qrc
-
-# Compiled Object files
+*.exe
 *.o
 *.obj
-
-# Executables
+*.dylib
+*.so
+*.a
 HelloWorld
-HelloWorld.js
-HelloWorld.wasm
-qtloader.js
-qtlogo.svg
-server.pid
+test_regression
+test_sensitivity
 
-# Temporary files
-*.tmp
-*~
-*.log
-.DS_Store
+# Qt Auto-Generated
+*_autogen/
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# Python (Artifacts if any python scripts are used)
 __pycache__/
+*.pyc

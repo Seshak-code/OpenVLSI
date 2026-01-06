@@ -16,6 +16,7 @@
 // STAMP FUNCTIONS (Component -> Matrix Entry)
 // ============================================================================
 
+#include "../autodiff/dual.h"
 #include "device_physics.h"
 #include "stamps.h"
 
@@ -409,7 +410,7 @@ public:
       double v_d = v_anode - v_cathode;
 
       // Use exact physics kernel (no clamping for residual check)
-      DiodeParams params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
+      DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
                             d.thermalVoltage_V_T_V};
       double i_d = diode_current(v_d, params);
 
@@ -468,7 +469,7 @@ public:
         // Diodes
         for (const auto &d : block.diodes) {
           double v_d = getV(mapNode(d.anode)) - getV(mapNode(d.cathode));
-          DiodeParams params = {d.saturationCurrent_I_S_A,
+          DiodeParams<double> params = {d.saturationCurrent_I_S_A,
                                 d.emissionCoefficient_N,
                                 d.thermalVoltage_V_T_V};
           double i_d = diode_current(v_d, params);
@@ -516,6 +517,113 @@ public:
       max_err = std::max(max_err, std::abs(val));
     }
     return max_err;
+  }
+
+  // Phase 2.5: Differentiable Physics
+  enum class ComponentType { RESISTOR, CAPACITOR, DIODE, MOSFET };
+
+  /**
+   * calculateSensitivity
+   * Computes the gradient of node voltages with respect to a specific component parameter (dV/dp).
+   * Solves: J * (dV/dp) = - (dF/dp)
+   */
+  std::vector<double> calculateSensitivity(TensorNetlist &netlist, 
+                                           ComponentType type, 
+                                           int index, 
+                                           const std::string& paramName, 
+                                           const std::vector<double>& v_converged) {
+      if (v_converged.empty()) return {};
+
+      // 1. Re-build Jacobian (J) at convergence point
+      // We assume standard stamping (double params) gives us the correct J = dF/dV
+      scheduler.schedule(netlist);
+      matrixBuilder.clear();
+      rhsVector.assign(netlist.numGlobalNodes, 0.0);
+      stampAllElements(netlist, 0.0, v_converged); // h=0 for DC sensitivity
+      addDiagonalConditioning(netlist.numGlobalNodes);
+      Csr_matrix J = matrixBuilder.createCsr(); /* Explicitly J */
+      
+      // 2. Build RHS vector b = - dF/dp
+      // This vector is zero everywhere except at the nodes of the target component
+      std::vector<double> b_sens(netlist.numGlobalNodes, 0.0);
+      
+      auto getV = [&](int n) { return (n>0 && n<=(int)v_converged.size()) ? v_converged[n-1] : 0.0; };
+
+      try {
+          if (type == ComponentType::RESISTOR) {
+              if (index < 0 || index >= (int)netlist.globalBlock.resistors.size()) return {};
+              const auto& r = netlist.globalBlock.resistors[index];
+              
+              // Only 'resistance' is supported for now
+              if (paramName != "resistance" && paramName != "R") return {};
+              
+              // I_leaving_n1 = (V1 - V2) / R
+              // dI/dR = -(V1 - V2) / R^2
+              double v_diff = getV(r.nodeTerminal1) - getV(r.nodeTerminal2);
+              double R = r.resistance_ohms;
+              double didp = -v_diff / (R * R);
+              
+              // F_n1 += I_leaving. dF_n1/dp = dI/dp
+              // b[n1] = -dF/dp = -dI/dp
+              if (r.nodeTerminal1 > 0) b_sens[r.nodeTerminal1-1] -= didp;
+              if (r.nodeTerminal2 > 0) b_sens[r.nodeTerminal2-1] += didp; // I_leaving_n2 is -I -> d(-I)/dp = -dI/dp -> b = +dI/dp
+          } 
+          else if (type == ComponentType::DIODE) {
+              if (index < 0 || index >= (int)netlist.globalBlock.diodes.size()) return {};
+              const auto& d = netlist.globalBlock.diodes[index];
+              
+              double v_diff = getV(d.anode) - getV(d.cathode);
+              
+              // Create DUAL parameters
+              // Example: paramName="Is" -> seed Is with grad=1.0
+              Dual<double> Is(d.saturationCurrent_I_S_A, (paramName == "Is" ? 1.0 : 0.0));
+              Dual<double> N(d.emissionCoefficient_N, (paramName == "N" ? 1.0 : 0.0));
+              Dual<double> Vt(d.thermalVoltage_V_T_V, (paramName == "Vt" ? 1.0 : 0.0));
+              
+              DiodeParams<Dual<double>> p_dual = {Is, N, Vt};
+              
+              // Evaluate physics with Dual params and Constant voltage
+              // v_diff is treated as constant (grad=0) for partial dF/dp
+              Dual<double> i_d = diode_current_clamped(Dual<double>(v_diff), p_dual);
+              
+              double didp = i_d.grad; // This is dI_anode / dp
+              
+              if (d.anode > 0) b_sens[d.anode-1] -= didp;
+              if (d.cathode > 0) b_sens[d.cathode-1] += didp;
+          }
+           else if (type == ComponentType::MOSFET) {
+              if (index < 0 || index >= (int)netlist.globalBlock.mosfets.size()) return {};
+              const auto& m = netlist.globalBlock.mosfets[index];
+
+              double vgs = getV(m.gate) - getV(m.source);
+              double vds = getV(m.drain) - getV(m.source);
+              
+              MosfetParams<Dual<double>> p;
+              // Hardcoded model params for now, ideally fetch from model library
+              // But 'W' and 'L' are instance params
+              p.Kp = Dual<double>(200e-6); 
+              p.Vth = Dual<double>(0.7, (paramName == "Vth" ? 1.0 : 0.0));
+              p.lambda = Dual<double>(0.02);
+              p.W = Dual<double>(m.channelWidth_m, (paramName == "W" ? 1.0 : 0.0));
+              p.L = Dual<double>(m.channelLength_m, (paramName == "L" ? 1.0 : 0.0));
+              
+              Dual<double> ids = mosfet_ids(Dual<double>(vgs), Dual<double>(vds), p);
+              double didp = ids.grad; // dIds / dp
+              
+              // I_drain leaves (positive in F_drain)
+              if (m.drain > 0) b_sens[m.drain-1] -= didp;
+              // I_source enters (negative in F_source)
+              if (m.source > 0) b_sens[m.source-1] += didp;
+           }
+      } catch(...) {
+          return {};
+      }
+
+      // 3. Solve J * x = b
+      // Reuse solvePCG (it needs Csr_matrix)
+      // Note: solvePCG args: A, b, tol...
+      SolverResult res = solvePCG(J, b_sens, 1e-6);
+      return res.solution;
   }
 
   // Phase 2: Numerical Integration Strategy
@@ -581,6 +689,7 @@ public:
    * stampBlockNonLinear
    * Linearizes and stamps non-linear elements (Diodes, MOSFETs) for a specific
    * block instance.
+   * Uses Forward-Mode Automatic Differentiation (AD) via Dual<double>.
    */
   void stampBlockNonLinear(const TensorBlock &block,
                            const std::function<int(int)> &mapNode,
@@ -597,13 +706,23 @@ public:
       double v_c = getV(mapNode(d.cathode));
       double v_diff = v_a - v_c;
 
-      DiodeParams params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
+      // AD: Seed derivative wrt Vd (v_diff)
+      Dual<double> v_diff_dual(v_diff, 1.0);
+
+      DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
                             d.thermalVoltage_V_T_V};
-      double i_diode = diode_current_clamped(v_diff, params);
-      double g_eq = diode_conductance_clamped(v_diff, params);
-      double i_eq = i_diode - g_eq * v_diff;
+      
+      // Auto-differentiate: returns { I, dI/dV }
+      Dual<double> i_diode = diode_current_clamped(v_diff_dual, params);
+      
+      double g_eq = i_diode.grad;
+      double i_eq = i_diode.val - g_eq * v_diff;
 
       // Stamp conductance (stamps.h helper)
+      // Note: stampResistor takes R, so pass 1/G
+      // M4 Safety: Guard against g_eq <= 0 (though diode_conductance is > 0)
+      if (g_eq < 1e-15) g_eq = 1e-15; 
+      
       stampResistor(mapNode(d.anode), mapNode(d.cathode), 1.0 / g_eq,
                     matrixBuilder);
       // Stamp current
@@ -619,22 +738,30 @@ public:
       double v_d = getV(mapNode(m.drain));
       double v_g = getV(mapNode(m.gate));
       double v_s = getV(mapNode(m.source));
-      double v_b = getV(mapNode(m.body));
+      // double v_b = getV(mapNode(m.body)); // Level 1 ignores body effect for now
 
       double vgs = v_g - v_s;
       double vds = v_d - v_s;
 
       // Level 1 Model
-      MosfetParams p;
+      MosfetParams<double> p;
       p.Kp = 200e-6;
       p.Vth = 0.7;
       p.lambda = 0.02;
       p.W = m.channelWidth_m;
       p.L = m.channelLength_m;
 
-      double gm = mosfet_gm(vgs, vds, p);
-      double gds = mosfet_gds(vgs, vds, p);
-      double ids = mosfet_ids(vgs, vds, p);
+      // AD Pass 1: Transconductance (gm = dIds/dVgs)
+      // vgs seeded with 1.0, vds with 0.0
+      Dual<double> ids_vgs = mosfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
+      double gm = ids_vgs.grad;
+      
+      // AD Pass 2: Output Conductance (gds = dIds/dVds)
+      // vgs seeded with 0.0, vds with 1.0
+      Dual<double> ids_vds = mosfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p);
+      double gds = ids_vds.grad;
+      
+      double ids = ids_vgs.val; // Value is same for both
 
       // Companion model current: Ieq = Ids - gm*Vgs - gds*Vds
       double ieq = ids - gm * vgs - gds * vds;
@@ -692,6 +819,7 @@ public:
    * stampNonLinearDevices
    * Iterates through the netlist and linearizes non-linear components (like
    * diodes) based on the current voltage guess.
+   * AD-Enabled.
    */
   void stampNonLinearDevices(TensorNetlist &netlist,
                              const std::vector<double> &voltageEstimate) {
@@ -702,15 +830,21 @@ public:
           (diode.cathode == 0) ? 0.0 : voltageEstimate[diode.cathode - 1];
       double v_diff = v_a - v_c;
 
-      // Use clamped physics kernels for NR stability
-      DiodeParams params = {diode.saturationCurrent_I_S_A,
+      // AD: Seed derivative wrt Vd
+      Dual<double> v_diff_dual(v_diff, 1.0);
+
+      DiodeParams<double> params = {diode.saturationCurrent_I_S_A,
                             diode.emissionCoefficient_N,
                             diode.thermalVoltage_V_T_V};
-      double i_diode = diode_current_clamped(v_diff, params);
-      double conductance_eq = diode_conductance_clamped(v_diff, params);
+      
+      // Auto-differentiate
+      Dual<double> i_diode = diode_current_clamped(v_diff_dual, params);
+      
+      double conductance_eq = i_diode.grad;
+      double current_eq = i_diode.val - conductance_eq * v_diff;
 
-      // Equivalent current source for companion model
-      double current_eq = i_diode - conductance_eq * v_diff;
+      // M4 Safety
+      if (conductance_eq < 1e-15) conductance_eq = 1e-15;
 
       // Stamp the linearized conductance into the matrix
       if (diode.anode != 0 && diode.cathode != 0) {

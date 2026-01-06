@@ -174,3 +174,12 @@ target_include_directories(test_regression PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components
 )
 target_compile_features(test_regression PUBLIC cxx_std_17)
+
+# Sensitivity Analysis Test (AD Gradient Check)
+add_executable(test_sensitivity autodiff/test_sensitivity.cpp)
+target_include_directories(test_sensitivity PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
+)
+target_compile_features(test_sensitivity PUBLIC cxx_std_17)

@@ -9,6 +9,7 @@
  * - Stateless (no side effects)
  * - Inline (for CPU performance / GPU transpilation)
  * - Bit-accurate (no approximations unless specified)
+ * - Templated (for Automatic Differentiation / Dual Numbers)
  *
  * These functions can be called from:
  * 1. The MNA stamping logic (to linearize devices for NR)
@@ -20,66 +21,67 @@
 // DIODE (PN JUNCTION) PHYSICS
 // ============================================================================
 
+template <typename T>
 struct DiodeParams 
 {
-    double Is;  // Saturation Current [A]
-    double N;   // Emission Coefficient (1.0 for ideal)
-    double Vt;  // Thermal Voltage [V] (kT/q ≈ 25.85mV @ 300K)
+    T Is;  // Saturation Current [A]
+    T N;   // Emission Coefficient (1.0 for ideal)
+    T Vt;  // Thermal Voltage [V] (kT/q ≈ 25.85mV @ 300K)
 };
 
 /**
  * diode_current
  * Exact Shockley Equation: I = Is * (exp(Vd / (N*Vt)) - 1)
  */
-inline double diode_current(double vd, const DiodeParams& p) 
+template <typename T, typename P>
+inline T diode_current(T vd, const DiodeParams<P>& p) 
 {
-    double n_vt = p.N * p.Vt;
-    return p.Is * (std::exp(vd / n_vt) - 1.0);
+    // Note: Implicit type promotion via operator overloads in dual.h
+    return p.Is * (std::exp(vd / (p.N * p.Vt)) - 1.0);
 }
 
 /**
  * diode_current_clamped
  * Safe version for NR iteration. Clamps exponent to prevent inf/nan.
  */
-inline double diode_current_clamped(double vd, const DiodeParams& p, double max_arg = 40.0) 
+template <typename T, typename P>
+inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 40.0) 
 {
-    double n_vt = p.N * p.Vt;
-    double arg = std::min(vd / n_vt, max_arg);
+    // NASA Optimization: Keep params as scalars (double) to avoid Dual overhead
+    auto n_vt = p.N * p.Vt;
+    T arg = vd / n_vt;
+    
+    // Linear Continuation to avoid zero-gradient (singularity) and overflow
+    // If arg > max_arg, assume linear slope matching the derivative at max_arg.
+    if (arg > max_arg) {
+        // I(max) = Is * (exp(max) - 1)
+        // G(max) = (Is / n_vt) * exp(max)
+        double exp_max = std::exp(max_arg);
+        auto i_max = p.Is * (exp_max - 1.0);
+        auto g_max = (p.Is / n_vt) * exp_max;
+        
+        T delta = vd - (n_vt * max_arg);
+        return i_max + delta * g_max;
+    }
+    
     return p.Is * (std::exp(arg) - 1.0);
 }
 
-/**
- * diode_conductance
- * Jacobian for NR: dI/dV = (Is / (N*Vt)) * exp(Vd / (N*Vt))
- */
-inline double diode_conductance(double vd, const DiodeParams& p) 
-{
-    double n_vt = p.N * p.Vt;
-    return (p.Is / n_vt) * std::exp(vd / n_vt);
-}
-
-/**
- * diode_conductance_clamped
- * Safe version for NR iteration.
- */
-inline double diode_conductance_clamped(double vd, const DiodeParams& p, double max_arg = 40.0) 
-{
-    double n_vt = p.N * p.Vt;
-    double arg = std::min(vd / n_vt, max_arg);
-    return (p.Is / n_vt) * std::exp(arg);
-}
+// NOTE: Manual derivative functions (conductance) removed.
+// Use Dual<double> with diode_current to get {I, G}.
 
 // ============================================================================
 // MOSFET (LEVEL 1 SHICHMAN-HODGES) PHYSICS
 // ============================================================================
 
+template <typename T>
 struct MosfetParams 
 {
-    double Kp;     // Process transconductance [A/V^2]
-    double Vth;    // Threshold Voltage [V]
-    double lambda; // Channel Length Modulation [1/V]
-    double W;      // Channel Width [m]
-    double L;      // Channel Length [m]
+    T Kp;     // Process transconductance [A/V^2]
+    T Vth;    // Threshold Voltage [V]
+    T lambda; // Channel Length Modulation [1/V]
+    T W;      // Channel Width [m]
+    T L;      // Channel Length [m]
 };
 
 enum class MosfetRegion { CUTOFF, LINEAR, SATURATION };
@@ -87,10 +89,12 @@ enum class MosfetRegion { CUTOFF, LINEAR, SATURATION };
 /**
  * mosfet_region
  * Determines operating region from terminal voltages. (NMOS)
+ * For Dual types, this uses the primal value for comparisons.
  */
-inline MosfetRegion mosfet_region(double vgs, double vds, const MosfetParams& p) 
+template <typename T, typename P>
+inline MosfetRegion mosfet_region(T vgs, T vds, const MosfetParams<P>& p) 
 {
-    double vov = vgs - p.Vth;
+    T vov = vgs - p.Vth;
     if (vov <= 0.0) return MosfetRegion::CUTOFF;
     if (vds < vov)  return MosfetRegion::LINEAR;
     return MosfetRegion::SATURATION;
@@ -100,14 +104,19 @@ inline MosfetRegion mosfet_region(double vgs, double vds, const MosfetParams& p)
  * mosfet_ids
  * Level 1 Drain-Source Current (NMOS).
  */
-inline double mosfet_ids(double vgs, double vds, const MosfetParams& p) 
+template <typename T, typename P>
+inline T mosfet_ids(T vgs, T vds, const MosfetParams<P>& p) 
 {
-    double K = 0.5 * p.Kp * (p.W / p.L);
-    double vov = vgs - p.Vth;
+    T K = 0.5 * p.Kp * (p.W / p.L);
+    T vov = vgs - p.Vth;
 
     if (vov <= 0.0) 
         return 0.0; // Cutoff
 
+    // We can just rely on vds < vov check, or call mosfet_region.
+    // Re-evaluating condition for branchless-ish optimization if T is SIMD?
+    // For scalar/dual, straightforward if-else is fine.
+    
     if (vds < vov) 
     {
         // Linear Region: Ids = K * (2*Vov*Vds - Vds^2)
@@ -120,34 +129,4 @@ inline double mosfet_ids(double vgs, double vds, const MosfetParams& p)
     }
 }
 
-/**
- * mosfet_gm
- * Transconductance: dIds/dVgs
- */
-inline double mosfet_gm(double vgs, double vds, const MosfetParams& p)
-{
-    double K = 0.5 * p.Kp * (p.W / p.L);
-    double vov = vgs - p.Vth;
-    if (vov <= 0.0) return 0.0;
-
-    if (vds < vov) 
-        return 2.0 * K * vds; // Linear
-    else
-        return 2.0 * K * vov * (1.0 + p.lambda * vds); // Saturation
-}
-
-/**
- * mosfet_gds
- * Output Conductance: dIds/dVds
- */
-inline double mosfet_gds(double vgs, double vds, const MosfetParams& p)
-{
-    double K = 0.5 * p.Kp * (p.W / p.L);
-    double vov = vgs - p.Vth;
-    if (vov <= 0.0) return 0.0;
-
-    if (vds < vov)
-        return 2.0 * K * (vov - vds); // Linear
-    else
-        return K * vov * vov * p.lambda; // Saturation (CLM term)
-}
+// NOTE: Manual gm/gds functions removed. Use Dual<double>.
