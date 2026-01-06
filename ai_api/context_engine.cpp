@@ -1,8 +1,11 @@
 
 #include "context_engine.h"
 #include "schema_api.h"
+#include "mainwindow.h"
+#include "schematic_editor.h"
 #include <QJsonArray>
 #include <QStringList>
+#include <QApplication>
 
 namespace AIAPI {
 
@@ -25,13 +28,19 @@ QString ContextEngine::generateSystemPrompt() {
         prompt += describeComponent(val.toObject()) + "\n";
     }
     
-    // 2. Connectivity (Simplified)
-    // Ideally we would run generateNetlist() to get distinct nodes, 
-    // but here we can just list wire endpoints or rely on the components' spatial location if connectivity info is missing in JSON
-    // The current getCircuitState returns coords.
-    // Future improvement: Include "Node ID" in the component JSON by running the netlister before export.
+    // 2. Spatial Relationships (Phase 1.3)
+    prompt += "\nSPATIAL LAYOUT:\n";
+    prompt += getSpatialContext() + "\n";
     
-    prompt += "\nInferred Topology: " + inferTopologyIntent(state) + "\n";
+    // 3. Inferred Topology
+    prompt += "Inferred Topology: " + inferTopologyIntent(state) + "\n";
+    
+    // 4. Relational Placement Instructions
+    prompt += "\nPLACEMENT GUIDE:\n";
+    prompt += "- Use 'placeNextTo(type, refId, direction)' for relative placement.\n";
+    prompt += "- Directions: Right, Left, Above, Below\n";
+    prompt += "- Canvas uses a 20px grid. Bounding boxes are ~60x60.\n";
+    prompt += "- If a placement fails, the area is likely occupied.\n";
     
     return prompt;
 }
@@ -84,6 +93,24 @@ QString ContextEngine::inferTopologyIntent(const QJsonObject& state) {
     if (nmosCount == pmosCount && nmosCount > 0) intent = "CMOS Logic or Transmission Gate.";
     
     return intent;
+}
+
+QString ContextEngine::getSpatialContext() {
+    // Delegate to SchematicEditor via schema_api
+    // This gets the spatial relationships from the editor
+    SchematicEditor* editor = nullptr;
+    
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+        if (MainWindow* mw = qobject_cast<MainWindow*>(widget)) {
+            editor = mw->getSchematicEditor();
+            break;
+        }
+    }
+    
+    if (editor) {
+        return editor->getSpatialContext();
+    }
+    return "Spatial context unavailable.";
 }
 
 } // namespace AIAPI

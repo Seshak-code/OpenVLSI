@@ -48,17 +48,12 @@ QString SchematicEditor::generateUniqueId(ComponentType type) {
 }
 
 QString SchematicEditor::placeComponent(const QString& typeStr, QPointF pos, double rotation, const QJsonObject& params) {
-    ComponentType type = ComponentType::Select;
-    if (typeStr == "Resistor") type = ComponentType::Resistor;
-    else if (typeStr == "Capacitor") type = ComponentType::Capacitor;
-    else if (typeStr == "Inductor") type = ComponentType::Inductor;
-    else if (typeStr == "VoltageSource" || typeStr == "Source") type = ComponentType::VoltageSource;
-    else if (typeStr == "Ground" || typeStr == "GND") type = ComponentType::Ground;
-    else if (typeStr == "Diode") type = ComponentType::Diode;
-    else if (typeStr == "Mosfet" || typeStr == "NMOS" || typeStr == "PMOS") type = ComponentType::Mosfet;
-    else if (typeStr == "Bjt" || typeStr == "NPN" || typeStr == "PNP") type = ComponentType::Bjt;
+    ComponentType type = stringToComponentType(typeStr);
     
-    if (type == ComponentType::Select) return "";
+    if (type == ComponentType::Select || type == ComponentType::Wire) {
+        qDebug() << "placeComponent: Unknown type:" << typeStr;
+        return "";
+    }
     
     VisualComponent* comp = new VisualComponent(type);
     
@@ -165,4 +160,262 @@ bool SchematicEditor::collidesWithAny(int x, int y, int w, int h, const QString&
     return scene->isOccupied(QRectF(x, y, w, h), excludeComp);
 }
 
+// ============================================================================
+// PHASE 1.3: RELATIONAL POSITIONING API
+// ============================================================================
+
+bool SchematicEditor::placeNextTo(const QString& type, const QString& referenceId, 
+                                   RelativeDirection dir, int margin, const QString& params) {
+    VisualComponent* ref = findComponent(referenceId);
+    if (!ref) {
+        qDebug() << "placeNextTo: Reference component not found:" << referenceId;
+        return false;
+    }
+    
+    QRectF refBounds = ref->sceneBoundingRect();
+    int x = 0, y = 0;
+    
+    switch (dir) {
+        case RelativeDirection::Right:
+            x = static_cast<int>(refBounds.right()) + margin;
+            y = static_cast<int>(refBounds.center().y());
+            break;
+        case RelativeDirection::Left:
+            x = static_cast<int>(refBounds.left()) - margin;
+            y = static_cast<int>(refBounds.center().y());
+            break;
+        case RelativeDirection::Below:
+            x = static_cast<int>(refBounds.center().x());
+            y = static_cast<int>(refBounds.bottom()) + margin;
+            break;
+        case RelativeDirection::Above:
+            x = static_cast<int>(refBounds.center().x());
+            y = static_cast<int>(refBounds.top()) - margin;
+            break;
+    }
+    
+    // Snap to grid
+    x = (x / 20) * 20;
+    y = (y / 20) * 20;
+    
+    return placeComponent(type, x, y, "", params);
+}
+
+bool SchematicEditor::alignWith(const QString& targetId, const QString& referenceId, bool horizontal) {
+    VisualComponent* target = findComponent(targetId);
+    VisualComponent* ref = findComponent(referenceId);
+    
+    if (!target || !ref) {
+        qDebug() << "alignWith: Component not found";
+        return false;
+    }
+    
+    QPointF refCenter = ref->sceneBoundingRect().center();
+    QPointF targetPos = target->pos();
+    
+    if (horizontal) {
+        // Align horizontal centers (same Y)
+        targetPos.setY(refCenter.y());
+    } else {
+        // Align vertical centers (same X)
+        targetPos.setX(refCenter.x());
+    }
+    
+    // Snap to grid
+    targetPos.setX(std::round(targetPos.x() / 20) * 20);
+    targetPos.setY(std::round(targetPos.y() / 20) * 20);
+    
+    target->setPos(targetPos);
+    return true;
+}
+
+QPoint SchematicEditor::findClearSpace(int width, int height) {
+    if (!scene) return QPoint(100, 100);
+    
+    QRectF bounds = getSceneBounds();
+    
+    // Strategy: Scan right edge of existing circuit, then scan downward
+    int startX = static_cast<int>(bounds.right()) + 60;
+    int startY = static_cast<int>(bounds.top());
+    
+    // Grid-align
+    startX = ((startX + 19) / 20) * 20;
+    startY = (startY / 20) * 20;
+    
+    // Scan for clear space in a grid pattern
+    for (int y = startY; y < startY + 500; y += 20) {
+        for (int x = startX; x < startX + 500; x += 20) {
+            if (!collidesWithAny(x - width/2, y - height/2, width, height)) {
+                return QPoint(x, y);
+            }
+        }
+    }
+    
+    // Fallback: far right
+    return QPoint(startX + 100, startY);
+}
+
+QString SchematicEditor::getSpatialContext() {
+    if (!scene) return "No scene available.";
+    
+    QString context;
+    QList<VisualComponent*> components;
+    QList<VisualWire*> wires;
+    
+    // Collect all components and wires
+    for (auto* item : scene->items()) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            components.append(c);
+        } else if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            wires.append(w);
+        }
+    }
+    
+    if (components.isEmpty() && wires.isEmpty()) {
+        return "The canvas is empty.";
+    }
+    
+    // Sort components by X position (left to right)
+    std::sort(components.begin(), components.end(), [](VisualComponent* a, VisualComponent* b) {
+        return a->pos().x() < b->pos().x();
+    });
+    
+    context = QString("COMPONENTS: %1 | WIRES: %2\n\n").arg(components.size()).arg(wires.size());
+    
+    // ========== COMPONENT SECTION ==========
+    context += "COMPONENT LAYOUT:\n";
+    for (int i = 0; i < components.size(); ++i) {
+        VisualComponent* c = components[i];
+        QString desc = QString("  %1 (%2) at (%3, %4)")
+            .arg(c->name)
+            .arg(componentTypeToString(c->type))
+            .arg(static_cast<int>(c->pos().x()))
+            .arg(static_cast<int>(c->pos().y()));
+        
+        // Find neighbors
+        QStringList neighbors;
+        for (int j = 0; j < components.size(); ++j) {
+            if (i == j) continue;
+            VisualComponent* other = components[j];
+            
+            double dx = other->pos().x() - c->pos().x();
+            double dy = other->pos().y() - c->pos().y();
+            double dist = std::sqrt(dx*dx + dy*dy);
+            
+            if (dist < 150) {
+                QString rel;
+                if (std::abs(dx) > std::abs(dy)) {
+                    rel = (dx > 0) ? "→" : "←";
+                } else {
+                    rel = (dy > 0) ? "↓" : "↑";
+                }
+                neighbors << QString("%1%2").arg(rel).arg(other->name);
+            }
+        }
+        
+        if (!neighbors.isEmpty()) {
+            desc += " [" + neighbors.join(" ") + "]";
+        }
+        
+        context += desc + "\n";
+    }
+    
+    // ========== WIRE/CONNECTIVITY SECTION ==========
+    if (!wires.isEmpty()) {
+        context += "\nCONNECTIVITY:\n";
+        
+        // Group wires by net name
+        QMap<QString, QList<VisualWire*>> netGroups;
+        for (auto* w : wires) {
+            QString netName = w->getName().isEmpty() ? "Unnamed" : w->getName();
+            netGroups[netName].append(w);
+        }
+        
+        for (auto it = netGroups.begin(); it != netGroups.end(); ++it) {
+            QString netName = it.key();
+            QList<VisualWire*>& netWires = it.value();
+            
+            // Find components connected to this net
+            QStringList connectedComponents;
+            for (auto* w : netWires) {
+                QLineF line = w->line();
+                QPointF p1 = w->mapToScene(line.p1());
+                QPointF p2 = w->mapToScene(line.p2());
+                
+                for (auto* c : components) {
+                    QVector<QPointF> terminals = c->getTerminals();
+                    for (const QPointF& term : terminals) {
+                        QPointF sceneTerm = c->mapToScene(term);
+                        double d1 = QLineF(sceneTerm, p1).length();
+                        double d2 = QLineF(sceneTerm, p2).length();
+                        
+                        if (d1 < 15 || d2 < 15) { // Within snap distance
+                            if (!connectedComponents.contains(c->name)) {
+                                connectedComponents.append(c->name);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (connectedComponents.size() >= 2) {
+                context += QString("  Net '%1': %2\n")
+                    .arg(netName)
+                    .arg(connectedComponents.join(" ↔ "));
+            } else if (connectedComponents.size() == 1) {
+                context += QString("  Net '%1': %2 (open-ended)\n")
+                    .arg(netName)
+                    .arg(connectedComponents.first());
+            }
+        }
+    }
+    
+    // ========== FLOATING TERMINALS SECTION ==========
+    context += "\nTERMINAL STATUS:\n";
+    int floatingCount = 0;
+    for (auto* c : components) {
+        QVector<QPointF> terminals = c->getTerminals();
+        QStringList floatingTerms;
+        
+        for (int t = 0; t < terminals.size(); ++t) {
+            QPointF sceneTerm = c->mapToScene(terminals[t]);
+            bool connected = false;
+            
+            for (auto* w : wires) {
+                QLineF line = w->line();
+                QPointF p1 = w->mapToScene(line.p1());
+                QPointF p2 = w->mapToScene(line.p2());
+                
+                double d1 = QLineF(sceneTerm, p1).length();
+                double d2 = QLineF(sceneTerm, p2).length();
+                
+                if (d1 < 15 || d2 < 15) {
+                    connected = true;
+                    break;
+                }
+            }
+            
+            if (!connected) {
+                floatingTerms << QString("T%1").arg(t + 1);
+                floatingCount++;
+            }
+        }
+        
+        if (!floatingTerms.isEmpty()) {
+            context += QString("  ⚠ %1: %2 floating\n")
+                .arg(c->name)
+                .arg(floatingTerms.join(", "));
+        }
+    }
+    
+    if (floatingCount == 0 && !components.isEmpty()) {
+        context += "  ✓ All terminals connected.\n";
+    }
+    
+    // ========== CLEAR SPACE HINT ==========
+    QPoint clearSpace = findClearSpace(60, 60);
+    context += QString("\nNEXT CLEAR SPACE: (%1, %2)\n").arg(clearSpace.x()).arg(clearSpace.y());
+    
+    return context;
+}
 

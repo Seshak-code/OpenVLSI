@@ -44,9 +44,11 @@ void ComponentLibrary::populateLists() {
     addComponentItem(activeList, "Diode", "diode.png", ComponentType::Diode);
     addComponentItem(activeList, "N-MOSFET", "nmos.png", ComponentType::Mosfet);
     addComponentItem(activeList, "NPN BJT", "bjt.png", ComponentType::Bjt);
+    addComponentItem(activeList, "Schottky Diode", "schottky.png", ComponentType::SchottkyDiode);
 
     // Sources
     addComponentItem(sourcesList, "Voltage Source", "vsource.png", ComponentType::VoltageSource);
+    addComponentItem(sourcesList, "Current Source", "isource.png", ComponentType::CurrentSource);
 }
 
 void ComponentLibrary::addComponentItem(QListWidget* list, const QString& name, const QString& iconName, ComponentType type) {

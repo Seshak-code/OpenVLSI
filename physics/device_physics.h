@@ -129,4 +129,167 @@ inline T mosfet_ids(T vgs, T vds, const MosfetParams<P>& p)
     }
 }
 
-// NOTE: Manual gm/gds functions removed. Use Dual<double>.
+// ============================================================================
+// BJT (EBERS-MOLL / GUMMEL-POON L1) PHYSICS
+// ============================================================================
+
+template <typename T>
+struct BJTParams 
+{
+    T Is;     // Transport Saturation Current [A]
+    T BetaF;  // Forward Current Gain
+    T BetaR;  // Reverse Current Gain
+    T Vt;     // Thermal Voltage [V]
+};
+
+struct BJTCurrents {
+    double Ic; // Collector Current
+    double Ib; // Base Current
+    double Ie; // Emitter Current
+    
+    // Gradients for linearization (g_ij = dI_i / dV_j)
+    // Indexes: C=0, B=1, E=2
+    double g_cc, g_cb, g_ce; 
+    double g_bc, g_bb, g_be;
+    double g_ec, g_eb, g_ee;
+};
+
+/**
+ * bjt_ebers_moll
+ * Computes currents and conductance matrix for a BJT.
+ * This function returns a struct with values (for RHS) and gradients (for Matrix).
+ * Currently implemented using Scalar Double arithmetic for optimal performance 
+ * (manual derivative derivation), but can be templated if needed.
+ */
+inline BJTCurrents bjt_ebers_moll(double v_c, double v_b, double v_e, bool isNPN, const BJTParams<double>& p)
+{
+    // 1. Determine local voltages relative to Base (Vbc, Vbe)
+    // NPN: Vbe = Vb - Ve, Vbc = Vb - Vc
+    // PNP: Vbe = Ve - Vb, Vbc = Vc - Vb
+    
+    double v_be, v_bc;
+    double sign = isNPN ? 1.0 : -1.0;
+
+    v_be = sign * (v_b - v_e);
+    v_bc = sign * (v_b - v_c);
+
+    // 2. Compute Diode Currents (Injection currents)
+    // I_F = Is * (exp(Vbe/Vt) - 1)
+    // I_R = Is * (exp(Vbc/Vt) - 1)
+    
+    // Limits to avoid overflow
+    auto safe_exp = [&](double v) { 
+        double arg = v / p.Vt;
+        if (arg > 40.0) arg = 40.0; // Clamp
+        return std::exp(arg);
+    };
+
+    double exp_be = safe_exp(v_be);
+    double exp_bc = safe_exp(v_bc);
+
+    double i_f = p.Is * (exp_be - 1.0);
+    double i_r = p.Is * (exp_bc - 1.0);
+
+    // Conductances of the internal diodes (g = dI/dV)
+    double g_f = (p.Is / p.Vt) * exp_be;
+    double g_r = (p.Is / p.Vt) * exp_bc;
+
+    // 3. Terminal Currents (Ebers-Moll)
+    // I_C = I_F - I_R/alpha_R  =>  I_F - I_R * (1 + 1/BetaR)
+    // I_E = - (I_F/alpha_F - I_R) => - (I_F * (1 + 1/BetaF) - I_R)
+    // I_B = (I_F/beta_F) + (I_R/beta_R)
+    
+    // Using common form:
+    // I_CT = I_F - I_R (Transport Current)
+    // I_C = I_CT - I_R/BetaR
+    // I_B = I_F/BetaF + I_R/BetaR
+    // I_E = -I_C - I_B
+    
+    double invBetaF = 1.0 / p.BetaF;
+    double invBetaR = 1.0 / p.BetaR;
+    
+    double i_ct = i_f - i_r;
+    double i_base_component_f = i_f * invBetaF;
+    double i_base_component_r = i_r * invBetaR;
+
+    double ic_local = i_ct - i_base_component_r;
+    double ib_local = i_base_component_f + i_base_component_r;
+    double ie_local = -ic_local - ib_local;
+    
+    // 4. Derivatives (Conductances)
+    // We need dIx / dV_C, dIx / dV_B, dIx / dV_E
+    // Chain rule: dI/dV_x = (dI/dVbe * dVbe/dVx) + (dI/dVbc * dVbc/dVx)
+    
+    // NPN partials:
+    // dVbe/dVb = 1, dVbe/dVe = -1, dVbe/dVc = 0
+    // dVbc/dVb = 1, dVbc/dVe = 0,  dVbc/dVc = -1
+    
+    double dIf_dVbe = g_f;
+    double dIr_dVbc = g_r;
+    
+    double dIct_dVbe = dIf_dVbe;
+    double dIct_dVbc = -dIr_dVbc;
+    
+    double dIbf_dVbe = dIf_dVbe * invBetaF; // Base current fwd component
+    double dIbr_dVbc = dIr_dVbc * invBetaR; // Base current rev component
+    
+    // Local derivatives (w.r.t internal Vbe, Vbc)
+    // Ic = Ict - Ir/BetaR
+    double dIc_dVbe = dIct_dVbe;       // = g_f
+    double dIc_dVbc = dIct_dVbc - dIbr_dVbc; // = -g_r - g_r/BetaR = -g_r(1+1/Br)
+    
+    // Ib = If/BetaF + Ir/BetaR
+    double dIb_dVbe = dIbf_dVbe;       // = g_f/BetaF
+    double dIb_dVbc = dIbr_dVbc;       // = g_r/BetaR
+    
+    // Ie = -Ic - Ib
+    double dIe_dVbe = -(dIc_dVbe + dIb_dVbe);
+    double dIe_dVbc = -(dIc_dVbc + dIb_dVbc);
+    
+    // Map to Terminal Voltages (NPN specific first)
+    // dIdx / dVc = dIdx/dVbc * dVbc/dVc = dIdx/dVbc * (-1)
+    // dIdx / dVe = dIdx/dVbe * dVbe/dVe = dIdx/dVbe * (-1)
+    // dIdx / dVb = dIdx/dVbe * 1 + dIdx/dVbc * 1
+    
+    BJTCurrents res;
+    res.Ic = sign * ic_local;
+    res.Ib = sign * ib_local;
+    res.Ie = sign * ie_local;
+
+    // The sign factor handles NPN/PNP current direction, but conductance is always positive for passive-ish/stable regions? 
+    // Wait, conductance is just slope.
+    
+    // NPN Matrix
+    if (isNPN) {
+        res.g_cc = -dIc_dVbc; 
+        res.g_cb = dIc_dVbe + dIc_dVbc;
+        res.g_ce = -dIc_dVbe;
+        
+        res.g_bc = -dIb_dVbc;
+        res.g_bb = dIb_dVbe + dIb_dVbc;
+        res.g_be = -dIb_dVbe;
+        
+        res.g_ec = -dIe_dVbc;
+        res.g_eb = dIe_dVbe + dIe_dVbc;
+        res.g_ee = -dIe_dVbe;
+    } 
+    else { // PNP
+        // Vbe = Ve - Vb -> dVbe/dVe = 1, dVbe/dVb = -1
+        // Vbc = Vc - Vb -> dVbc/dVc = 1, dVbc/dVb = -1
+        
+        res.g_cc = dIc_dVbc;
+        res.g_cb = -(dIc_dVbe + dIc_dVbc); 
+        res.g_ce = dIc_dVbe;
+        
+        res.g_bc = dIb_dVbc;
+        res.g_bb = -(dIb_dVbe + dIb_dVbc); 
+        res.g_be = dIb_dVbe;
+        
+        res.g_ec = dIe_dVbc;
+        res.g_eb = -(dIe_dVbe + dIe_dVbc); 
+        res.g_ee = dIe_dVbe;
+    }
+    
+    return res;
+}
+

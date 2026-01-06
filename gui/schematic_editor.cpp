@@ -500,9 +500,11 @@ TensorNetlist GridScene::generateNetlist() {
             case ComponentType::Capacitor: expected = 2; break;
             case ComponentType::Inductor: expected = 2; break;
             case ComponentType::VoltageSource: expected = 2; break;
+            case ComponentType::CurrentSource: expected = 2; break;
             case ComponentType::Diode: expected = 2; break;
+            case ComponentType::SchottkyDiode: expected = 2; break;
             case ComponentType::Mosfet: expected = 3; break; // G, D, S
-            case ComponentType::Bjt: expected = 2; break; // Current mock uses 2? No, should be 3.
+            case ComponentType::Bjt: expected = 3; break; // C, B, E
             default: break;
         }
         
@@ -526,10 +528,16 @@ TensorNetlist GridScene::generateNetlist() {
             case ComponentType::VoltageSource:
                 netlist.addVoltageSource(nodes[0], nodes[1], val);
                 break;
+            case ComponentType::CurrentSource:
+                netlist.addCurrentSource(nodes[0], nodes[1], val);
+                break;
             case ComponentType::Ground:
                 break;
             case ComponentType::Diode:
                 netlist.addDiode(nodes[0], nodes[1], 1e-14); 
+                break;
+            case ComponentType::SchottkyDiode:
+                netlist.addDiode(nodes[0], nodes[1], 200e-9); // Higher Is for lower Vf (~0.3V)
                 break;
             case ComponentType::Mosfet:
                 {
@@ -912,11 +920,34 @@ bool GridScene::isOccupied(const QRectF& rect, QGraphicsItem* exclude) {
     // Search for items in this region
     QList<QGraphicsItem*> itemsInRect = items(rect, Qt::IntersectsItemBoundingRect);
     
+    // Debug logging for empty scene issues
+    if (itemsInRect.size() > 0) {
+        // qDebug() << "Checking collision at:" << rect << "Found" << itemsInRect.size() << "items.";
+    }
+
     for (auto* item : itemsInRect) {
+        // Exclude self and ghost item
         if (item == exclude) continue;
+        if (item == ghostItem) {
+             // qDebug() << "Ignoring ghostItem at" << item->pos();
+             continue;
+        }
+        
+        // Exclude ghost wires
+        bool isGhostWire = false;
+        for (auto* gw : ghostWires) {
+            if (item == gw) { isGhostWire = true; break; }
+        }
+        if (isGhostWire) continue;
         
         // Only count components and wires as "obstructions"
-        if (dynamic_cast<VisualComponent*>(item) || dynamic_cast<VisualWire*>(item)) {
+        if (auto* vc = dynamic_cast<VisualComponent*>(item)) {
+            qDebug() << "COLLISION: Component" << vc->name << "(" << componentTypeToString(vc->type) << ") at" << vc->pos()
+                     << "Bounds:" << vc->sceneBoundingRect() << "vs Check:" << rect;
+            return true;
+        } 
+        else if (auto* vw = dynamic_cast<VisualWire*>(item)) {
+            qDebug() << "COLLISION: Wire" << vw->getName() << "Line:" << vw->line() << "vs Check:" << rect;
             return true;
         }
     }

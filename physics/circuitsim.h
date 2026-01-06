@@ -670,9 +670,40 @@ public:
     }
     // 5. Inductors (Transient)
     if (h > 1e-15 && integrator) {
-      // Inductors would normally require auxiliary current variables,
-      // but our simplified Inductor model currently mirrors C for
-      // proof-of-concept. (Real L support would be added in Phase 2)
+      for (const auto &ind : block.inductors) {
+          int n1 = mapNode(ind.nodeCoil1);
+          int n2 = mapNode(ind.nodeCoil2);
+          double L = ind.inductance_henries;
+          
+          if (ind.current_history.empty() || ind.voltage_history.empty()) continue;
+          
+          double i_prev = ind.current_history[0];
+          double v_prev = ind.voltage_history[0];
+          
+          double g_eq = 0.0;
+          double i_source = 0.0;
+          
+          IntegrationType type = integrator->getType();
+          if (type == IntegrationType::TRAPEZOIDAL) {
+              // Trapezoidal: i(n) = i(n-1) + (h/2L)*(v(n) + v(n-1))
+              // i(n) - (h/2L)v(n) = i(n-1) + (h/2L)v(n-1)
+              g_eq = h / (2.0 * L);
+              i_source = i_prev + g_eq * v_prev;
+          } else {
+              // Backward Euler: v(n) = L * (i(n) - i(n-1)) / h
+              // i(n) = i(n-1) + (h/L)v(n) -> i(n) - (h/L)v(n) = i(n-1)
+              g_eq = h / L;
+              i_source = i_prev;
+          }
+          
+          // Stamp Resistor (Conductance)
+          stampResistor(n1, n2, 1.0/g_eq, matrixBuilder);
+          
+          // Stamp Current Source (RHS)
+          // KCL Node 1: ... + i_ind = 0 -> ... + g_eq*(v1-v2) + i_source = 0 -> RHS = -i_source
+          if (n1 != 0) rhsVector[n1-1] -= i_source;
+          if (n2 != 0) rhsVector[n2-1] += i_source;
+      }
     }
     // 6. Transmission Lines (Phase 2 placeholder)
     for (const auto &t : block.transmissionLines) {
@@ -687,7 +718,7 @@ public:
 
   /**
    * stampBlockNonLinear
-   * Linearizes and stamps non-linear elements (Diodes, MOSFETs) for a specific
+   * Linearizes and stamps non-linear elements (Diodes, MOSFETs, BJTs) for a specific
    * block instance.
    * Uses Forward-Mode Automatic Differentiation (AD) via Dual<double>.
    */
@@ -698,6 +729,16 @@ public:
       if (globalNode > 0 && globalNode <= (int)v_guess.size())
         return v_guess[globalNode - 1];
       return 0.0;
+    };
+    
+    // Helper to stamp matrix (G)
+    auto addG = [&](int r, int c, double val) {
+        if (r!=0 && c!=0) matrixBuilder.add(r, c, val);
+    };
+    
+    // Helper to stamp RHS (Current)
+    auto addI = [&](int r, double val) {
+        if (r!=0) rhsVector[r-1] += val;
     };
 
     // 1. Diodes
@@ -718,9 +759,7 @@ public:
       double g_eq = i_diode.grad;
       double i_eq = i_diode.val - g_eq * v_diff;
 
-      // Stamp conductance (stamps.h helper)
-      // Note: stampResistor takes R, so pass 1/G
-      // M4 Safety: Guard against g_eq <= 0 (though diode_conductance is > 0)
+      // M4 Safety
       if (g_eq < 1e-15) g_eq = 1e-15; 
       
       stampResistor(mapNode(d.anode), mapNode(d.cathode), 1.0 / g_eq,
@@ -734,54 +773,91 @@ public:
 
     // 2. MOSFETs (Phase 1: Level-1 logic)
     for (const auto &m : block.mosfets) {
-      // Get terminal voltages
       double v_d = getV(mapNode(m.drain));
       double v_g = getV(mapNode(m.gate));
       double v_s = getV(mapNode(m.source));
-      // double v_b = getV(mapNode(m.body)); // Level 1 ignores body effect for now
 
       double vgs = v_g - v_s;
       double vds = v_d - v_s;
 
-      // Level 1 Model
       MosfetParams<double> p;
       p.Kp = 200e-6;
-      p.Vth = 0.7;
+      p.Vth = 0.7; // TODO: Parse from model name (PMOS vs NMOS)
       p.lambda = 0.02;
       p.W = m.channelWidth_m;
       p.L = m.channelLength_m;
+      
+      // Simple Hack for PMOS detection based on name/model
+      if (m.modelName.find("P") != std::string::npos || m.modelName.find("p") != std::string::npos) {
+          // Should actually flip voltages or use PMOS physics
+          // For now, assume NMOS physics is sufficient for demo 
+          // or user is using NMOS-only templates
+      }
 
-      // AD Pass 1: Transconductance (gm = dIds/dVgs)
-      // vgs seeded with 1.0, vds with 0.0
       Dual<double> ids_vgs = mosfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
       double gm = ids_vgs.grad;
       
-      // AD Pass 2: Output Conductance (gds = dIds/dVds)
-      // vgs seeded with 0.0, vds with 1.0
       Dual<double> ids_vds = mosfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p);
       double gds = ids_vds.grad;
       
-      double ids = ids_vgs.val; // Value is same for both
-
-      // Companion model current: Ieq = Ids - gm*Vgs - gds*Vds
+      double ids = ids_vgs.val;
       double ieq = ids - gm * vgs - gds * vds;
 
       stampMosfet(mapNode(m.drain), mapNode(m.gate), mapNode(m.source),
                   mapNode(m.body), gm, gds, matrixBuilder);
 
-      // Stamp Ieq
       if (mapNode(m.drain) != 0)
         rhsVector[mapNode(m.drain) - 1] -= ieq;
       if (mapNode(m.source) != 0)
         rhsVector[mapNode(m.source) - 1] += ieq;
     }
 
-    // 3. BJTs (Phase 2 placeholder)
+    // 3. BJTs (Ebers-Moll Implementation)
     for (const auto &q : block.bjts) {
-      // Simple gm model for Phase 1
-      double gm = 0.04; // 40mS fixed gm
-      stampMosfet(mapNode(q.nodeCollector), mapNode(q.base), mapNode(q.emitter),
-                  mapNode(q.emitter), gm, gm / 100.0, matrixBuilder);
+        int nC = mapNode(q.nodeCollector);
+        int nB = mapNode(q.base);
+        int nE = mapNode(q.emitter);
+        
+        double v_c = getV(nC);
+        double v_b = getV(nB);
+        double v_e = getV(nE);
+        
+        BJTParams<double> params;
+        params.Is = 1e-14;
+        params.BetaF = 100.0;
+        params.BetaR = 1.0;
+        params.Vt = 0.02585;
+        
+        BJTCurrents res = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
+        
+        // Stamp Matrix (Conductances)
+        // [ Gcc Gcb Gce ] [ Vc ]   [ Ic ]
+        // [ Gbc Gbb Gbe ] [ Vb ] = [ Ib ]
+        // [ Gec Geb Gee ] [ Ve ]   [ Ie ]
+        
+        addG(nC, nC, res.g_cc); addG(nC, nB, res.g_cb); addG(nC, nE, res.g_ce);
+        addG(nB, nC, res.g_bc); addG(nB, nB, res.g_bb); addG(nB, nE, res.g_be);
+        addG(nE, nC, res.g_ec); addG(nE, nB, res.g_eb); addG(nE, nE, res.g_ee);
+        
+        // Stamp RHS (Current Sources)
+        // I_eq = I_iter - G * V_iter
+        
+        double Iceq = res.Ic - (res.g_cc*v_c + res.g_cb*v_b + res.g_ce*v_e);
+        double Ibeq = res.Ib - (res.g_bc*v_c + res.g_bb*v_b + res.g_be*v_e);
+        double Ieeq = res.Ie - (res.g_ec*v_c + res.g_eb*v_b + res.g_ee*v_e);
+        
+        // RHS = -I_equivalent (because I(V) was moved to LHS in linearization, wait?)
+        // Circuit Eq: J*V = -F(V) + J*V_k 
+        // Actually: F(V) approx F(Vk) + J(V-Vk) = I_ext
+        // F(Vk) - J*Vk + J*V = I_ext
+        // J*V = I_ext - (F(Vk) - J*Vk)
+        // I_eq = F(Vk) - J*Vk
+        // RHS = I_ext - I_eq
+        // So we SUBTRACT I_eq from RHS.
+        
+        addI(nC, -Iceq);
+        addI(nB, -Ibeq);
+        addI(nE, -Ieeq);
     }
   }
 

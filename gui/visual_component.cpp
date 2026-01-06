@@ -12,6 +12,8 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::Diode: return "Diode";
         case ComponentType::Mosfet: return "Mosfet";
         case ComponentType::Bjt: return "Bjt";
+        case ComponentType::CurrentSource: return "CurrentSource";
+        case ComponentType::SchottkyDiode: return "SchottkyDiode";
         case ComponentType::Wire: return "Wire";
         default: return "Unknown";
     }
@@ -22,10 +24,12 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "Capacitor") return ComponentType::Capacitor;
     if (s == "Inductor") return ComponentType::Inductor;
     if (s == "VoltageSource" || s == "Source") return ComponentType::VoltageSource;
+    if (s == "CurrentSource" || s == "ISettings") return ComponentType::CurrentSource;
     if (s == "Ground" || s == "GND") return ComponentType::Ground;
     if (s == "Diode") return ComponentType::Diode;
+    if (s == "Schottky" || s == "SchottkyDiode") return ComponentType::SchottkyDiode;
     if (s == "Mosfet" || s == "NMOS" || s == "PMOS") return ComponentType::Mosfet;
-    if (s == "Bjt" || s == "NPN" || s == "PNP") return ComponentType::Bjt;
+    if (s == "Bjt" || s == "NPN" || s == "PNP" || s == "BJT_NPN" || s == "BJT_PNP") return ComponentType::Bjt;
     if (s == "Wire") return ComponentType::Wire;
     return ComponentType::Select;
 }
@@ -130,6 +134,14 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             params["Model"] = "2N2222";
             paramOptions["Model"] = {"2N2222", "2N3904", "2N3906", "BC547"};
             break;
+        case ComponentType::CurrentSource:
+            name = "I?";
+            value = "1mA";
+            break;
+        case ComponentType::SchottkyDiode:
+            name = "D?";
+            value = "BAT54";
+            break;
         default: 
             name = "U?"; 
             value = "0"; 
@@ -138,6 +150,7 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
 }
 
 QRectF VisualComponent::boundingRect() const {
+    // Inductors and some mosfets might need slightly wider boxes
     return QRectF(-50, -50, 100, 100);
 }
 
@@ -155,9 +168,11 @@ QVector<QPointF> VisualComponent::getTerminals() const {
             break;
         case ComponentType::Capacitor:
         case ComponentType::Diode:
+        case ComponentType::SchottkyDiode:
             t << QPointF(-20, 0) << QPointF(20, 0);
             break;
         case ComponentType::VoltageSource:
+        case ComponentType::CurrentSource:
         case ComponentType::Bjt: 
             t << QPointF(0, -40) << QPointF(0, 40);
             break;
@@ -240,15 +255,128 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
             painter->drawLine(0, -40, 0, -20);
             painter->drawLine(0, 20, 0, 40);
             break;
-        case ComponentType::Diode:
-            painter->drawLine(-5, -10, -5, 10); 
+        
+        case ComponentType::Inductor:
+            // Draw Coils
             {
+                painter->drawLine(-40, 0, -30, 0); // Left lead
+                painter->drawLine(30, 0, 40, 0);   // Right lead
+                
+                // 3 Loops
+                painter->drawArc(-30, -10, 20, 20, 0, 180 * 16);
+                painter->drawArc(-10, -10, 20, 20, 0, 180 * 16);
+                painter->drawArc(10, -10, 20, 20, 0, 180 * 16);
+            }
+            break;
+            
+        case ComponentType::CurrentSource:
+            painter->drawEllipse(-20, -20, 40, 40);
+            painter->drawLine(0, -15, 0, 15);
+            // Arrow Head
+            painter->drawLine(-5, -5, 0, -15);
+            painter->drawLine(5, -5, 0, -15);
+            
+            painter->drawLine(0, -40, 0, -20);
+            painter->drawLine(0, 20, 0, 40);
+            break;
+            
+        case ComponentType::Diode:
+        case ComponentType::SchottkyDiode:
+            painter->drawLine(-5, -10, -5, 10); // Anode
+            {
+                // Triangle
                 QPointF poly[] = {{10, 0}, {-5, -10}, {-5, 10}};
                 painter->drawPolygon(poly, 3);
             }
+            // Cathode Bar
+            if (type == ComponentType::SchottkyDiode) {
+                // S shape
+                painter->drawLine(10, -10, 10, 10);
+                painter->drawLine(10, -10, 14, -10); // Top hook right
+                painter->drawLine(10, 10, 6, 10);    // Bottom hook left
+            } else {
+                painter->drawLine(10, -10, 10, 10);
+            }
+            
             painter->drawLine(-20, 0, -5, 0);
             painter->drawLine(10, 0, 20, 0);
             break;
+            
+        case ComponentType::Mosfet:
+            // Draw NMOS/PMOS Symbol
+            {
+                bool isPMOS = (value.contains("PMOS") || value.contains("pfet"));
+                
+                // Leads
+                painter->drawLine(-20, 0, -10, 0); // Gate lead
+                painter->drawLine(0, 20, 10, 20);  // Drain/Source lead
+                painter->drawLine(20, 0, 10, 0);   // Drain/Source lead
+                
+                // Gate Plate
+                painter->drawLine(-10, -15, -10, 15);
+                
+                // Channel Plates (3 dashed segments)
+                painter->drawLine(0, -15, 0, -9);
+                painter->drawLine(0, -3, 0, 3);
+                painter->drawLine(0, 9, 0, 15);
+                
+                // Substrate
+                painter->drawLine(0, 0, 10, 0); // Bulk connection
+                // Arrow
+                if (isPMOS) {
+                    // Arrow pointing OUT from Channel (on Bulk)
+                    painter->drawLine(5, 0, 2, -3);
+                    painter->drawLine(5, 0, 2, 3);
+                    // Gate bubble
+                     painter->drawEllipse(-12, -2, 4, 4);
+                } else {
+                    // NMOS: Arrow pointing IN to Channel
+                    painter->drawLine(0, 0, 5, -3);
+                    painter->drawLine(0, 0, 5, 3);
+                }
+                
+                // Connect D/S to channel
+                painter->drawLine(10, -15, 0, -15);
+                painter->drawLine(10, 15, 0, 15);
+                
+                // Vertical D/S lines
+                painter->drawLine(10, -15, 10, 0);
+                painter->drawLine(10, 15, 10, 0);
+            }
+            break;
+            
+        case ComponentType::Bjt:
+             // Draw BJT Symbol
+             {
+                 bool isPNP = (value.contains("PNP"));
+                 
+                 // Base
+                 painter->drawLine(-10, -10, -10, 10); // Base Bar
+                 painter->drawLine(-20, 0, -10, 0);    // Base Lead
+                 
+                 // Collector (Angled)
+                 painter->drawLine(-10, -5, 10, -15);
+                 painter->drawLine(10, -15, 10, -25); // Lead up
+                 
+                 // Emitter (Angled)
+                 painter->drawLine(-10, 5, 10, 15);
+                 painter->drawLine(10, 15, 10, 25);   // Lead down
+                 
+                 // Arrow
+                 if (isPNP) {
+                     // Emitter Arrow Pointing IN
+                     QPointF mid(0, 10); // on emitter leg
+                     painter->drawLine(mid.x(), mid.y(), mid.x()-3, mid.y()-5);
+                     painter->drawLine(mid.x(), mid.y(), mid.x()+5, mid.y()-2);
+                 } else {
+                     // NPN: Emitter Arrow Pointing OUT
+                     QPointF tip(10, 15);
+                     painter->drawLine(tip.x(), tip.y(), tip.x()-6, tip.y()-2);
+                     painter->drawLine(tip.x(), tip.y(), tip.x()-2, tip.y()-6);
+                 }
+             }
+             break;
+             
         default:
             painter->drawRect(-15, -15, 30, 30);
             break;
@@ -258,8 +386,8 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
     painter->setPen(QPen(Qt::red, 1));
     QVector<QPointF> terms = getTerminals();
     for(const QPointF& p : terms) {
-         painter->drawLine(p.x()-4, p.y()-4, p.x()+4, p.y()+4);
-         painter->drawLine(p.x()-4, p.y()+4, p.x()+4, p.y()-4);
+         painter->setBrush(Qt::red);
+         painter->drawEllipse(p, 2, 2);
     }
 
     if (isSelected()) {

@@ -24,6 +24,7 @@ public:
 private:
     static QString describeComponent(const QJsonObject& comp);
     static QString inferTopologyIntent(const QJsonObject& state);
+    static QString getSpatialContext();
 };
 
 } // namespace AIAPI

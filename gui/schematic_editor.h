@@ -125,6 +125,22 @@ public:
     // Get scene bounding box (for auto-placement)
     QRectF getSceneBounds();
     
+    // --- Phase 1.3: Relational Positioning API ---
+    enum class RelativeDirection { Left, Right, Above, Below };
+    
+    // Place a component relative to an existing one
+    bool placeNextTo(const QString& type, const QString& referenceId, RelativeDirection dir, 
+                     int margin = 60, const QString& params = "");
+    
+    // Align a component with another (horizontal or vertical center)
+    bool alignWith(const QString& targetId, const QString& referenceId, bool horizontal = true);
+    
+    // Find nearest clear space of given size
+    QPoint findClearSpace(int width = 60, int height = 60);
+    
+    // Get spatial relationships for AI context
+    QString getSpatialContext();
+    
     // Overloaded placement for AI assistant (string-based)
     bool placeComponent(const QString& type, int x, int y, const QString& id = "", const QString& params = "");
 

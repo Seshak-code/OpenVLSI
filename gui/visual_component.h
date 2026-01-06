@@ -19,7 +19,9 @@ enum class ComponentType {
     Ground,
     Diode,
     Mosfet,
-    Bjt
+    Bjt,
+    CurrentSource,
+    SchottkyDiode
 };
 
 QString componentTypeToString(ComponentType t);

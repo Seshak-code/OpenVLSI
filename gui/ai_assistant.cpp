@@ -297,6 +297,56 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
     
     int successCount = 0;
     
+    // ====== SPATIAL AWARENESS: Compute Template Offset ======
+    // If this is a multi-component placement, check if origin is clear.
+    // If not, find clear space and offset all coordinates.
+    
+    QPoint offset(0, 0);
+    
+    if (request.actions.size() > 1) {
+        // Calculate bounding box of all template coordinates
+        int minX = INT_MAX, minY = INT_MAX;
+        int maxX = INT_MIN, maxY = INT_MIN;
+        
+        for (const auto& actionVal : request.actions) {
+            QJsonObject action = actionVal.toObject();
+            if (action["action"].toString() == "placeComponent") {
+                int x = action["x"].toInt();
+                int y = action["y"].toInt();
+                minX = std::min(minX, x);
+                minY = std::min(minY, y);
+                maxX = std::max(maxX, x);
+                maxY = std::max(maxY, y);
+            }
+        }
+        
+        if (minX != INT_MAX) {
+            // Template bounding box size (with padding for component size)
+            int templateWidth = (maxX - minX) + 100;  // 100 = component width
+            int templateHeight = (maxY - minY) + 100;
+            
+            // Check if the template origin (minX, minY) is clear
+            QPoint templateOrigin(minX, minY);
+            bool originClear = !editorContext->collidesWithAny(
+                templateOrigin.x() - 20, templateOrigin.y() - 20, 
+                templateWidth, templateHeight
+            );
+            
+            if (!originClear) {
+                // Find clear space for this template
+                QPoint clearSpot = editorContext->findClearSpace(templateWidth, templateHeight);
+                
+                // Offset = clearSpot - templateOrigin
+                offset = QPoint(clearSpot.x() - minX, clearSpot.y() - minY);
+                
+                appendMessage("Copilot", 
+                    QString("📍 Relocating template to clear space: (%1, %2)")
+                        .arg(clearSpot.x()).arg(clearSpot.y()));
+            }
+        }
+    }
+    
+    // ====== Execute Actions with Offset ======
     for (const auto& actionVal : request.actions) {
         QJsonObject action = actionVal.toObject();
         QString actionType = action["action"].toString();
@@ -304,11 +354,11 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
         if (actionType == "placeComponent") {
             QString type = action["type"].toString();
             QString id = action.contains("id") ? action["id"].toString() : "";
-            int x = action["x"].toInt();
-            int y = action["y"].toInt();
+            int x = action["x"].toInt() + offset.x();  // Apply offset
+            int y = action["y"].toInt() + offset.y();  // Apply offset
             
-            // Auto-place if no coordinates given
-            if (x < 0 || y < 0) {
+            // Auto-place if no coordinates given (single component fallback)
+            if (action["x"].toInt() < 0 || action["y"].toInt() < 0) {
                 QRectF bounds = editorContext->getSceneBounds();
                 x = static_cast<int>(bounds.right()) + 100;
                 y = static_cast<int>(bounds.center().y());
