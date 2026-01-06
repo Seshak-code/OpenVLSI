@@ -4,7 +4,7 @@ import socketserver
 import os
 
 PORT = 8000
-DIRECTORY = "/Users/seshak/Desktop/CuteApp/build_wasm"
+DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build_wasm")
 
 class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):

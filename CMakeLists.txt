@@ -58,6 +58,15 @@ if(DEFINED Qt6_DIR)
 endif()
 message(STATUS "CMAKE_PREFIX_PATH = ${CMAKE_PREFIX_PATH}")
 
+# Emscripten-specific configuration
+if(EMSCRIPTEN)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+    
+    # Workaround for Qt 6.9+ Wasm build issue where _qt_test_emscripten_version is undefined
+    macro(_qt_test_emscripten_version)
+    endmacro()
+endif()
+
 # Find Qt6 (required)
 find_package(Qt6 COMPONENTS Core Widgets REQUIRED)
 
