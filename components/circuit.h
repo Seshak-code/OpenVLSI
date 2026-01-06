@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <map>
 #include <cassert>  // NASA Rule #5
+#include "graph_canonical.h"
 
 /*
  * circuit.h
@@ -296,15 +297,32 @@ struct TensorBlock {
     }
 
     void computeTopologyHash() {
-        // Research-Grade Hashing: Canonical string of component patterns
-        // For Phase 1, we use a simple string concatenation of counts and local node pairs.
-        std::string s = name + "|";
-        s += std::to_string(numInternalNodes) + "|R:";
-        for (const auto& r : resistors) s += std::to_string(r.nodeTerminal1) + "-" + std::to_string(r.nodeTerminal2) + ";";
-        s += "|M:";
-        for (const auto& m : mosfets) s += std::to_string(m.drain) + "-" + std::to_string(m.gate) + ";";
+        // Phase 1.4: Canonical Graph Hashing
+        // Uses orientation-invariant edges and BFS-based node relabeling.
+        std::vector<GraphCanonical::CanonicalEdge> edges;
         
-        topologyHash = std::hash<std::string>{}(s);
+        // Type tags: 0=Resistor, 1=Capacitor, 2=Inductor, 3=Diode, 4=Mosfet, 5=BJT
+        for (const auto& r : resistors) 
+            edges.emplace_back(r.nodeTerminal1, r.nodeTerminal2, 0);
+        for (const auto& c : capacitors) 
+            edges.emplace_back(c.nodePlate1, c.nodePlate2, 1);
+        for (const auto& l : inductors) 
+            edges.emplace_back(l.nodeCoil1, l.nodeCoil2, 2);
+        for (const auto& d : diodes) 
+            edges.emplace_back(d.anode, d.cathode, 3);
+        for (const auto& m : mosfets) {
+            // MOSFET is a 4-terminal device; we represent as (D-S) and (G-S) edges
+            edges.emplace_back(m.drain, m.source, 4);
+            edges.emplace_back(m.gate, m.source, 4);
+        }
+        for (const auto& b : bjts) {
+            // BJT: (C-E) and (B-E) edges
+            edges.emplace_back(b.nodeCollector, b.emitter, 5);
+            edges.emplace_back(b.base, b.emitter, 5);
+        }
+        
+        // Ground is assumed to be node 0 for blocks
+        topologyHash = GraphCanonical::computeTopologyHash(edges, 0);
     }
 
     void updateNodeCount(int node) {
