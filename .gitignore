@@ -1,44 +1,133 @@
+# ============================================
 # Build Directories
+# ============================================
 build/
 build_wasm/
+build2/
+build-*/
 cmake-build-*/
+out/
 bin/
 lib/
+Debug/
+Release/
+x64/
+x86/
 
-# CMake Artifacts (In-Source Builds)
+# ============================================
+# CMake Artifacts
+# ============================================
 CMakeCache.txt
 CMakeFiles/
+CMakeScripts/
 Makefile
 *.cmake
+!CMakeLists.txt
 install_manifest.txt
 compile_commands.json
+CTestTestfile.cmake
+_deps/
+CMakeUserPresets.json
+CMakeLists.txt.user
 
-# IDE / Editor
+# ============================================
+# IDE / Editor Settings
+# ============================================
 .vscode/
+.vs/
 .idea/
-.DS_Store
-*.swp
-*~
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vcxproj.user
 
-# Compiled Executables
+# ============================================
+# OS Generated Files
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ============================================
+# Compiled Files & Executables
+# ============================================
 *.app/
 *.exe
+*.out
 *.o
 *.obj
 *.dylib
 *.so
+*.dll
 *.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# Project-specific executables
 HelloWorld
+HelloWorld.js
+HelloWorld.wasm
+HelloWorld.html
+AcuteSim
+AcuteSim.js
+AcuteSim.wasm
+AcuteSim.html
 test_regression
 test_sensitivity
 
-# Qt Auto-Generated
+# ============================================
+# Qt Auto-Generated Files
+# ============================================
 *_autogen/
 *.moc
 moc_*.cpp
 qrc_*.cpp
 ui_*.h
+*.qrc
+.qmake.stash
+*.pro.user
+qtloader.js
+qtlogo.svg
 
-# Python (Artifacts if any python scripts are used)
+# ============================================
+# Wasm Build Artifacts
+# ============================================
+*.html
+!webapp/*.html
+*.svg
+server.pid
+
+# ============================================
+# Python Artifacts
+# ============================================
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
+
+# ============================================
+# Temporary & Log Files
+# ============================================
+*.tmp
+*.temp
+*~
+*.swp
+*.swo
+*.log
+*.bak
+
+# ============================================
+# Ninja Build System
+# ============================================
+.ninja_deps
+.ninja_log
+build.ninja
+
