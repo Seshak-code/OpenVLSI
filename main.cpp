@@ -43,12 +43,18 @@ int main(int argc, char *argv[]) {
 
   MainWindow w;
 
+#ifdef __EMSCRIPTEN__
   // Wasm-specific: Force window to match screen interaction size
   // This allows the browser to handle scaling via the viewport
   auto screen = app.primaryScreen();
-  const QRect geometry = screen->availableGeometry();
-  w.setGeometry(geometry);
+  if (screen) {
+    const QRect geometry = screen->availableGeometry();
+    w.setGeometry(geometry);
+  }
   w.show();
+#else
+  w.showMaximized();
+#endif
 
   return app.exec();
 }
