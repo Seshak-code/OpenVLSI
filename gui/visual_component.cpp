@@ -173,14 +173,18 @@ QVector<QPointF> VisualComponent::getTerminals() const {
             break;
         case ComponentType::VoltageSource:
         case ComponentType::CurrentSource:
-        case ComponentType::Bjt: 
             t << QPointF(0, -40) << QPointF(0, 40);
+            break;
+        case ComponentType::Bjt: 
+            // Base (-20, 0), Collector (20, -20), Emitter (20, 20)
+            t << QPointF(-20, 0) << QPointF(20, -20) << QPointF(20, 20);
             break;
         case ComponentType::Ground:
             t << QPointF(0, -20); 
             break;
         case ComponentType::Mosfet:
-             t << QPointF(-20, 0) << QPointF(20, 0) << QPointF(0, 20); // G D S
+             // Gate (-20, 0), Drain (20, -20), Source (20, 20)
+             t << QPointF(-20, 0) << QPointF(20, -20) << QPointF(20, 20); 
              break;
         default:
             break;
@@ -339,9 +343,14 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                 painter->drawLine(10, -15, 0, -15);
                 painter->drawLine(10, 15, 0, 15);
                 
-                // Vertical D/S lines
-                painter->drawLine(10, -15, 10, 0);
-                painter->drawLine(10, 15, 10, 0);
+                // Vertical D/S lines to new terminals
+                // Drain (20, -20) -> Dogleg
+                painter->drawLine(10, -15, 20, -15);
+                painter->drawLine(20, -15, 20, -20);
+                
+                // Source (20, 20) -> Dogleg
+                painter->drawLine(10, 15, 20, 15);
+                painter->drawLine(20, 15, 20, 20);
             }
             break;
             
@@ -356,11 +365,15 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                  
                  // Collector (Angled)
                  painter->drawLine(-10, -5, 10, -15);
-                 painter->drawLine(10, -15, 10, -25); // Lead up
+                 // Lead to (20, -20)
+                 painter->drawLine(10, -15, 20, -15);
+                 painter->drawLine(20, -15, 20, -20);
                  
                  // Emitter (Angled)
                  painter->drawLine(-10, 5, 10, 15);
-                 painter->drawLine(10, 15, 10, 25);   // Lead down
+                 // Lead to (20, 20)
+                 painter->drawLine(10, 15, 20, 15);
+                 painter->drawLine(20, 15, 20, 20);
                  
                  // Arrow
                  if (isPNP) {
@@ -382,12 +395,13 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
             break;
     }
     
-    // VISUAL INDICATORS
-    painter->setPen(QPen(Qt::red, 1));
+    // VISUAL INDICATORS (X Marks)
+    painter->setPen(QPen(Qt::red, 2));
     QVector<QPointF> terms = getTerminals();
     for(const QPointF& p : terms) {
-         painter->setBrush(Qt::red);
-         painter->drawEllipse(p, 2, 2);
+         // Draw X
+         painter->drawLine(p.x()-3, p.y()-3, p.x()+3, p.y()+3);
+         painter->drawLine(p.x()+3, p.y()-3, p.x()-3, p.y()+3);
     }
 
     // ====== PLACEMENT PRE-FLIGHT INDICATOR ======

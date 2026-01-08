@@ -37,22 +37,56 @@ private:
         QMap<QString, CircuitTemplate> map;
         
         // ====== DARLINGTON PAIR ======
-        // Two NPN BJTs in cascade for high current gain (β₁ × β₂)
+        // Complete Darlington amplifier with biasing
+        // V1 (10V) -> R1 (100Ω) -> Q1/Q2 Collectors
+        // I1 (1µA) -> Q1 Base, Q1 Emitter -> Q2 Base, Q2 Emitter -> GND
         {
             CircuitTemplate t;
             t.name = "darlington";
-            t.description = "Darlington Pair (NPN) - High current gain configuration";
+            t.description = "Darlington Pair (NPN) - Complete amplifier with biasing";
+            
+            // Component Layout (Grid: 20px step)
+            // V1 at (0, 100), I1 at (100, 200), Ground at (200, 340)
+            // R1 at (300, 40), Q1 at (260, 140), Q2 at (300, 240)
             t.components = QJsonArray{
-                QJsonObject{{"type", "BJT_NPN"}, {"id", "Q1"}, {"x", 0}, {"y", 0}},
-                QJsonObject{{"type", "BJT_NPN"}, {"id", "Q2"}, {"x", 0}, {"y", 100}}
+                // Power & Biasing
+                QJsonObject{{"type", "VoltageSource"}, {"id", "V1"}, {"x", 0}, {"y", 100}, {"value", "10"}},
+                QJsonObject{{"type", "CurrentSource"}, {"id", "I1"}, {"x", 100}, {"y", 200}, {"value", "1u"}},
+                QJsonObject{{"type", "Ground"}, {"id", "GND"}, {"x", 200}, {"y", 340}},
+                // Load
+                QJsonObject{{"type", "Resistor"}, {"id", "R1"}, {"x", 300}, {"y", 40}, {"value", "100"}},
+                // Transistors
+                QJsonObject{{"type", "BJT_NPN"}, {"id", "Q1"}, {"x", 260}, {"y", 140}},
+                QJsonObject{{"type", "BJT_NPN"}, {"id", "Q2"}, {"x", 300}, {"y", 240}}
             };
+            
+            // Wiring (described as coordinate paths for L-shape routing)
+            // Wire placement uses absolute coordinates matching the component terminals
             t.wires = QJsonArray{
-                // Q1.Emitter -> Q2.Base
-                QJsonObject{{"from", "Q1.E"}, {"to", "Q2.B"}},
-                // Q1.Collector -> Q2.Collector (tied together)
-                QJsonObject{{"from", "Q1.C"}, {"to", "Q2.C"}}
+                // V1+ (0, 60) -> up to (0, 0) -> right to (340, 0) -> down to R1 top
+                QJsonObject{{"points", QJsonArray{QJsonArray{0, 60}, QJsonArray{0, 0}, QJsonArray{340, 0}, QJsonArray{340, 40}}}},
+                
+                // R1 -> Q1.C junction
+                QJsonObject{{"points", QJsonArray{QJsonArray{340, 40}, QJsonArray{340, 120}, QJsonArray{280, 120}}}},
+                // Junction -> Q2.C
+                QJsonObject{{"points", QJsonArray{QJsonArray{340, 120}, QJsonArray{340, 220}, QJsonArray{320, 220}}}},
+                
+                // Q1.E (280, 160) -> Q2.B (280, 240)
+                QJsonObject{{"points", QJsonArray{QJsonArray{280, 160}, QJsonArray{280, 240}}}},
+                
+                // Q2.E (320, 260) -> Ground (200, 320)
+                QJsonObject{{"points", QJsonArray{QJsonArray{320, 260}, QJsonArray{320, 320}, QJsonArray{200, 320}}}},
+                
+                // Ground -> V1-
+                QJsonObject{{"points", QJsonArray{QJsonArray{200, 320}, QJsonArray{0, 320}, QJsonArray{0, 140}}}},
+                // Ground -> I1-
+                QJsonObject{{"points", QJsonArray{QJsonArray{200, 320}, QJsonArray{100, 320}, QJsonArray{100, 240}}}},
+                
+                // I1+ (100, 160) -> Q1.B (240, 140)
+                QJsonObject{{"points", QJsonArray{QJsonArray{100, 160}, QJsonArray{100, 140}, QJsonArray{240, 140}}}}
             };
-            t.ports = {"Q1.B", "Q2.E", "Q2.C"}; // Input, Output, Collector
+            
+            t.ports = {"V1.+", "GND", "Q1.B"}; // VCC, GND, Input
             map["darlington"] = t;
         }
         

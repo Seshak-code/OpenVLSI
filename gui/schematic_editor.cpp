@@ -621,10 +621,10 @@ TensorNetlist GridScene::generateNetlist() {
             case ComponentType::Bjt:
                 {
                     std::string model = c->params.value("Model", "2N2222").toStdString();
-                    // Need to check BJT terminals in visual_component.cpp
-                    // If it has 3, we map C B E.
+                    // Maps: 0=Base, 1=Collector, 2=Emitter (from VisualComponent)
+                    // API: addBJT(name, C, B, E, ...)
                     if (nodes.size() >= 3)
-                        netlist.addBJT(c->name.toStdString(), nodes[0], nodes[1], nodes[2], model, true);
+                        netlist.addBJT(c->name.toStdString(), nodes[1], nodes[0], nodes[2], model, true);
                     else
                          emit messageLogged(QString("Warning: BJT %1 pins definition incomplete").arg(c->name));
                 }

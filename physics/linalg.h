@@ -91,6 +91,12 @@ public:
     numRows = 0;
     numCols = 0;
   }
+  
+  // Explicitly set matrix dimensions (prevents auto-grow beyond expected bounds)
+  void setDimensions(int rows, int cols) {
+    numRows = rows;
+    numCols = cols;
+  }
 
   /*
    * Stamps a numerical value at the specified (row, col) coordinate.

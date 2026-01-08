@@ -973,6 +973,7 @@ inline SimulationStep CircuitSim::solveDC(TensorNetlist &netlist) {
     // Unified Stamping (Phase 1: Structural Abstraction)
     scheduler.schedule(netlist);
     matrixBuilder.clear();
+    matrixBuilder.setDimensions(netlist.numGlobalNodes, netlist.numGlobalNodes);
     rhsVector.assign(netlist.numGlobalNodes, 0.0);
 
     stampAllElements(netlist, 0.0, voltageEstimate);
@@ -1069,6 +1070,7 @@ inline SimulationStep CircuitSim::stepTransient(TensorNetlist &netlist, double &
         for (int iteration = 0; iteration < MAX_NR_ITER; ++iteration) {
              scheduler.schedule(netlist);
              matrixBuilder.clear();
+             matrixBuilder.setDimensions(netlist.numGlobalNodes, netlist.numGlobalNodes);
              rhsVector.assign(netlist.numGlobalNodes, 0.0);
              
              stampAllElements(netlist, actualTimeStep, nrEstimate);

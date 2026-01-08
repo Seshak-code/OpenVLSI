@@ -192,7 +192,21 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
             if (comp.toObject().contains("params")) {
                 action["params"] = comp.toObject()["params"].toObject();
             }
+            if (comp.toObject().contains("value")) {
+                action["value"] = comp.toObject()["value"].toString();
+            }
             req.actions.append(action);
+        }
+        
+        // Add wire placements from template
+        for (const auto& wire : tmpl.wires) {
+            QJsonObject wireObj = wire.toObject();
+            if (wireObj.contains("points")) {
+                QJsonObject action;
+                action["action"] = "placeWire";
+                action["points"] = wireObj["points"];
+                req.actions.append(action);
+            }
         }
     }
     else if (intent.action == "runSimulation") {
@@ -390,6 +404,23 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
             // Trigger simulation (this would connect to SimulatorWindow)
             appendMessage("Copilot", "🔬 Simulation requested. Open the Simulator window to see results.");
             successCount++;
+        }
+        else if (actionType == "placeWire") {
+            // Place wire path from coordinate array
+            QJsonArray pointsArray = action["points"].toArray();
+            QVector<QPointF> points;
+            for (const auto& pt : pointsArray) {
+                QJsonArray coords = pt.toArray();
+                if (coords.size() >= 2) {
+                    double x = coords[0].toDouble() + offset.x();
+                    double y = coords[1].toDouble() + offset.y();
+                    points.append(QPointF(x, y));
+                }
+            }
+            if (points.size() >= 2) {
+                editorContext->placeWirePath(points);
+                successCount++;
+            }
         }
     }
     
