@@ -1,6 +1,0 @@
-set(__QT_DEPLOY_TARGET_HelloWorld_FILE /Users/seshak/Desktop/CuteApp/HelloWorld)
-set(__QT_DEPLOY_TARGET_HelloWorld_TYPE EXECUTABLE)
-set(__QT_DEPLOY_TARGET_test_regression_FILE /Users/seshak/Desktop/CuteApp/test_regression)
-set(__QT_DEPLOY_TARGET_test_regression_TYPE EXECUTABLE)
-set(__QT_DEPLOY_TARGET_test_sensitivity_FILE /Users/seshak/Desktop/CuteApp/test_sensitivity)
-set(__QT_DEPLOY_TARGET_test_sensitivity_TYPE EXECUTABLE)
