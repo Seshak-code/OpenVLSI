@@ -70,4 +70,5 @@ public:
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
     
     void rotate90(); 
+    void flip(); // Flips horizontally around center 
 };

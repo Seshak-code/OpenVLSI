@@ -333,6 +333,17 @@ void GridScene::keyPressEvent(QKeyEvent* event) {
             }
         }
     }
+    else if (event->key() == Qt::Key_F) {
+        if (ghostItem) {
+            ghostItem->flip();
+        } else {
+            for (auto* item : selectedItems()) {
+                if (auto* sc = dynamic_cast<VisualComponent*>(item)) {
+                    sc->flip();
+                }
+            }
+        }
+    }
     else {
         QGraphicsScene::keyPressEvent(event);
     }

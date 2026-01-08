@@ -158,6 +158,14 @@ void VisualComponent::rotate90() {
     setRotation(rotation() + 90);
 }
 
+void VisualComponent::flip() {
+    // Flip horizontally (Scale X by -1)
+    // Combine with existing transform
+    QTransform t = transform();
+    t.scale(-1, 1);
+    setTransform(t);
+}
+
 QVector<QPointF> VisualComponent::getTerminals() const {
     // Terminals MUST land on 20px grid (GRID_STEP)
     QVector<QPointF> t;

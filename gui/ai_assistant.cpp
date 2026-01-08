@@ -195,6 +195,12 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
             if (comp.toObject().contains("value")) {
                 action["value"] = comp.toObject()["value"].toString();
             }
+            if (comp.toObject().contains("rotation")) {
+                action["rotation"] = comp.toObject()["rotation"].toDouble();
+            }
+            if (comp.toObject().contains("flipped")) {
+                action["flipped"] = comp.toObject()["flipped"].toBool();
+            }
             req.actions.append(action);
         }
         
@@ -380,12 +386,25 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
             
             // Call placement API
             QString params = "";
+            QJsonObject paramObj;
+            
+            // Merge explicit params and rotation/flip into a single JSON object
             if (action.contains("params")) {
-                QJsonDocument paramsDoc(action["params"].toObject());
-                params = paramsDoc.toJson(QJsonDocument::Compact);
+                paramObj = action["params"].toObject();
             }
             if (action.contains("value")) {
-                params = action["value"].toString();
+                paramObj["value"] = action["value"].toString();
+            }
+            if (action.contains("rotation")) {
+                paramObj["rotation"] = action["rotation"].toDouble();
+            }
+            if (action.contains("flipped")) {
+                paramObj["flipped"] = action["flipped"].toBool();
+            }
+            
+            if (!paramObj.isEmpty()) {
+                QJsonDocument paramsDoc(paramObj);
+                params = paramsDoc.toJson(QJsonDocument::Compact);
             }
             
             bool success = editorContext->placeComponent(type, x, y, id, params);

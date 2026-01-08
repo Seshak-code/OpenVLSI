@@ -47,14 +47,14 @@ private:
             
             // Component Layout (Grid: 20px step)
             // V1 at (0, 100), I1 at (100, 200), Ground at (200, 340)
-            // R1 at (300, 40), Q1 at (260, 140), Q2 at (300, 240)
+            // R1 at (300, 60) [ROTATED 90 DEG - Vertical], Q1 at (260, 140), Q2 at (300, 240)
             t.components = QJsonArray{
                 // Power & Biasing
                 QJsonObject{{"type", "VoltageSource"}, {"id", "V1"}, {"x", 0}, {"y", 100}, {"value", "10"}},
                 QJsonObject{{"type", "CurrentSource"}, {"id", "I1"}, {"x", 100}, {"y", 200}, {"value", "1u"}},
                 QJsonObject{{"type", "Ground"}, {"id", "GND"}, {"x", 200}, {"y", 340}},
-                // Load
-                QJsonObject{{"type", "Resistor"}, {"id", "R1"}, {"x", 300}, {"y", 40}, {"value", "100"}},
+                // Load (Rotated Vertical)
+                QJsonObject{{"type", "Resistor"}, {"id", "R1"}, {"x", 300}, {"y", 60}, {"value", "100"}, {"rotation", 90}},
                 // Transistors
                 QJsonObject{{"type", "BJT_NPN"}, {"id", "Q1"}, {"x", 260}, {"y", 140}},
                 QJsonObject{{"type", "BJT_NPN"}, {"id", "Q2"}, {"x", 300}, {"y", 240}}
@@ -62,14 +62,16 @@ private:
             
             // Wiring (described as coordinate paths for L-shape routing)
             // Wire placement uses absolute coordinates matching the component terminals
+            // R1 (Vertical) at (300, 60). Unrotated terminals (-40, 0), (40, 0).
+            // Rotated 90: (0, -40), (0, 40) relative to (300, 60).
+            // Top Terminal: (300, 20). Bottom Terminal: (300, 100).
             t.wires = QJsonArray{
-                // V1+ (0, 60) -> up to (0, 0) -> right to (340, 0) -> down to R1 top
-                QJsonObject{{"points", QJsonArray{QJsonArray{0, 60}, QJsonArray{0, 0}, QJsonArray{340, 0}, QJsonArray{340, 40}}}},
+                // V1+ (0, 60) -> up to (0, 0) -> right to (300, 0) -> down to R1 Top (300, 20)
+                QJsonObject{{"points", QJsonArray{QJsonArray{0, 60}, QJsonArray{0, 0}, QJsonArray{300, 0}, QJsonArray{300, 20}}}},
                 
-                // R1 -> Q1.C junction
-                QJsonObject{{"points", QJsonArray{QJsonArray{340, 40}, QJsonArray{340, 120}, QJsonArray{280, 120}}}},
-                // Junction -> Q2.C
-                QJsonObject{{"points", QJsonArray{QJsonArray{340, 120}, QJsonArray{340, 220}, QJsonArray{320, 220}}}},
+                // R1 Bottom (300, 100) -> Q1.C (280, 120) and Q2.C (320, 220) junction
+                QJsonObject{{"points", QJsonArray{QJsonArray{300, 100}, QJsonArray{300, 120}, QJsonArray{280, 120}}}},  // R1 -> Q1.C
+                QJsonObject{{"points", QJsonArray{QJsonArray{300, 120}, QJsonArray{320, 120}, QJsonArray{320, 220}}}}, // Junction -> Q2.C
                 
                 // Q1.E (280, 160) -> Q2.B (280, 240)
                 QJsonObject{{"points", QJsonArray{QJsonArray{280, 160}, QJsonArray{280, 240}}}},

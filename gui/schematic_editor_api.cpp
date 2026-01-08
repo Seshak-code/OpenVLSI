@@ -65,7 +65,7 @@ QString SchematicEditor::placeComponent(const QString& typeStr, QPointF pos, dou
     
     // Generic Params Map
     for(auto it = params.begin(); it != params.end(); ++it) {
-        if (it.key() != "value") {
+        if (it.key() != "value" && it.key() != "rotation" && it.key() != "flipped") {
              comp->params[it.key()] = it.value().toString();
         }
     }
@@ -73,6 +73,14 @@ QString SchematicEditor::placeComponent(const QString& typeStr, QPointF pos, dou
     // Position
     comp->setPos(pos);
     comp->setRotation(rotation);
+    
+    // Apply Flip
+    if (params.contains("flipped")) {
+        // Can be boolean or string "true"
+        QJsonValue v = params["flipped"];
+        if (v.isBool() && v.toBool()) comp->flip();
+        else if (v.isString() && v.toString() == "true") comp->flip();
+    }
     
     scene->addItem(comp);
     
@@ -132,18 +140,22 @@ bool SchematicEditor::placeComponent(const QString& type, int x, int y, const QS
 
     // 2. Convert to JSON params if provided
     QJsonObject jsonParams;
+    double rotation = 0.0;
+    
     if (!params.isEmpty()) {
-        // ... (rest of the existing logic)
         QJsonDocument doc = QJsonDocument::fromJson(params.toUtf8());
         if (doc.isObject()) {
             jsonParams = doc.object();
+            if (jsonParams.contains("rotation")) {
+                rotation = jsonParams["rotation"].toDouble();
+            }
         } else {
             jsonParams["value"] = params;
         }
     }
     
     QPointF pos(x, y);
-    QString resultId = placeComponent(type, pos, 0.0, jsonParams);
+    QString resultId = placeComponent(type, pos, rotation, jsonParams);
     
     if (!id.isEmpty() && !resultId.isEmpty()) {
         VisualComponent* comp = findComponent(resultId);
