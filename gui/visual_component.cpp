@@ -390,6 +390,19 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
          painter->drawEllipse(p, 2, 2);
     }
 
+    // ====== PLACEMENT PRE-FLIGHT INDICATOR ======
+    // Draw colored border based on placement validity (set by GridScene::mouseMoveEvent)
+    QString placementState = data(0).toString();
+    if (!placementState.isEmpty()) {
+        if (placementState == "valid") {
+            painter->setPen(QPen(QColor(0, 255, 0), 2, Qt::DashLine)); // Green
+        } else {
+            painter->setPen(QPen(QColor(255, 0, 0), 2, Qt::DashLine)); // Red
+        }
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRect(boundingRect().adjusted(2, 2, -2, -2));
+    }
+
     if (isSelected()) {
         painter->setPen(QPen(QColor(0, 255, 0), 1, Qt::DashLine));
         painter->setBrush(Qt::NoBrush);

@@ -78,7 +78,19 @@ private:
     void clearGhostWires();
     
     // Ghost for placement
-    VisualComponent* ghostItem = nullptr; 
+    VisualComponent* ghostItem = nullptr;
+    
+    // ====== GEOMETRIC CONSTRAINTS: Alignment Guides ======
+    QLineF alignmentGuideH;  // Horizontal alignment guide
+    QLineF alignmentGuideV;  // Vertical alignment guide
+    bool showAlignH = false;
+    bool showAlignV = false;
+    
+    // Compute alignment with existing components
+    void updateAlignmentGuides(const QPointF& ghostPos);
+    
+protected:
+    void drawForeground(QPainter* painter, const QRectF& rect) override;
 };
 
 // ============================================================================

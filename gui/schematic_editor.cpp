@@ -283,6 +283,29 @@ void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     
     if (ghostItem) {
         ghostItem->setPos(p);
+        
+        // ====== PLACEMENT PRE-FLIGHT: Visual Collision Indicator ======
+        // Check if the current ghost position would collide with existing components.
+        // If so, tint the ghost RED. Otherwise, keep it GREEN/normal.
+        
+        bool valid = isPlacementValid(p, ghostItem);
+        if (valid) {
+            ghostItem->setOpacity(0.6);
+            // Apply green selection effect via flags (workaround: we will handle this in paint)
+            ghostItem->setData(0, "valid"); // Custom data key for paint
+        } else {
+            ghostItem->setOpacity(0.4);
+            ghostItem->setData(0, "invalid");
+        }
+        ghostItem->update(); // Force repaint
+        
+        // ====== GEOMETRIC CONSTRAINTS: Update Alignment Guides ======
+        updateAlignmentGuides(p);
+    } else {
+        // Clear guides when not placing
+        showAlignH = false;
+        showAlignV = false;
+        update();
     }
 }
 
@@ -312,6 +335,50 @@ void GridScene::keyPressEvent(QKeyEvent* event) {
     }
     else {
         QGraphicsScene::keyPressEvent(event);
+    }
+}
+
+// ====== GEOMETRIC CONSTRAINTS: Alignment Guides ======
+void GridScene::updateAlignmentGuides(const QPointF& ghostPos) {
+    const double SNAP_THRESHOLD = 15.0; // Pixels
+    
+    showAlignH = false;
+    showAlignV = false;
+    
+    // Find all existing components
+    for (auto* item : items()) {
+        auto* comp = dynamic_cast<VisualComponent*>(item);
+        if (!comp || comp == ghostItem) continue;
+        
+        QPointF compCenter = comp->sceneBoundingRect().center();
+        
+        // Check horizontal alignment (same Y)
+        if (std::abs(ghostPos.y() - compCenter.y()) < SNAP_THRESHOLD) {
+            showAlignH = true;
+            alignmentGuideH = QLineF(-10000, compCenter.y(), 10000, compCenter.y());
+        }
+        
+        // Check vertical alignment (same X)
+        if (std::abs(ghostPos.x() - compCenter.x()) < SNAP_THRESHOLD) {
+            showAlignV = true;
+            alignmentGuideV = QLineF(compCenter.x(), -10000, compCenter.x(), 10000);
+        }
+    }
+    
+    update(); // Trigger redraw
+}
+
+void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
+    Q_UNUSED(rect);
+    
+    // Draw alignment guides
+    if (showAlignH) {
+        painter->setPen(QPen(QColor(255, 165, 0), 1, Qt::DashLine)); // Orange
+        painter->drawLine(alignmentGuideH);
+    }
+    if (showAlignV) {
+        painter->setPen(QPen(QColor(255, 165, 0), 1, Qt::DashLine)); // Orange
+        painter->drawLine(alignmentGuideV);
     }
 }
 
