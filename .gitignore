@@ -131,3 +131,13 @@ __pycache__/
 .ninja_log
 build.ninja
 
+# ============================================
+# Local Tools & Cache
+# ============================================
+.qt/
+.cache/
+.vscode/
+.history/
+node_modules/
+package-lock.json
+
