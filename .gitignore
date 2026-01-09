@@ -140,4 +140,6 @@ build.ninja
 .history/
 node_modules/
 package-lock.json
+dyld_log.txt
+
 
