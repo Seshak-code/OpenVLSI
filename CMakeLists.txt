@@ -100,6 +100,8 @@ qt_add_executable(${PROJECT_NAME}
     ai_api/context_engine.cpp
     ai_api/context_engine.h
     ai_api/simulation_api.h
+    ai_api/simulation_trace.cpp
+    ai_api/simulation_trace.h
     components/circuit.h
 )
 
