@@ -115,6 +115,38 @@ public:
             return result;
         }
         
+        // Pattern 6: Analyze signal path
+        QRegularExpression pathPattern(
+            R"((?:find|analyze|show|trace)\s+(?:the\s+)?(?:signal\s+)?(?:path|flow|chain))",
+            QRegularExpression::CaseInsensitiveOption);
+        match = pathPattern.match(lower);
+        if (match.hasMatch()) {
+            result.action = "analyzeSignalPath";
+            result.confidence = 0.9;
+            result.rawMatch = match.captured(0);
+            return result;
+        }
+        
+        // Pattern 7: Debug suggestions
+        QRegularExpression debugPattern(
+            R"((?:suggest|recommend|where\s+(?:to|should))\s+(?:probes?|debug|measure|test))",
+            QRegularExpression::CaseInsensitiveOption);
+        match = debugPattern.match(lower);
+        if (match.hasMatch()) {
+            result.action = "debugSuggestions";
+            result.confidence = 0.9;
+            result.rawMatch = match.captured(0);
+            return result;
+        }
+        
+        // Alternative debug patterns
+        if (lower.contains("debug") || lower.contains("probe") || lower.contains("where to measure")) {
+            result.action = "debugSuggestions";
+            result.confidence = 0.7;
+            result.rawMatch = lower;
+            return result;
+        }
+        
         // No match found
         result.action = "";
         result.confidence = 0.0;

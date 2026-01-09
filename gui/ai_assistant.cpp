@@ -222,6 +222,56 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
         action["type"] = "DC";
         req.actions.append(action);
     }
+    else if (intent.action == "analyzeSignalPath") {
+        // Call ContextEngine to analyze signal paths
+        QJsonArray paths = AIAPI::ContextEngine::analyzeSignalPaths();
+        
+        if (paths.isEmpty()) {
+            appendMessage("Copilot", "⚠️ No signal paths found. Make sure you have sources (V/I) and a ground.");
+            return;
+        }
+        
+        QString response = "📡 **Signal Path Analysis:**\n\n";
+        for (const auto& pathVal : paths) {
+            QJsonObject path = pathVal.toObject();
+            response += QString("**Source:** %1 → **Sink:** %2\n").arg(path["source"].toString()).arg(path["sink"].toString());
+            
+            QJsonArray pathComps = path["path"].toArray();
+            QStringList pathList;
+            for (const auto& c : pathComps) pathList << c.toString();
+            response += QString("**Path:** %1\n\n").arg(pathList.join(" → "));
+            
+            response += "**Recommended Probes:**\n";
+            QJsonArray probes = path["probePoints"].toArray();
+            for (const auto& probeVal : probes) {
+                QJsonObject probe = probeVal.toObject();
+                response += QString("  • **%1**: %2\n").arg(probe["label"].toString()).arg(probe["node"].toString());
+            }
+        }
+        
+        appendMessage("Copilot", response);
+        return; // No approval needed for analysis
+    }
+    else if (intent.action == "debugSuggestions") {
+        // Call ContextEngine for debug suggestions
+        QJsonArray suggestions = AIAPI::ContextEngine::getDebugSuggestions();
+        
+        if (suggestions.isEmpty()) {
+            appendMessage("Copilot", "✅ No issues detected. Circuit looks good!");
+            return;
+        }
+        
+        QString response = "🔍 **Debug Suggestions:**\n\n";
+        for (const auto& sugVal : suggestions) {
+            QJsonObject sug = sugVal.toObject();
+            int priority = sug["priority"].toInt();
+            QString icon = (priority == 1) ? "🔴" : ((priority == 2) ? "🟡" : "🔵");
+            response += QString("%1 **%2**\n   %3\n\n").arg(icon).arg(sug["node"].toString()).arg(sug["reason"].toString());
+        }
+        
+        appendMessage("Copilot", response);
+        return; // No approval needed for suggestions
+    }
     else {
         appendMessage("Copilot", "Intent recognized but not yet implemented: " + intent.action);
         return;

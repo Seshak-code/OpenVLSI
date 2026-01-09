@@ -9,8 +9,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT DEFINED Qt6_DIR)
     if(NOT DEFINED CMAKE_PREFIX_PATH)
         if(APPLE)
-            # Prioritize qtbase (core) then full qt to match Homebrew's linked plugins
-            list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qtbase/lib/cmake" "/opt/homebrew/opt/qt/lib/cmake" "/usr/local/opt/qt/lib/cmake")
+            # EXTREMELY IMPORTANT: Prioritize qtbase to avoid mixing with "qt" full package
+            # Homebrew's "qt" and "qtbase" often have version mismatches that cause segfaults
+            set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qtbase/lib/cmake")
+            message(STATUS "Mac-specific CMAKE_PREFIX_PATH set to: ${CMAKE_PREFIX_PATH}")
         elseif(WIN32)
             # On Windows, try to detect a Qt installation under C:/Qt and append likely cmake folders.
             set(_qt_root "C:/Qt")

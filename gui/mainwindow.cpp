@@ -7,7 +7,7 @@
 #include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setWindowTitle("AcuteSim - Professional Circuit Designer");
+    setWindowTitle("BeaverSim 🦫 - Experimental Circuit Designer");
     resize(1400, 900); // Decent default size for EDA
     
     // 1. Setup Central Area (Tabbed Workspace)
@@ -29,11 +29,11 @@ void MainWindow::setupCentralWidget() {
     
     // Tab 1: Schematic Editor
     schematicEditor = new SchematicEditor(this);
-    centralTabs->addTab(schematicEditor, "📐 Schematic");
+    centralTabs->addTab(schematicEditor, "Schematic");
     
     // Tab 2: Simulator (embedded, not popup)
     simulatorPanel = new SimulatorWindow(this);
-    centralTabs->addTab(simulatorPanel, "⚡ Simulation");
+    centralTabs->addTab(simulatorPanel, "Simulation");
     
     setCentralWidget(centralTabs);
     

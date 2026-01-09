@@ -1,4 +1,5 @@
 #include "schematic_editor.h"
+#include "../ai_api/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsLineItem>
@@ -391,6 +392,54 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
         painter->setPen(QPen(QColor(255, 165, 0), 1, Qt::DashLine)); // Orange
         painter->drawLine(alignmentGuideV);
     }
+    
+    // ====== CONNECTION DOTS (Wire-to-PROBE Tip Junctions) ======
+    // For each PROBE TIP, check if it touches any wire.
+    // If so, draw a green connection dot.
+    QSet<QPair<int,int>> connectedProbePoints;
+    
+    for (auto* item : items()) {
+        auto* tip = dynamic_cast<ProbeTip*>(item);
+        if (!tip) continue;
+        
+        // Get tip position in scene coordinates (includes parent transform)
+        QPointF sceneTip = tip->scenePos();
+        int tx = qRound(sceneTip.x());
+        int ty = qRound(sceneTip.y());
+        
+        for (auto* wItem : items()) {
+            auto* wire = dynamic_cast<VisualWire*>(wItem);
+            if (!wire) continue;
+            
+            // Convert wire endpoints to scene coordinates
+            QLineF l = wire->line();
+            QPointF p1 = wire->mapToScene(l.p1());
+            QPointF p2 = wire->mapToScene(l.p2());
+            QPointF p(tx, ty);
+            
+            // Distance from point to line segment
+            double l2 = QLineF(p1, p2).length() * QLineF(p1, p2).length();
+            double d = 0;
+            if (l2 == 0) d = QLineF(p1, p).length();
+            else {
+                double t = ((p.x() - p1.x()) * (p2.x() - p1.x()) + (p.y() - p1.y()) * (p2.y() - p1.y())) / l2;
+                t = std::max(0.0, std::min(1.0, t));
+                d = QLineF(p, QPointF(p1.x() + t * (p2.x() - p1.x()), p1.y() + t * (p2.y() - p1.y()))).length();
+            }
+            
+            if (d < 10.0) { // Larger tolerance for easier connection
+                connectedProbePoints.insert({tx, ty});
+                break;
+            }
+        }
+    }
+    
+    // Draw the connection dots for Probes only
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(0, 255, 0)); // Green
+    for (const auto& pt : connectedProbePoints) {
+        painter->drawEllipse(QPointF(pt.first, pt.second), 5, 5);
+    }
 }
 
 // ============================================================================
@@ -489,12 +538,15 @@ TensorNetlist GridScene::generateNetlist() {
         if (auto* w = dynamic_cast<VisualWire*>(item)) {
             if (!w->isVisible()) continue;
             
+            // CRITICAL: Convert LOCAL wire coordinates to SCENE coordinates
             QLineF line = w->line();
-            // Normalize direction for iteration
-            int x1 = (int)round(line.x1());
-            int y1 = (int)round(line.y1());
-            int x2 = (int)round(line.x2());
-            int y2 = (int)round(line.y2());
+            QPointF sceneP1 = w->mapToScene(line.p1());
+            QPointF sceneP2 = w->mapToScene(line.p2());
+            
+            int x1 = (int)round(sceneP1.x());
+            int y1 = (int)round(sceneP1.y());
+            int x2 = (int)round(sceneP2.x());
+            int y2 = (int)round(sceneP2.y());
             
             // Unify Start
             int startID = getNetID(QPointF(x1, y1));
@@ -520,8 +572,11 @@ TensorNetlist GridScene::generateNetlist() {
     }
     
     // 1.2 Traverse Components -> Get Terminals -> Get Net IDs
+    // SKIP Probes: They are measurement-only and should not create nodes
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            // Include Probes so they get net IDs
+            // if (c->type == ComponentType::Probe) continue; 
             QVector<QPointF> terms = c->getTerminals();
             for (const auto& localP : terms) {
                 // Ensure this point gets an ID
@@ -558,11 +613,79 @@ TensorNetlist GridScene::generateNetlist() {
             }
         }
     }
+
+    auto isPointOnCircuit = [&](QPointF p) -> bool {
+        QPair<int,int> key = {(int)round(p.x()), (int)round(p.y())};
+        return pointToNetID.contains(key);
+    };
+    
+    // Helper: Find a net ID at a point that may be on a wire segment (not just grid endpoints)
+    // CRITICAL: This must NEVER create new nodes, only return existing ones
+    auto findNetOnWireAt = [&](QPointF tipPos) -> int {
+        int tx = qRound(tipPos.x());
+        int ty = qRound(tipPos.y());
+        
+        for (auto* item : allItems) {
+            auto* wire = dynamic_cast<VisualWire*>(item);
+            if (!wire) continue;
+            
+            QLineF l = wire->line();
+            QPointF p1 = wire->mapToScene(l.p1());
+            QPointF p2 = wire->mapToScene(l.p2());
+            QPointF p(tx, ty);
+            
+            // Distance from point to line segment
+            double l2 = QLineF(p1, p2).length() * QLineF(p1, p2).length();
+            double d = 0;
+            if (l2 == 0) d = QLineF(p1, p).length();
+            else {
+                double t = ((p.x() - p1.x()) * (p2.x() - p1.x()) + (p.y() - p1.y()) * (p2.y() - p1.y())) / l2;
+                t = std::max(0.0, std::min(1.0, t));
+                d = QLineF(p, QPointF(p1.x() + t * (p2.x() - p1.x()), p1.y() + t * (p2.y() - p1.y()))).length();
+            }
+            
+            if (d < 15.0) {
+                // Tip is on this wire. Snap to nearest grid point on this wire.
+                int wx1 = qRound(p1.x()), wy1 = qRound(p1.y());
+                int wx2 = qRound(p2.x()), wy2 = qRound(p2.y());
+                
+                // For H/V wires, snap tip to the nearest grid point along the wire
+                if (wx1 == wx2) { // Vertical wire
+                    int snapY = qRound((double)ty / GRID_STEP) * GRID_STEP;
+                    snapY = std::max(std::min(wy1, wy2), std::min(snapY, std::max(wy1, wy2)));
+                    QPair<int,int> key = {wx1, snapY};
+                    if (pointToNetID.contains(key)) {
+                        return getFinalNode(QPointF(wx1, snapY));
+                    }
+                } else if (wy1 == wy2) { // Horizontal wire
+                    int snapX = qRound((double)tx / GRID_STEP) * GRID_STEP;
+                    snapX = std::max(std::min(wx1, wx2), std::min(snapX, std::max(wx1, wx2)));
+                    QPair<int,int> key = {snapX, wy1};
+                    if (pointToNetID.contains(key)) {
+                        return getFinalNode(QPointF(snapX, wy1));
+                    }
+                }
+                
+                // Fallback: Try wire endpoints (only if they exist in the map!)
+                QPair<int,int> key1 = {wx1, wy1};
+                QPair<int,int> key2 = {wx2, wy2};
+                if (pointToNetID.contains(key1)) {
+                    return getFinalNode(p1);
+                }
+                if (pointToNetID.contains(key2)) {
+                    return getFinalNode(p2);
+                }
+            }
+        }
+        return -1; // Not on any wire
+    };
     
     // Step 3: Populate Netlist & Enforce Counts
+    // IMPORTANT: Skip probes in this loop - they are attached AFTER all nodes are finalized
     for (auto* item : allItems) {
         auto* c = dynamic_cast<VisualComponent*>(item);
         if (!c) continue;
+        if (c->type == ComponentType::Probe) continue; // Probes handled separately
         
         QVector<int> nodes;
         for (QPointF p : c->getTerminals()) {
@@ -586,8 +709,6 @@ TensorNetlist GridScene::generateNetlist() {
             default: break;
         }
         
-        // BJT VisualComponent check in visual_component.cpp might need update if it only returns 2 points.
-        // Assuming it's correct or we leniently skip if mismatches.
         if (c->type != ComponentType::Ground && nodes.size() < expected) {
             emit messageLogged(QString("Warning: Component %1 has incomplete terminals!").arg(c->name));
             continue;
@@ -622,9 +743,6 @@ TensorNetlist GridScene::generateNetlist() {
                    double W = parseValue(c->params.value("W", "1u"));
                    double L = parseValue(c->params.value("L", "180n"));
                    std::string model = c->params.value("Model", "nfet").toStdString();
-                   // Order: G(0), D(1), S(2)? Check VisualComponent
-                   // Assuming D G S mapping for safety or standardized order
-                   // visual_component says:  t << QPointF(-20, 0) << QPointF(20, 0) << QPointF(0, 20); // G D S
                    // Indices: 0=G, 1=D, 2=S
                    netlist.addMosfet(c->name.toStdString(), nodes[1], nodes[0], nodes[2], nodes[2], model, W, L); 
                 }
@@ -642,6 +760,93 @@ TensorNetlist GridScene::generateNetlist() {
                 break;
             default:
                 break;
+        }
+    }
+    
+    // =========================================================================
+    // Step 4: Attach Probes to EXISTING nodes (AFTER all components stamped)
+    // Probes are ideal oscilloscope cables - they find the nearest component
+    // terminal on the wire they touch and use that terminal's existing node ID.
+    // =========================================================================
+    auto findNearestTerminalNodeOnWire = [&](QPointF tipPos) -> int {
+        int tx = qRound(tipPos.x());
+        int ty = qRound(tipPos.y());
+        
+        // First, find which wire the tip is touching
+        VisualWire* touchedWire = nullptr;
+        double minWireDist = 1e9;
+        
+        for (auto* item : allItems) {
+            auto* wire = dynamic_cast<VisualWire*>(item);
+            if (!wire) continue;
+            
+            QLineF l = wire->line();
+            QPointF p1 = wire->mapToScene(l.p1());
+            QPointF p2 = wire->mapToScene(l.p2());
+            QPointF p(tx, ty);
+            
+            // Distance from tip to wire segment
+            double l2 = QLineF(p1, p2).length() * QLineF(p1, p2).length();
+            double d = 0;
+            if (l2 == 0) d = QLineF(p1, p).length();
+            else {
+                double t = ((p.x() - p1.x()) * (p2.x() - p1.x()) + (p.y() - p1.y()) * (p2.y() - p1.y())) / l2;
+                t = std::max(0.0, std::min(1.0, t));
+                d = QLineF(p, QPointF(p1.x() + t * (p2.x() - p1.x()), p1.y() + t * (p2.y() - p1.y()))).length();
+            }
+            
+            if (d < 15.0 && d < minWireDist) {
+                minWireDist = d;
+                touchedWire = wire;
+            }
+        }
+        
+        if (!touchedWire) return -1; // Not touching any wire
+        
+        // Now find the wire's net ID using its endpoints (which we DID register)
+        QLineF wl = touchedWire->line();
+        QPointF wp1 = touchedWire->mapToScene(wl.p1());
+        QPointF wp2 = touchedWire->mapToScene(wl.p2());
+        
+        // Check if wire endpoints are in our map
+        QPair<int,int> key1 = {qRound(wp1.x()), qRound(wp1.y())};
+        QPair<int,int> key2 = {qRound(wp2.x()), qRound(wp2.y())};
+        
+        if (pointToNetID.contains(key1)) {
+            int rawID = pointToNetID[key1];
+            int rootID = findSet(rawID);
+            if (finalNodeMap.contains(rootID)) {
+                return finalNodeMap[rootID];
+            }
+        }
+        if (pointToNetID.contains(key2)) {
+            int rawID = pointToNetID[key2];
+            int rootID = findSet(rawID);
+            if (finalNodeMap.contains(rootID)) {
+                return finalNodeMap[rootID];
+            }
+        }
+        
+        return -1; // Wire not connected to any known node
+    };
+    
+    // Attach all probes
+    for (auto* item : allItems) {
+        auto* c = dynamic_cast<VisualComponent*>(item);
+        if (!c || c->type != ComponentType::Probe) continue;
+        if (!c->probePositiveTip || !c->probeNegativeTip) continue;
+        
+        int posNode = findNearestTerminalNodeOnWire(c->probePositiveTip->scenePos());
+        int negNode = findNearestTerminalNodeOnWire(c->probeNegativeTip->scenePos());
+        
+        if (posNode >= 0 && negNode >= 0) {
+            // Both tips connected to valid existing nodes
+            netlist.addProbe(c->name.toStdString(), posNode, negNode);
+            emit messageLogged(QString("Probe %1: measuring V(node%2) - V(node%3)")
+                .arg(c->name).arg(posNode).arg(negNode));
+        } else {
+            emit messageLogged(QString("Probe %1: Not fully connected (pos=%2, neg=%3)")
+                .arg(c->name).arg(posNode).arg(negNode));
         }
     }
     
@@ -677,14 +882,16 @@ QStringList GridScene::runERC() {
         if (r1 != r2) { if (r1 < r2) merges[r2] = r1; else merges[r1] = r2; }
     };
     
-    // Wire Traversal
+    // Wire Traversal - CRITICAL: Use scene coordinates
     QList<QGraphicsItem*> allItems = items();
     for (auto* item : allItems) {
         if (auto* w = dynamic_cast<VisualWire*>(item)) {
             if (!w->isVisible()) continue;
             QLineF line = w->line();
-            int x1 = (int)round(line.x1()), y1 = (int)round(line.y1());
-            int x2 = (int)round(line.x2()), y2 = (int)round(line.y2());
+            QPointF sceneP1 = w->mapToScene(line.p1());
+            QPointF sceneP2 = w->mapToScene(line.p2());
+            int x1 = (int)round(sceneP1.x()), y1 = (int)round(sceneP1.y());
+            int x2 = (int)round(sceneP2.x()), y2 = (int)round(sceneP2.y());
             int startID = getNetID(QPointF(x1, y1));
             if (x1 == x2) { for (int y = std::min(y1,y2); y <= std::max(y1,y2); y += GRID_STEP) unionSets(startID, getNetID(QPointF(x1, y))); }
             else if (y1 == y2) { for (int x = std::min(x1,x2); x <= std::max(x1,x2); x += GRID_STEP) unionSets(startID, getNetID(QPointF(x, y1))); }
@@ -789,17 +996,19 @@ QWidget* SchematicEditor::createRibbon() {
     toolButtons[ComponentType::Wire] = createToolButton("Wire", ComponentType::Wire);
     layout->addWidget(toolButtons[ComponentType::Wire]);
     
-    toolButtons[ComponentType::Resistor] = createToolButton("Resistor", ComponentType::Resistor);
-    layout->addWidget(toolButtons[ComponentType::Resistor]);
+    // Separator before measurement tools
+    QFrame* sep = new QFrame();
+    sep->setFrameShape(QFrame::VLine);
+    sep->setStyleSheet("color: #555;");
+    layout->addWidget(sep);
     
-    toolButtons[ComponentType::Capacitor] = createToolButton("Capacitor", ComponentType::Capacitor);
-    layout->addWidget(toolButtons[ComponentType::Capacitor]);
-
-    toolButtons[ComponentType::VoltageSource] = createToolButton("Source", ComponentType::VoltageSource);
-    layout->addWidget(toolButtons[ComponentType::VoltageSource]);
-    
-    toolButtons[ComponentType::Ground] = createToolButton("GND", ComponentType::Ground);
-    layout->addWidget(toolButtons[ComponentType::Ground]);
+    toolButtons[ComponentType::Probe] = createToolButton("Probe", ComponentType::Probe);
+    toolButtons[ComponentType::Probe]->setStyleSheet(
+        "QPushButton { background: #333; color: #FF6B6B; border: 1px solid #FF6B6B; border-radius: 3px; padding: 5px; }"
+        "QPushButton:checked { background: #FF6B6B; color: white; border: 1px solid #FF8888; }"
+        "QPushButton:hover { background: #444; }"
+    );
+    layout->addWidget(toolButtons[ComponentType::Probe]);
 
     layout->addStretch();
     return ribbon;

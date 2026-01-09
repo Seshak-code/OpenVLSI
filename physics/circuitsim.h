@@ -418,6 +418,39 @@ public:
       addRes(d.cathode, i_d);
     }
 
+    // 3.5 BJT Audit
+    for (const auto &q : netlist.globalBlock.bjts) {
+        double v_c = getV(q.nodeCollector);
+        double v_b = getV(q.base);
+        double v_e = getV(q.emitter);
+        
+        BJTParams<double> params;
+        params.Is = q.saturationCurrent_I_S_A;
+        params.BetaF = q.betaF;
+        params.BetaR = q.betaR;
+        params.Vt = q.thermalVoltage_V_T_V;
+        
+        // Exact solution (no linearization)
+        BJTCurrents currents = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
+        
+        // KCL: Sum of currents entering node must be zero
+        // bjt_ebers_moll returns currents INTO terminal
+        // So we add -currents.Ic (leaving node in residual definition?)
+        // Residual = Sum(I_entering_node)
+        // bjt_ebers_moll returns I_C (into collector), I_B (into base)...
+        // Note: Resistors add (-I) to node 1 because I flows 1->2 (leaving 1).
+        // If I_entering > 0, we should add +I?
+        // Let's check resistor: I = V1-V2 / R. Flows 1->2.
+        // Node 1: Leaking I. Residual += -I. Correct.
+        // Node 2: Entering I. Residual += +I. Correct.
+        // BJT currents are DEFINED as flowing INTO the terminal.
+        // So we should add +I to the node residual.
+        
+        addRes(q.nodeCollector, currents.Ic);
+        addRes(q.base, currents.Ib);
+        addRes(q.emitter, currents.Ie);
+    }
+
     // 4. Capacitors (Transient Only)
     // If h > 0, we are in transient and must audit the displacement current
     if (h > 1e-15 && integrator) {
@@ -520,7 +553,7 @@ public:
   }
 
   // Phase 2.5: Differentiable Physics
-  enum class ComponentType { RESISTOR, CAPACITOR, DIODE, MOSFET };
+  enum class ComponentType { RESISTOR, CAPACITOR, DIODE, MOSFET, BJT };
 
   /**
    * calculateSensitivity
@@ -612,9 +645,74 @@ public:
               
               // I_drain leaves (positive in F_drain)
               if (m.drain > 0) b_sens[m.drain-1] -= didp;
-              // I_source enters (negative in F_source)
-              if (m.source > 0) b_sens[m.source-1] += didp;
-           }
+               // I_source enters (negative in F_source)
+               if (m.source > 0) b_sens[m.source-1] += didp;
+            }
+            // BJT SENSITIVITY
+            else if (type == ComponentType::BJT) {
+               if (index < 0 || index >= (int)netlist.globalBlock.bjts.size()) return {};
+               const auto& q = netlist.globalBlock.bjts[index];
+               
+               double vc = getV(q.nodeCollector);
+               double vb = getV(q.base);
+               double ve = getV(q.emitter);
+               
+               // Seed Dual parameters based on what we are differentiating against
+               Dual<double> Is(q.saturationCurrent_I_S_A, (paramName == "Is" ? 1.0 : 0.0));
+               Dual<double> Bf(q.betaF, ((paramName == "BetaF" || paramName == "Beta") ? 1.0 : 0.0));
+               Dual<double> Br(q.betaR, (paramName == "BetaR" ? 1.0 : 0.0));
+               Dual<double> Vt(q.thermalVoltage_V_T_V, (paramName == "Vt" ? 1.0 : 0.0));
+               
+               // Reuse the existing templated physics kernel? 
+               // bjt_ebers_moll is currently hardcoded for double (inline double-only implementation).
+               // We need to look at device_physics.h. It seems I didn't verify if it's templated!
+               // Checking device_physics.h... it returns BJTCurrents struct with doubles.
+               // Ah, the implementation in device_physics.h lines 164 is:
+               // inline BJTCurrents bjt_ebers_moll(double v_c, ... const BJTParams<double>& p)
+               // It accepts double params. It is NOT templated for Dual<double> yet.
+               // Ideally, I should template it. But for now, I can replicate the simple Ebers-Moll equation logic here using Duals.
+               // Ebers-Moll is relatively simple.
+               
+               // voltages are constant for partial dF/dp
+               Dual<double> v_be_d = (q.isNPN ? 1.0 : -1.0) * (vb - ve);
+               Dual<double> v_bc_d = (q.isNPN ? 1.0 : -1.0) * (vb - vc);
+               
+               auto safe_exp = [&](Dual<double> v, Dual<double> vt) { 
+                    Dual<double> arg = v / vt;
+                    if (arg.val > 40.0) arg = Dual<double>(40.0, 0.0);
+                    return std::exp(arg); // Use std::exp which should have overload for Dual in dual.h
+               };
+
+               Dual<double> i_f = Is * (safe_exp(v_be_d, Vt) - 1.0);
+               Dual<double> i_r = Is * (safe_exp(v_bc_d, Vt) - 1.0);
+               
+               Dual<double> i_ct = i_f - i_r;
+               Dual<double> i_b_f = i_f / Bf;
+               Dual<double> i_b_r = i_r / Br;
+               
+               Dual<double> ic = i_ct - i_b_r;
+               Dual<double> ib = i_b_f + i_b_r;
+               // Dual<double> ie = -ic - ib;
+               
+               // We need dIc/dp, dIb/dp, dIe/dp
+               // Note: These are currents INTO the terminal. 
+               // In RHS b_sens, we add +dI/dp if it enters?
+               // F_node = Sum(I_entering) = 0.
+               // dF/dp = Sum(dI_entering/dp)
+               // b = -dF/dp.
+               // So b -= dI_entering/dp.
+               
+               // Correct sign fix:
+               // If I_c enters Collector, residual R_c += I_c
+               // dR_c / dp = dI_c / dp
+               // b_c = - dR_c / dp = - dI_c / dp.
+               
+               double sign = (q.isNPN ? 1.0 : -1.0);
+               
+               if (q.nodeCollector > 0) b_sens[q.nodeCollector-1] -= (sign * ic.grad);
+               if (q.base > 0)          b_sens[q.base-1]          -= (sign * ib.grad);
+               if (q.emitter > 0)       b_sens[q.emitter-1]       -= (sign * (-ic.grad - ib.grad));
+            }
       } catch(...) {
           return {};
       }
@@ -823,10 +921,10 @@ public:
         double v_e = getV(nE);
         
         BJTParams<double> params;
-        params.Is = 1e-14;
-        params.BetaF = 100.0;
-        params.BetaR = 1.0;
-        params.Vt = 0.02585;
+        params.Is = q.saturationCurrent_I_S_A;
+        params.BetaF = q.betaF;
+        params.BetaR = q.betaR;
+        params.Vt = q.thermalVoltage_V_T_V;
         
         BJTCurrents res = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
         
@@ -1013,6 +1111,27 @@ inline SimulationStep CircuitSim::solveDC(TensorNetlist &netlist) {
       }
     }
 
+    // BJT Voltage Limiting (Base-Emitter and Base-Collector)
+    for (const auto &q : netlist.globalBlock.bjts) {
+        int nC = q.nodeCollector - 1;
+        int nB = q.base - 1;
+        int nE = q.emitter - 1;
+
+        auto limitJunction = [&](int p, int n, double limit) {
+             double v_old = (p >= 0 ? voltageEstimate[p] : 0.0) - (n >= 0 ? voltageEstimate[n] : 0.0);
+             double v_new_j = (p >= 0 ? v_new[p] : 0.0) - (n >= 0 ? v_new[n] : 0.0);
+             double d = v_new_j - v_old;
+             if (std::abs(d) > limit) {
+                 double corr = d - std::copysign(limit, d);
+                 if (p >= 0) v_new[p] -= corr;
+                 if (n >= 0) v_new[n] += corr;
+             }
+        };
+
+        limitJunction(nB, nE, 2.0*thermalVoltage); // Vbe
+        limitJunction(nB, nC, 2.0*thermalVoltage); // Vbc
+    }
+
     // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
     double kcl_error = calculatePhysicalResiduals(netlist, v_new);
 
@@ -1077,7 +1196,22 @@ inline SimulationStep CircuitSim::stepTransient(TensorNetlist &netlist, double &
              addDiagonalConditioning(netlist.numGlobalNodes);
              
              Csr_matrix A = matrixBuilder.createCsr();
-             lastResult = solvePCG(A, rhsVector, 1e-6);
+             
+             // --- Solver Strategy Optimization ---
+             // LU is O(N^3) but robust for non-symmetric active circuits.
+             // PCG is O(N*sqrt(K)) but requires SPD (Resistor/Capacitor meshes).
+             if (netlist.numGlobalNodes < 100) {
+                 // Small VLSI blocks: Use Direct LU with partial pivoting for absolute robustness
+                 lastResult = solveLU_Pivoted(A, rhsVector);
+             } else {
+                 // Large Parasitic Meshes: Try Iterative first
+                 lastResult = solvePCG(A, rhsVector, 1e-6);
+                 if (!lastResult.converged) {
+                     // Emergency Fallback: If PCG fails (highly non-symmetric), drop into LU
+                     lastResult = solveLU_Pivoted(A, rhsVector);
+                 }
+             }
+             
              std::vector<double> v_new = lastResult.solution;
              
              double kcl_error = calculatePhysicalResiduals(netlist, v_new, actualTimeStep);
@@ -1112,6 +1246,12 @@ inline SimulationStep CircuitSim::stepTransient(TensorNetlist &netlist, double &
         simulationConverged = true;
         timeStep = next_dt_suggestion;
         break;
+    }
+    
+    // Hang Protection: Detect if timeStep has underflowed
+    if (timeStep < 1e-18) {
+        // Prevent infinite loop by returning failing step
+         return {currentTime, std::vector<double>(netlist.numGlobalNodes, 0.0), {lastResult.iterations, lastResult.finalResidual, false}};
     }
 
     if (simulationConverged) {

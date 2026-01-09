@@ -226,10 +226,16 @@ struct Mosfet {
 struct BJT {
     std::string instanceName;
     int nodeCollector;                    // C terminal
-    int base;                         // B terminal
-    int emitter;                      // E terminal
+    int base;                             // B terminal
+    int emitter;                          // E terminal
     std::string modelName;
     bool isNPN;                           // true=NPN, false=PNP
+    
+    // Model Parameters (Per-Instance for Phase 1, ideally per-model lookup)
+    double betaF;                         // Forward Beta
+    double betaR;                         // Reverse Beta
+    double saturationCurrent_I_S_A;       // Is [A]
+    double thermalVoltage_V_T_V;          // Vt [V]
 };
 
 // ============================================================================
@@ -247,6 +253,17 @@ struct TransmissionLine {
     int nodePort2Pos, nodePort2Neg;       // Port 2 terminals
     double characteristicImpedance_Z0_ohms; // Z_0 [Ω]
     double propagationDelay_Td_s;         // T_d [seconds]
+};
+
+/*
+ * Probe (Measurement Tool)
+ * Does not affect physics (infinite impedance).
+ * Used to request V(pos) - V(neg) for plotting/GUI.
+ */
+struct Probe {
+    std::string name;
+    int nodePositive;
+    int nodeNegative;
 };
 
 // ============================================================================
@@ -284,7 +301,11 @@ struct TensorBlock {
     std::vector<BJT> bjts;
     
     // Interconnects
+    // Interconnects
     std::vector<TransmissionLine> transmissionLines;
+    
+    // Aux
+    std::vector<Probe> probes;
 
     bool isFrozen = false;       // Phase 1: Structural Immutability
     size_t topologyHash = 0;     // Phase 4: Symbolic Reuse Key
@@ -381,15 +402,23 @@ struct TensorBlock {
         updateNodeCount(D); updateNodeCount(G); updateNodeCount(S); updateNodeCount(B);
     }
     void addBJT(const std::string& name, int C, int B, int E, 
-                const std::string& model, bool isNPN = true) {
+                const std::string& model, bool isNPN = true,
+                double betaF = 100.0, double betaR = 1.0, 
+                double Is = 1e-14, double Vt = 0.02585) {
         if (isFrozen) return;
-        bjts.push_back({name, C, B, E, model, isNPN});
+        bjts.push_back({name, C, B, E, model, isNPN, betaF, betaR, Is, Vt});
         updateNodeCount(C); updateNodeCount(B); updateNodeCount(E);
     }
     void addTransmissionLine(int p1p, int p1n, int p2p, int p2n, double Z0, double Td) {
         if (isFrozen) return;
         transmissionLines.push_back({p1p, p1n, p2p, p2n, Z0, Td});
         updateNodeCount(p1p); updateNodeCount(p1n); updateNodeCount(p2p); updateNodeCount(p2n);
+    }
+    void addProbe(const std::string& name, int nPos, int nNeg) {
+        if (isFrozen) return;
+        probes.push_back({name, nPos, nNeg});
+        // NOTE: Probes do NOT call updateNodeCount because they are passive observers
+        // and should not inflate the matrix dimensions.
     }
 };
 
@@ -459,12 +488,18 @@ public:
         numGlobalNodes = std::max({numGlobalNodes, D, G, S, B});
     }
     void addBJT(const std::string& name, int C, int B, int E, 
-                const std::string& model, bool isNPN = true) {
-        globalBlock.addBJT(name, C, B, E, model, isNPN);
+                const std::string& model, bool isNPN = true,
+                double betaF = 100.0, double betaR = 1.0, 
+                double Is = 1e-14, double Vt = 0.02585) {
+        globalBlock.addBJT(name, C, B, E, model, isNPN, betaF, betaR, Is, Vt);
         numGlobalNodes = std::max({numGlobalNodes, C, B, E});
     }
     void addTransmissionLine(int p1p, int p1n, int p2p, int p2n, double Z0, double Td) {
         globalBlock.addTransmissionLine(p1p, p1n, p2p, p2n, Z0, Td);
         numGlobalNodes = std::max({numGlobalNodes, p1p, p1n, p2p, p2n});
+    }
+    void addProbe(const std::string& name, int nPos, int nNeg) {
+        globalBlock.addProbe(name, nPos, nNeg);
+        // NOTE: Probes do NOT inflate numGlobalNodes because they are passive observers.
     }
 };

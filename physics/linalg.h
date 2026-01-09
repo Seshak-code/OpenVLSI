@@ -453,3 +453,108 @@ inline SolverResult solvePCG(const Csr_matrix &matrix,
 
   return {solution, currentResidualNorm, iteration, false};
 }
+
+// ============================================================================
+// DIRECT DENSE SOLVER (LU DECOMPOSITION WITH PARTIAL PIVOTING)
+// ============================================================================
+
+/**
+ * Converts a sparse CSR matrix to a dense row-major vector representation.
+ * Optimized for small matrices where direct solvers are preferred.
+ */
+inline std::vector<double> convertCsrToDense(const Csr_matrix &matrix) {
+    std::vector<double> dense(matrix.rows * matrix.cols, 0.0);
+    for (int i = 0; i < matrix.rows; ++i) {
+        for (int j = matrix.row_pointer[i]; j < matrix.row_pointer[i+1]; ++j) {
+            dense[i * matrix.cols + matrix.col_indices[j]] = matrix.values[j];
+        }
+    }
+    return dense;
+}
+
+/**
+ * solveLU_Pivoted - Robust Direct Solver for Non-Symmetric Matrices.
+ * 
+ * Performs Crout/Doolittle LU decomposition with Partial Pivoting (row swapping).
+ * This is the fallback solver for circuits where iterative methods (PCG) fail
+ * due to zero-diagonals or non-symmetry (active components like BJTs).
+ */
+inline SolverResult solveLU_Pivoted(const Csr_matrix &matrix, 
+                                   const std::vector<double> &rhsVector) {
+    const int n = matrix.rows;
+    assert(matrix.rows == matrix.cols && "LU requires a square matrix");
+    assert(matrix.rows == (int)rhsVector.size() && "Dimension mismatch");
+
+    std::vector<double> A = convertCsrToDense(matrix);
+    std::vector<double> b = rhsVector;
+    std::vector<double> x(n, 0.0);
+    std::vector<int> pivot(n);
+    for (int i = 0; i < n; ++i) pivot[i] = i;
+
+    // --- 1. LU Decomposition with Partial Pivoting ---
+    for (int i = 0; i < n; ++i) {
+        // Find pivot for column i
+        double maxVal = 0.0;
+        int maxRow = i;
+        for (int k = i; k < n; ++k) {
+            double val = std::abs(A[k * n + i]);
+            if (val > maxVal) {
+                maxVal = val;
+                maxRow = k;
+            }
+        }
+
+        // Check for singularity
+        if (maxVal < 1e-25) {
+            // Matrix is singular or near-singular. Return failure.
+            return {x, 1.0, 0, false};
+        }
+
+        // Swap rows if necessary
+        if (maxRow != i) {
+            std::swap(pivot[i], pivot[maxRow]);
+            for (int k = 0; k < n; ++k) {
+                std::swap(A[i * n + k], A[maxRow * n + k]);
+            }
+            std::swap(b[i], b[maxRow]);
+        }
+
+        // Compute multipliers and eliminate
+        for (int j = i + 1; j < n; ++j) {
+            A[j * n + i] /= A[i * n + i];
+            for (int k = i + 1; k < n; ++k) {
+                A[j * n + k] -= A[j * n + i] * A[i * n + k];
+            }
+        }
+    }
+
+    // --- 2. Forward Substitution (Ly = b) ---
+    std::vector<double> y(n, 0.0);
+    for (int i = 0; i < n; ++i) {
+        y[i] = b[i];
+        for (int j = 0; j < i; ++j) {
+            y[i] -= A[i * n + j] * y[j];
+        }
+    }
+
+    // --- 3. Backward Substitution (Ux = y) ---
+    for (int i = n - 1; i >= 0; --i) {
+        x[i] = y[i];
+        for (int j = i + 1; j < n; ++j) {
+            x[i] -= A[i * n + j] * x[j];
+        }
+        x[i] /= A[i * n + i];
+    }
+
+    // Verify residual (||Ax-b||)
+    std::vector<double> check(n, 0.0);
+    matrixMultiplication(matrix, x.data(), check.data());
+    double residual = 0.0;
+    for (int i = 0; i < n; ++i) {
+        double err = check[i] - rhsVector[i];
+        residual += err * err;
+    }
+    residual = std::sqrt(residual);
+
+    return {x, residual, 1, true};
+}

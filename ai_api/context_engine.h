@@ -20,6 +20,25 @@ public:
      * Generates a compact JSON summary token-optimized for LLM context windows.
      */
     static QJsonObject getContextJson();
+    
+    /**
+     * Analyzes the circuit topology to discover signal paths from sources to sinks.
+     * Returns a list of paths, each containing:
+     * - "source": The driving component (e.g., "V1", "I1")
+     * - "sink": The terminating node (e.g., "GND", "R_load")
+     * - "path": Ordered list of component IDs in the signal chain
+     * - "probePoints": Recommended measurement nodes along the path
+     */
+    static QJsonArray analyzeSignalPaths();
+    
+    /**
+     * Provides intelligent debug suggestions based on circuit topology.
+     * Returns a list of suggestions, each containing:
+     * - "node": The node ID or component terminal
+     * - "reason": Why this is a good probe point (e.g., "High-gain stage input")
+     * - "priority": 1 (critical) to 3 (informational)
+     */
+    static QJsonArray getDebugSuggestions();
 
 private:
     static QString describeComponent(const QJsonObject& comp);

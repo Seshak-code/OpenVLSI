@@ -15,6 +15,7 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::CurrentSource: return "CurrentSource";
         case ComponentType::SchottkyDiode: return "SchottkyDiode";
         case ComponentType::Wire: return "Wire";
+        case ComponentType::Probe: return "Probe";
         default: return "Unknown";
     }
 }
@@ -31,7 +32,69 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "Mosfet" || s == "NMOS" || s == "PMOS") return ComponentType::Mosfet;
     if (s == "Bjt" || s == "NPN" || s == "PNP" || s == "BJT_NPN" || s == "BJT_PNP") return ComponentType::Bjt;
     if (s == "Wire") return ComponentType::Wire;
+    if (s == "Probe") return ComponentType::Probe;
     return ComponentType::Select;
+}
+
+// ============================================================================
+// PROBE TIP
+// ============================================================================
+ProbeTip::ProbeTip(VisualComponent* parent, bool isPos) 
+    : isPositive(isPos), probeBody(parent) {
+    setFlags(ItemIsMovable | ItemIsSelectable | ItemSendsGeometryChanges);
+    setParentItem(parent);
+    setZValue(3); // Above cables
+}
+
+QRectF ProbeTip::boundingRect() const {
+    return QRectF(-15, -35, 30, 50);
+}
+
+QPainterPath ProbeTip::shape() const {
+    QPainterPath path;
+    path.addRect(-10, -10, 20, 20);
+    return path;
+}
+
+void ProbeTip::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
+    painter->setRenderHint(QPainter::Antialiasing);
+    
+    // Draw the pointed probe handle/body
+    painter->setPen(QPen(Qt::white, 1));
+    painter->setBrush(isPositive ? QColor(255, 50, 50) : QColor(30, 30, 30));
+    
+    static const QPointF points[] = {
+        {0, 0},     // Tip
+        {-6, -20},  // Base left
+        {6, -20}    // Base right
+    };
+    painter->drawPolygon(points, 3);
+    painter->drawRect(-4, -30, 8, 10); // Handle neck
+    
+    // Indicator String (+/-)
+    painter->setPen(Qt::white);
+    QFont f = painter->font();
+    f.setPointSize(10);
+    f.setBold(true);
+    painter->setFont(f);
+    painter->drawText(QRectF(-15, -35, 30, 30), Qt::AlignCenter, isPositive ? "+" : "-");
+}
+
+QVariant ProbeTip::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionChange && scene()) {
+        GridScene* gs = qobject_cast<GridScene*>(scene());
+        if (gs && gs->isSnappingEnabled()) {
+            QPointF newPos = value.toPointF();
+            qreal x = std::round(newPos.x() / GRID_STEP) * GRID_STEP;
+            qreal y = std::round(newPos.y() / GRID_STEP) * GRID_STEP;
+            
+            // Inform body to update its dashed lines
+            if (probeBody) probeBody->update();
+            
+            return QPointF(x, y);
+        }
+    }
+    return QGraphicsItem::itemChange(change, value);
 }
 
 // ============================================================================
@@ -142,6 +205,14 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             name = "D?";
             value = "BAT54";
             break;
+        case ComponentType::Probe:
+            name = "P?";
+            value = "";
+            probePositiveTip = new ProbeTip(this, true);
+            probePositiveTip->setPos(0, -60);
+            probeNegativeTip = new ProbeTip(this, false);
+            probeNegativeTip->setPos(0, 60);
+            break;
         default: 
             name = "U?"; 
             value = "0"; 
@@ -150,7 +221,10 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
 }
 
 QRectF VisualComponent::boundingRect() const {
-    // Inductors and some mosfets might need slightly wider boxes
+    if (type == ComponentType::Probe) {
+        // Broad bounding box to cover potentially far-reaching probe tips and their dashed lines
+        return QRectF(-300, -300, 600, 600); 
+    }
     return QRectF(-50, -50, 100, 100);
 }
 
@@ -194,6 +268,9 @@ QVector<QPointF> VisualComponent::getTerminals() const {
              // Gate (-20, 0), Drain (20, -20), Source (20, 20)
              t << QPointF(-20, 0) << QPointF(20, -20) << QPointF(20, 20); 
              break;
+        case ComponentType::Probe:
+             // NO fixed terminals. Measurement points are derived from tips.
+             return {};
         default:
             break;
     }
@@ -398,18 +475,68 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
              }
              break;
              
+        case ComponentType::Probe:
+            // Monochrome ASCII-Style Multimeter
+            {
+                // -- Virtual Wires (Dashed lines to tips) --
+                if (probePositiveTip) {
+                    painter->setPen(QPen(QColor(255, 100, 100), 1, Qt::DashLine));
+                    painter->drawLine(QPointF(0, -10), probePositiveTip->pos());
+                }
+                if (probeNegativeTip) {
+                    painter->setPen(QPen(QColor(150, 150, 150), 1, Qt::DashLine));
+                    painter->drawLine(QPointF(0, 10), probeNegativeTip->pos());
+                }
+
+                // -- Body (Main Chassis) --
+                painter->setPen(QPen(Qt::white, 1.5));
+                painter->setBrush(QColor("#1A1A1A")); // Near-black fill
+                painter->drawRect(-12, -12, 24, 24);
+                
+                // -- Screen (LCD Display) --
+                painter->setPen(Qt::NoPen);
+                painter->setBrush(QColor("#2A2A2A")); // Slightly lighter grey
+                painter->drawRect(-9, -9, 18, 11);
+                
+                // -- ASCII Value on Screen --
+                painter->setPen(Qt::white);
+                QFont f = painter->font();
+                f.setFamily("Courier"); // Monospace for ASCII look
+                f.setPointSize(7);
+                f.setBold(true);
+                painter->setFont(f);
+                if (value.isEmpty()) {
+                    painter->drawText(QRectF(-9, -9, 18, 11), Qt::AlignCenter, "---");
+                } else {
+                    painter->drawText(QRectF(-9, -9, 18, 11), Qt::AlignCenter, value);
+                }
+
+                // -- Dial/Button --
+                painter->setBrush(QColor("#444444"));
+                painter->drawRect(-4, 4, 8, 6);
+
+                // -- Body Labels (External) --
+                f.setPointSize(8);
+                painter->setFont(f);
+                painter->setPen(Qt::white);
+                painter->drawText(QRectF(-35, -5, 20, 12), Qt::AlignRight | Qt::AlignVCenter, name);
+            }
+            break;
+             
         default:
             painter->drawRect(-15, -15, 30, 30);
             break;
     }
     
     // VISUAL INDICATORS (X Marks)
-    painter->setPen(QPen(Qt::red, 2));
-    QVector<QPointF> terms = getTerminals();
-    for(const QPointF& p : terms) {
-         // Draw X
-         painter->drawLine(p.x()-3, p.y()-3, p.x()+3, p.y()+3);
-         painter->drawLine(p.x()+3, p.y()-3, p.x()-3, p.y()+3);
+    if (type != ComponentType::Probe) {
+        painter->setPen(QPen(Qt::red, 2));
+        QVector<QPointF> terms = getTerminals();
+        for(const QPointF& p : terms) {
+             // Draw X
+             painter->drawLine(p.x()-3, p.y()-3, p.x()+3, p.y()+3);
+             painter->drawLine(p.x()+3, p.y()-3, p.x()-3, p.y()+3);
+        }
     }
 
     // ====== PLACEMENT PRE-FLIGHT INDICATOR ======

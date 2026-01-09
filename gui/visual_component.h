@@ -21,7 +21,8 @@ enum class ComponentType {
     Mosfet,
     Bjt,
     CurrentSource,
-    SchottkyDiode
+    SchottkyDiode,
+    Probe
 };
 
 QString componentTypeToString(ComponentType t);
@@ -48,6 +49,25 @@ public:
 };
 
 // ============================================================================
+// PROBE TIP
+// ============================================================================
+class VisualComponent;
+class ProbeTip : public QGraphicsItem {
+public:
+    ProbeTip(VisualComponent* parent, bool isPositive);
+
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
+    
+    // Snapping support
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+
+    bool isPositive;
+    VisualComponent* probeBody;
+};
+
+// ============================================================================
 // VISUAL COMPONENT
 // ============================================================================
 class VisualComponent : public QGraphicsItem {
@@ -57,6 +77,10 @@ public:
     QString value;
     QMap<QString, QString> params; // Dynamic parameters
     QMap<QString, QStringList> paramOptions; // Options for parameters (Key -> List of Choices)
+
+    // For Oscilloscope-style Probes
+    ProbeTip* probePositiveTip = nullptr;
+    ProbeTip* probeNegativeTip = nullptr;
 
     VisualComponent(ComponentType t);
 

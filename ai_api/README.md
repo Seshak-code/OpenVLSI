@@ -131,6 +131,56 @@ See individual header files:
 - `validation_api.h` - ERC, DRC, compliance
 - `ai_interface.h` - Unified JSON command interface
 
+## Probe Component API
+
+The `Probe` component allows marking specific nodes for measurement. Probes are essential for:
+- Defining output observation points
+- Debugging intermediate signal values
+- AI-suggested measurement locations
+
+### Place a Probe
+```json
+{
+  "action": "placeComponent",
+  "params": {
+    "type": "Probe",
+    "x": 300,
+    "y": 100,
+    "id": "P1"
+  }
+}
+```
+
+### AI Commands (Natural Language)
+The following phrases are recognized by the NL parser:
+- "add a probe at 300, 100"
+- "place probe next to R1"
+- "suggest probes" → AI analyzes and recommends probe locations
+- "find signal path" → AI traces input-to-output chains
+
+### Signal Path Analysis API
+```cpp
+// Returns paths from sources to sinks with recommended probe points
+QJsonArray AIAPI::ContextEngine::analyzeSignalPaths();
+
+// Returns debug suggestions with priority levels
+QJsonArray AIAPI::ContextEngine::getDebugSuggestions();
+```
+
+### Response Format (Signal Path)
+```json
+{
+  "source": "V1",
+  "sink": "GND",
+  "path": ["V1", "Q1", "Q2", "GND"],
+  "probePoints": [
+    {"node": "V1.+", "label": "Vin"},
+    {"node": "Q1.C", "label": "Vout_Q1"},
+    {"node": "Q2.C", "label": "Vout_Q2"}
+  ]
+}
+```
+
 ## Future Enhancements
 
 - **Machine Learning Integration**: Train models on successful placements
