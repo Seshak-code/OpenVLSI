@@ -104,6 +104,8 @@ qt_add_executable(${PROJECT_NAME}
     ai_api/simulation_trace.h
     ai_api/failure_classifier.cpp
     ai_api/failure_classifier.h
+    ai_api/speculative_runner.cpp
+    ai_api/speculative_runner.h
     components/circuit.h
 )
 
