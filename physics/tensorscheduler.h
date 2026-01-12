@@ -4,7 +4,7 @@
 #include <map>
 #include <string>
 #include <iostream>
-#include <cassert>  // NASA Rule #5
+#include <cassert>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>

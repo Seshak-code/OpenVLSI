@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
+    branches: [ "main" ]
   pull_request:
+    branches: [ "main" ]
 
 jobs:
   build-windows:
@@ -13,7 +15,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.0'
+          version: '6.8.0'
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2019_64'
@@ -21,22 +23,40 @@ jobs:
       - name: Configure CMake
         run: |
           cmake -S . -B out/build/windows-msvc -G "Visual Studio 17 2022" -A x64
+          
       - name: Build
-        run: cmake --build out/build/windows-msvc --config Debug
+        run: cmake --build out/build/windows-msvc --config Release
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AcuteSim-Windows
+          path: out/build/windows-msvc/Release/AcuteSim.exe
 
   build-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Qt and OpenMP with Homebrew
+      - name: Install Dependencies
         run: |
           brew update
-          brew install qt libomp
+          brew install ninja qt libomp
           
       - name: Configure CMake
         run: |
+          echo "Finding Qt Path..."
+          QT_PATH=$(brew --prefix qt)
+          echo "Qt Path found at: $QT_PATH"
           cmake -S . -B out/build/macos -G Ninja \
-            -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/qt/lib/cmake"
+            -DCMAKE_PREFIX_PATH="$QT_PATH/lib/cmake" \
+            -DCMAKE_BUILD_TYPE=Release
+            
       - name: Build
         run: cmake --build out/build/macos
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AcuteSim-macOS
+          path: out/build/macos/AcuteSim.app

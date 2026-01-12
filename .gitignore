@@ -71,11 +71,7 @@ desktop.ini
 *.ilk
 *.exp
 
-# Project-specific executables
-HelloWorld
-HelloWorld.js
-HelloWorld.wasm
-HelloWorld.html
+# Project-specific executables (AcuteSim)
 AcuteSim
 AcuteSim.js
 AcuteSim.wasm

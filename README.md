@@ -1,4 +1,4 @@
-Project HelloWorld - Cross-platform Qt6 + CMake
+Project AcuteSim - Cross-platform Qt6 + CMake
 
 This repo is configured to build on macOS and Windows (MSVC) using CMake.
 

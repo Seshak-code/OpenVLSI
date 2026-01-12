@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(HelloWorld VERSION 1.0 LANGUAGES CXX)
+project(AcuteSim VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -73,6 +73,7 @@ endif()
 find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
 
 # Find OpenMP (Optional, for physics engine performance)
+# Due to security issues with OpenMP on Emscripten, we only find it when not building for Emscripten
 if(NOT EMSCRIPTEN)
     find_package(OpenMP)
 endif()
@@ -140,6 +141,10 @@ if(EMSCRIPTEN)
     # Ensure the output filename is predictable for the HTML shell
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
 endif()
+
+# Set output name for all platforms (not just Emscripten) if needed, 
+# although it already follows PROJECT_NAME.
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
 
 # macOS specific: Ensure system frameworks like AGL are found
 if(APPLE)

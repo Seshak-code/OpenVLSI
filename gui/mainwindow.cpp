@@ -7,8 +7,8 @@
 #include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setWindowTitle("BeaverSim 🦫 - Experimental Circuit Designer");
-    resize(1400, 900); // Decent default size for EDA
+    setWindowTitle("AcuteSim - Experimental Circuit Designer");
+    resize(1280, 720); // Compatible across various resolutions
     
     // 1. Setup Central Area (Tabbed Workspace)
     setupCentralWidget();
