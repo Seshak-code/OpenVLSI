@@ -1,4 +1,4 @@
-#include "physics/regression_suite.h"
+#include "regression_suite.h"
 #include <string>
 #include <cstring>
 

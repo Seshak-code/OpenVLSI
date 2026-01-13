@@ -115,6 +115,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 
 # Link Qt libraries
@@ -181,18 +182,20 @@ install(TARGETS ${PROJECT_NAME}
 )
 
 # Regression Test Suite (Standalone Backend)
-add_executable(test_regression regression_main.cpp)
+add_executable(test_regression tests/regression_main.cpp)
 target_include_directories(test_regression PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 target_compile_features(test_regression PUBLIC cxx_std_17)
 
 # Sensitivity Analysis Test (AD Gradient Check)
-add_executable(test_sensitivity autodiff/test_sensitivity.cpp)
+add_executable(test_sensitivity tests/test_sensitivity.cpp)
 target_include_directories(test_sensitivity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 target_compile_features(test_sensitivity PUBLIC cxx_std_17)
