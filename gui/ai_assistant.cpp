@@ -95,18 +95,57 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
                 appendMessage("Copilot", "⚠️ ERC Issues:\n - " + errors.join("\n - "));
             }
         }
+        else if (cmd == "/demo") {
+            // Create a Demo Resistive Divider
+            ChangeRequest req;
+            req.description = "Create Demo Resistive Divider (5V Source + 1k Load)";
+            
+            // V1
+            QJsonObject v1; v1["action"] = "placeComponent"; v1["type"] = "VoltageSource"; v1["x"] = 0; v1["y"] = 0; v1["id"] = "V1";
+            req.actions.append(v1);
+            
+            // R1
+            QJsonObject r1; r1["action"] = "placeComponent"; r1["type"] = "Resistor"; r1["x"] = 100; r1["y"] = 0; r1["id"] = "R1";
+            req.actions.append(r1);
+            
+            // GND
+            QJsonObject gnd; gnd["action"] = "placeComponent"; gnd["type"] = "Ground"; gnd["x"] = 100; gnd["y"] = 80; gnd["id"] = "GND";
+            req.actions.append(gnd);
+            
+            // Wire V1 -> R1
+            QJsonObject w1; w1["action"] = "placeWire"; 
+            QJsonArray pts1; pts1.append(QJsonArray{0, -40}); pts1.append(QJsonArray{0, -60}); pts1.append(QJsonArray{100, -60}); pts1.append(QJsonArray{100, -20}); // Top wire
+            w1["points"] = pts1;
+            req.actions.append(w1);
+            
+            // Wire R1 -> GND
+            QJsonObject w2; w2["action"] = "placeWire"; 
+            QJsonArray pts2; pts2.append(QJsonArray{100, 20}); pts2.append(QJsonArray{100, 60}); // Bottom wire
+            w2["points"] = pts2;
+            req.actions.append(w2);
+            
+             // Wire V1 Bottom -> GND ?? (Implicitly V1 bottom is floating in this simple demo if not connected. Let's connect V1 bottom to GND too for loop)
+            QJsonObject w3; w3["action"] = "placeWire"; 
+            QJsonArray pts3; pts3.append(QJsonArray{0, 40}); pts3.append(QJsonArray{0, 80}); pts3.append(QJsonArray{100, 80}); 
+            w3["points"] = pts3;
+            req.actions.append(w3);
+
+            showDiffCard(req);
+        }
         else if (cmd == "/help") {
             appendMessage("Copilot", "Commands:\n"
+                                     "/help - This msg\n"
                                      "/context - Show AI System Prompt\n"
                                      "/dump - JSON Dump\n"
                                      "/wire - (Demo) Auto Wire\n"
                                      "/parts - List Components\n"
                                      "/erc - Run ERC\n"
                                      "/templates - List circuit templates\n"
-                                     "/help - This msg\n\n"
+                                     "/demo - Build Resistive Divider\n\n"
                                      "Natural Language:\n"
                                      "  'add a 1k resistor'\n"
-                                     "  'design a current mirror'\n"
+                                     "  'connect V1 to R1'\n"
+                                     "  'place probe'\n"
                                      "  'delete R5'");
         }
         else if (cmd == "/context") {
@@ -128,6 +167,66 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
 }
 
 void AiAssistantPanel::processNaturalLanguage(const QString& text) {
+
+    // === MANUAL PARSING FOR ROBUST "CONNECT" COMMANDS ===
+    if (text.startsWith("connect", Qt::CaseInsensitive)) {
+        QStringList parts = text.split(" ", Qt::SkipEmptyParts);
+        if (parts.size() >= 4 && parts[2] == "to") {
+            QString id1 = parts[1];
+            QString id2 = parts[3];
+            
+            QVector<QPointF> t1 = editorContext->getComponentTerminals(id1);
+            QVector<QPointF> t2 = editorContext->getComponentTerminals(id2);
+            
+            if (!t1.isEmpty() && !t2.isEmpty()) {
+                // Find closest terminal pair
+                QPointF p1 = t1[0];
+                QPointF p2 = t2[0];
+                double minDist = 1e9;
+                
+                for(const auto& pt1 : t1) {
+                    for(const auto& pt2 : t2) {
+                        double d = QLineF(pt1, pt2).length();
+                        if (d < minDist) {
+                            minDist = d;
+                            p1 = pt1;
+                            p2 = pt2;
+                        }
+                    }
+                }
+                
+                // Route L-Shape
+                QJsonArray points;
+                points.append(QJsonArray{p1.x(), p1.y()});
+                
+                // Midpoint logic (Simple)
+                if (std::abs(p1.x() - p2.x()) > std::abs(p1.y() - p2.y())) {
+                    // Horizontal first
+                     points.append(QJsonArray{p2.x(), p1.y()});
+                } else {
+                    // Vertical first
+                     points.append(QJsonArray{p1.x(), p2.y()});
+                }
+                points.append(QJsonArray{p2.x(), p2.y()});
+                
+                ChangeRequest req;
+                req.description = QString("Connect %1 to %2").arg(id1).arg(id2);
+                
+                QJsonObject action;
+                action["action"] = "placeWire";
+                action["points"] = points;
+                req.actions.append(action);
+                
+                showDiffCard(req);
+                return;
+            } else {
+                appendMessage("Copilot", QString("⚠️ Could not find terminals for %1 or %2").arg(id1).arg(id2));
+                return;
+            }
+        }
+    }
+    // ====================================================
+
     AIAPI::ParsedIntent intent = AIAPI::NLParser::parseIntent(text);
     
     if (intent.confidence < 0.5) {
@@ -147,6 +246,42 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
         QString value = intent.params["value"].toString();
         int x = intent.params.contains("x") ? intent.params["x"].toInt() : -1;
         int y = intent.params.contains("y") ? intent.params["y"].toInt() : -1;
+        
+        // === SMART PROBE PLACEMENT (Pathing Logic) ===
+        if (type == "Probe" && x == -1) {
+            QJsonArray paths = AIAPI::ContextEngine::analyzeSignalPaths();
+            if (!paths.isEmpty()) {
+                QJsonObject path = paths[0].toObject();
+                QString src = path["source"].toString();
+                QString sink = path["sink"].toString();
+                
+                QPointF p1 = editorContext->findNodeCenter(src);
+                QPointF p2 = editorContext->findNodeCenter(sink);
+                
+                // If we found valid coordinates for signal path endpoints
+                if (!p1.isNull() && !p2.isNull()) {
+                    req.description = QString("Place Smart Probe across Signal Path (%1 -> %2)").arg(src).arg(sink);
+                    
+                    QJsonObject action;
+                    action["action"] = "placeProbe";
+                    // Body centered above
+                    action["x"] = (p1.x() + p2.x()) / 2;
+                    action["y"] = std::min(p1.y(), p2.y()) - 140; 
+                    
+                    QJsonObject pt, nt;
+                    pt["x"] = p1.x(); pt["y"] = p1.y();
+                    nt["x"] = p2.x(); nt["y"] = p2.y();
+                    
+                    action["posTip"] = pt;
+                    action["negTip"] = nt;
+                    
+                    req.actions.append(action);
+                    showDiffCard(req);
+                    return;
+                }
+            }
+        }
+        // =============================================
         
         req.description = QString("Add %1 (%2)").arg(type).arg(value);
         if (x >= 0) req.description += QString(" at (%1, %2)").arg(x).arg(y);
@@ -472,6 +607,27 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
         else if (actionType == "runSimulation") {
             // Trigger simulation (this would connect to SimulatorWindow)
             appendMessage("Copilot", "🔬 Simulation requested. Open the Simulator window to see results.");
+            successCount++;
+        }
+        else if (actionType == "placeProbe") {
+            // Place probe with explicit tip positions
+            double bx = action["x"].toInt() + offset.x();
+            double by = action["y"].toInt() + offset.y();
+            
+            QPointF bodyPos(bx, by);
+            QPointF posTip(bx, by - 60); // Default relative
+            QPointF negTip(bx, by + 60); // Default relative
+            
+            if (action.contains("posTip")) {
+                QJsonObject pt = action["posTip"].toObject();
+                posTip = QPointF(pt["x"].toDouble() + offset.x(), pt["y"].toDouble() + offset.y());
+            }
+            if (action.contains("negTip")) {
+                QJsonObject nt = action["negTip"].toObject();
+                negTip = QPointF(nt["x"].toDouble() + offset.x(), nt["y"].toDouble() + offset.y());
+            }
+
+            editorContext->placeProbe("", bodyPos, posTip, negTip);
             successCount++;
         }
         else if (actionType == "placeWire") {

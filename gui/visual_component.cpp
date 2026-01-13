@@ -222,8 +222,7 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
 
 QRectF VisualComponent::boundingRect() const {
     if (type == ComponentType::Probe) {
-        // Broad bounding box to cover potentially far-reaching probe tips and their dashed lines
-        return QRectF(-300, -300, 600, 600); 
+        return QRectF(-20, -20, 40, 40);
     }
     return QRectF(-50, -50, 100, 100);
 }

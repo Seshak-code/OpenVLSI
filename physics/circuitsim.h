@@ -2,7 +2,7 @@
 #include "circuit.h"
 #include "linalg.h"
 #include <algorithm>
-#include <cassert> // NASA Rule #5
+#include <cassert>
 #include <cmath>
 #include <functional>
 #include <vector>
@@ -18,6 +18,7 @@
 
 #include "../autodiff/dual.h"
 #include "device_physics.h"
+#include "physics_tensors.h"
 #include "stamps.h"
 
 // ============================================================================
@@ -316,6 +317,9 @@ private:
   MatrixConstructor matrixBuilder;
   std::vector<double> rhsVector;
   TensorScheduler scheduler;
+  
+  // SoA Tensor Storage (Batch Physics)
+  TensorizedBlock soaBlock;
 
 
 
@@ -401,6 +405,14 @@ public:
       double i_src = (v.voltage_V - (v1 - v2)) / r_int;
       addRes(v.nodePositive, i_src);
       addRes(v.nodeNegative, -i_src);
+    }
+
+    // 2.5. Current Sources (Ideal Current Injection)
+    // Current sources inject fixed current regardless of voltage
+    for (const auto &cs : netlist.globalBlock.currentSources) {
+      // Current flows from + to - inside source, leaves + externally
+      addRes(cs.nodePositive, -cs.current_A); // Current leaving + node
+      addRes(cs.nodeNegative, cs.current_A);  // Current entering - node
     }
 
     // 3. Diodes (Shockley Equation: I = Is * (exp(V/Vt) - 1))
@@ -820,6 +832,66 @@ public:
    * block instance.
    * Uses Forward-Mode Automatic Differentiation (AD) via Dual<double>.
    */
+  /**
+   * stampSoABlock
+   * Uses Structure-of-Arrays (SoA) tensors for batch processing.
+   * Calls specialized SIMD-friendly physics kernels and then stamps the results.
+   */
+  void stampSoABlock(TensorizedBlock& block, const std::vector<double>& v_guess) {
+    // 1. Batch Compute Physics (Updates internal state: v_d, i_d, g_d, etc.)
+    batchDiodePhysics(block.diodes, v_guess);
+    batchMosfetPhysics(block.mosfets, v_guess);
+    batchBJTPhysics(block.bjts, v_guess);
+
+    // 2. Batch Stamp (Iterate over contiguous arrays)
+    
+    // Diodes
+    size_t nD = block.diodes.size();
+    for (size_t i = 0; i < nD; ++i) {
+        stampDiode(block.diodes.anodes[i], block.diodes.cathodes[i],
+                   block.diodes.g_d[i], block.diodes.i_d[i], block.diodes.v_d[i],
+                   matrixBuilder, rhsVector);
+    }
+    
+    // MOSFETs
+    size_t nM = block.mosfets.size();
+    for (size_t i = 0; i < nM; ++i) {
+        stampMosfet(block.mosfets.drains[i], block.mosfets.gates[i], 
+                    block.mosfets.sources[i], block.mosfets.bodies[i],
+                    block.mosfets.gm[i], block.mosfets.gds[i],
+                    matrixBuilder);
+        
+        // RHS Current Correction: I_eq = I_ds - (gm*vgs + gds*vds)
+        // Check `stampMosfet` logic: it assumes linear model. 
+        // We need to stamp the equivalent current source for the linearization point.
+        double ids = block.mosfets.ids[i];
+        double gm = block.mosfets.gm[i];
+        double gds = block.mosfets.gds[i];
+        double vgs = block.mosfets.vgs[i];
+        double vds = block.mosfets.vds[i];
+        double i_eq = ids - (gm * vgs + gds * vds);
+        
+        int d = block.mosfets.drains[i];
+        int s = block.mosfets.sources[i];
+        if (d != 0) rhsVector[d-1] -= i_eq;
+        if (s != 0) rhsVector[s-1] += i_eq;
+    }
+    
+    // BJTs
+    size_t nQ = block.bjts.size();
+    for (size_t i = 0; i < nQ; ++i) {
+        stampBJT(block.bjts.collectors[i], block.bjts.bases[i], block.bjts.emitters[i],
+                 block.bjts.g_cc[i], block.bjts.g_cb[i], block.bjts.g_ce[i],
+                 block.bjts.g_bc[i], block.bjts.g_bb[i], block.bjts.g_be[i],
+                 block.bjts.g_ec[i], block.bjts.g_eb[i], block.bjts.g_ee[i],
+                 block.bjts.Ic[i], block.bjts.Ib[i], block.bjts.Ie[i],
+                 (block.bjts.collectors[i]>0 ? v_guess[block.bjts.collectors[i]-1] : 0.0),
+                 (block.bjts.bases[i]>0 ? v_guess[block.bjts.bases[i]-1] : 0.0),
+                 (block.bjts.emitters[i]>0 ? v_guess[block.bjts.emitters[i]-1] : 0.0),
+                 matrixBuilder, rhsVector);
+    }
+  }
+
   void stampBlockNonLinear(const TensorBlock &block,
                            const std::function<int(int)> &mapNode,
                            const std::vector<double> &v_guess) {
@@ -968,7 +1040,8 @@ public:
     // A. Global Block
     auto identityMap = [](int n) { return n; };
     stampBlockLinear(netlist.globalBlock, identityMap, h);
-    stampBlockNonLinear(netlist.globalBlock, identityMap, v_guess);
+    // stampBlockNonLinear(netlist.globalBlock, identityMap, v_guess); 
+    stampSoABlock(soaBlock, v_guess); // SoA for Global Block
 
     // B. Hierarchical Batches
     for (const auto &job : scheduler.jobs) {
@@ -1047,6 +1120,9 @@ inline SimulationStep CircuitSim::solveDC(TensorNetlist &netlist) {
   if (netlist.numGlobalNodes == 0)
     return {0.0, {}, {0, 0.0, true}};
 
+  // Initialize SoA Block for this solve
+  soaBlock = tensorizeBlock(netlist.globalBlock);
+
   std::vector<double> voltageEstimate(netlist.numGlobalNodes, 0.0);
 
   // Seed the solver with initial guesses to speed up convergence
@@ -1079,7 +1155,7 @@ inline SimulationStep CircuitSim::solveDC(TensorNetlist &netlist) {
 
     Csr_matrix matrix = matrixBuilder.createCsr();
     SolverResult result = solvePCG(matrix, rhsVector, 1e-6, PCG_MAX_ITER);
-
+    
     std::vector<double> v_new = result.solution;
 
     // PN Junction Limiting (pnjlim)

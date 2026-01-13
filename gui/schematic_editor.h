@@ -150,11 +150,20 @@ public:
     // Find nearest clear space of given size
     QPoint findClearSpace(int width = 60, int height = 60);
     
+    // Find center coordinate of a net/node (for smart probe placement)
+    QPointF findNodeCenter(const QString& nodeName);
+    
+    // Get absolute scene coordinates of a component's terminals
+    QVector<QPointF> getComponentTerminals(const QString& id);
+    
     // Get spatial relationships for AI context
     QString getSpatialContext();
     
     // Overloaded placement for AI assistant (string-based)
     bool placeComponent(const QString& type, int x, int y, const QString& id = "", const QString& params = "");
+    
+    // Explicit Probe Placement with Custom Tip Locations
+    QString placeProbe(const QString& id, QPointF bodyPos, QPointF posTip, QPointF negTip);
 
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }

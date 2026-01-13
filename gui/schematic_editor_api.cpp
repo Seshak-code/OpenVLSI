@@ -165,6 +165,26 @@ bool SchematicEditor::placeComponent(const QString& type, int x, int y, const QS
     return !resultId.isEmpty();
 }
 
+QString SchematicEditor::placeProbe(const QString& id, QPointF bodyPos, QPointF posTip, QPointF negTip) {
+    if (!scene) return "";
+
+    VisualComponent* comp = new VisualComponent(ComponentType::Probe);
+    comp->name = id.isEmpty() ? generateUniqueId(ComponentType::Probe) : id;
+    comp->setPos(bodyPos);
+    
+    scene->addItem(comp);
+    
+    // Set tips relative to body
+    if (comp->probePositiveTip) {
+        comp->probePositiveTip->setPos(comp->mapFromScene(posTip));
+    }
+    if (comp->probeNegativeTip) {
+        comp->probeNegativeTip->setPos(comp->mapFromScene(negTip));
+    }
+    
+    return comp->name;
+}
+
 bool SchematicEditor::collidesWithAny(int x, int y, int w, int h, const QString& excludeId) {
     if (!scene) return false;
     
@@ -429,5 +449,58 @@ QString SchematicEditor::getSpatialContext() {
     context += QString("\nNEXT CLEAR SPACE: (%1, %2)\n").arg(clearSpace.x()).arg(clearSpace.y());
     
     return context;
+}
+
+QPointF SchematicEditor::findNodeCenter(const QString& nodeName) {
+    if (!scene) return QPointF(0, 0);
+    
+    QPointF center(0, 0);
+    int count = 0;
+    
+    // Scan wires with matching net name
+    for (auto* item : scene->items()) {
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            if (w->getName() == nodeName) {
+                center += w->line().center();
+                count++;
+            }
+        }
+    }
+    
+    // Also check component terminals connected to this node (via connectivity map)
+    // This is expensive to compute, so relying on named wires is faster.
+    // If no named wires found, return 0,0
+    
+    if (count > 0) {
+        return center / count;
+    }
+    
+    // Fallback: If nodeName is "0" or "GND", find Ground components
+    if (nodeName == "0" || nodeName == "GND") {
+        for (auto* item : scene->items()) {
+             if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+                 if (c->type == ComponentType::Ground) {
+                     return c->pos() + QPointF(0, -20); // Terminal pos
+                 }
+             }
+        }
+    }
+
+    return QPointF(0, 0);
+}
+
+QVector<QPointF> SchematicEditor::getComponentTerminals(const QString& id) {
+    if (!scene) return {};
+    
+    VisualComponent* c = findComponent(id);
+    if (!c) return {};
+    
+    QVector<QPointF> sceneTerminals;
+    QVector<QPointF> localTerminals = c->getTerminals();
+    
+    for (const QPointF& pt : localTerminals) {
+        sceneTerminals.append(c->mapToScene(pt));
+    }
+    return sceneTerminals;
 }
 

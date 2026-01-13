@@ -24,14 +24,34 @@
 template <typename T>
 struct DiodeParams 
 {
-    T Is;  // Saturation Current [A]
+    T Is;  // Saturation Current [A] at Tnom
     T N;   // Emission Coefficient (1.0 for ideal)
     T Vt;  // Thermal Voltage [V] (kT/q ≈ 25.85mV @ 300K)
+    T Rs;   // Series Parasitic Resistance [Ω]
+    
+    // Thermal Parameters
+    T Tnom; // Nominal Temperature (usually 300.15K)
+    T Temp; // Operating Temperature [K]
+    T Eg;   // Bandgap Energy [eV] (1.11 for Si)
+    T Xti;  // IS temperature exponent (3.0 for pn junction)
+
+    // Calculate Is at operating temperature
+    T Is_effective() const {
+        if (Temp == Tnom) return Is;
+        T ratio = Temp / Tnom;
+        // Eg is in eV, Vt is in V. V = kT/q. Need to be careful with Boltzmann constant units if using raw k.
+        // Simplified relations used in SPICE:
+        // Is(T) = Is * (T/Tnom)^(Xti/N) * exp(...) 
+        // Note: Xti usually 3.0.
+        return Is * std::pow(ratio, Xti / N) * std::exp((Eg / (0.02585)) * (1.0 - Tnom/Temp)); // using Vt_nom approx
+    }
 };
 
 /**
  * diode_current
  * Exact Shockley Equation: I = Is * (exp(Vd / (N*Vt)) - 1)
+ * Exact Shockley Equation including Series Resistance iteration would require implicit solve.
+ * Here we assume Rs is handled by external stamps (StampedResistor).
  */
 template <typename T, typename P>
 inline T diode_current(T vd, const DiodeParams<P>& p) 
@@ -77,11 +97,15 @@ inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 4
 template <typename T>
 struct MosfetParams 
 {
-    T Kp;     // Process transconductance [A/V^2]
+    T Kp;     // Process transconductance [A/V^2] at Tnom
     T Vth;    // Threshold Voltage [V]
     T lambda; // Channel Length Modulation [1/V]
     T W;      // Channel Width [m]
     T L;      // Channel Length [m]
+    
+    // Thermal
+    T Temp;
+    T Tnom;
 };
 
 enum class MosfetRegion { CUTOFF, LINEAR, SATURATION };
@@ -140,6 +164,13 @@ struct BJTParams
     T BetaF;  // Forward Current Gain
     T BetaR;  // Reverse Current Gain
     T Vt;     // Thermal Voltage [V]
+    
+    // Thermal
+    T Temp;
+    T Tnom;
+    T Xtb;    // Beta temperature exponent
+    T Eg;     // Bandgap
+    T Xti;    // IS temperature exponent
 };
 
 struct BJTCurrents {

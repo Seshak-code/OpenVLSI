@@ -2,7 +2,7 @@ QT       += core gui widgets
 
 CONFIG += c++17
 
-TARGET = HelloWorld
+TARGET = AcuteSim
 TEMPLATE = app
 
 SOURCES += main.cpp

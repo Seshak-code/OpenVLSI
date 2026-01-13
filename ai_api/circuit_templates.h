@@ -51,7 +51,7 @@ private:
             t.components = QJsonArray{
                 // Power & Biasing
                 QJsonObject{{"type", "VoltageSource"}, {"id", "V1"}, {"x", 0}, {"y", 100}, {"value", "10"}},
-                QJsonObject{{"type", "CurrentSource"}, {"id", "I1"}, {"x", 100}, {"y", 200}, {"value", "1u"}},
+                QJsonObject{{"type", "CurrentSource"}, {"id", "I1"}, {"x", 100}, {"y", 200}, {"value", "1m"}},
                 QJsonObject{{"type", "Ground"}, {"id", "GND"}, {"x", 200}, {"y", 340}},
                 // Load (Rotated Vertical)
                 QJsonObject{{"type", "Resistor"}, {"id", "R1"}, {"x", 300}, {"y", 60}, {"value", "100"}, {"rotation", 90}},

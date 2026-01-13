@@ -188,21 +188,13 @@ struct Diode {
     double saturationCurrent_I_S_A;       // I_S [A]
     double emissionCoefficient_N;         // N (dimensionless)
     double thermalVoltage_V_T_V;          // V_T [V]
+    
+    // Thermal (Optional, default 300.15K)
+    double temperature_K = 300.15;
 };
 
-/*
- * MOSFET (M) - Metal-Oxide-Semiconductor FET
- * Level 1 (Shichman-Hodges) Equations:
- *   Cutoff:     I_DS = 0                                       (V_GS < V_TH)
- *   Linear:     I_DS = K * [2*(V_GS-V_TH)*V_DS - V_DS^2]        (V_DS < V_GS-V_TH)
- *   Saturation: I_DS = K * (V_GS - V_TH)^2 * (1 + lambda*V_DS)  (V_DS >= V_GS-V_TH)
- * Where K = (mu * C_ox / 2) * (W / L) = Kp * (W/L) / 2
- *
- * Small-Signal Model (Linearized):
- *   g_m  = dI_DS/dV_GS  (transconductance)
- *   g_ds = dI_DS/dV_DS  (output conductance)
- *   g_mb = dI_DS/dV_BS  (body transconductance)
- */
+// ...
+
 struct Mosfet {
     std::string instanceName;             // e.g., "M1"
     int drain;                        // D terminal
@@ -213,16 +205,14 @@ struct Mosfet {
     double channelWidth_m;                // W [meters]
     double channelLength_m;               // L [meters]
     
+    double temperature_K = 300.15;
+    
     // Operating Point (Updated each Newton iteration)
     double V_GS = 0.0, V_DS = 0.0, V_BS = 0.0;
 };
 
-/*
- * BJT (Q) - Bipolar Junction Transistor
- * Ebers-Moll Equations (NPN):
- *   I_C = I_S * (exp(V_BE / V_T) - 1) - I_S/beta_R * (exp(V_BC / V_T) - 1)
- *   I_E = I_S/beta_F * (exp(V_BE / V_T) - 1) - I_S * (exp(V_BC / V_T) - 1)
- */
+// ...
+
 struct BJT {
     std::string instanceName;
     int nodeCollector;                    // C terminal
@@ -236,6 +226,8 @@ struct BJT {
     double betaR;                         // Reverse Beta
     double saturationCurrent_I_S_A;       // Is [A]
     double thermalVoltage_V_T_V;          // Vt [V]
+    
+    double temperature_K = 300.15;
 };
 
 // ============================================================================

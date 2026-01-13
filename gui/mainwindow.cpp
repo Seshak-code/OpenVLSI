@@ -8,7 +8,7 @@
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("AcuteSim - Experimental Circuit Designer");
-    resize(1280, 720); // Compatible across various resolutions
+    resize(1280, 720); // Compatible across various screen sizes
     
     // 1. Setup Central Area (Tabbed Workspace)
     setupCentralWidget();

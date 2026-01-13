@@ -184,6 +184,26 @@ struct DRCRule {
     double minEnclosure;
 };
 
+struct DensityRule {
+    QString layerName;
+    double minDensity;  // e.g., 0.3 (30%)
+    double maxDensity;  // e.g., 0.7 (70%)
+    double windowSize;  // e.g., 100um x 100um check window
+};
+
+struct AntennaRule {
+    QString gateLayer;
+    QString metalLayer;
+    double maxRatio;    // Max Metal Area / Gate Area
+};
+
+struct EOLRule {
+    QString layerName;
+    double minWidth;
+    double minSpacing;  // Spacing required at the end of line
+    double eolExtension; // Definition of "End of Line"
+};
+
 struct DRCViolation {
     QString ruleId;
     QString description;

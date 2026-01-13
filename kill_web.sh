@@ -9,4 +9,4 @@ else
     echo "Killing web server (PID: $PID) on port 8000..."
     kill -9 $PID
     echo "Web server killed."
-fi
+fi  

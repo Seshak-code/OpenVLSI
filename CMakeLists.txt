@@ -107,6 +107,10 @@ qt_add_executable(${PROJECT_NAME}
     ai_api/failure_classifier.h
     ai_api/speculative_runner.cpp
     ai_api/speculative_runner.h
+    ai_api/prompt_builder.cpp
+    ai_api/prompt_builder.h
+    physics/physics_tensors.cpp
+    physics/superposition.cpp
     components/circuit.h
 )
 
@@ -182,7 +186,11 @@ install(TARGETS ${PROJECT_NAME}
 )
 
 # Regression Test Suite (Standalone Backend)
-add_executable(test_regression tests/regression_main.cpp)
+add_executable(test_regression 
+    tests/regression_main.cpp
+    physics/physics_tensors.cpp
+    physics/superposition.cpp
+)
 target_include_directories(test_regression PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/components
@@ -191,7 +199,11 @@ target_include_directories(test_regression PRIVATE
 target_compile_features(test_regression PUBLIC cxx_std_17)
 
 # Sensitivity Analysis Test (AD Gradient Check)
-add_executable(test_sensitivity tests/test_sensitivity.cpp)
+add_executable(test_sensitivity 
+    tests/test_sensitivity.cpp
+    physics/physics_tensors.cpp
+    physics/superposition.cpp
+)
 target_include_directories(test_sensitivity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/components
@@ -199,3 +211,16 @@ target_include_directories(test_sensitivity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 target_compile_features(test_sensitivity PUBLIC cxx_std_17)
+
+# Superposition Test
+add_executable(test_superposition 
+    tests/test_superposition.cpp
+    physics/physics_tensors.cpp
+    physics/superposition.cpp
+)
+target_include_directories(test_superposition PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_features(test_superposition PUBLIC cxx_std_17)
