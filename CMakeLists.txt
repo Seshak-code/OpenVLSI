@@ -112,6 +112,7 @@ qt_add_executable(${PROJECT_NAME}
     physics/physics_tensors.cpp
     physics/superposition.cpp
     physics/circuitsim_solver.cpp
+    physics/webgpu_solver.cpp
     components/circuit.h
 )
 
@@ -143,6 +144,7 @@ if(EMSCRIPTEN)
         "-sALLOW_MEMORY_GROWTH=1"
         "-sEXIT_RUNTIME=1"
         "-sERROR_ON_UNDEFINED_SYMBOLS=0"
+        "-sUSE_WEBGPU=1"
     )
     # Ensure the output filename is predictable for the HTML shell
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")

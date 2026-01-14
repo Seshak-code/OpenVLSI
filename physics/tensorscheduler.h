@@ -38,7 +38,10 @@ class HardwareManager : public IHardwareDetector {
 public:
     SolverBackend detectBestBackend() const override {
         #ifdef __EMSCRIPTEN__
-            return SolverBackend::CPU_SEQUENTIAL;
+            // Check for WebGPU availability via JS interop
+            // This requires -s USE_WEBGPU=1 during compilation
+            // For now, we assume if we are in Wasm with the feature flag, we use it.
+            return SolverBackend::WEBGPU_COMPUTE;
         #else
             return SolverBackend::CPU_OPENMP;
         #endif
