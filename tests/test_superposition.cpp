@@ -1,5 +1,5 @@
-#include "../physics/circuitsim.h"
-#include "../physics/superposition.h"
+#include "circuitsim.h"
+#include "superposition.h"
 #include <iostream>
 #include <cassert>
 #include <cmath>

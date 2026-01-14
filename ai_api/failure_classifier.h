@@ -1,8 +1,8 @@
 #pragma once
 #include "simulation_trace.h"
 #include "failure_taxonomy.h"
-#include "../physics/linalg.h" 
-#include "../physics/circuitsim.h" // For SolverResult
+#include "linalg.h" 
+#include "circuitsim.h" // For SolverResult
 
 namespace AIAPI {
 

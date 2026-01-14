@@ -1,11 +1,10 @@
 #include "webgpu_solver.h"
+#ifdef __EMSCRIPTEN__
 #include <webgpu/webgpu.h>
 #include <emscripten/html5_webgpu.h>
 #include <iostream>
 #include <vector>
 #include <string>
-
-#ifdef __EMSCRIPTEN__
 
 // WGSL Shader Source (Embedded for now)
 const char* COMPUTE_SHADER_WGSL = R"(

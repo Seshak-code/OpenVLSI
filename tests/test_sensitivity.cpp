@@ -2,7 +2,7 @@
 #include <vector>
 #include <cmath>
 #include <cassert>
-#include "../physics/circuitsim.h"
+#include "circuitsim.h"
 
 // Minimal Test Runner
 #define ASSERT_NEAR(a, b, eps) \
