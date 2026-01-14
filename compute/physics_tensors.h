@@ -258,6 +258,33 @@ struct CapacitorTensor {
 };
 
 // ============================================================================
+// INDUCTOR TENSOR (for transient)
+// ============================================================================
+
+struct InductorTensor {
+    std::vector<int> coil1;
+    std::vector<int> coil2;
+    std::vector<double> L;         // Inductance [H]
+    std::vector<double> i_prev;    // Current at t-1
+    std::vector<double> v_prev;    // Voltage at t-1
+    
+    size_t size() const { return coil1.size(); }
+    
+    void push(int c1, int c2, double l) {
+        coil1.push_back(c1);
+        coil2.push_back(c2);
+        L.push_back(l);
+        i_prev.push_back(0.0);
+        v_prev.push_back(0.0);
+    }
+    
+    void clear() {
+        coil1.clear(); coil2.clear(); L.clear();
+        i_prev.clear(); v_prev.clear();
+    }
+};
+
+// ============================================================================
 // UNIFIED TENSOR BLOCK
 // ============================================================================
 
@@ -268,6 +295,7 @@ struct CapacitorTensor {
 struct TensorizedBlock {
     ResistorTensor resistors;
     CapacitorTensor capacitors;
+    InductorTensor inductors;
     DiodeTensor diodes;
     MosfetTensor mosfets;
     BJTTensor bjts;
@@ -275,6 +303,7 @@ struct TensorizedBlock {
     void clear() {
         resistors.clear();
         capacitors.clear();
+        inductors.clear();
         diodes.clear();
         mosfets.clear();
         bjts.clear();

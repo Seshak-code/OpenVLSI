@@ -491,6 +491,33 @@ public:
         addRes(c.nodePlate1, -i_c);
         addRes(c.nodePlate2, i_c);
       }
+      
+      // 4.5. Inductors (Transient Only)
+      for (const auto &l : netlist.globalBlock.inductors) {
+        double v_curr = getV(l.nodeCoil1) - getV(l.nodeCoil2);
+        double i_l = 0.0;
+        IntegrationType type = integrator->getType();
+
+        if (l.current_history.empty())
+          continue;
+
+        if (type == IntegrationType::TRAPEZOIDAL) {
+          double g_eq = h / (2.0 * l.inductance_henries);
+          i_l = l.current_history[0] + g_eq * (v_curr + l.voltage_history[0]);
+        } else if (type == IntegrationType::GEAR_1_EULER) {
+          i_l = l.current_history[0] + (h / l.inductance_henries) * v_curr;
+        } else if (type == IntegrationType::GEAR_2) {
+          if (l.current_history.size() >= 2) {
+            double coeff = h / l.inductance_henries;
+            i_l = (4.0/3.0)*l.current_history[0] - (1.0/3.0)*l.current_history[1] 
+                  + (2.0/3.0)*coeff*v_curr;
+          } else {
+            i_l = l.current_history[0] + (h / l.inductance_henries) * v_curr;
+          }
+        }
+        addRes(l.nodeCoil1, -i_l);
+        addRes(l.nodeCoil2, i_l);
+      }
     }
 
     // 5. Hierarchical Instances (Phase 1: Structural Abstraction)

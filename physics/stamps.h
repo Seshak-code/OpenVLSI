@@ -53,6 +53,43 @@ inline void stampCapacitorTrapezoidal(int nodeI, int nodeJ, double C, double h,
         rhsVector[nodeJ - 1] += I_eq;
 }
 
+/**
+ * Inductor Trapezoidal Companion Model
+ * Physics: v_L = L * di/dt
+ * Companion Model (Norton equivalent):
+ *   R_eq = 2*L / h (equivalent resistance)
+ *   I_eq = i_prev + (v_prev / R_eq)
+ * Stamps R_eq in parallel with I_eq current source.
+ */
+inline void stampInductorTrapezoidal(int nodeI, int nodeJ, double L, double h, 
+                                      double i_prev, double v_prev, 
+                                      MatrixConstructor& matrixBuilder, std::vector<double>& rhsVector)
+{
+    // R_eq = 2*L / h => G_eq = h / (2*L)
+    double G_eq = h / (2.0 * L);
+    double I_eq = i_prev + G_eq * v_prev;
+
+    // Stamp conductance G_eq (like resistor)
+    if (nodeI != 0) 
+    {
+        matrixBuilder.add(nodeI - 1, nodeI - 1, G_eq);
+        if (nodeJ != 0) 
+            matrixBuilder.add(nodeI - 1, nodeJ - 1, -G_eq);
+    }
+    if (nodeJ != 0) 
+    {
+        matrixBuilder.add(nodeJ - 1, nodeJ - 1, G_eq);
+        if (nodeI != 0) 
+            matrixBuilder.add(nodeJ - 1, nodeI - 1, -G_eq);
+    }
+
+    // Stamp equivalent current source
+    if (nodeI != 0) 
+        rhsVector[nodeI - 1] += I_eq;
+    if (nodeJ != 0) 
+        rhsVector[nodeJ - 1] -= I_eq;
+}
+
 inline void stampVoltageSourceAsNorton(int nodePos, int nodeNeg, double voltage, 
                                         MatrixConstructor& matrixBuilder, std::vector<double>& rhsVector)
 {
