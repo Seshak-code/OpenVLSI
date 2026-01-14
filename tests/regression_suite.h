@@ -6,7 +6,7 @@
 #include <string>
 #include <iostream>
 
-using TestCase = std::function<SimulationStep()>;
+using TestCase = std::function<SolverStep()>;
 
 struct RegisteredTest {
     std::string name;
@@ -39,12 +39,12 @@ public:
              std::cout << "Running " << t.name << "... ";
              
              try {
-                SimulationStep result = t.testFunc();
+                SolverStep result = t.testFunc();
                 
                 if (updateGolden) {
                     // Calculate KCL residual for the record
                     CircuitSim sim; // Need sim to calc residuals? 
-                    // Wait, SimulationStep doesn't have the netlist.
+                    // Wait, SolverStep doesn't have the netlist.
                     // The test case generates the netlist and solves.
                     // Ideally the test case should return the KCL residual too or we calculate it there.
                     // For now, let's assume result.stats matches.
@@ -92,7 +92,7 @@ public:
 // ===================================
 namespace Benchmarks {
 
-SimulationStep linearDivider() {
+SolverStep linearDivider() {
     TensorNetlist nl;
     nl.addVoltageSource(1, 0, 10.0);
     nl.addResistor(1, 2, 2000.0); // 2k
@@ -102,7 +102,7 @@ SimulationStep linearDivider() {
     return sim.solveDC(nl);
 }
 
-SimulationStep diodeCircuit() {
+SolverStep diodeCircuit() {
     TensorNetlist nl;
     nl.addCurrentSource(0, 1, 1.0); // 1A source
     nl.addDiode(1, 0, 1e-14);       // Standard diode
@@ -111,7 +111,7 @@ SimulationStep diodeCircuit() {
     return sim.solveDC(nl);
 }
 
-SimulationStep bridgeRectifier() {
+SolverStep bridgeRectifier() {
     // Full bridge rectifier (DC snapshot)
     TensorNetlist nl;
     nl.addVoltageSource(1, 2, 10.0); // AC source snapshot 10V

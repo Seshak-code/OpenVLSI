@@ -88,7 +88,7 @@ void SimulatorWindow::stepSimulation() {
     }
 
     // Perform one physics step
-    SimulationStep step = sim.stepTransient(netlist, timeStep, currentTime);
+    SolverStep step = sim.stepTransient(netlist, timeStep, currentTime);
     
     // Defensive guard: Check for convergence failure
     if (!step.stats.converged) {

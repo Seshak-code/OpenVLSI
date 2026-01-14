@@ -44,7 +44,7 @@ private:
         netlist.addResistor(2, 0, 2000.0);
 
         CircuitSim sim;
-        SimulationStep res = sim.solveDC(netlist);
+        SolverStep res = sim.solveDC(netlist);
         
         double v_out = (res.nodeVoltages.size() >= 2) ? res.nodeVoltages[1] : 0.0; // Node 2 is index 1
         report("Ohm's Law (Res Divider)", v_out, 5.000000, 0.01); // 0.01% tolerance
@@ -69,7 +69,7 @@ private:
         netlist.addDiode(1, 0, Is);
 
         CircuitSim sim;
-        SimulationStep res = sim.solveDC(netlist);
+        SolverStep res = sim.solveDC(netlist);
 
         double v_out = (res.nodeVoltages.size() >= 1) ? res.nodeVoltages[0] : 0.0; // Node 1 is index 0
         report("Shockley Diode V_drop", v_out, expectedV, 0.1); 

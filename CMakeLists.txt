@@ -111,6 +111,7 @@ qt_add_executable(${PROJECT_NAME}
     ai_api/prompt_builder.h
     physics/physics_tensors.cpp
     physics/superposition.cpp
+    physics/circuitsim_solver.cpp
     components/circuit.h
 )
 
@@ -190,6 +191,7 @@ add_executable(test_regression
     tests/regression_main.cpp
     physics/physics_tensors.cpp
     physics/superposition.cpp
+    physics/circuitsim_solver.cpp
 )
 target_include_directories(test_regression PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -203,6 +205,7 @@ add_executable(test_sensitivity
     tests/test_sensitivity.cpp
     physics/physics_tensors.cpp
     physics/superposition.cpp
+    physics/circuitsim_solver.cpp
 )
 target_include_directories(test_sensitivity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -217,6 +220,7 @@ add_executable(test_superposition
     tests/test_superposition.cpp
     physics/physics_tensors.cpp
     physics/superposition.cpp
+    physics/circuitsim_solver.cpp
 )
 target_include_directories(test_superposition PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics

@@ -37,7 +37,7 @@ SimulationTrace SpeculativeRunner::runSpeculative(
     const int MAX_STEPS = 5000; // Safety cap
 
     while (currentTime < simulationDuration && steps < MAX_STEPS) {
-        SimulationStep step = specSim.stepTransient(specNetlist, dt, currentTime);
+        SolverStep step = specSim.stepTransient(specNetlist, dt, currentTime);
         
         // Capture Failures via Classifier
         if (!step.stats.converged) {

@@ -92,7 +92,7 @@ public:
             
             try 
             {
-                SimulationStep result = sim.solveDC(netlist);
+                SolverStep result = sim.solveDC(netlist);
                 
                 if (result.stats.converged) 
                 {

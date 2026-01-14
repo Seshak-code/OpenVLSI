@@ -72,7 +72,7 @@ public:
             // Vary parameters by 5%
             TensorNetlist instance = copyWithVariation(baseNetlist, 0.05, 1234 + i);
             
-            SimulationStep step = sim.solveDC(instance);
+            SolverStep step = sim.solveDC(instance);
             if (step.stats.converged) {
                 // Node 2 is index 1
                 double v_out = (step.nodeVoltages.size() > 1) ? step.nodeVoltages[1] : 0.0;

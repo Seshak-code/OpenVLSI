@@ -51,6 +51,48 @@ QString ContextEngine::generateSystemPrompt() {
         prompt += "\nAnalyze this crash context and consider it when assisting the user.\n";
     }
     
+    // 6. Phase 1.26 Step 4: AI Context Representation Layer
+    prompt += "\n=== STRUCTURED CONTEXT (Step 4) ===\n";
+    
+    // 4.1: Topology Chunks
+    QJsonObject topology = serializeTopologyChunks();
+    QJsonObject deviceTables = topology["deviceTables"].toObject();
+    prompt += "Device Summary:\n";
+    prompt += QString("  Resistors: %1, Capacitors: %2, Diodes: %3\n")
+        .arg(deviceTables["resistors"].toArray().size())
+        .arg(deviceTables["capacitors"].toArray().size())
+        .arg(deviceTables["diodes"].toArray().size());
+    prompt += QString("  BJTs: %1, MOSFETs: %2, Sources: %3\n")
+        .arg(deviceTables["bjts"].toArray().size())
+        .arg(deviceTables["mosfets"].toArray().size())
+        .arg(deviceTables["sources"].toArray().size());
+    prompt += QString("  DC Status: %1\n").arg(topology["dcOperatingPoint"].toObject()["status"].toString());
+    
+    // 4.2: Probe Context
+    QJsonObject probes = serializeProbeContext();
+    QJsonArray probeList = probes["probes"].toArray();
+    if (!probeList.isEmpty()) {
+        prompt += "Probes:\n";
+        for (const auto& p : probeList) {
+            QJsonObject po = p.toObject();
+            prompt += QString("  - %1 (%2): %3\n")
+                .arg(po["name"].toString())
+                .arg(po["label"].toString())
+                .arg(po["value"].toString());
+        }
+    }
+    
+    // 4.3: Solver Decisions
+    QJsonObject solver = serializeSolverDecisions();
+    prompt += "Solver Config:\n";
+    prompt += QString("  Method: %1, LTE Threshold: %2\n")
+        .arg(solver["integrationMethod"].toString())
+        .arg(solver["lteThreshold"].toDouble());
+    QJsonObject gmin = solver["gminStepping"].toObject();
+    prompt += QString("  GMIN Active: %1, Current GMIN: %2\n")
+        .arg(gmin["active"].toBool() ? "Yes" : "No")
+        .arg(gmin["currentGmin"].toDouble());
+    
     return prompt;
 }
 
@@ -263,6 +305,144 @@ QJsonArray ContextEngine::getDebugSuggestions() {
     }
     
     return suggestions;
+}
+
+// =============================================================================
+// Phase 1.26 Step 4: AI Context Representation Layer
+// =============================================================================
+
+QJsonObject ContextEngine::serializeTopologyChunks() {
+    QJsonObject result;
+    QJsonObject state = getContextJson();
+    QJsonArray components = state["components"].toArray();
+    
+    // 1. Device Tables (grouped by type)
+    QJsonArray resistors, capacitors, diodes, bjts, mosfets, sources;
+    
+    for (const auto& val : components) {
+        QJsonObject c = val.toObject();
+        QString type = c["type"].toString();
+        QString name = c["name"].toString();
+        QJsonObject props = c["properties"].toObject();
+        
+        QJsonObject entry;
+        entry["id"] = name;
+        
+        if (type == "Resistor") {
+            entry["value"] = props["value"].toString();
+            resistors.append(entry);
+        } else if (type == "Capacitor") {
+            entry["value"] = props["value"].toString();
+            capacitors.append(entry);
+        } else if (type == "Diode" || type == "SchottkyDiode") {
+            entry["Is"] = props["Is"].toString();
+            entry["N"] = props["N"].toString();
+            diodes.append(entry);
+        } else if (type == "Bjt") {
+            entry["model"] = props["Model"].toString();
+            entry["beta"] = props["Beta"].toString();
+            bjts.append(entry);
+        } else if (type == "Mosfet") {
+            entry["model"] = props["Model"].toString();
+            entry["W"] = props["W"].toString();
+            entry["L"] = props["L"].toString();
+            mosfets.append(entry);
+        } else if (type == "VoltageSource" || type == "CurrentSource") {
+            entry["value"] = props["value"].toString();
+            sources.append(entry);
+        }
+    }
+    
+    QJsonObject deviceTables;
+    deviceTables["resistors"] = resistors;
+    deviceTables["capacitors"] = capacitors;
+    deviceTables["diodes"] = diodes;
+    deviceTables["bjts"] = bjts;
+    deviceTables["mosfets"] = mosfets;
+    deviceTables["sources"] = sources;
+    result["deviceTables"] = deviceTables;
+    
+    // 2. DC Operating Point (Placeholder - would come from last simulation)
+    // In a real implementation, this would read from SimulationTrace
+    QJsonObject dcOP;
+    dcOP["status"] = "Not yet simulated";
+    dcOP["nodeVoltages"] = QJsonArray();
+    result["dcOperatingPoint"] = dcOP;
+    
+    // 3. Transient Endpoints (Placeholder)
+    QJsonObject transient;
+    transient["status"] = "Not yet simulated";
+    transient["finalTime"] = 0.0;
+    result["transientEndpoint"] = transient;
+    
+    return result;
+}
+
+QJsonObject ContextEngine::serializeProbeContext() {
+    QJsonObject result;
+    QJsonObject state = getContextJson();
+    QJsonArray components = state["components"].toArray();
+    
+    // 1. Named Probe Values
+    QJsonArray probeValues;
+    for (const auto& val : components) {
+        QJsonObject c = val.toObject();
+        QString type = c["type"].toString();
+        if (type == "Probe") {
+            QJsonObject p;
+            p["name"] = c["name"].toString();
+            p["label"] = c["properties"].toObject()["Label"].toString();
+            // Value would come from simulation; placeholder
+            p["value"] = "N/A";
+            probeValues.append(p);
+        }
+    }
+    result["probes"] = probeValues;
+    
+    // 2. Historical Errors (Placeholder - would come from trace history)
+    QJsonArray errorHistory;
+    // In production, this would iterate over last N simulation traces
+    // and extract convergence failures, KCL residuals, etc.
+    result["errorHistory"] = errorHistory;
+    
+    // 3. KCL Residual Summary
+    QJsonObject kclSummary;
+    kclSummary["maxResidual_A"] = "N/A";
+    kclSummary["residualStatus"] = "Not yet computed";
+    result["kclResiduals"] = kclSummary;
+    
+    return result;
+}
+
+QJsonObject ContextEngine::serializeSolverDecisions() {
+    QJsonObject result;
+    
+    // 1. Integration Method
+    // In production, this would query the active CircuitSim instance
+    result["integrationMethod"] = "Trapezoidal"; // Default
+    result["lteThreshold"] = 1e-4;
+    result["maxIterations"] = 20;
+    
+    // 2. GMIN Stepping
+    QJsonObject gminState;
+    gminState["active"] = false;
+    gminState["currentGmin"] = 1e-12;
+    gminState["steppingPhase"] = "None";
+    result["gminStepping"] = gminState;
+    
+    // 3. Rollback History
+    QJsonArray rollbacks;
+    // Would track timestep rollbacks due to LTE violations
+    result["rollbackHistory"] = rollbacks;
+    
+    // 4. Solver Flags
+    QJsonObject flags;
+    flags["useSourceStepping"] = false;
+    flags["useDampedNewton"] = true;
+    flags["pnjlimEnabled"] = true;
+    result["solverFlags"] = flags;
+    
+    return result;
 }
 
 } // namespace AIAPI

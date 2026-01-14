@@ -21,7 +21,7 @@ void test_resistor_sensitivity() {
     nl.addResistor(1, 0, 1000.0);    // R2
     
     CircuitSim sim;
-    SimulationStep step = sim.solveDC(nl);
+    SolverStep step = sim.solveDC(nl);
     
     double v1 = step.nodeVoltages[0];
     std::cout << "DC V1: " << v1 << " (Expected: 5.0)" << std::endl;

@@ -5,12 +5,14 @@
 
 /*
  * simtrace.h
- * Simulation Trace API - Decoupled data storage for simulation results.
+ * Solver Trace API - Decoupled data storage for simulation results.
  *
  * This enables:
  * 1. Headless runs (save trace to disk).
  * 2. GUI Replay (scrub through time).
  * 3. Debug Attribution (view residuals/stats per step).
+ * 
+ * NOTE: This is the SOLVER-SIDE trace. For AI/RAG traces, see ai_api/simulation_trace.h.
  */
 
 
@@ -21,21 +23,21 @@ struct SolverStats
     bool converged = false;
 };
 
-struct SimulationStep 
+struct SolverStep 
 {
     double time = 0.0;
     std::vector<double> nodeVoltages;
     SolverStats stats;
 };
 
-class SimulationTrace 
+class SolverTrace 
 {
 public:
     std::string netlistName;
     std::string timestamp;
-    std::vector<SimulationStep> steps;
+    std::vector<SolverStep> steps;
 
-    SimulationTrace() {
+    SolverTrace() {
         auto now = std::chrono::system_clock::now();
         auto in_time_t = std::chrono::system_clock::to_time_t(now);
         timestamp = std::ctime(&in_time_t);
@@ -50,5 +52,5 @@ public:
     }
 
     size_t size() const { return steps.size(); }
-    const SimulationStep& lastStep() const { return steps.back(); }
+    const SolverStep& lastStep() const { return steps.back(); }
 };

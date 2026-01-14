@@ -39,6 +39,37 @@ public:
      * - "priority": 1 (critical) to 3 (informational)
      */
     static QJsonArray getDebugSuggestions();
+    
+    // =========================================================================
+    // Phase 1.26 Step 4: AI Context Representation Layer
+    // =========================================================================
+    
+    /**
+     * 4.1: Serialize topology, device tables, and DC/Transient endpoints.
+     * Returns structured chunks suitable for RAG embedding or prompt injection.
+     * Includes:
+     * - Device Tables (Resistors, Capacitors, BJTs, MOSFETs, Diodes)
+     * - DC Operating Point Summary (Node Voltages, Branch Currents)
+     * - Transient Endpoints (Final time, final voltages)
+     */
+    static QJsonObject serializeTopologyChunks();
+    
+    /**
+     * 4.2: Inject probe values and historical error metrics.
+     * Returns:
+     * - Named probe values (e.g., "Vout": 2.5V)
+     * - Historical KCL residuals and convergence failures
+     */
+    static QJsonObject serializeProbeContext();
+    
+    /**
+     * 4.3: Incorporate solver decisions and flags.
+     * Returns:
+     * - Integration method (Trapezoidal, Gear2)
+     * - GMIN stepping state
+     * - LTE thresholds and rollback history
+     */
+    static QJsonObject serializeSolverDecisions();
 
 private:
     static QString describeComponent(const QJsonObject& comp);
