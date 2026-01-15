@@ -8,7 +8,10 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
-
+#include <QVBoxLayout>
+#include <QWidget>
+#include <QTabWidget>
+#include "logic_analyzer.h" // Phase 13.2
 class SimulatorWindow : public QWidget {
 Q_OBJECT
 
@@ -32,6 +35,11 @@ private:
   TensorNetlist netlist;
   CircuitSim sim;
   SolverTrace trace;
+  
+  // UI Panels
+  QTabWidget* resultTabs;
+  LogicWaveformWidget* logicAnalyzer;
+  
   double currentTime = 0.0;
   double timeStep = 0.00001; // 10us
   const double totalTime = 0.002;  // 2ms

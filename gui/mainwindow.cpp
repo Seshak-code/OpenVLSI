@@ -41,6 +41,10 @@ void MainWindow::setupCentralWidget() {
     QVBoxLayout* rtlLayout = new QVBoxLayout(rtlContainer);
     rtlLayout->setContentsMargins(0, 0, 0, 0);
     
+    // Splitter for Hybrid View (Schematic | Code)
+    QSplitter* rtlSplitter = new QSplitter(Qt::Horizontal);
+    
+    // Left: Schematic Tabs
     rtlPageTabs = new QTabWidget();
     rtlPageTabs->setTabsClosable(true);
     rtlPageTabs->setMovable(true);
@@ -56,7 +60,18 @@ void MainWindow::setupCentralWidget() {
     connect(addPageBtn, &QPushButton::clicked, this, &MainWindow::addRtlPage);
     rtlPageTabs->setCornerWidget(addPageBtn, Qt::TopRightCorner);
     
-    rtlLayout->addWidget(rtlPageTabs);
+    rtlSplitter->addWidget(rtlPageTabs);
+    
+    // Right: HDL Code Editor (Phase 14.1)
+    HDLEditor* hdlEditor = new HDLEditor(this);
+    hdlEditor->setLanguage(HDLSyntaxHighlighter::VERILOG_AMS); // Default to Mixed-Signal
+    rtlSplitter->addWidget(hdlEditor);
+    
+    // Set Initial Ratios (70% Schematic, 30% Code)
+    rtlSplitter->setStretchFactor(0, 7);
+    rtlSplitter->setStretchFactor(1, 3);
+    
+    rtlLayout->addWidget(rtlSplitter);
     stageTabs->addTab(rtlContainer, "RTL Design");
     
     // --- Stage 2: Synthesis (Placeholder) ---

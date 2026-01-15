@@ -15,13 +15,21 @@ SimulatorWindow::SimulatorWindow(QWidget *parent) : QWidget(parent) {
   statusLabel->setStyleSheet("font-size: 14px; color: #888;");
   mainLayout->addWidget(statusLabel);
 
-  // Log Area
+  // Tab Widget for Results
+  resultTabs = new QTabWidget(this);
+  mainLayout->addWidget(resultTabs, 1);
+
+  // Tab 1: Log Area
   logArea = new QPlainTextEdit(this);
   logArea->setReadOnly(true);
   logArea->setPlaceholderText("Simulation output will appear here...");
   logArea->setStyleSheet(
       "QPlainTextEdit { background: #1e1e1e; color: #00ff00; font-family: monospace; font-size: 12px; border: 1px solid #444; }");
-  mainLayout->addWidget(logArea, 1); // Stretch
+  resultTabs->addTab(logArea, "Log");
+  
+  // Tab 2: Logic Analyzer (Phase 13.2)
+  logicAnalyzer = new LogicWaveformWidget(this);
+  resultTabs->addTab(logicAnalyzer, "Logic Analyzer");
 
   // Run Button
   btnRun = new QPushButton("▶ Run Simulation", this);
@@ -65,7 +73,10 @@ void SimulatorWindow::startSimulation() {
   sim.resetArbiter();
   currentTime = 0.0;
   trace.clear();
+  trace.clear();
   trace.netlistName = "Schematic Circuit";
+  logicAnalyzer->clear();
+  logicAnalyzer->setTimeRange(totalTime);
 
   logArea->appendPlainText("=== Transient Analysis ===");
   logArea->appendPlainText("Time          Probe Readings");
@@ -140,6 +151,47 @@ void SimulatorWindow::stepSimulation() {
         if (step.nodeVoltages.size() >= 1)
           v_out = step.nodeVoltages[0];
         logLine += QString("V(1): %1 V").arg(v_out, 8, 'f', 4);
+      }
+
+      // --- Digital Bus Probes (Phase 13) ---
+      if (!netlist.globalBlock.busProbes.empty()) {
+        for (const auto& bp : netlist.globalBlock.busProbes) {
+             uint64_t val = 0;
+             QString binaryStr = "";
+             
+             // Process bits from MSB to LSB for reading
+             for (int i = bp.nodeIndices.size() - 1; i >= 0; --i) {
+                 int nodeIdx = bp.nodeIndices[i];
+                 double v = 0.0;
+                 if (nodeIdx > 0 && nodeIdx <= (int)step.nodeVoltages.size()) {
+                     v = step.nodeVoltages[nodeIdx - 1];
+                 }
+                 
+                 // Threshold Check
+                 if (v > bp.v_th_high) {
+                     val |= (1ULL << i);
+                     binaryStr += "1";
+                 } else if (v < bp.v_th_low) {
+                     binaryStr += "0";
+                 } else {
+                     binaryStr += "X"; // Metastable/Unknown
+                 }
+             }
+             
+             // Format: BUS: 0xDEAD (1101...)
+             logLine += QString("  %1: 0x%2")
+                 .arg(QString::fromStdString(bp.name))
+                 .arg(val, (bp.bit_width + 3) / 4, 16, QChar('0')).toUpper();
+             
+             // Phase 13.2: Stream to UI
+             if (logicAnalyzer) {
+                 BusProbe::DigitalSample s;
+                 s.time = currentTime;
+                 s.value = val;
+                 std::vector<BusProbe::DigitalSample> history = {s};
+                 logicAnalyzer->addBusData(bp.name, history, bp.bit_width);
+             }
+        }
       }
 
       logArea->appendPlainText(logLine);

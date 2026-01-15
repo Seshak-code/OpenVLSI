@@ -17,7 +17,9 @@
 #include "simulator_window.h"
 #include "system_inspector.h"
 #include "design_flow.h"
+#include "hdl_editor.h"  // Phase 14.1
 #include <QStackedWidget>
+#include <QSplitter>
 
 // ============================================================================
 // MAIN WINDOW

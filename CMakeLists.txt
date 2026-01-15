@@ -99,7 +99,13 @@ qt_add_executable(${PROJECT_NAME}
     gui/system_inspector.cpp
     gui/system_inspector.h
     gui/design_flow.cpp
+    gui/design_flow.cpp
     gui/design_flow.h
+    gui/logic_analyzer.cpp
+    gui/logic_analyzer.cpp
+    gui/logic_analyzer.h
+    gui/hdl_editor.cpp
+    gui/hdl_editor.h
     ai_api/schema_api.cpp
     ai_api/schema_api.h
     ai_api/context_engine.cpp

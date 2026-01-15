@@ -164,6 +164,35 @@ struct SignalSource {
     std::vector<std::pair<double, double>> points;
 };
 
+// ============================================================================
+// DIGITAL VERIFICATION COMPONENTS (Phase 13)
+// ============================================================================
+
+enum class LogicState {
+    LOW = 0,
+    HIGH = 1,
+    UNKNOWN = 2, // X
+    IMPEDANCE = 3 // Z
+};
+
+struct BusProbe {
+    std::string name;             // e.g., "DATA_BUS"
+    int bit_width;                // 8, 16, 32
+    std::vector<int> nodeIndices; // [LSB ... MSB]
+    
+    // Logic Level Config
+    double v_th_low = 0.8;        // Below 0.8V = 0
+    double v_th_high = 2.0;       // Above 2.0V = 1
+    
+    // History
+    struct DigitalSample {
+        double time;
+        uint64_t value;           // For up to 64-bit bus
+        std::vector<LogicState> bitStates; // Detailed X/Z state
+    };
+    std::vector<DigitalSample> history;
+};
+
 /*
  * Simulation Environment
  * Global context for the simulation run.
@@ -370,6 +399,7 @@ struct TensorBlock {
     
     // Aux
     std::vector<Probe> probes;
+    std::vector<BusProbe> busProbes;
 
     bool isFrozen = false;       // Phase 1: Structural Immutability
     size_t topologyHash = 0;     // Phase 4: Symbolic Reuse Key
@@ -620,5 +650,12 @@ public:
     void addProbe(const std::string& name, int nPos, int nNeg) {
         globalBlock.addProbe(name, nPos, nNeg);
         // NOTE: Probes do NOT inflate numGlobalNodes because they are passive observers.
+    }
+    void addBusProbe(const std::string& name, const std::vector<int>& nodes) {
+        BusProbe bp;
+        bp.name = name;
+        bp.bit_width = nodes.size();
+        bp.nodeIndices = nodes;
+        globalBlock.busProbes.push_back(bp);
     }
 };
