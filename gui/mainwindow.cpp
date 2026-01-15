@@ -380,10 +380,10 @@ void MainWindow::setupModeToolbar() {
     
     // Toggle Action
     // We use a checkable action to simulate a switch
-    toggleModeAction = new QAction("System Mode", this);
+    toggleModeAction = new QAction("System Integration", this);
     toggleModeAction->setCheckable(true);
-    toggleModeAction->setChecked(true); // Default to System Mode
-    toggleModeAction->setIcon(QIcon::fromTheme("system-run")); // Placeholder icon
+    toggleModeAction->setChecked(true); // Default to System Integration
+    toggleModeAction->setToolTip("Switch between Lab Isolation and System-Level reality");
     
     // Connect
     connect(toggleModeAction, &QAction::toggled, this, &MainWindow::onModeToggle);
@@ -396,36 +396,31 @@ void MainWindow::setupModeToolbar() {
 
 void MainWindow::onModeToggle() {
     if (toggleModeAction->isChecked()) {
-        setMode(AppMode::SYSTEM_SIMULATION);
+        setMode(AppMode::SYSTEM_INTEGRATION);
     } else {
-        setMode(AppMode::COMPONENT_TEST);
+        setMode(AppMode::LAB_BENCHMARK);
     }
 }
 
 void MainWindow::setMode(AppMode mode) {
     currentMode = mode;
     
-    if (mode == AppMode::SYSTEM_SIMULATION) {
-        toggleModeAction->setText("System Mode (Active)");
-        toggleModeAction->setToolTip("System Simulation Mode: Includes Power Rails and Environment");
-        statusBar()->showMessage("Switched to System Simulation Mode");
+    if (mode == AppMode::SYSTEM_INTEGRATION) {
+        toggleModeAction->setText("System Integration");
+        toggleModeAction->setToolTip("Simulation: Real PDN (ESR/Ripple) + High Precision Solver");
+        statusBar()->showMessage("Mode: System Integration (Realistic Power & Noise)");
         
         // Switch Inspector (Phase 3.3)
         propertiesStack->setCurrentWidget(systemInspector);
         propertiesDock->setWindowTitle("System Inspector");
         
-        // TODO: Notify Library to filter components
-        // libraryPanel->setMode(ComponentLibrary::Mode::SYSTEM);
     } else {
-        toggleModeAction->setText("Component Mode (Active)");
-        toggleModeAction->setToolTip("Component Test Mode: Ideal Sources Only");
-        statusBar()->showMessage("Switched to Component Test Mode");
+        toggleModeAction->setText("Lab Benchmark");
+        toggleModeAction->setToolTip("Simulation: Ideal Sources (0 Resistance) + Fast Solver");
+        statusBar()->showMessage("Mode: Lab Benchmark (Isolated Component Testing)");
         
         // Switch Inspector
         propertiesStack->setCurrentWidget(propertiesTable);
         propertiesDock->setWindowTitle("Component Properties");
-        
-        // TODO: Notify Library to filter components
-        // libraryPanel->setMode(ComponentLibrary::Mode::COMPONENT);
     }
 }

@@ -29,7 +29,7 @@ public:
     SchematicEditor* getSchematicEditor() const { return schematicEditor; }
     
     // Mode Management
-    enum class AppMode { COMPONENT_TEST, SYSTEM_SIMULATION };
+    enum class AppMode { LAB_BENCHMARK, SYSTEM_INTEGRATION };
     AppMode getMode() const { return currentMode; }
     void setMode(AppMode mode);
 
@@ -83,7 +83,7 @@ private:
     void onModeToggle();
 
 private:
-    AppMode currentMode = AppMode::SYSTEM_SIMULATION;
+    AppMode currentMode = AppMode::SYSTEM_INTEGRATION;
     QToolBar* modeToolbar;
     QAction* toggleModeAction;
 

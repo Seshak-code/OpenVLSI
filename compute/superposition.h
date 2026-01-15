@@ -22,7 +22,7 @@
  */
 class SuperpositionSolver {
 public:
-    enum class Mode { COMPONENT_LEVEL, SYSTEM_LEVEL };
+    enum class Mode { LAB_BENCHMARK, SYSTEM_INTEGRATION };
 
     struct SubProblem {
         std::string sourceName;
@@ -33,10 +33,10 @@ public:
     /**
      * decompose
      * Generates a set of sub-problems based on the selected mode:
-     * - COMPONENT_LEVEL: Decomposes Ideal Voltage/Current Sources.
-     * - SYSTEM_LEVEL: Decomposes PowerRails and SignalSources (preserving passive parasitics).
+     * - LAB_BENCHMARK: Decomposes Ideal Voltage/Current Sources.
+     * - SYSTEM_INTEGRATION: Decomposes PowerRails and SignalSources (preserving passive parasitics).
      */
-    static std::vector<SubProblem> decompose(const TensorNetlist& original, Mode mode = Mode::COMPONENT_LEVEL);
+    static std::vector<SubProblem> decompose(const TensorNetlist& original, Mode mode = Mode::LAB_BENCHMARK);
     
     /**
      * combine

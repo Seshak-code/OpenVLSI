@@ -4,8 +4,8 @@
 std::vector<SuperpositionSolver::SubProblem> SuperpositionSolver::decompose(const TensorNetlist& original, Mode mode) {
     std::vector<SubProblem> problems;
     
-    // COMPONENT LEVEL: Decompose Ideal Independent Sources
-    if (mode == Mode::COMPONENT_LEVEL) {
+    // LAB BENCHMARK: Decompose Ideal Independent Sources
+    if (mode == Mode::LAB_BENCHMARK) {
         const auto& vSources = original.globalBlock.voltageSources;
         const auto& cSources = original.globalBlock.currentSources;
         
@@ -30,9 +30,7 @@ std::vector<SuperpositionSolver::SubProblem> SuperpositionSolver::decompose(cons
                     sub.netlist.globalBlock.currentSources[i].current_A = 0.0; // Open Circuit
                 }
             }
-            // In component mode, we assume System Sources are OFF or ignored,
-            // or the user hasn't added them yet. For safety, we can silence them too?
-            // For now, assume Component Mode only uses ideal sources.
+            // In lab mode, we assume System Sources are OFF or ignored.
             return sub;
         };
 
@@ -40,8 +38,8 @@ std::vector<SuperpositionSolver::SubProblem> SuperpositionSolver::decompose(cons
         for (size_t i = 0; i < cSources.size(); ++i) problems.push_back(createIdealSub("I" + std::to_string(i), false, i));
     
     } 
-    // SYSTEM LEVEL: Decompose Power Rails and Signal Generators
-    else if (mode == Mode::SYSTEM_LEVEL) {
+    // SYSTEM INTEGRATION: Decompose Power Rails and Signal Generators
+    else if (mode == Mode::SYSTEM_INTEGRATION) {
         const auto& rails = original.globalBlock.powerRails;
         const auto& signals = original.globalBlock.signalSources;
         

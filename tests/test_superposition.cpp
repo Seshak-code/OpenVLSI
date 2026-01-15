@@ -63,7 +63,7 @@ int main() {
     
     // 2. Superposition
     std::cout << "Running Superposition Decomposition..." << std::endl;
-    auto subproblems = SuperpositionSolver::decompose(netlist);
+    auto subproblems = SuperpositionSolver::decompose(netlist, SuperpositionSolver::Mode::LAB_BENCHMARK);
     std::cout << "  Decomposed into " << subproblems.size() << " sub-problems." << std::endl;
     
     if (subproblems.size() != 2) {

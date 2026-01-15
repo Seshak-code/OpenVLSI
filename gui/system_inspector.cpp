@@ -68,7 +68,7 @@ void SystemInspector::setupUi() {
     noiseCheck->setChecked(true);
     
     precisionCheck = new QCheckBox("High Precision (Dual-Scale)");
-    precisionCheck->setToolTip("Enable 64-bit emulation for 1nm leakage + 12V rails (Slower)");
+    precisionCheck->setToolTip("Required for System Integration (1nm leakage + 12V rails)");
     precisionCheck->setChecked(true);
     
     // Custom Layout for Slider + Label
