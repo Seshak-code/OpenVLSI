@@ -2,6 +2,7 @@
 #include "context_engine.h"
 #include "schema_api.h"
 #include "crash_report.h"
+#include "topology_analyzer.h"
 #include "mainwindow.h"
 #include "schematic_editor.h"
 #include <QJsonArray>
@@ -92,6 +93,39 @@ QString ContextEngine::generateSystemPrompt() {
     prompt += QString("  GMIN Active: %1, Current GMIN: %2\n")
         .arg(gmin["active"].toBool() ? "Yes" : "No")
         .arg(gmin["currentGmin"].toDouble());
+    
+    // 7. Phase 1.26 Step 5: Topology-Aware Prompt Compression
+    prompt += "\n=== TOPOLOGY ANALYSIS (Step 5) ===\n";
+    
+    // 5.1: Functional Block Identification
+    QJsonObject topologyAnalysis = TopologyAnalyzer::toJson();
+    QJsonArray functionalBlocks = topologyAnalysis["functionalBlocks"].toArray();
+    
+    if (!functionalBlocks.isEmpty()) {
+        prompt += "Identified Blocks:\n";
+        for (const auto& b : functionalBlocks) {
+            QJsonObject bo = b.toObject();
+            prompt += QString("  - %1 (%2): %3\n")
+                .arg(bo["name"].toString())
+                .arg(bo["type"].toString())
+                .arg(bo["description"].toString());
+        }
+    }
+    
+    // 5.2: Signal Pathway Summary
+    QJsonArray signalPaths = topologyAnalysis["signalPaths"].toArray();
+    if (!signalPaths.isEmpty()) {
+        prompt += "Signal Paths:\n";
+        for (const auto& p : signalPaths) {
+            QJsonObject po = p.toObject();
+            prompt += QString("  - %1: %2\n")
+                .arg(po["id"].toString())
+                .arg(po["summary"].toString());
+        }
+    }
+    
+    // Compressed summary (token-efficient)
+    prompt += "\n[COMPRESSED]: " + topologyAnalysis["compressedPrompt"].toString() + "\n";
     
     return prompt;
 }

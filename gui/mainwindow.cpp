@@ -5,41 +5,97 @@
 #include <QDebug>
 #include <QComboBox>
 #include <QMessageBox>
+#include <QPushButton>
+#include <QLabel>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setWindowTitle("AcuteSim - Experimental Circuit Designer");
-    resize(1280, 720); // Compatible across various screen sizes
+    setWindowTitle("AcuteSim - ASIC Design Suite");
+    resize(1280, 720);
     
-    // 1. Setup Central Area (Tabbed Workspace)
+    // Initialize Design Flow Manager
+    flowManager = new DesignFlowManager(this);
+    connect(flowManager, &DesignFlowManager::stageChanged, this, &MainWindow::onStageChanged);
+    
+    // 1. Setup Central Area (Stage-based Workspace)
     setupCentralWidget();
 
     // 2. Setup Docks (Project, Properties, Messages)
     setupDocks();
 
-    // 3. Setup Menus
-    // 3. Setup Menus
+    // 3. Setup Menus and Toolbar
     setupMenus();
-    setupModeToolbar();
+    setupStageToolbar();
 
     // 4. Status Bar
-    statusBar()->showMessage("Ready");
+    statusBar()->showMessage("Ready - RTL Design Stage");
 }
 
 void MainWindow::setupCentralWidget() {
-    // Tabbed interface for Schematic and Simulator
-    centralTabs = new QTabWidget(this);
+    // ==== Stage Tabs (Top-Level) ====
+    stageTabs = new QTabWidget(this);
+    stageTabs->setTabPosition(QTabWidget::North);
+    stageTabs->setDocumentMode(true); // VS Code style flat tabs
     
-    // Tab 1: Schematic Editor
+    // --- Stage 1: RTL Design (Multi-Page Schematics) ---
+    QWidget* rtlContainer = new QWidget();
+    QVBoxLayout* rtlLayout = new QVBoxLayout(rtlContainer);
+    rtlLayout->setContentsMargins(0, 0, 0, 0);
+    
+    rtlPageTabs = new QTabWidget();
+    rtlPageTabs->setTabsClosable(true);
+    rtlPageTabs->setMovable(true);
+    
+    // Initial schematic page
     schematicEditor = new SchematicEditor(this);
-    centralTabs->addTab(schematicEditor, "Schematic");
+    rtlPageTabs->addTab(schematicEditor, "top.sch");
     
-    // Tab 2: Simulator (embedded, not popup)
+    // "+" button to add new pages
+    QPushButton* addPageBtn = new QPushButton("+");
+    addPageBtn->setFixedWidth(30);
+    addPageBtn->setToolTip("Add new schematic page");
+    connect(addPageBtn, &QPushButton::clicked, this, &MainWindow::addRtlPage);
+    rtlPageTabs->setCornerWidget(addPageBtn, Qt::TopRightCorner);
+    
+    rtlLayout->addWidget(rtlPageTabs);
+    stageTabs->addTab(rtlContainer, "RTL Design");
+    
+    // --- Stage 2: Synthesis (Placeholder) ---
+    QLabel* synthesisLabel = new QLabel("Logic Synthesis & Timing Optimization\n\n[Run Synthesis] button coming soon...");
+    synthesisLabel->setAlignment(Qt::AlignCenter);
+    stageTabs->addTab(synthesisLabel, "Synthesis");
+    
+    // --- Stage 3: Physical Design (Placeholder) ---
+    QLabel* physicalLabel = new QLabel("Physical Design: Netlist → Layout\n\nFloorplanning, P&R, Power Grid visualization.");
+    physicalLabel->setAlignment(Qt::AlignCenter);
+    stageTabs->addTab(physicalLabel, "Physical Design");
+    
+    // --- Stage 4: Verification (Placeholder) ---
+    QLabel* verificationLabel = new QLabel("DRC/LVS Checks & Sign-Off\n\n(Future: 3D LVS Viewer)");
+    verificationLabel->setAlignment(Qt::AlignCenter);
+    stageTabs->addTab(verificationLabel, "Verification");
+    
+    // Simulator Panel (can be shown in any stage)
     simulatorPanel = new SimulatorWindow(this);
-    centralTabs->addTab(simulatorPanel, "Simulation");
+    stageTabs->addTab(simulatorPanel, "Simulation");
     
-    setCentralWidget(centralTabs);
+    setCentralWidget(stageTabs);
     
-    // Connect Selection
+    // Connect tab changes to flow manager
+    connect(stageTabs, &QTabWidget::currentChanged, this, [this](int idx) {
+        if (idx == 0) flowManager->setStage(DesignStage::RTL_DESIGN);
+        else if (idx == 1) flowManager->setStage(DesignStage::SYNTHESIS);
+        else if (idx == 2) flowManager->setStage(DesignStage::PHYSICAL_DESIGN);
+        else if (idx == 3) flowManager->setStage(DesignStage::VERIFICATION);
+    });
+    
+    // Connect RTL page tab changes to update active schematic
+    connect(rtlPageTabs, &QTabWidget::currentChanged, this, [this](int idx) {
+        if (idx >= 0) {
+            schematicEditor = qobject_cast<SchematicEditor*>(rtlPageTabs->widget(idx));
+        }
+    });
+    
+    // Connect schematic selection signals
     connect(schematicEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
     connect(schematicEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
 }
@@ -337,7 +393,7 @@ void MainWindow::runSimulation() {
 
     // Pass netlist to simulator panel and switch tab
     simulatorPanel->setNetlist(netlist); 
-    centralTabs->setCurrentWidget(simulatorPanel);
+    stageTabs->setCurrentWidget(simulatorPanel);
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -374,24 +430,78 @@ void MainWindow::updateWireProperties(VisualWire* wire) {
     isUpdating = false;
 }
 
-void MainWindow::setupModeToolbar() {
-    modeToolbar = addToolBar("Mode");
+void MainWindow::setupStageToolbar() {
+    modeToolbar = addToolBar("Design Flow");
     modeToolbar->setMovable(false);
     
-    // Toggle Action
-    // We use a checkable action to simulate a switch
+    // Stage Selector Combobox
+    QComboBox* stageCombo = new QComboBox();
+    stageCombo->addItems({"RTL Design", "Synthesis", "Physical Design", "Verification"});
+    stageCombo->setToolTip("Select design flow stage");
+    stageCombo->setMinimumWidth(150);
+    
+    connect(stageCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (stageTabs) {
+            stageTabs->setCurrentIndex(idx);
+        }
+    });
+    
+    // Sync combo with tab changes
+    connect(stageTabs, &QTabWidget::currentChanged, stageCombo, &QComboBox::setCurrentIndex);
+    
+    modeToolbar->addWidget(new QLabel(" Stage: "));
+    modeToolbar->addWidget(stageCombo);
+    modeToolbar->addSeparator();
+    
+    // Mode Toggle (Lab/System) - Keep for simulation mode within stages
     toggleModeAction = new QAction("System Integration", this);
     toggleModeAction->setCheckable(true);
-    toggleModeAction->setChecked(true); // Default to System Integration
-    toggleModeAction->setToolTip("Switch between Lab Isolation and System-Level reality");
-    
-    // Connect
+    toggleModeAction->setChecked(true);
+    toggleModeAction->setToolTip("Solver mode: Ideal (Lab) vs Realistic (System)");
     connect(toggleModeAction, &QAction::toggled, this, &MainWindow::onModeToggle);
-    
     modeToolbar->addAction(toggleModeAction);
     
-    // Initialize state
-    onModeToggle(); 
+    // Initialize
+    onModeToggle();
+}
+
+void MainWindow::onStageChanged(DesignStage stage) {
+    // Update Component Library based on stage
+    if (libraryPanel) {
+        libraryPanel->setStage(stage);
+    }
+    
+    // Update status bar
+    statusBar()->showMessage(QString("Stage: %1").arg(DesignFlowManager::stageName(stage)));
+    
+    // Update Properties Panel
+    switch (stage) {
+        case DesignStage::RTL_DESIGN:
+        case DesignStage::SYNTHESIS:
+            propertiesStack->setCurrentWidget(propertiesTable);
+            propertiesDock->setWindowTitle("Component Properties");
+            break;
+        case DesignStage::PHYSICAL_DESIGN:
+        case DesignStage::VERIFICATION:
+            propertiesStack->setCurrentWidget(systemInspector);
+            propertiesDock->setWindowTitle("System Inspector");
+            break;
+    }
+}
+
+void MainWindow::addRtlPage() {
+    static int pageCount = 1; // Simple counter for unique names
+    QString pageName = QString("module_%1.sch").arg(++pageCount);
+    
+    SchematicEditor* newEditor = new SchematicEditor(this);
+    rtlPageTabs->addTab(newEditor, pageName);
+    rtlPageTabs->setCurrentWidget(newEditor);
+    
+    // Connect signals for the new editor
+    connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+    connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+    
+    statusBar()->showMessage(QString("Added new schematic page: %1").arg(pageName), 3000);
 }
 
 void MainWindow::onModeToggle() {
@@ -408,19 +518,8 @@ void MainWindow::setMode(AppMode mode) {
     if (mode == AppMode::SYSTEM_INTEGRATION) {
         toggleModeAction->setText("System Integration");
         toggleModeAction->setToolTip("Simulation: Real PDN (ESR/Ripple) + High Precision Solver");
-        statusBar()->showMessage("Mode: System Integration (Realistic Power & Noise)");
-        
-        // Switch Inspector (Phase 3.3)
-        propertiesStack->setCurrentWidget(systemInspector);
-        propertiesDock->setWindowTitle("System Inspector");
-        
     } else {
         toggleModeAction->setText("Lab Benchmark");
         toggleModeAction->setToolTip("Simulation: Ideal Sources (0 Resistance) + Fast Solver");
-        statusBar()->showMessage("Mode: Lab Benchmark (Isolated Component Testing)");
-        
-        // Switch Inspector
-        propertiesStack->setCurrentWidget(propertiesTable);
-        propertiesDock->setWindowTitle("Component Properties");
     }
 }

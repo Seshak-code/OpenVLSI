@@ -98,6 +98,8 @@ qt_add_executable(${PROJECT_NAME}
     gui/schematic_editor_api.cpp
     gui/system_inspector.cpp
     gui/system_inspector.h
+    gui/design_flow.cpp
+    gui/design_flow.h
     ai_api/schema_api.cpp
     ai_api/schema_api.h
     ai_api/context_engine.cpp
@@ -111,6 +113,8 @@ qt_add_executable(${PROJECT_NAME}
     ai_api/speculative_runner.h
     ai_api/prompt_builder.cpp
     ai_api/prompt_builder.h
+    ai_api/topology_analyzer.cpp
+    ai_api/topology_analyzer.h
     compute/physics_tensors.cpp
     compute/superposition.cpp
     compute/circuitsim_solver.cpp

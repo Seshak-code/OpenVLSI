@@ -16,6 +16,7 @@
 #include "component_library.h"
 #include "simulator_window.h"
 #include "system_inspector.h"
+#include "design_flow.h"
 #include <QStackedWidget>
 
 // ============================================================================
@@ -37,9 +38,13 @@ protected:
     void closeEvent(QCloseEvent *event) override;
 
 private:
+    // Design Flow Management
+    DesignFlowManager* flowManager;
+    QTabWidget* stageTabs;           // Top-level stage tabs (RTL, Synthesis, Physical, Verification)
+    QTabWidget* rtlPageTabs;         // Sub-tabs within RTL stage (multi-page schematics)
+    
     // Core Components
-    QTabWidget* centralTabs;
-    SchematicEditor* schematicEditor;
+    SchematicEditor* schematicEditor; // Active schematic editor (points to current RTL page)
     SimulatorWindow* simulatorPanel;
     
     // Docks
@@ -78,14 +83,17 @@ private:
     void openProject();
     void runSimulation();
     
-    // Mode Switching
-    void setupModeToolbar();
-    void onModeToggle();
+    // Stage Switching (replaces old Mode Switching)
+    void setupStageToolbar();
+    void onStageChanged(DesignStage stage);
+    void addRtlPage();
 
 private:
     AppMode currentMode = AppMode::SYSTEM_INTEGRATION;
     QToolBar* modeToolbar;
     QAction* toggleModeAction;
+    
+    void onModeToggle();
 
 private slots:
     void updateProperties(VisualComponent* item);
