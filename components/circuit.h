@@ -3,7 +3,7 @@
 #include <string>
 #include <algorithm>
 #include <map>
-#include <cassert>  // NASA Rule #5
+#include <cassert>
 #include "graph_canonical.h"
 
 /*
@@ -111,6 +111,74 @@ struct CurrentSource {
     int nodePositive;             // Current enters (+)
     int nodeNegative;             // Current exits (-)
     double current_A;             // DC Current [A]
+};
+
+// ============================================================================
+// SYSTEM SIMULATION SOURCES (Phase 2.9)
+// ============================================================================
+
+/*
+ * Power Rail (Vdd/Vcc)
+ * Models a realistic power supply network (PDN).
+ * Model: V_ideal -> [ESL] -> [ESR] -> Node_Chip -> [C_decap] -> GND
+ */
+struct PowerRail {
+    std::string name;              // "Vdd", "Vcc", "Vio"
+    int nodeRail;                  // The chip-side node index
+    double nominal_V;              // 1.8V, 3.3V, 5V, 12V
+    double ripple_Vpp;             // Peak-to-peak ripple voltage
+    double frequency_Hz;           // Ripple frequency (e.g., 1MHz switching)
+    double ESR_ohms;               // Equivalent Series Resistance (package + regulator)
+    double ESL_henries;            // Equivalent Series Inductance (bond wires)
+    double capacitance_F;          // Decoupling capacitance (local)
+    
+    // Monte Carlo parameters
+    double tolerance_percent;      // ±5% for typical regulators
+    double temp_coefficient;       // Voltage drift with temperature [V/K]
+    
+    // Transient History (for L and C)
+    std::vector<double> voltage_history;
+    std::vector<double> current_history;
+};
+
+/*
+ * Signal Source (Waveform Generator)
+ * Models complex signal inputs (Clock, Data, Noise).
+ */
+struct SignalSource {
+    std::string name;              // "CLK", "DATA_IN"
+    int nodePositive;
+    int nodeNegative;
+    
+    enum WaveformType { DC, PULSE, SINE, PWL, NOISE } type;
+    
+    double amplitude_V;
+    double frequency_Hz;
+    double phase_deg;
+    double offset_V;
+    double duty_cycle;             // 0.0 to 1.0 (Pulse only)
+    double rise_time_s;            // (Pulse only)
+    double fall_time_s;            // (Pulse only)
+    
+    // For future PWL
+    std::vector<std::pair<double, double>> points;
+};
+
+/*
+ * Simulation Environment
+ * Global context for the simulation run.
+ */
+struct SimulationEnvironment {
+    double ambient_temp_K = 300.0;    // 27°C
+    double temp_ramp_K_per_s = 0.0;   // For thermal cycling
+    
+    // Process Corners (Monte Carlo)
+    enum Corner { TT, FF, SS, SF, FS } process = TT;
+    double vdd_variation_sigma = 0.0; // σ for MC
+    
+    // Noise Profile
+    bool thermal_noise_enabled = false;
+    bool flicker_noise_enabled = false;
 };
 
 // ============================================================================
@@ -280,6 +348,10 @@ struct TensorBlock {
     // Independent Sources
     std::vector<VoltageSource> voltageSources;
     std::vector<CurrentSource> currentSources;
+
+    // System Simulation Sources (Phase 2.9)
+    std::vector<PowerRail> powerRails;
+    std::vector<SignalSource> signalSources;
     
     // Controlled Sources
     std::vector<VoltageControl_Voltage_Source> voltageControlledVoltageSources;
@@ -382,6 +454,48 @@ struct TensorBlock {
         currentSources.push_back({nPos, nNeg, I});
         updateNodeCount(nPos); updateNodeCount(nNeg);
     }
+    
+    // System Simulation Helpers
+    void addPowerRail(const std::string& name, int node, double V, double ripple = 0.0) {
+        if (isFrozen) return;
+        PowerRail rail;
+        rail.name = name;
+        rail.nodeRail = node;
+        rail.nominal_V = V;
+        rail.ripple_Vpp = ripple;
+        // Defaults for simple model
+        rail.frequency_Hz = 1e6;
+        rail.ESR_ohms = 0.01;
+        rail.ESL_henries = 1e-9;
+        rail.capacitance_F = 100e-9;
+        rail.tolerance_percent = 5.0;
+        rail.temp_coefficient = 0.0;
+        
+        rail.voltage_history.assign(3, 0.0);
+        rail.current_history.assign(3, 0.0);
+        
+        powerRails.push_back(rail);
+        updateNodeCount(node);
+    }
+    
+    void addSignalSource(const std::string& name, int nPos, int nNeg, 
+                         SignalSource::WaveformType type, double amp, double freq) {
+        if (isFrozen) return;
+        SignalSource src;
+        src.name = name;
+        src.nodePositive = nPos;
+        src.nodeNegative = nNeg;
+        src.type = type;
+        src.amplitude_V = amp;
+        src.frequency_Hz = freq;
+        // Defaults
+        src.phase_deg = 0.0;
+        src.offset_V = 0.0;
+        src.duty_cycle = 0.5;
+        
+        signalSources.push_back(src);
+        updateNodeCount(nPos); updateNodeCount(nNeg);
+    }
     void addDiode(int anode, int cathode, double Is, double N = 1.0, double Vt = 0.02585) {
         if (isFrozen) return;
         diodes.push_back({anode, cathode, Is, N, Vt});
@@ -430,6 +544,9 @@ public:
     TensorBlock globalBlock;                             // Top-level components
     std::vector<BlockInstance> instances;                // Placed block instances
     int numGlobalNodes = 0;
+    
+    // Global Simulation Context (Phase 2.9)
+    SimulationEnvironment environment;
 
     TensorNetlist() { globalBlock.name = "GLOBAL"; }
 
@@ -466,6 +583,16 @@ public:
     }
     void addCurrentSource(int nPos, int nNeg, double I) {
         globalBlock.addCurrentSource(nPos, nNeg, I);
+        if (nPos > numGlobalNodes) numGlobalNodes = nPos;
+        if (nNeg > numGlobalNodes) numGlobalNodes = nNeg;
+    }
+    void addPowerRail(const std::string& name, int node, double V, double ripple = 0.0) {
+        globalBlock.addPowerRail(name, node, V, ripple);
+        if (node > numGlobalNodes) numGlobalNodes = node;
+    }
+    void addSignalSource(const std::string& name, int nPos, int nNeg, 
+                         SignalSource::WaveformType type, double amp, double freq) {
+        globalBlock.addSignalSource(name, nPos, nNeg, type, amp, freq);
         if (nPos > numGlobalNodes) numGlobalNodes = nPos;
         if (nNeg > numGlobalNodes) numGlobalNodes = nNeg;
     }

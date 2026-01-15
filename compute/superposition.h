@@ -22,6 +22,8 @@
  */
 class SuperpositionSolver {
 public:
+    enum class Mode { COMPONENT_LEVEL, SYSTEM_LEVEL };
+
     struct SubProblem {
         std::string sourceName;
         TensorNetlist netlist; // The modified netlist for this case
@@ -30,10 +32,11 @@ public:
     
     /**
      * decompose
-     * Generates a set of sub-problems, one for each independent source in the global block.
-     * Note: Does not currently handle hierarchical sources (Phase 1 simplification).
+     * Generates a set of sub-problems based on the selected mode:
+     * - COMPONENT_LEVEL: Decomposes Ideal Voltage/Current Sources.
+     * - SYSTEM_LEVEL: Decomposes PowerRails and SignalSources (preserving passive parasitics).
      */
-    static std::vector<SubProblem> decompose(const TensorNetlist& original);
+    static std::vector<SubProblem> decompose(const TensorNetlist& original, Mode mode = Mode::COMPONENT_LEVEL);
     
     /**
      * combine

@@ -1,5 +1,6 @@
 #include "physics_tensors.h"
 #include "../components/circuit.h"
+#include <iostream>
 
 /*
  * physics_tensors.cpp - Implementation of AoS->SoA conversion.
@@ -12,8 +13,23 @@ TensorizedBlock tensorizeBlock(const TensorBlock& block) {
     result.resistors.nodes1.reserve(block.resistors.size());
     result.resistors.nodes2.reserve(block.resistors.size());
     result.resistors.R.reserve(block.resistors.size());
+    
+    // Safety Clamps for Fixed-Point Solver (1e9 Scale)
+    // Max Conductance G_max = 2.0 S => R_min = 0.5 Ohm
+    // Min Conductance G_min = 1 nS => R_max = 1 GigaOhm
+    const double R_MIN_SAFE = 0.5; 
+    const double R_MAX_SAFE = 1.0e9;
+
     for (const auto& r : block.resistors) {
-        result.resistors.push(r.nodeTerminal1, r.nodeTerminal2, r.resistance_ohms);
+        double safeR = r.resistance_ohms;
+        if (safeR < R_MIN_SAFE) {
+            std::cerr << "[WARNING] Resistor clamped: " << safeR << " -> " << R_MIN_SAFE << " (Min Safe R)\n";
+            safeR = R_MIN_SAFE;
+        } else if (safeR > R_MAX_SAFE) {
+             // Not strictly dangerous for crash, but prevents 0 conductance
+            safeR = R_MAX_SAFE;
+        }
+        result.resistors.push(r.nodeTerminal1, r.nodeTerminal2, safeR);
     }
     
     // Convert Capacitors

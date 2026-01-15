@@ -44,6 +44,10 @@ private:
     WGPUBuffer rhsBuffer = nullptr;
     WGPUBuffer matrixBuffer = nullptr;
     
+    // High Precision Dual-Scale Buffers
+    WGPUBuffer rhsBufferFine = nullptr;
+    WGPUBuffer matrixBufferFine = nullptr;
+    
     // Component Buffers (SoA)
     WGPUBuffer resistorBuffer = nullptr;
     WGPUBuffer diodeBuffer = nullptr;

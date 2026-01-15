@@ -15,6 +15,8 @@
 #include "ai_assistant.h"
 #include "component_library.h"
 #include "simulator_window.h"
+#include "system_inspector.h"
+#include <QStackedWidget>
 
 // ============================================================================
 // MAIN WINDOW
@@ -25,6 +27,11 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
     SchematicEditor* getSchematicEditor() const { return schematicEditor; }
+    
+    // Mode Management
+    enum class AppMode { COMPONENT_TEST, SYSTEM_SIMULATION };
+    AppMode getMode() const { return currentMode; }
+    void setMode(AppMode mode);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -44,7 +51,9 @@ private:
     ComponentLibrary* libraryPanel;
 
     QDockWidget* propertiesDock;
-    QTableWidget* propertiesTable;
+    QStackedWidget* propertiesStack; // [NEW] Switcher
+    QTableWidget* propertiesTable;   // For Component Mode
+    SystemInspector* systemInspector; // For System Mode
     
     QDockWidget* aiDock;
     AiAssistantPanel* aiPanel;
@@ -68,6 +77,15 @@ private:
     void newProject();
     void openProject();
     void runSimulation();
+    
+    // Mode Switching
+    void setupModeToolbar();
+    void onModeToggle();
+
+private:
+    AppMode currentMode = AppMode::SYSTEM_SIMULATION;
+    QToolBar* modeToolbar;
+    QAction* toggleModeAction;
 
 private slots:
     void updateProperties(VisualComponent* item);

@@ -40,8 +40,17 @@ public:
         // Perturb Global Components
         for (auto& r : varied.globalBlock.resistors) r.resistance_ohms = vary(r.resistance_ohms);
         for (auto& c : varied.globalBlock.capacitors) c.capacitance_farads = vary(c.capacitance_farads);
-        // We typically don't vary geometric parameters like Mosfet W/L in basic MC, 
-        // but we could vary Vth or Kp if those were exposed as params.
+        
+        // Perturb Power Rails (Vdd Variation)
+        for (auto& p : varied.globalBlock.powerRails) {
+            if (p.tolerance_percent > 0.0) {
+                 // Use specific sigma for this rail
+                 double railSigma = p.tolerance_percent * 0.01 / 3.0;
+                 std::normal_distribution<double> railDist(0.0, railSigma);
+                 double change = railDist(gen);
+                 p.nominal_V *= (1.0 + change);
+            }
+        }
 
         return varied;
     }

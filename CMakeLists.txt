@@ -96,6 +96,8 @@ qt_add_executable(${PROJECT_NAME}
     gui/component_library.cpp
     gui/component_library.h
     gui/schematic_editor_api.cpp
+    gui/system_inspector.cpp
+    gui/system_inspector.h
     ai_api/schema_api.cpp
     ai_api/schema_api.h
     ai_api/context_engine.cpp

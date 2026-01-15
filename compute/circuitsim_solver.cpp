@@ -45,7 +45,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     matrixBuilder.setDimensions(netlist.numGlobalNodes, netlist.numGlobalNodes);
     rhsVector.assign(netlist.numGlobalNodes, 0.0);
 
-    stampAllElements(netlist, 0.0, voltageEstimate);
+    stampAllElements(netlist, 0.0, voltageEstimate, 0.0);
     addDiagonalConditioning(netlist.numGlobalNodes);
 
     Csr_matrix matrix = matrixBuilder.createCsr();
@@ -163,7 +163,7 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
              matrixBuilder.setDimensions(netlist.numGlobalNodes, netlist.numGlobalNodes);
              rhsVector.assign(netlist.numGlobalNodes, 0.0);
              
-             stampAllElements(netlist, actualTimeStep, nrEstimate);
+             stampAllElements(netlist, actualTimeStep, nrEstimate, currentTime + actualTimeStep);
              addDiagonalConditioning(netlist.numGlobalNodes);
              
              Csr_matrix A = matrixBuilder.createCsr();
@@ -248,6 +248,30 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
              }
              integrator->updateHistory(cap.voltage_history, cap.current_history, v_curr, i_curr);
         }
+        
+        // Update Power Rail History (Local Decap)
+        for (auto &rail : netlist.globalBlock.powerRails) {
+             double v_curr = 0.0;
+             if (rail.nodeRail > 0 && rail.nodeRail <= (int)finalVoltages.size()) 
+                 v_curr = finalVoltages[rail.nodeRail - 1];
+             
+             double i_curr = 0.0;
+             double C = rail.capacitance_F;
+             IntegrationType type = integrator->getType();
+             
+             // I_cap = C * dv/dt (Trapezoidal integration)
+             if (type == IntegrationType::TRAPEZOIDAL) {
+                 if (!rail.voltage_history.empty())
+                     i_curr = (2.0*C/actualTimeStep)*(v_curr - rail.voltage_history[0]) - rail.current_history[0];
+             } else if (type == IntegrationType::GEAR_1_EULER) {
+                 if (!rail.voltage_history.empty())
+                    i_curr = (C/actualTimeStep)*(v_curr - rail.voltage_history[0]);
+             } 
+             // Simplified GEAR2 fallback to GEAR1 for rails for now (or implement full logic)
+             
+             integrator->updateHistory(rail.voltage_history, rail.current_history, v_curr, i_curr);
+        }
+
          for (auto &inst : netlist.instances) {
             auto it = netlist.blockDefinitions.find(inst.blockName);
             if (it != netlist.blockDefinitions.end()) {

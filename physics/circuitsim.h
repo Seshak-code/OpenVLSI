@@ -611,7 +611,7 @@ public:
       scheduler.schedule(netlist);
       matrixBuilder.clear();
       rhsVector.assign(netlist.numGlobalNodes, 0.0);
-      stampAllElements(netlist, 0.0, v_converged); // h=0 for DC sensitivity
+      stampAllElements(netlist, 0.0, v_converged, 0.0); // h=0, time=0 for DC sensitivity
       addDiagonalConditioning(netlist.numGlobalNodes);
       Csr_matrix J = matrixBuilder.createCsr(); /* Explicitly J */
       
@@ -776,7 +776,7 @@ public:
    * block instance.
    */
   void stampBlockLinear(const TensorBlock &block,
-                        const std::function<int(int)> &mapNode, double h) {
+                        const std::function<int(int)> &mapNode, double h, double time) {
     // 1. Resistors
     for (const auto &r : block.resistors) {
       stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2),
@@ -787,6 +787,21 @@ public:
       stampVoltageSourceAsNorton(mapNode(v.nodePositive),
                                  mapNode(v.nodeNegative), v.voltage_V,
                                  matrixBuilder, rhsVector);
+    }
+    // 2.5 Power Rails (System Source)
+    for (const auto &rail : block.powerRails) {
+        // Retrieve history (dc/transient)
+        double v_prev = 0.0;
+        double i_prev_cap = 0.0;
+        if (!rail.voltage_history.empty()) {
+            v_prev = rail.voltage_history[0];
+            i_prev_cap = rail.current_history[0]; // Stores capacitor current
+        }
+        
+        stampPowerRail(mapNode(rail.nodeRail), rail.nominal_V, rail.ripple_Vpp, rail.frequency_Hz,
+                       rail.ESR_ohms, rail.capacitance_F, h, time, 
+                       v_prev, i_prev_cap,
+                       matrixBuilder, rhsVector);
     }
     // 3. Current Sources
     for (const auto &i : block.currentSources) {
@@ -1063,10 +1078,10 @@ public:
    * High-level entry point for matrix assembly.
    */
   void stampAllElements(const TensorNetlist &netlist, double h,
-                        const std::vector<double> &v_guess) {
+                        const std::vector<double> &v_guess, double time) {
     // A. Global Block
     auto identityMap = [](int n) { return n; };
-    stampBlockLinear(netlist.globalBlock, identityMap, h);
+    stampBlockLinear(netlist.globalBlock, identityMap, h, time);
     // stampBlockNonLinear(netlist.globalBlock, identityMap, v_guess); 
     stampSoABlock(soaBlock, v_guess); // SoA for Global Block
 
@@ -1078,7 +1093,7 @@ public:
         auto mapNode = [&](int localNode) {
           return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
         };
-        stampBlockLinear(block, mapNode, h);
+        stampBlockLinear(block, mapNode, h, time);
         stampBlockNonLinear(block, mapNode, v_guess);
       }
     }

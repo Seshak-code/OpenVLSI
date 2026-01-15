@@ -17,7 +17,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setupDocks();
 
     // 3. Setup Menus
+    // 3. Setup Menus
     setupMenus();
+    setupModeToolbar();
 
     // 4. Status Bar
     statusBar()->showMessage("Ready");
@@ -125,7 +127,11 @@ void MainWindow::createPropertiesDock() {
     propertiesDock = new QDockWidget("Properties", this);
     propertiesDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     
-    propertiesTable = new QTableWidget(propertiesDock);
+    // Stack for Multi-Mode Support
+    propertiesStack = new QStackedWidget(propertiesDock);
+    
+    // Mode 1: Component Properties (Table)
+    propertiesTable = new QTableWidget();
     propertiesTable->setColumnCount(2);
     propertiesTable->setHorizontalHeaderLabels({"Property", "Value"});
     propertiesTable->horizontalHeader()->setStretchLastSection(true);
@@ -143,9 +149,16 @@ void MainWindow::createPropertiesDock() {
 
     // Connect editing signal
     connect(propertiesTable, &QTableWidget::itemChanged, this, &MainWindow::onPropertyEdited);
+    
+    propertiesStack->addWidget(propertiesTable);
 
-    propertiesDock->setWidget(propertiesTable);
+    // Mode 2: System Inspector
+    systemInspector = new SystemInspector();
+    propertiesStack->addWidget(systemInspector);
+
+    propertiesDock->setWidget(propertiesStack);
 }
+
 
 void MainWindow::updateProperties(VisualComponent* item) {
     if (isUpdating) return;
@@ -359,4 +372,60 @@ void MainWindow::updateWireProperties(VisualWire* wire) {
     propertiesTable->setItem(1, 1, lenItem);
     
     isUpdating = false;
+}
+
+void MainWindow::setupModeToolbar() {
+    modeToolbar = addToolBar("Mode");
+    modeToolbar->setMovable(false);
+    
+    // Toggle Action
+    // We use a checkable action to simulate a switch
+    toggleModeAction = new QAction("System Mode", this);
+    toggleModeAction->setCheckable(true);
+    toggleModeAction->setChecked(true); // Default to System Mode
+    toggleModeAction->setIcon(QIcon::fromTheme("system-run")); // Placeholder icon
+    
+    // Connect
+    connect(toggleModeAction, &QAction::toggled, this, &MainWindow::onModeToggle);
+    
+    modeToolbar->addAction(toggleModeAction);
+    
+    // Initialize state
+    onModeToggle(); 
+}
+
+void MainWindow::onModeToggle() {
+    if (toggleModeAction->isChecked()) {
+        setMode(AppMode::SYSTEM_SIMULATION);
+    } else {
+        setMode(AppMode::COMPONENT_TEST);
+    }
+}
+
+void MainWindow::setMode(AppMode mode) {
+    currentMode = mode;
+    
+    if (mode == AppMode::SYSTEM_SIMULATION) {
+        toggleModeAction->setText("System Mode (Active)");
+        toggleModeAction->setToolTip("System Simulation Mode: Includes Power Rails and Environment");
+        statusBar()->showMessage("Switched to System Simulation Mode");
+        
+        // Switch Inspector (Phase 3.3)
+        propertiesStack->setCurrentWidget(systemInspector);
+        propertiesDock->setWindowTitle("System Inspector");
+        
+        // TODO: Notify Library to filter components
+        // libraryPanel->setMode(ComponentLibrary::Mode::SYSTEM);
+    } else {
+        toggleModeAction->setText("Component Mode (Active)");
+        toggleModeAction->setToolTip("Component Test Mode: Ideal Sources Only");
+        statusBar()->showMessage("Switched to Component Test Mode");
+        
+        // Switch Inspector
+        propertiesStack->setCurrentWidget(propertiesTable);
+        propertiesDock->setWindowTitle("Component Properties");
+        
+        // TODO: Notify Library to filter components
+        // libraryPanel->setMode(ComponentLibrary::Mode::COMPONENT);
+    }
 }

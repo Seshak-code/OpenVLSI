@@ -17,37 +17,56 @@
 
 const char* WGSL_KERNELS = R"(
 // --- Constants ---
-const FIXED_POINT_SCALE: f32 = 1e9; // Precision: ~1 nano-unit
-const MAX_EXP_ARG: f32 = 40.0;      // Prevent exp() overflow
+const COARSE_SCALE: f32 = 1e6;   // Micro-units (1uV resolution, huge range)
+const FINE_SCALE: f32 = 1e15;    // Femto-units (1fV resolution, 1nm leakage)
+const MAX_EXP_ARG: f32 = 40.0;   // Prevent exp() overflow
 
 // --- Buffers (Bind Group 0) ---
 // Global voltage vector (read-only for stamping pass)
 @group(0) @binding(0) var<storage, read> voltages : array<f32>;
-// RHS vector (atomic i32 for accumulation, scaled)
-@group(0) @binding(1) var<storage, read_write> rhs_atomic : array<atomic<i32>>;
-// Matrix (CSR triplet format: row, col, val_atomic) - Simplified Dense for now
-// For a real sparse solver, this would be COO then reduced to CSR.
-@group(0) @binding(2) var<storage, read_write> matrix_atomic : array<atomic<i32>>; 
+
+// RHS Buffers (Coarse + Fine)
+@group(0) @binding(1) var<storage, read_write> rhs_atomic_coarse : array<atomic<i32>>;
+@group(0) @binding(4) var<storage, read_write> rhs_atomic_fine : array<atomic<i32>>;
+
+// Matrix Buffers (Coarse + Fine)
+@group(0) @binding(2) var<storage, read_write> matrix_atomic_coarse : array<atomic<i32>>;
+@group(0) @binding(5) var<storage, read_write> matrix_atomic_fine : array<atomic<i32>>;
+
 // Matrix dimension (N x N)
 @group(0) @binding(3) var<uniform> matrixDim : u32;
 
-// --- Helper: Fixed-Point Atomic Add ---
-fn atomicAddFloat(ptr: ptr<storage, atomic<i32>, read_write>, value: f32) {
-    let scaled = i32(value * FIXED_POINT_SCALE);
-    atomicAdd(ptr, scaled);
+// --- Helper: Dual-Scale Atomic Add ---
+fn atomicAddDual(coarsePtr: ptr<storage, atomic<i32>, read_write>, 
+                 finePtr: ptr<storage, atomic<i32>, read_write>, 
+                 val: f32) {
+    // 1. Calculate Coarse Part (Micro-units)
+    let val_coarse = i32(val * COARSE_SCALE);
+    
+    // 2. Calculate Residual for Fine Part
+    // We reconstruct what the coarse part physically represents and subtract it
+    let represented_coarse = f32(val_coarse) / COARSE_SCALE;
+    let residual = val - represented_coarse;
+    
+    // 3. Calculate Fine Part (Femto-units)
+    let val_fine = i32(residual * FINE_SCALE);
+    
+    // 4. Parallel Atomic Add
+    atomicAdd(coarsePtr, val_coarse);
+    atomicAdd(finePtr, val_fine);
 }
 
 // --- Helper: Stamp to dense matrix (row-major) ---
 fn stampMatrix(row: i32, col: i32, val: f32) {
     if (row < 0 || col < 0) { return; } // Ground node (0) is implicit
     let idx = u32(row) * matrixDim + u32(col);
-    atomicAddFloat(&matrix_atomic[idx], val);
+    atomicAddDual(&matrix_atomic_coarse[idx], &matrix_atomic_fine[idx], val);
 }
 
 // --- Helper: Stamp to RHS vector ---
 fn stampRHS(node: i32, val: f32) {
     if (node < 0) { return; } // Ground
-    atomicAddFloat(&rhs_atomic[u32(node)], val);
+    atomicAddDual(&rhs_atomic_coarse[u32(node)], &rhs_atomic_fine[u32(node)], val);
 }
 
 // --- Helper: Get voltage (0-indexed, ground=0V) ---
@@ -420,8 +439,13 @@ WebGPUSolver::WebGPUSolver() {
 WebGPUSolver::~WebGPUSolver() {
     if (resistorBuffer) wgpuBufferRelease(resistorBuffer);
     if (diodeBuffer) wgpuBufferRelease(diodeBuffer);
+    
     if (rhsBuffer) wgpuBufferRelease(rhsBuffer);
+    if (rhsBufferFine) wgpuBufferRelease(rhsBufferFine);
+    
     if (matrixBuffer) wgpuBufferRelease(matrixBuffer);
+    if (matrixBufferFine) wgpuBufferRelease(matrixBufferFine);
+    
     if (queue) wgpuQueueRelease(queue);
     if (device) wgpuDeviceRelease(device);
 }
@@ -436,19 +460,27 @@ bool WebGPUSolver::initialize(const TensorNetlist& netlist) {
 void WebGPUSolver::createBuffers(const TensorNetlist& netlist) {
     size_t N = netlist.numGlobalNodes;
     
-    // RHS Buffer (atomic i32)
+    // RHS Buffer (Coarse)
     WGPUBufferDescriptor rhsDesc = {};
-    rhsDesc.label = "RHS Atomic Buffer";
+    rhsDesc.label = "RHS Coarse Buffer";
     rhsDesc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc | WGPUBufferUsage_CopyDst;
     rhsDesc.size = N * sizeof(int32_t);
     rhsBuffer = wgpuDeviceCreateBuffer(device, &rhsDesc);
     
-    // Matrix Buffer (dense N*N atomic i32)
+    // RHS Buffer (Fine)
+    rhsDesc.label = "RHS Fine Buffer";
+    rhsBufferFine = wgpuDeviceCreateBuffer(device, &rhsDesc);
+    
+    // Matrix Buffer (Coarse)
     WGPUBufferDescriptor matDesc = {};
-    matDesc.label = "Matrix Atomic Buffer";
+    matDesc.label = "Matrix Coarse Buffer";
     matDesc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc | WGPUBufferUsage_CopyDst;
     matDesc.size = N * N * sizeof(int32_t);
     matrixBuffer = wgpuDeviceCreateBuffer(device, &matDesc);
+    
+    // Matrix Buffer (Fine)
+    matDesc.label = "Matrix Fine Buffer";
+    matrixBufferFine = wgpuDeviceCreateBuffer(device, &matDesc);
 }
 
 void WebGPUSolver::createPipelines() {
