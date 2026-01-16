@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <map>
 #include <cassert>
+#include <iostream>
 #include "graph_canonical.h"
 
 /*
@@ -111,6 +112,57 @@ struct CurrentSource {
     int nodePositive;             // Current enters (+)
     int nodeNegative;             // Current exits (-)
     double current_A;             // DC Current [A]
+};
+
+// ============================================================================
+// DEPENDENT SOURCES (Bench + Block internal modes)
+// ============================================================================
+
+/*
+ * VCVS - Voltage-Controlled Voltage Source
+ * Vout = gain * Vcontrol
+ * MNA: Adds branch equation with controlled coefficient.
+ */
+struct VCVS {
+    int nodeOutPos, nodeOutNeg;   // Output terminals
+    int nodeCtrlPos, nodeCtrlNeg; // Control terminals
+    double gain;                  // Voltage gain (dimensionless)
+    std::string role;             // For AI/debug: "bias", "feedback", etc.
+};
+
+/*
+ * CCVS - Current-Controlled Voltage Source
+ * Vout = transresistance * Icontrol
+ * Requires a controlling branch (voltage source index).
+ */
+struct CCVS {
+    int nodeOutPos, nodeOutNeg;
+    int ctrlBranchIdx;            // Index of controlling branch current
+    double transresistance;       // Ohms
+    std::string role;
+};
+
+/*
+ * VCCS - Voltage-Controlled Current Source
+ * Iout = transconductance * Vcontrol
+ * Stamps directly into conductance matrix.
+ */
+struct VCCS {
+    int nodeOutPos, nodeOutNeg;
+    int nodeCtrlPos, nodeCtrlNeg;
+    double transconductance;      // Siemens
+    std::string role;
+};
+
+/*
+ * CCCS - Current-Controlled Current Source
+ * Iout = currentGain * Icontrol
+ */
+struct CCCS {
+    int nodeOutPos, nodeOutNeg;
+    int ctrlBranchIdx;
+    double currentGain;           // Dimensionless
+    std::string role;
 };
 
 // ============================================================================
@@ -312,17 +364,17 @@ struct Mosfet {
 
 struct BJT {
     std::string instanceName;
-    int nodeCollector;                    // C terminal
-    int base;                             // B terminal
-    int emitter;                          // E terminal
-    std::string modelName;
-    bool isNPN;                           // true=NPN, false=PNP
+    int nodeCollector = -1;                    // C terminal
+    int base = -1;                             // B terminal
+    int emitter = -1;                          // E terminal
+    std::string modelName = "default";
+    bool isNPN = true;                           // true=NPN, false=PNP
     
     // Model Parameters (Per-Instance for Phase 1, ideally per-model lookup)
-    double betaF;                         // Forward Beta
-    double betaR;                         // Reverse Beta
-    double saturationCurrent_I_S_A;       // Is [A]
-    double thermalVoltage_V_T_V;          // Vt [V]
+    double betaF = 100.0;                         // Forward Beta
+    double betaR = 1.0;                         // Reverse Beta
+    double saturationCurrent_I_S_A = 1e-14;       // Is [A]
+    double thermalVoltage_V_T_V = 0.02585;          // Vt [V]
     
     double temperature_K = 300.15;
 };
@@ -542,7 +594,27 @@ struct TensorBlock {
                 double betaF = 100.0, double betaR = 1.0, 
                 double Is = 1e-14, double Vt = 0.02585) {
         if (isFrozen) return;
-        bjts.push_back({name, C, B, E, model, isNPN, betaF, betaR, Is, Vt});
+        
+        BJT newBjt;
+        newBjt.instanceName = name;
+        newBjt.nodeCollector = C;
+        newBjt.base = B;
+        newBjt.emitter = E;
+        newBjt.modelName = model;
+        newBjt.isNPN = isNPN;
+        newBjt.betaF = betaF;
+        newBjt.betaR = betaR;
+        newBjt.saturationCurrent_I_S_A = Is;
+        newBjt.thermalVoltage_V_T_V = Vt;
+        
+        // Defensive Fix: Prevent invalid Is
+        if (newBjt.saturationCurrent_I_S_A <= 1e-20) {
+             std::cerr << "[FIX] BJT " << name << " initialized with Is=" << newBjt.saturationCurrent_I_S_A 
+                      << ". Forcing default 1e-14." << std::endl;
+            newBjt.saturationCurrent_I_S_A = 1e-14;
+        }
+
+        bjts.push_back(newBjt);
         updateNodeCount(C); updateNodeCount(B); updateNodeCount(E);
     }
     void addTransmissionLine(int p1p, int p1n, int p2p, int p2n, double Z0, double Td) {

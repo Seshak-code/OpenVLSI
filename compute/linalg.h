@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <iostream>
 #include <vector>
 
 #ifdef _OPENMP
@@ -507,6 +508,10 @@ inline SolverResult solveLU_Pivoted(const Csr_matrix &matrix,
         // Check for singularity
         if (maxVal < 1e-25) {
             // Matrix is singular or near-singular. Return failure.
+            std::cerr << "LU: Singular matrix at row " << i << " (maxVal=" << maxVal << ")\n";
+            std::cerr << "Diagonals: ";
+            for(int d=0; d<n; ++d) std::cerr << A[d*n+d] << " ";
+            std::cerr << "\n";
             return {x, 1.0, 0, false};
         }
 

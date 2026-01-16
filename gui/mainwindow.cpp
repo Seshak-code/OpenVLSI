@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "welcome_widget.h"
 #include <QApplication>
 #include <QHeaderView>
 #include <QStatusBar>
@@ -50,10 +51,16 @@ void MainWindow::setupCentralWidget() {
     rtlPageTabs->setTabsClosable(true);
     rtlPageTabs->setMovable(true);
     
-    // Initial schematic page
-    schematicEditor = new SchematicEditor(this);
-    schematicEditor->setMode(AppMode::LAB_BENCHMARK); // Default initial page to Labs
-    rtlPageTabs->addTab(schematicEditor, "top.sch");
+    // Welcome Widget (shown when no schematics are open)
+    welcomeWidget = new WelcomeWidget(this);
+    rtlPageTabs->addTab(welcomeWidget, "Welcome");
+    connect(welcomeWidget, &WelcomeWidget::newSchematicRequested, this, &MainWindow::createSchematicFromWelcome);
+    
+    // Track active editor when tabs change
+    connect(rtlPageTabs, &QTabWidget::currentChanged, this, &MainWindow::onRtlTabChanged);
+    
+    // Initialize schematicEditor as nullptr until first schematic is created
+    schematicEditor = nullptr;
     
     // "+" button to add new pages
     QPushButton* addPageBtn = new QPushButton("+");
@@ -392,7 +399,7 @@ void MainWindow::setupMenus() {
 
     // Simulation
     QMenu* simMenu = mb->addMenu("&Simulation");
-    simMenu->addAction("Run Simulation", this, &MainWindow::runSimulation);
+    simMenu->addAction("Set Simulation", this, &MainWindow::runSimulation);
 }
 
 void MainWindow::newProject() {
@@ -460,32 +467,7 @@ void MainWindow::setupStageToolbar() {
     modeToolbar = addToolBar("Design Flow");
     modeToolbar->setMovable(false);
     
-    // Stage Selector Combobox
-    QComboBox* stageCombo = new QComboBox();
-    stageCombo->addItems({"RTL Design", "Synthesis", "Physical Design", "Verification"});
-    stageCombo->setToolTip("Select design flow stage");
-    stageCombo->setMinimumWidth(150);
-    
-    connect(stageCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
-        if (stageTabs) {
-            stageTabs->setCurrentIndex(idx);
-        }
-    });
-    
-    // Sync combo with tab changes
-    connect(stageTabs, &QTabWidget::currentChanged, stageCombo, &QComboBox::setCurrentIndex);
-    
-    modeToolbar->addWidget(new QLabel(" Stage: "));
-    modeToolbar->addWidget(stageCombo);
-    modeToolbar->addSeparator();
-    
-    // Mode Toggle - Removed as per request (mode is set at page creation)
-    /*
-    toggleModeAction = new QAction("System Integration", this);
-    ...
-    */
-    
-    modeToolbar->addSeparator();
+    // Stage Selector removed - tabs serve as navigation
     
     // Sync Buttons (Phase 14.2)
     QAction* genVerilog = new QAction("Sch -> HDL", this);
@@ -538,27 +520,81 @@ void MainWindow::onStageChanged(DesignStage stage) {
 }
 
 void MainWindow::addRtlPage() {
-    QStringList modes = {"Lab Benchmark (Ideal)", "System Integration (Realistic)"};
+    QStringList modes = {"Bench Test (Ideal)", "Block Subsystem", "System Integration"};
     bool ok;
     QString selection = QInputDialog::getItem(this, "New Schematic", 
-                                             "Select simulation environment:", 
+                                             "Select simulation mode:", 
                                              modes, 0, false, &ok);
     if (!ok) return;
 
-    static int pageCount = 1; 
+    static int pageCount = 0; 
     QString pageName = QString("module_%1.sch").arg(++pageCount);
     
+    AppMode mode = AppMode::BENCH_TEST;
+    if (selection == modes[1]) mode = AppMode::BLOCK_SUBSYSTEM;
+    else if (selection == modes[2]) mode = AppMode::SYSTEM_INTEGRATION;
+    
     SchematicEditor* newEditor = new SchematicEditor(this);
-    AppMode mode = (selection == modes[0]) ? AppMode::LAB_BENCHMARK : AppMode::SYSTEM_INTEGRATION;
     newEditor->setMode(mode);
 
-    rtlPageTabs->addTab(newEditor, pageName);
+    // Add tab with mode label
+    QString tabTitle = QString("%1 [%2]").arg(pageName, modeLabel(mode));
+    rtlPageTabs->addTab(newEditor, tabTitle);
     rtlPageTabs->setCurrentWidget(newEditor);
+    
+    // Update active editor and sync library
+    schematicEditor = newEditor;
+    if (libraryPanel) libraryPanel->setMode(mode);
     
     connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
     connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
     
     statusBar()->showMessage(QString("Added %1 schematic: %2").arg(selection, pageName), 3000);
+}
+
+void MainWindow::createSchematicFromWelcome(AppMode mode) {
+    static int pageCount = 0;
+    QString pageName = QString("module_%1.sch").arg(++pageCount);
+    
+    SchematicEditor* newEditor = new SchematicEditor(this);
+    newEditor->setMode(mode);
+    
+    // Add tab with mode label
+    QString tabTitle = QString("%1 [%2]").arg(pageName, modeLabel(mode));
+    rtlPageTabs->addTab(newEditor, tabTitle);
+    rtlPageTabs->setCurrentWidget(newEditor);
+    
+    // Update active editor and sync library
+    schematicEditor = newEditor;
+    if (libraryPanel) libraryPanel->setMode(mode);
+    
+    connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+    connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+    
+    statusBar()->showMessage(QString("Created %1 schematic: %2").arg(modeLabel(mode), pageName), 3000);
+}
+
+void MainWindow::onRtlTabChanged(int index) {
+    QWidget* current = rtlPageTabs->widget(index);
+    if (auto* editor = qobject_cast<SchematicEditor*>(current)) {
+        schematicEditor = editor;
+        if (libraryPanel) libraryPanel->setMode(editor->getMode());
+        if (aiPanel) aiPanel->setEditor(editor);
+        statusBar()->showMessage(QString("Active: %1").arg(rtlPageTabs->tabText(index)));
+    } else {
+        // Welcome widget or placeholder - no active editor
+        schematicEditor = nullptr;
+        if (aiPanel) aiPanel->setEditor(nullptr);
+    }
+}
+
+QString MainWindow::modeLabel(AppMode mode) {
+    switch (mode) {
+        case AppMode::BENCH_TEST: return "Bench";
+        case AppMode::BLOCK_SUBSYSTEM: return "Block";
+        case AppMode::SYSTEM_INTEGRATION: return "System";
+        default: return "Unknown";
+    }
 }
 
 AppMode MainWindow::getMode() const {

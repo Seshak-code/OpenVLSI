@@ -11,7 +11,7 @@ SimulatorWindow::SimulatorWindow(QWidget *parent) : QWidget(parent) {
   mainLayout->addWidget(title);
 
   // Status Label
-  statusLabel = new QLabel("Ready. Click 'Run Simulation' to start.", this);
+  statusLabel = new QLabel("Ready. Click 'Start Simulation' to run.", this);
   statusLabel->setStyleSheet("font-size: 14px; color: #888;");
   mainLayout->addWidget(statusLabel);
 
@@ -32,7 +32,7 @@ SimulatorWindow::SimulatorWindow(QWidget *parent) : QWidget(parent) {
   resultTabs->addTab(logicAnalyzer, "Logic Analyzer");
 
   // Run Button
-  btnRun = new QPushButton("▶ Run Simulation", this);
+  btnRun = new QPushButton("▶ Start Simulation", this);
   btnRun->setStyleSheet(
       "QPushButton { background-color: #4CAF50; color: white; padding: 12px; font-size: 14px; border-radius: 5px; }"
       "QPushButton:hover { background-color: #45a049; }");
@@ -49,7 +49,7 @@ void SimulatorWindow::startSimulation() {
   
   if (netlist.numGlobalNodes == 0) {
     logArea->appendPlainText("ERROR: No netlist provided!");
-    logArea->appendPlainText("Please draw a circuit in the Schematic tab and click 'Run Simulation' from the menu.");
+    logArea->appendPlainText("Use 'Set Simulation' from schematic, then switch to this tab and click 'Start Simulation'.");
     statusLabel->setText("❌ No circuit to simulate.");
     return;
   }
@@ -77,6 +77,37 @@ void SimulatorWindow::startSimulation() {
   trace.netlistName = "Schematic Circuit";
   logicAnalyzer->clear();
   logicAnalyzer->setTimeRange(totalTime);
+
+  // == DC Operating Point ==
+  logArea->appendPlainText("=== DC Operating Point ===");
+  SolverStep dcStep = sim.solveDC(netlist);
+  if (!dcStep.stats.converged) {
+    logArea->appendPlainText("ERROR: DC analysis failed to converge!");
+    logArea->appendPlainText(QString("  Iterations: %1, Residual: %2")
+        .arg(dcStep.stats.iterations).arg(dcStep.stats.residual, 0, 'e', 2));
+    
+    if (!dcStep.stats.error_detail.empty()) {
+        logArea->appendPlainText("--- DIAGNOSTICS ---");
+        logArea->appendPlainText(QString::fromStdString(dcStep.stats.error_detail));
+        logArea->appendPlainText("-------------------");
+    }
+
+    logArea->appendPlainText("Check for floating nodes or invalid circuit topology.");
+    logArea->appendPlainText("Partial solution (may be invalid):");
+    for (size_t i = 0; i < dcStep.nodeVoltages.size(); ++i) {
+      logArea->appendPlainText(QString("  V(node%1) = %2 V").arg(i+1).arg(dcStep.nodeVoltages[i], 0, 'f', 4));
+    }
+    statusLabel->setText("❌ DC OP failed.");
+    btnRun->setEnabled(true);
+    return;
+  }
+  logArea->appendPlainText(QString("Converged in %1 iterations (residual: %2)")
+      .arg(dcStep.stats.iterations).arg(dcStep.stats.residual, 0, 'e', 2));
+  logArea->appendPlainText("Initial node voltages:");
+  for (size_t i = 0; i < dcStep.nodeVoltages.size(); ++i) {
+    logArea->appendPlainText(QString("  V(node%1) = %2 V").arg(i+1).arg(dcStep.nodeVoltages[i], 0, 'f', 4));
+  }
+  logArea->appendPlainText("");
 
   logArea->appendPlainText("=== Transient Analysis ===");
   logArea->appendPlainText("Time          Probe Readings");

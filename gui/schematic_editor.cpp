@@ -43,7 +43,17 @@ void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
 
     if (!gridVisible) return;
 
-    const int gridSize = GRID_STEP;
+    // Adaptive Grid Density (LOD)
+    double scale = painter->transform().m11();
+    int gridSize = GRID_STEP;
+    
+    // If zoomed out too far, thin out the grid
+    if (scale < 0.5) gridSize *= 2;
+    if (scale < 0.25) gridSize *= 4;
+    
+    // If zoomed in very far, maybe add sub-grid? 
+    // (Keeping it simple for now)
+
     int left = static_cast<int>(std::floor(rect.left()));
     int top = static_cast<int>(std::floor(rect.top()));
     int right = static_cast<int>(std::ceil(rect.right()));
@@ -63,7 +73,8 @@ void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
         painter->drawLine(left, y, right, y);
     }
     
-    painter->setPen(QPen(Qt::white, 2));
+    // Axes
+    painter->setPen(QPen(QColor(100, 100, 100), 1));
     painter->drawLine(0, top, 0, bottom);
     painter->drawLine(left, 0, right, 0);
 }
@@ -393,6 +404,54 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
         painter->drawLine(alignmentGuideV);
     }
     
+    // ====== JUNCTION DOTS (Wire-to-Wire / Wire-to-Pin Branching) ======
+    // Logic:
+    // - Wire endpoint = 1 connection
+    // - Wire middle point = 2 connections (incoming + outgoing)
+    // - Pin = 1 connection
+    // Dot if total >= 3
+    QMap<QPair<int,int>, int> junctionCounts;
+    for (auto* item : items()) {
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            if (!w->isVisible()) continue;
+            QLineF l = w->line();
+            QPointF p1 = w->mapToScene(l.p1());
+            QPointF p2 = w->mapToScene(l.p2());
+            int x1 = qRound(p1.x()), y1 = qRound(p1.y());
+            int x2 = qRound(p2.x()), y2 = qRound(p2.y());
+            
+            if (x1 == x2) { // Vertical
+                int minY = std::min(y1, y2);
+                int maxY = std::max(y1, y2);
+                for (int y = minY; y <= maxY; y += 20) { // Using GRID_STEP=20
+                    if (y == y1 || y == y2) junctionCounts[{x1, y}] += 1; // Endpoint
+                    else junctionCounts[{x1, y}] += 2; // Middle
+                }
+            } else if (y1 == y2) { // Horizontal
+                int minX = std::min(x1, x2);
+                int maxX = std::max(x1, x2);
+                for (int x = minX; x <= maxX; x += 20) {
+                    if (x == x1 || x == x2) junctionCounts[{x, y1}] += 1; // Endpoint
+                    else junctionCounts[{x, y1}] += 2; // Middle
+                }
+            }
+        } else if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+             if (c->type == ComponentType::Probe) continue; 
+             for (const auto& localP : c->getTerminals()) {
+                 QPointF p = c->mapToScene(localP);
+                 junctionCounts[{qRound(p.x()), qRound(p.y())}] += 1;
+             }
+        }
+    }
+    
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(30, 30, 30)); // Dark grey junction dots
+    for (auto it = junctionCounts.begin(); it != junctionCounts.end(); ++it) {
+        if (it.value() >= 3) {
+            painter->drawEllipse(QPointF(it.key().first, it.key().second), 4, 4);
+        }
+    }
+
     // ====== CONNECTION DOTS (Wire-to-PROBE Tip Junctions) ======
     // For each PROBE TIP, check if it touches any wire.
     // If so, draw a green connection dot.
@@ -950,7 +1009,7 @@ QStringList GridScene::runERC() {
 // ============================================================================
 SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {
     scene = new GridScene(this);
-    view = new QGraphicsView(scene, this);
+    view = new SchematicView(scene, this);
     
     setupUi();
     
@@ -1082,10 +1141,19 @@ void SchematicEditor::onSnappingToggled(bool checked) {
 
 void SchematicEditor::setMode(AppMode mode) {
     currentMode = mode;
-    statusLabel->setText(mode == AppMode::SYSTEM_INTEGRATION ? "Mode: System Integration" : "Mode: Lab Benchmark");
-    statusLabel->setStyleSheet(mode == AppMode::SYSTEM_INTEGRATION ? 
-        "background: #007ACC; color: white; padding: 4px; font-weight: bold;" :
-        "background: #2D8A2D; color: white; padding: 4px; font-weight: bold;");
+    QString modeStr = "Mode: Bench Test";
+    QString color = "#2D8A2D"; // Greenish
+    
+    if (mode == AppMode::BLOCK_SUBSYSTEM) {
+        modeStr = "Mode: Block Subsystem";
+        color = "#8A8A2D"; // Yellowish
+    } else if (mode == AppMode::SYSTEM_INTEGRATION) {
+        modeStr = "Mode: System Integration";
+        color = "#007ACC"; // Blue
+    }
+    
+    statusLabel->setText(modeStr);
+    statusLabel->setStyleSheet(QString("background: %1; color: white; padding: 4px; font-weight: bold;").arg(color));
 }
 
 void SchematicEditor::setTool(ComponentType t) {

@@ -90,6 +90,8 @@ qt_add_executable(${PROJECT_NAME}
     gui/schematic_editor.cpp
     gui/schematic_editor_sync.cpp
     gui/schematic_editor.h
+    gui/schematic_view.cpp
+    gui/schematic_view.h
     gui/visual_component.cpp
     gui/visual_component.h
     gui/ai_assistant.cpp
@@ -107,6 +109,8 @@ qt_add_executable(${PROJECT_NAME}
     gui/logic_analyzer.h
     gui/hdl_editor.cpp
     gui/hdl_editor.h
+    gui/welcome_widget.cpp
+    gui/welcome_widget.h
     ai_api/schema_api.cpp
     ai_api/schema_api.h
     ai_api/context_engine.cpp

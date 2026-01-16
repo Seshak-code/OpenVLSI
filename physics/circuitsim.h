@@ -422,10 +422,11 @@ public:
       double v_cathode = getV(d.cathode);
       double v_d = v_anode - v_cathode;
 
-      // Use exact physics kernel (no clamping for residual check)
+      // Use CLAMPED physics kernel (matching solver) to avoid false divergence
+      // on valid linear continuation steps.
       DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
                             d.thermalVoltage_V_T_V};
-      double i_d = diode_current(v_d, params);
+      double i_d = diode_current_clamped(v_d, params, 30.0); // Match device_physics.h clamp
 
       addRes(d.anode, -i_d);
       addRes(d.cathode, i_d);
@@ -443,7 +444,8 @@ public:
         params.BetaR = q.betaR;
         params.Vt = q.thermalVoltage_V_T_V;
         
-        // Exact solution (no linearization)
+        // Use CLAMPED physics for consistent residual auditing
+        // bjt_ebers_moll uses "linear_continuation_diode" internally which we clamped to 30.0
         BJTCurrents currents = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
         
         // KCL: Sum of currents entering node must be zero
@@ -1155,6 +1157,8 @@ public:
         rhsVector[diode.cathode - 1] += current_eq;
     }
   }
+
+#include "circuitsim_audit.inc"
 };
 
 // =============================================================================

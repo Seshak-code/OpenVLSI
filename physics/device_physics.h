@@ -107,6 +107,12 @@ inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 4
 inline double pnjlim(double vnew, double vold, double vt, double vcrit) {
     double vlim = vnew;
     
+    // Bypass limiting if we are in the linear continuation region (defined as > 40*Vt in physics)
+    // In this region, the device behaves as a linear resistor, so Newton-Raphson is stable/exact.
+    if (vold > 40.0 * vt && vnew > 40.0 * vt) {
+        return vnew;
+    }
+
     if (vnew > vcrit && std::abs(vnew - vold) > 2.0 * vt) {
         // Large forward step - apply limiting
         if (vold > 0.0) {
@@ -257,13 +263,13 @@ inline BJTCurrents bjt_ebers_moll(double v_c, double v_b, double v_e, bool isNPN
     // For Vj > Vcrit: I = I(Vcrit) + G(Vcrit) * (Vj - Vcrit)
     // This avoids exponential overflow and provides smooth derivatives.
     
-    const double Vcrit = 40.0 * p.Vt;  // Critical voltage for linear region
+    const double Vcrit = 30.0 * p.Vt;  // Critical voltage for linear region (Reduced from 40.0 for robustness)
     const double GMIN = 1e-12;         // Minimum conductance for cutoff
     
     // Branchless clamping using std::min/std::max (GPU-friendly)
     auto linear_continuation_diode = [&](double v_j) -> std::pair<double, double> {
         double arg = v_j / p.Vt;
-        double arg_clamped = std::min(arg, 40.0);  // Branchless clamp
+        double arg_clamped = std::min(arg, 30.0);  // Branchless clamp
         
         double exp_val = std::exp(arg_clamped);
         double i_base = p.Is * (exp_val - 1.0);

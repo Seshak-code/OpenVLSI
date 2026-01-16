@@ -23,7 +23,22 @@ enum class ComponentType {
     CurrentSource,
     SchottkyDiode,
     Probe,
-    ICPackage  // Hierarchical IC (e.g., ULN2003A, 555 Timer)
+    ICPackage,      // Hierarchical IC (e.g., ULN2003A, 555 Timer)
+    
+    // Dependent Sources (Bench + Block internal)
+    VCVS,           // Voltage-Controlled Voltage Source
+    CCVS,           // Current-Controlled Voltage Source
+    VCCS,           // Voltage-Controlled Current Source
+    CCCS,           // Current-Controlled Current Source
+    
+    // Block mode (PowerPort never stamps MNA - constraint endpoint only)
+    PowerPort,      // Interface pin: Vin, Vout, GND as requirement
+    
+    // System mode (RailDrivers inject net power)
+    RailDriver,     // Abstract: IdealRail, LinearRegulator, SwitchingRegulator
+    PowerVdd,       // Vdd/Vcc symbol (binds to global net)
+    PowerVss,       // Vss/GND symbol (binds to global net)
+    WaveformGen     // System-level clock/IO driver
 };
 
 QString componentTypeToString(ComponentType t);

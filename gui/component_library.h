@@ -9,7 +9,7 @@
 #include "gui_types.h"
 
 // ============================================================================
-// COMPONENT LIBRARY
+// COMPONENT LIBRARY (Three-Mode Architecture)
 // ============================================================================
 class ComponentLibrary : public QWidget {
     Q_OBJECT
@@ -18,7 +18,7 @@ public:
     
     void setStage(DesignStage stage);
     
-    // Mode-based filtering (Lab vs System)
+    // Three-mode filtering: Bench / Block / System
     void setMode(AppMode mode);
 
 signals:
@@ -28,13 +28,12 @@ private:
     QTabWidget* tabs;
     QListWidget* basicList;
     QListWidget* activeList;
-    QListWidget* sourcesList;
-    QListWidget* systemList; // [NEW] PDN-specific parts
-    QListWidget* icsList;    // [NEW] IC Packages (System mode)
+    QListWidget* sourcesList;       // Bench: ideal + dependent sources
+    QListWidget* interfacesList;    // Block: PowerPort pins
+    QListWidget* systemList;        // System: PDN, RailDrivers
+    QListWidget* icsList;           // System: IC Packages
 
     void setupUi();
     void populateLists();
-    void populateSystemList();
-    void populateICsList();
     void addComponentItem(QListWidget* list, const QString& name, const QString& iconName, ComponentType type);
 };

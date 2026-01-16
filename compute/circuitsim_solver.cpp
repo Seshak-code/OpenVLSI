@@ -99,6 +99,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
 
   bool converged = false;
   int total_iterations = 0;
+  double final_kcl_error = 0.0;
   
   // GMIN Stepping: Start with large parallel conductances, reduce each pass
   // This prevents singular matrices for cold-start BJT circuits
@@ -112,7 +113,8 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     
     std::cerr << "GMIN Step " << gmin_step << " (G=" << gmin_factor << ")\n";
 
-  for (int iteration = 0; iteration < MAX_NR_ITER; ++iteration) {
+  int iteration = 0; // Declare outside loop for scope access
+  for (; iteration < MAX_NR_ITER; ++iteration) {
     // Unified Stamping (Phase 1: Structural Abstraction)
     scheduler.schedule(netlist);
     matrixBuilder.clear();
@@ -144,7 +146,11 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     }
     if (!result.converged) {
       // Matrix is singular - circuit topology error or floating node
-      continue; // Try next iteration/GMIN step
+      std::cerr << "DC Solver: Linear solver failed (Singular Matrix) at iter " << iteration << "\n";
+      final_kcl_error = 1e9; // Flag as bad residual
+      // If singular, retrying with same Jacobian won't help. Abort this GMIN step.
+      total_iterations += iteration + 1;
+      break; 
     }
     
     std::vector<double> v_new = result.solution;
@@ -223,6 +229,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
 
     // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
     double kcl_error = calculatePhysicalResiduals(netlist, v_new);
+    final_kcl_error = kcl_error;
 
     // During GMIN stepping, we relax the KCL check because GMIN itself adds residual.
     // We only enforce strict KCL at the final (nominal GMIN) step.
@@ -241,6 +248,11 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     voltageEstimate = v_new;
   }
   
+  // If we finished the loop without converging, accumulate iterations
+  if (!gmin_converged) {
+      total_iterations += iteration + 1;
+  }
+  
   // Only the final GMIN step should mark the overall simulation as converged
   if (gmin_step == GMIN_STEPS - 1 && gmin_converged) {
       converged = true;
@@ -254,9 +266,14 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   
   } // End GMIN stepping loop
 
-  // If we didn't converge, calculate final residual
-  double final_kcl_error = calculatePhysicalResiduals(netlist, voltageEstimate);
-  return {0.0, voltageEstimate, {total_iterations, final_kcl_error, converged}};
+  final_kcl_error = calculatePhysicalResiduals(netlist, voltageEstimate);
+  
+  std::string details;
+  if (final_kcl_error > 1.0 || !converged) {
+      details = auditPhysicalResiduals(netlist, voltageEstimate);
+  }
+
+  return {0.0, voltageEstimate, {total_iterations, final_kcl_error, converged, details}};
 }
 
 

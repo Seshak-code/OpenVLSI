@@ -66,7 +66,7 @@ void AiAssistantPanel::appendMessage(const QString& sender, const QString& msg, 
 
 void AiAssistantPanel::processCommand(const QString& cmd) {
     if (!editorContext) {
-        appendMessage("System", "Error: No Editor Context found.");
+        appendMessage("System", "⚠️ No active schematic found.\nPlease create a new schematic (File > New) or select an active tab.");
         return;
     }
 
@@ -94,6 +94,73 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
             } else {
                 appendMessage("Copilot", "⚠️ ERC Issues:\n - " + errors.join("\n - "));
             }
+        }
+        else if (cmd == "/probe") {
+            // Mode-aware probe placement for testing
+            if (!editorContext) {
+                appendMessage("Copilot", "⚠️ No active schematic. Create one first.");
+                return;
+            }
+            
+            QJsonObject state = editorContext->getCircuitState();
+            QJsonArray components = state["components"].toArray();
+            AppMode mode = editorContext->getMode();
+            
+            QPointF posTip(100, 160);  // Default fallback
+            QPointF negTip(200, 320);
+            
+            // Mode-specific terminal detection
+            for (const auto& comp : components) {
+                QJsonObject c = comp.toObject();
+                QString type = c["type"].toString();
+                
+                if (mode == AppMode::BENCH_TEST) {
+                    // Bench: VoltageSource+ and Ground
+                    if (type == "VoltageSource") {
+                        posTip = QPointF(c["x"].toInt(), c["y"].toInt() - 40);
+                    } else if (type == "Ground") {
+                        negTip = QPointF(c["x"].toInt(), c["y"].toInt() - 20);
+                    }
+                } else if (mode == AppMode::BLOCK_SUBSYSTEM) {
+                    // Block: PowerPort with specific names
+                    if (type == "PowerPort") {
+                        QString val = c["value"].toString();
+                        if (val.contains("VCC") || val.contains("OUT")) {
+                            posTip = QPointF(c["x"].toInt(), c["y"].toInt());
+                        } else if (val.contains("GND") || val.contains("VSS")) {
+                            negTip = QPointF(c["x"].toInt(), c["y"].toInt());
+                        }
+                    }
+                } else if (mode == AppMode::SYSTEM_INTEGRATION) {
+                    // System: RailDriver/PowerVdd and PowerVss
+                    if (type == "RailDriver" || type == "PowerVdd") {
+                        posTip = QPointF(c["x"].toInt(), c["y"].toInt() - 40);
+                    } else if (type == "PowerVss") {
+                        negTip = QPointF(c["x"].toInt(), c["y"].toInt() + 10);
+                    }
+                }
+            }
+            
+            QString modeStr = (mode == AppMode::BENCH_TEST) ? "Bench" : 
+                              (mode == AppMode::BLOCK_SUBSYSTEM) ? "Block" : "System";
+            
+            ChangeRequest req;
+            req.description = QString("Place Probe (%1 Mode) - Pos: %2,%3 Neg: %4,%5")
+                .arg(modeStr).arg(posTip.x()).arg(posTip.y()).arg(negTip.x()).arg(negTip.y());
+            
+            QJsonObject action;
+            action["action"] = "placeProbe";
+            action["x"] = (posTip.x() + negTip.x()) / 2;
+            action["y"] = std::min(posTip.y(), negTip.y()) - 100;
+            
+            QJsonObject pt, nt;
+            pt["x"] = posTip.x(); pt["y"] = posTip.y();
+            nt["x"] = negTip.x(); nt["y"] = negTip.y();
+            action["posTip"] = pt;
+            action["negTip"] = nt;
+            
+            req.actions.append(action);
+            showDiffCard(req);
         }
         else if (cmd == "/demo") {
             // Create a Demo Resistive Divider
@@ -154,7 +221,13 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
         }
         else if (cmd == "/templates") {
             QStringList templates = AIAPI::CircuitTemplates::availableTemplates();
-            appendMessage("Copilot", "Available Circuit Templates:\n - " + templates.join("\n - "));
+            QString modeStr = "Bench";
+            if (editorContext) {
+                AppMode m = editorContext->getMode();
+                if (m == AppMode::BLOCK_SUBSYSTEM) modeStr = "Block";
+                else if (m == AppMode::SYSTEM_INTEGRATION) modeStr = "System";
+            }
+            appendMessage("Copilot", QString("Available Templates (Mode: %1):\n - ").arg(modeStr) + templates.join("\n - "));
         }
         else {
             appendMessage("Copilot", "Unknown command. Try /help for options.");
@@ -306,7 +379,10 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
     }
     else if (intent.action == "instantiateTemplate") {
         QString templateName = intent.params["template"].toString();
-        AIAPI::CircuitTemplate tmpl = AIAPI::CircuitTemplates::getTemplate(templateName);
+        
+        // Mode-aware template lookup
+        AppMode currentMode = editorContext ? editorContext->getMode() : AppMode::BENCH_TEST;
+        AIAPI::CircuitTemplate tmpl = AIAPI::CircuitTemplates::getTemplate(templateName, currentMode);
         
         if (tmpl.name.isEmpty()) {
             appendMessage("Copilot", QString("Template '%1' not found. Try /templates for available options.").arg(templateName));

@@ -17,6 +17,15 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::Wire: return "Wire";
         case ComponentType::Probe: return "Probe";
         case ComponentType::ICPackage: return "ICPackage";
+        case ComponentType::VCVS: return "VCVS";
+        case ComponentType::CCVS: return "CCVS";
+        case ComponentType::VCCS: return "VCCS";
+        case ComponentType::CCCS: return "CCCS";
+        case ComponentType::PowerPort: return "PowerPort";
+        case ComponentType::RailDriver: return "RailDriver";
+        case ComponentType::PowerVdd: return "PowerVdd";
+        case ComponentType::PowerVss: return "PowerVss";
+        case ComponentType::WaveformGen: return "WaveformGen";
         default: return "Unknown";
     }
 }
@@ -35,6 +44,15 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "Wire") return ComponentType::Wire;
     if (s == "Probe") return ComponentType::Probe;
     if (s == "ICPackage" || s == "IC" || s == "ULN2003A" || s == "ULN2803A") return ComponentType::ICPackage;
+    if (s == "VCVS") return ComponentType::VCVS;
+    if (s == "CCVS") return ComponentType::CCVS;
+    if (s == "VCCS") return ComponentType::VCCS;
+    if (s == "CCCS") return ComponentType::CCCS;
+    if (s == "PowerPort" || s == "Vin" || s == "Vout") return ComponentType::PowerPort;
+    if (s == "RailDriver" || s == "Battery" || s == "LDO" || s == "Regulator") return ComponentType::RailDriver;
+    if (s == "PowerVdd" || s == "Vdd" || s == "Vcc") return ComponentType::PowerVdd;
+    if (s == "PowerVss" || s == "Vss" || s == "Vee") return ComponentType::PowerVss;
+    if (s == "WaveformGen" || s == "SignalGen" || s == "Clock") return ComponentType::WaveformGen;
     return ComponentType::Select;
 }
 
@@ -222,6 +240,47 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             params["PinCount"] = "16";
             paramOptions["Model"] = {"ULN2003A", "ULN2803A", "LM7805", "NE555"};
             break;
+        case ComponentType::VCVS:
+            name = "E?";
+            value = "1.0";
+            params["Role"] = "Buffer";
+            break;
+        case ComponentType::CCVS:
+            name = "H?";
+            value = "1.0";
+            break;
+        case ComponentType::VCCS:
+            name = "G?";
+            value = "1.0";
+            break;
+        case ComponentType::CCCS:
+            name = "F?";
+            value = "1.0";
+            break;
+        case ComponentType::PowerPort:
+            name = "P?";
+            value = "VDD";
+            params["Net"] = "VDD";
+            break;
+        case ComponentType::RailDriver:
+            name = "S?";
+            value = "Battery";
+            params["Type"] = "IdealRail";
+            paramOptions["Type"] = {"IdealRail", "LinearRegulator", "SwitchingRegulator"};
+            break;
+        case ComponentType::PowerVdd:
+            name = "VDD";
+            value = "1.8V";
+            break;
+        case ComponentType::PowerVss:
+            name = "VSS";
+            value = "0V";
+            break;
+        case ComponentType::WaveformGen:
+            name = "W?";
+            value = "Clock";
+            params["Frequency"] = "1MHz";
+            break;
         default: 
             name = "U?"; 
             value = "0"; 
@@ -293,8 +352,30 @@ QVector<QPointF> VisualComponent::getTerminals() const {
                  t << QPointF(40, -60 + i * 20);  // Right side: pin 16 at top
              }
              break;
-        default:
+        case ComponentType::VCVS:
+        case ComponentType::VCCS:
+            // 4 terminals: 2 control (-40, -20/20), 2 output (40, -20/20)
+            t << QPointF(-40, -20) << QPointF(-40, 20) << QPointF(40, -20) << QPointF(40, 20);
             break;
+        case ComponentType::CCVS:
+        case ComponentType::CCCS:
+            // 2 terminals (output)
+            t << QPointF(40, -20) << QPointF(40, 20);
+            break;
+        case ComponentType::PowerPort:
+            t << QPointF(0, 0); // Single connection point
+            break;
+        case ComponentType::RailDriver:
+        case ComponentType::WaveformGen:
+            t << QPointF(0, -40) << QPointF(0, 40);
+            break;
+        case ComponentType::PowerVdd:
+            t << QPointF(0, 20); // Connect at bottom
+            break;
+        case ComponentType::PowerVss:
+            t << QPointF(0, -20); // Connect at top
+            break;
+        default: break;
     }
     return t;
 }
@@ -615,7 +696,79 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                 }
             }
             break;
-             
+        
+        case ComponentType::VCVS:
+        case ComponentType::VCCS:
+        case ComponentType::CCVS:
+        case ComponentType::CCCS:
+            // Diamond symbol for dependent sources
+            {
+                QPointF diamond[] = {{0, -20}, {20, 0}, {0, 20}, {-20, 0}};
+                painter->drawPolygon(diamond, 4);
+                // Symbol inside
+                if (type == ComponentType::VCVS || type == ComponentType::CCVS) {
+                    painter->drawText(QRectF(-10, -10, 20, 20), Qt::AlignCenter, "V");
+                } else {
+                    // Current source arrow
+                    painter->drawLine(0, -10, 0, 10);
+                    painter->drawLine(-3, 3, 0, 10);
+                    painter->drawLine(3, 3, 0, 10);
+                }
+                // Control leads (dashed) for V-controlled
+                if (type == ComponentType::VCVS || type == ComponentType::VCCS) {
+                    painter->setPen(QPen(Qt::gray, 1, Qt::DashLine));
+                    painter->drawLine(-20, -10, -40, -20);
+                    painter->drawLine(-20, 10, -40, 20);
+                }
+                // Output leads
+                painter->setPen(QPen(Qt::white, 2));
+                painter->drawLine(20, -10, 40, -20);
+                painter->drawLine(20, 10, 40, 20);
+            }
+            break;
+
+        case ComponentType::PowerPort:
+            // Small square port
+            painter->drawRect(-10, -10, 20, 20);
+            painter->setPen(Qt::gray);
+            painter->drawText(QRectF(-40, -25, 80, 15), Qt::AlignCenter, value);
+            break;
+
+        case ComponentType::PowerVdd:
+            // Up arrow
+            painter->drawLine(0, 20, 0, -10);
+            painter->drawLine(0, -10, -10, 0);
+            painter->drawLine(0, -10, 10, 0);
+            painter->drawText(QRectF(-20, -30, 40, 20), Qt::AlignCenter, value);
+            break;
+
+        case ComponentType::PowerVss:
+            // Down arrow (VSS/VEE Rail) - Distinct from Earth Ground
+            painter->drawLine(0, -20, 0, 10); // Stem
+            painter->drawLine(0, 10, -10, 0); // Arrow Left
+            painter->drawLine(0, 10, 10, 0);  // Arrow Right
+            painter->drawText(QRectF(-20, 15, 40, 20), Qt::AlignCenter, value);
+            break;
+
+        case ComponentType::RailDriver:
+            // Battery icon
+            painter->drawRect(-15, -25, 30, 50);
+            painter->drawRect(-8, -30, 16, 5); // Cap
+            painter->drawLine(0, -40, 0, -30);
+            painter->drawLine(0, 25, 0, 40);
+            painter->drawText(QRectF(-15, -15, 30, 30), Qt::AlignCenter, "B");
+            break;
+
+        case ComponentType::WaveformGen:
+            // Sine wave icon
+            painter->drawRect(-20, -20, 40, 40);
+            for (int i = -15; i < 15; ++i) {
+                painter->drawLine(i, 5 * sin(i * 0.3), i + 1, 5 * sin((i + 1) * 0.3));
+            }
+            painter->drawLine(0, -40, 0, -20);
+            painter->drawLine(0, 20, 0, 40);
+            break;
+
         default:
             painter->drawRect(-15, -15, 30, 30);
             break;

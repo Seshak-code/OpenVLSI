@@ -21,6 +21,7 @@ struct SolverStats
     int iterations = 0;
     double residual = 0.0;
     bool converged = false;
+    std::string error_detail;
 };
 
 struct SolverStep 

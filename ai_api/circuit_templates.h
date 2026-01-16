@@ -3,12 +3,18 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
+#include "../gui/gui_types.h"
 
 /**
  * circuit_templates.h - Predefined Circuit Topology Templates
  * 
  * Contains JSON descriptions of common analog building blocks
  * that can be instantiated by the AI copilot.
+ * 
+ * Templates are MODE-AWARE:
+ * - Bench: Uses Ground, VoltageSource, CurrentSource (ideal)
+ * - Block: Uses PowerPort (interface pins, no sources)
+ * - System: Uses PowerVdd, PowerVss, RailDriver (realistic)
  */
 
 namespace AIAPI {
@@ -23,9 +29,20 @@ struct CircuitTemplate {
 
 class CircuitTemplates {
 public:
-    static CircuitTemplate getTemplate(const QString& name) {
+    // Mode-aware template lookup (primary)
+    static CircuitTemplate getTemplate(const QString& name, AppMode mode) {
+        QString key = name.toLower() + "_" + modeKey(mode);
         static QMap<QString, CircuitTemplate> templates = initTemplates();
-        return templates.value(name.toLower());
+        if (templates.contains(key)) {
+            return templates.value(key);
+        }
+        // Fallback to bench mode if mode-specific not found
+        return templates.value(name.toLower() + "_bench", templates.value(name.toLower()));
+    }
+    
+    // Legacy lookup (defaults to Bench)
+    static CircuitTemplate getTemplate(const QString& name) {
+        return getTemplate(name, AppMode::BENCH_TEST);
     }
     
     static QStringList availableTemplates() {
@@ -33,63 +50,108 @@ public:
     }
 
 private:
+    static QString modeKey(AppMode mode) {
+        switch (mode) {
+            case AppMode::BENCH_TEST: return "bench";
+            case AppMode::BLOCK_SUBSYSTEM: return "block";
+            case AppMode::SYSTEM_INTEGRATION: return "system";
+            default: return "bench";
+        }
+    }
+    
     static QMap<QString, CircuitTemplate> initTemplates() {
         QMap<QString, CircuitTemplate> map;
         
-        // ====== DARLINGTON PAIR ======
-        // Complete Darlington amplifier with biasing
-        // V1 (10V) -> R1 (100Ω) -> Q1/Q2 Collectors
-        // I1 (1µA) -> Q1 Base, Q1 Emitter -> Q2 Base, Q2 Emitter -> GND
+        // ====== DARLINGTON PAIR (BENCH MODE) ======
+        // Uses Ground, VoltageSource, CurrentSource (ideal)
         {
             CircuitTemplate t;
             t.name = "darlington";
-            t.description = "Darlington Pair (NPN) - Complete amplifier with biasing";
+            t.description = "Darlington Pair (NPN) - Bench Test with ideal sources";
             
-            // Component Layout (Grid: 20px step)
-            // V1 at (0, 100), I1 at (100, 200), Ground at (200, 340)
-            // R1 at (300, 60) [ROTATED 90 DEG - Vertical], Q1 at (260, 140), Q2 at (300, 240)
             t.components = QJsonArray{
-                // Power & Biasing
                 QJsonObject{{"type", "VoltageSource"}, {"id", "V1"}, {"x", 0}, {"y", 100}, {"value", "10"}},
                 QJsonObject{{"type", "CurrentSource"}, {"id", "I1"}, {"x", 100}, {"y", 200}, {"value", "1m"}},
                 QJsonObject{{"type", "Ground"}, {"id", "GND"}, {"x", 200}, {"y", 340}},
-                // Load (Rotated Vertical)
                 QJsonObject{{"type", "Resistor"}, {"id", "R1"}, {"x", 300}, {"y", 60}, {"value", "100"}, {"rotation", 90}},
-                // Transistors
-                QJsonObject{{"type", "BJT_NPN"}, {"id", "Q1"}, {"x", 260}, {"y", 140}},
-                QJsonObject{{"type", "BJT_NPN"}, {"id", "Q2"}, {"x", 300}, {"y", 240}}
+                QJsonObject{{"type", "Bjt"}, {"id", "Q1"}, {"x", 260}, {"y", 140}, {"value", "NPN"}},
+                QJsonObject{{"type", "Bjt"}, {"id", "Q2"}, {"x", 300}, {"y", 240}, {"value", "NPN"}}
             };
             
-            // Wiring (described as coordinate paths for L-shape routing)
-            // Wire placement uses absolute coordinates matching the component terminals
-            // R1 (Vertical) at (300, 60). Unrotated terminals (-40, 0), (40, 0).
-            // Rotated 90: (0, -40), (0, 40) relative to (300, 60).
-            // Top Terminal: (300, 20). Bottom Terminal: (300, 100).
             t.wires = QJsonArray{
-                // V1+ (0, 60) -> up to (0, 0) -> right to (300, 0) -> down to R1 Top (300, 20)
                 QJsonObject{{"points", QJsonArray{QJsonArray{0, 60}, QJsonArray{0, 0}, QJsonArray{300, 0}, QJsonArray{300, 20}}}},
-                
-                // R1 Bottom (300, 100) -> Q1.C (280, 120) and Q2.C (320, 220) junction
-                QJsonObject{{"points", QJsonArray{QJsonArray{300, 100}, QJsonArray{300, 120}, QJsonArray{280, 120}}}},  // R1 -> Q1.C
-                QJsonObject{{"points", QJsonArray{QJsonArray{300, 120}, QJsonArray{320, 120}, QJsonArray{320, 220}}}}, // Junction -> Q2.C
-                
-                // Q1.E (280, 160) -> Q2.B (280, 240)
+                QJsonObject{{"points", QJsonArray{QJsonArray{300, 100}, QJsonArray{300, 120}, QJsonArray{280, 120}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{300, 120}, QJsonArray{320, 120}, QJsonArray{320, 220}}}},
                 QJsonObject{{"points", QJsonArray{QJsonArray{280, 160}, QJsonArray{280, 240}}}},
-                
-                // Q2.E (320, 260) -> Ground (200, 320)
                 QJsonObject{{"points", QJsonArray{QJsonArray{320, 260}, QJsonArray{320, 320}, QJsonArray{200, 320}}}},
-                
-                // Ground -> V1-
                 QJsonObject{{"points", QJsonArray{QJsonArray{200, 320}, QJsonArray{0, 320}, QJsonArray{0, 140}}}},
-                // Ground -> I1-
                 QJsonObject{{"points", QJsonArray{QJsonArray{200, 320}, QJsonArray{100, 320}, QJsonArray{100, 240}}}},
-                
-                // I1+ (100, 160) -> Q1.B (240, 140)
                 QJsonObject{{"points", QJsonArray{QJsonArray{100, 160}, QJsonArray{100, 140}, QJsonArray{240, 140}}}}
             };
             
-            t.ports = {"V1.+", "GND", "Q1.B"}; // VCC, GND, Input
-            map["darlington"] = t;
+            t.ports = {"V1.+", "GND", "Q1.B"};
+            map["darlington_bench"] = t;
+            map["darlington"] = t; // Default
+        }
+        
+        // ====== DARLINGTON PAIR (SYSTEM MODE) ======
+        // Uses PowerVdd, PowerVss, RailDriver (realistic power)
+        {
+            CircuitTemplate t;
+            t.name = "darlington";
+            t.description = "Darlington Pair (NPN) - System Integration with PDN";
+            
+            t.components = QJsonArray{
+                QJsonObject{{"type", "RailDriver"}, {"id", "VCC"}, {"x", 0}, {"y", 100}, {"value", "10V"}},
+                QJsonObject{{"type", "WaveformGen"}, {"id", "SIG"}, {"x", 100}, {"y", 200}, {"value", "1mA Pulse"}},
+                QJsonObject{{"type", "PowerVss"}, {"id", "VSS"}, {"x", 200}, {"y", 340}, {"value", "0V"}},
+                QJsonObject{{"type", "Resistor"}, {"id", "R1"}, {"x", 300}, {"y", 60}, {"value", "100"}, {"rotation", 90}},
+                QJsonObject{{"type", "Bjt"}, {"id", "Q1"}, {"x", 260}, {"y", 140}, {"value", "NPN"}},
+                QJsonObject{{"type", "Bjt"}, {"id", "Q2"}, {"x", 300}, {"y", 240}, {"value", "NPN"}}
+            };
+            
+            t.wires = QJsonArray{
+                QJsonObject{{"points", QJsonArray{QJsonArray{0, 60}, QJsonArray{0, 0}, QJsonArray{300, 0}, QJsonArray{300, 20}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{300, 100}, QJsonArray{300, 120}, QJsonArray{280, 120}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{300, 120}, QJsonArray{320, 120}, QJsonArray{320, 220}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{280, 160}, QJsonArray{280, 240}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{320, 260}, QJsonArray{320, 320}, QJsonArray{200, 320}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{200, 320}, QJsonArray{0, 320}, QJsonArray{0, 140}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{200, 320}, QJsonArray{100, 320}, QJsonArray{100, 240}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{100, 160}, QJsonArray{100, 140}, QJsonArray{240, 140}}}}
+            };
+            
+            t.ports = {"VCC.+", "VSS", "Q1.B"};
+            map["darlington_system"] = t;
+        }
+        
+        // ====== DARLINGTON PAIR (BLOCK MODE) ======
+        // Uses PowerPort (interface pins, no sources)
+        {
+            CircuitTemplate t;
+            t.name = "darlington";
+            t.description = "Darlington Pair (NPN) - Block Subsystem with PowerPorts";
+            
+            t.components = QJsonArray{
+                QJsonObject{{"type", "PowerPort"}, {"id", "VCC"}, {"x", 0}, {"y", 0}, {"value", "VCC"}},
+                QJsonObject{{"type", "PowerPort"}, {"id", "IN"}, {"x", 100}, {"y", 100}, {"value", "IN"}},
+                QJsonObject{{"type", "PowerPort"}, {"id", "GND"}, {"x", 200}, {"y", 340}, {"value", "GND"}},
+                QJsonObject{{"type", "Resistor"}, {"id", "R1"}, {"x", 300}, {"y", 60}, {"value", "100"}, {"rotation", 90}},
+                QJsonObject{{"type", "Bjt"}, {"id", "Q1"}, {"x", 260}, {"y", 140}, {"value", "NPN"}},
+                QJsonObject{{"type", "Bjt"}, {"id", "Q2"}, {"x", 300}, {"y", 240}, {"value", "NPN"}}
+            };
+            
+            t.wires = QJsonArray{
+                QJsonObject{{"points", QJsonArray{QJsonArray{0, 0}, QJsonArray{300, 0}, QJsonArray{300, 20}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{300, 100}, QJsonArray{300, 120}, QJsonArray{280, 120}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{300, 120}, QJsonArray{320, 120}, QJsonArray{320, 220}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{280, 160}, QJsonArray{280, 240}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{320, 260}, QJsonArray{320, 320}, QJsonArray{200, 320}}}},
+                QJsonObject{{"points", QJsonArray{QJsonArray{100, 100}, QJsonArray{240, 140}}}}
+            };
+            
+            t.ports = {"VCC", "GND", "IN"};
+            map["darlington_block"] = t;
         }
         
         // ====== CURRENT MIRROR ======

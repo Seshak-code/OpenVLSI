@@ -21,6 +21,7 @@
 #include <QStackedWidget>
 #include <QSplitter>
 #include "gui_types.h"
+#include "welcome_widget.h"
 
 // ============================================================================
 // MAIN WINDOW
@@ -49,6 +50,7 @@ private:
     SchematicEditor* schematicEditor; // Active schematic editor (points to current RTL page)
     HDLEditor* hdlEditor; // Phase 14: Code Editor
     SimulatorWindow* simulatorPanel;
+    WelcomeWidget* welcomeWidget;
     
     // Docks
     QDockWidget* projectDock;
@@ -90,6 +92,9 @@ private:
     void setupStageToolbar();
     void onStageChanged(DesignStage stage);
     void addRtlPage();
+    void createSchematicFromWelcome(AppMode mode);
+    void onRtlTabChanged(int index);
+    QString modeLabel(AppMode mode);
 
 private:
     AppMode currentMode = AppMode::SYSTEM_INTEGRATION;

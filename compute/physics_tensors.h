@@ -481,6 +481,7 @@ inline void batchBJTPhysics(BJTTensor& tensor, const std::vector<double>& voltag
         double dIe_dVbc = -(dIc_dVbc + dIb_dVbc);
         
         // Terminal Conductances (Common for NPN and PNP)
+        // Apply chain rule: dI/dVc = -dI/dVbc, dI/dVe = -dI/dVbe, dI/dVb = dI/dVbe + dI/dVbc
         tensor.g_cc[i] = -dIc_dVbc;
         tensor.g_cb[i] = dIc_dVbe + dIc_dVbc;
         tensor.g_ce[i] = -dIc_dVbe;
@@ -490,6 +491,12 @@ inline void batchBJTPhysics(BJTTensor& tensor, const std::vector<double>& voltag
         tensor.g_ec[i] = -dIe_dVbc;
         tensor.g_eb[i] = dIe_dVbe + dIe_dVbc;
         tensor.g_ee[i] = -dIe_dVbe;
+        
+        // CRITICAL: Add GMIN to diagonal terms to prevent singular Jacobian
+        // This is essential for convergence when BJT is in cutoff/low current
+        tensor.g_cc[i] = std::max(tensor.g_cc[i], GMIN);
+        tensor.g_bb[i] = std::max(tensor.g_bb[i], GMIN);
+        tensor.g_ee[i] = std::max(tensor.g_ee[i], GMIN);
     }
 }
 

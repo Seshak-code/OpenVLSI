@@ -28,6 +28,9 @@ class AiAssistantPanel : public QWidget {
     Q_OBJECT
 public:
     explicit AiAssistantPanel(SchematicEditor* editor, QWidget* parent = nullptr);
+    
+    // Dynamic editor context update
+    void setEditor(SchematicEditor* editor) { editorContext = editor; }
 
 private slots:
     void onSendMessage();

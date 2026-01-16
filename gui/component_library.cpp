@@ -3,11 +3,9 @@
 ComponentLibrary::ComponentLibrary(QWidget* parent) : QWidget(parent) {
     setupUi();
     populateLists();
-    populateSystemList();
-    populateICsList();
     
-    // Default to RTL stage (hides System tab)
-    setStage(DesignStage::RTL_DESIGN);
+    // Default to Bench mode
+    setMode(AppMode::BENCH_TEST);
 }
 
 void ComponentLibrary::setupUi() {
@@ -20,14 +18,16 @@ void ComponentLibrary::setupUi() {
     basicList = new QListWidget();
     activeList = new QListWidget();
     sourcesList = new QListWidget();
+    interfacesList = new QListWidget();
     systemList = new QListWidget();
     icsList = new QListWidget();
 
     tabs->addTab(basicList, "Basic");
     tabs->addTab(activeList, "Active");
-    tabs->addTab(sourcesList, "Sources");
-    tabs->addTab(systemList, "PDN"); // Power Delivery Network parts
-    tabs->addTab(icsList, "ICs");    // IC Packages (System mode only)
+    tabs->addTab(sourcesList, "Sources");      // Bench: ideal V/I, dependent
+    tabs->addTab(interfacesList, "Interfaces"); // Block: PowerPort pins
+    tabs->addTab(systemList, "PDN");           // System: RailDrivers, Vdd/Vss
+    tabs->addTab(icsList, "ICs");              // System: IC packages
     
     // Connect Signals
     auto setupConnection = [this](QListWidget* list) {
@@ -40,37 +40,59 @@ void ComponentLibrary::setupUi() {
     setupConnection(basicList);
     setupConnection(activeList);
     setupConnection(sourcesList);
+    setupConnection(interfacesList);
     setupConnection(systemList);
     setupConnection(icsList);
 }
 
 void ComponentLibrary::populateLists() {
-    // Basic Components
+    // =========================================================================
+    // BASIC - Available in all modes
+    // =========================================================================
     addComponentItem(basicList, "Resistor", "resistor.png", ComponentType::Resistor);
     addComponentItem(basicList, "Capacitor", "capacitor.png", ComponentType::Capacitor);
     addComponentItem(basicList, "Inductor", "inductor.png", ComponentType::Inductor);
-    addComponentItem(basicList, "Ground", "ground.png", ComponentType::Ground);
+    // Ground omitted: implicit in Bench, pin in Block, Vss in System
 
-    // Active Components
+    // =========================================================================
+    // ACTIVE - Available in all modes
+    // =========================================================================
     addComponentItem(activeList, "Diode", "diode.png", ComponentType::Diode);
     addComponentItem(activeList, "N-MOSFET", "nmos.png", ComponentType::Mosfet);
     addComponentItem(activeList, "NPN BJT", "bjt.png", ComponentType::Bjt);
     addComponentItem(activeList, "Schottky Diode", "schottky.png", ComponentType::SchottkyDiode);
 
-    // Sources (Ideal lab sources)
+    // =========================================================================
+    // SOURCES - Bench mode only (ideal + dependent)
+    // =========================================================================
     addComponentItem(sourcesList, "Voltage Source", "vsource.png", ComponentType::VoltageSource);
     addComponentItem(sourcesList, "Current Source", "isource.png", ComponentType::CurrentSource);
-}
+    addComponentItem(sourcesList, "VCVS", "vcvs.png", ComponentType::VCVS);
+    addComponentItem(sourcesList, "CCVS", "ccvs.png", ComponentType::CCVS);
+    addComponentItem(sourcesList, "VCCS", "vccs.png", ComponentType::VCCS);
+    addComponentItem(sourcesList, "CCCS", "cccs.png", ComponentType::CCCS);
 
-void ComponentLibrary::populateSystemList() {
-    // PDN-specific parts (visible in Physical Design stage)
-    addComponentItem(systemList, "Power Rail", "powerrail.png", ComponentType::VoltageSource); // Reuses VoltageSource for now
+    // =========================================================================
+    // INTERFACES - Block mode only (PowerPort never stamps MNA)
+    // =========================================================================
+    addComponentItem(interfacesList, "Vin", "pin.png", ComponentType::PowerPort);
+    addComponentItem(interfacesList, "Vout", "pin.png", ComponentType::PowerPort);
+    addComponentItem(interfacesList, "GND Pin", "gnd_pin.png", ComponentType::PowerPort);
+    addComponentItem(interfacesList, "VDD Pin", "vdd_pin.png", ComponentType::PowerPort);
+
+    // =========================================================================
+    // PDN - System mode only (RailDrivers inject net power)
+    // =========================================================================
+    addComponentItem(systemList, "Vdd/Vcc", "vdd.png", ComponentType::PowerVdd);
+    addComponentItem(systemList, "Vss/GND", "vss.png", ComponentType::PowerVss);
+    addComponentItem(systemList, "Battery", "battery.png", ComponentType::RailDriver);
+    addComponentItem(systemList, "LDO Regulator", "ldo.png", ComponentType::RailDriver);
+    addComponentItem(systemList, "Waveform Gen", "waveform.png", ComponentType::WaveformGen);
     addComponentItem(systemList, "Decoupling Cap", "decap.png", ComponentType::Capacitor);
-    addComponentItem(systemList, "Ferrite Bead", "ferrite.png", ComponentType::Inductor); // Models as inductor
-}
 
-void ComponentLibrary::populateICsList() {
-    // IC Packages (visible in System Integration mode)
+    // =========================================================================
+    // ICs - System mode only
+    // =========================================================================
     addComponentItem(icsList, "ULN2003A", "uln2003a.png", ComponentType::ICPackage);
     addComponentItem(icsList, "ULN2803A", "uln2803a.png", ComponentType::ICPackage);
     addComponentItem(icsList, "LM7805", "lm7805.png", ComponentType::ICPackage);
@@ -85,39 +107,40 @@ void ComponentLibrary::addComponentItem(QListWidget* list, const QString& name, 
 }
 
 void ComponentLibrary::setStage(DesignStage stage) {
-    // RTL/Synthesis: Show ideal sources, hide PDN
-    // Physical/Verification: Show PDN parts
-    int pdnIdx = tabs->indexOf(systemList);
-    int srcIdx = tabs->indexOf(sourcesList);
-    
-    switch (stage) {
-        case DesignStage::RTL_DESIGN:
-        case DesignStage::SYNTHESIS:
-            tabs->setTabVisible(pdnIdx, false);
-            tabs->setTabVisible(srcIdx, true);
-            break;
-        case DesignStage::PHYSICAL_DESIGN:
-        case DesignStage::VERIFICATION:
-            tabs->setTabVisible(pdnIdx, true);
-            tabs->setTabVisible(srcIdx, false); // Hide ideal sources in physical stage
-            break;
-    }
+    // Stage affects PDN visibility within System mode
+    // Keeping for backwards compatibility
+    (void)stage;
 }
 
 void ComponentLibrary::setMode(AppMode mode) {
-    int sysIdx = tabs->indexOf(systemList);
-    int icsIdx = tabs->indexOf(icsList);
     int srcIdx = tabs->indexOf(sourcesList);
+    int intIdx = tabs->indexOf(interfacesList);
+    int pdnIdx = tabs->indexOf(systemList);
+    int icsIdx = tabs->indexOf(icsList);
     
-    if (mode == AppMode::SYSTEM_INTEGRATION) {
-        // Show PDN/System components and ICs
-        tabs->setTabVisible(sysIdx, true);
-        tabs->setTabVisible(icsIdx, true);
-        tabs->setTabVisible(srcIdx, false);  // Hide ideal sources in system mode
-    } else {
-        // Lab Benchmark: Hide PDN and ICs, show only ideal sources
-        tabs->setTabVisible(sysIdx, false);
-        tabs->setTabVisible(icsIdx, false);
-        tabs->setTabVisible(srcIdx, true);
+    switch (mode) {
+        case AppMode::BENCH_TEST:
+            // Ideal sources, implicit ground, device testing
+            tabs->setTabVisible(srcIdx, true);
+            tabs->setTabVisible(intIdx, false);
+            tabs->setTabVisible(pdnIdx, false);
+            tabs->setTabVisible(icsIdx, false);
+            break;
+            
+        case AppMode::BLOCK_SUBSYSTEM:
+            // PowerPort interfaces, internal dependent sources
+            tabs->setTabVisible(srcIdx, false);
+            tabs->setTabVisible(intIdx, true);
+            tabs->setTabVisible(pdnIdx, false);
+            tabs->setTabVisible(icsIdx, false);
+            break;
+            
+        case AppMode::SYSTEM_INTEGRATION:
+            // RailDrivers only, explicit VSS/VDD symbols
+            tabs->setTabVisible(srcIdx, false);
+            tabs->setTabVisible(intIdx, false);
+            tabs->setTabVisible(pdnIdx, true);
+            tabs->setTabVisible(icsIdx, true);
+            break;
     }
 }

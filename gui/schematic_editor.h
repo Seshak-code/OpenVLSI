@@ -15,7 +15,8 @@
 #include <QMap>
 #include <QKeyEvent>
 #include "visual_component.h"
-#include "circuit.h" // Logical circuit definitions (from components/)
+#include "circuit.h" 
+#include "schematic_view.h"
 
 
 #include <QJsonArray>
@@ -186,10 +187,11 @@ private slots:
     void onGridToggled(bool checked);
     void onSnappingToggled(bool checked);
 
+
 private:
     AppMode currentMode = AppMode::SYSTEM_INTEGRATION;
     GridScene* scene;
-    QGraphicsView* view;
+    SchematicView* view;
     QLabel* statusLabel;
     
     void setupUi();
