@@ -63,7 +63,7 @@ void MainWindow::setupCentralWidget() {
     rtlSplitter->addWidget(rtlPageTabs);
     
     // Right: HDL Code Editor (Phase 14.1)
-    HDLEditor* hdlEditor = new HDLEditor(this);
+    hdlEditor = new HDLEditor(this); // Assign to member
     hdlEditor->setLanguage(HDLSyntaxHighlighter::VERILOG_AMS); // Default to Mixed-Signal
     rtlSplitter->addWidget(hdlEditor);
     
@@ -478,6 +478,33 @@ void MainWindow::setupStageToolbar() {
     
     // Initialize
     onModeToggle();
+    
+    modeToolbar->addSeparator();
+    
+    // Sync Buttons (Phase 14.2)
+    QAction* genVerilog = new QAction("Sch -> HDL", this);
+    genVerilog->setToolTip("Generate Verilog-AMS from Schematic");
+    connect(genVerilog, &QAction::triggered, this, &MainWindow::syncSchematicToVerilog);
+    modeToolbar->addAction(genVerilog);
+    
+    QAction* parseVerilog = new QAction("HDL -> Sch", this);
+    parseVerilog->setToolTip("Update Schematic from Verilog-AMS (Ghost Placement)");
+    connect(parseVerilog, &QAction::triggered, this, &MainWindow::syncVerilogToSchematic);
+    modeToolbar->addAction(parseVerilog);
+}
+
+void MainWindow::syncSchematicToVerilog() {
+    if (!schematicEditor || !hdlEditor) return;
+    QString code = schematicEditor->generateVerilogSnippet();
+    hdlEditor->setPlainText(code);
+    statusBar()->showMessage("Generated Verilog-AMS from Schematic");
+}
+
+void MainWindow::syncVerilogToSchematic() {
+    if (!schematicEditor || !hdlEditor) return;
+    QString code = hdlEditor->toPlainText();
+    schematicEditor->parseVerilogToSchematic(code);
+    statusBar()->showMessage("Parsed Verilog-AMS to Schematic (Ghost Objects)");
 }
 
 void MainWindow::onStageChanged(DesignStage stage) {

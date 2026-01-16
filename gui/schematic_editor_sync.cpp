@@ -1,0 +1,122 @@
+// ============================================================================
+// Phase 14.2: Bi-Directional Parsing (Manual Sync)
+// ============================================================================
+#include "schematic_editor.h"
+#include <QRegularExpression>
+
+/**
+ * Generates a Verilog-AMS representation of the current schematic.
+ * Iterates through the netlist and formats components as module instantiations.
+ */
+QString SchematicEditor::generateVerilogSnippet() {
+    TensorNetlist netlist = scene->generateNetlist();
+    QString code;
+    
+    // Header
+    code += "// Auto-Generated from Schematic\n";
+    code += "module top_schematic();\n\n";
+    
+    // Wires (Nodes) - Naive enumeration
+    // In a real system, we'd use named nets from labels
+    code += "  // Nets\n";
+    int maxNode = 0;
+    // ... logic to find max node ...
+    QStringList wires;
+    // Iterate to find unique nets. For now, assume a few generic ones.
+    
+    // Components
+    code += "  // Component Instantiations\n";
+    
+    // Resistors
+    for (size_t i = 0; i < netlist.globalBlock.resistors.size(); ++i) {
+        const auto& comp = netlist.globalBlock.resistors[i];
+        QString name = "R" + QString::number(i); 
+        code += QString("  resistor #(.r(%1)) %2 (.p(n%3), .n(n%4));\n")
+                .arg(comp.resistance_ohms)
+                .arg(name)
+                .arg(comp.nodeTerminal1)
+                .arg(comp.nodeTerminal2);
+    }
+    
+    // Capacitors
+    for (size_t i = 0; i < netlist.globalBlock.capacitors.size(); ++i) {
+        const auto& comp = netlist.globalBlock.capacitors[i];
+        QString name = "C" + QString::number(i);
+        code += QString("  capacitor #(.c(%1)) %2 (.p(n%3), .n(n%4));\n")
+                .arg(comp.capacitance_farads)
+                .arg(name)
+                .arg(comp.nodePlate1)
+                .arg(comp.nodePlate2);
+    }
+    
+    // Voltage Sources
+    for (size_t i = 0; i < netlist.globalBlock.voltageSources.size(); ++i) {
+        const auto& comp = netlist.globalBlock.voltageSources[i];
+        QString name = "V" + QString::number(i);
+        code += QString("  vsource #(.v(%1)) %2 (.p(n%3), .n(n%4));\n")
+                .arg(comp.voltage_V)
+                .arg(name)
+                .arg(comp.nodePositive)
+                .arg(comp.nodeNegative);
+    }
+    
+    // MOSFETs
+    for (size_t i = 0; i < netlist.globalBlock.mosfets.size(); ++i) {
+        const auto& comp = netlist.globalBlock.mosfets[i];
+        QString name = QString::fromStdString(comp.instanceName);
+        if (name.isEmpty()) name = "M" + QString::number(i);
+        
+        QString type = "nmos"; // Default
+        if (comp.modelName.find("PMOS") != std::string::npos) type = "pmos";
+        
+        code += QString("  %1 #(.w(%2), .l(%3)) %4 (.d(n%5), .g(n%6), .s(n%7), .b(n%8));\n")
+                .arg(type)
+                .arg(comp.channelWidth_m)
+                .arg(comp.channelLength_m)
+                .arg(name)
+                .arg(comp.drain)
+                .arg(comp.gate)
+                .arg(comp.source)
+                .arg(comp.body);
+    }
+
+    code += "\nendmodule\n";
+    return code;
+}
+
+/**
+ * Parses Verilog-AMS code and instantiates components in the schematic.
+ * Uses Regex to identify module instantiations and placement "Ghost Boxes".
+ */
+void SchematicEditor::parseVerilogToSchematic(const QString& code) {
+    // 1. Resistor Regex: resistor #(.r(1000)) R1 (.p(n1), .n(n2));
+    QRegularExpression resRegex(R"(resistor\s*#\s*\(\.r\(([\d\.e\-\+]+)\)\)\s*(\w+)\s*\(\.p\((\w+)\),\s*\.n\((\w+)\)\);)", QRegularExpression::CaseInsensitiveOption);
+    
+    QRegularExpressionMatchIterator i = resRegex.globalMatch(code);
+    int xArg = 100;
+    
+    while (i.hasNext()) {
+        QRegularExpressionMatch match = i.next();
+        QString valStr = match.captured(1);
+        QString name = match.captured(2);
+        
+        // Check if component already exists (Synch not dupe)
+        if (findComponent(name)) continue;
+        
+        // Place new component
+        // Ideally we use Graphviz/Autolayout here. For now, linear placement.
+        QJsonObject params;
+        params["resistance"] = valStr.toDouble();
+        
+        placeComponent("resistor", xArg, 100, name, "");
+        VisualComponent* comp = findComponent(name);
+        if (comp) {
+            comp->setOpacity(0.5); // Ghost look until moved
+        }
+        
+        xArg += 100;
+    }
+    
+    // TODO: Add regex for other components (Mosfet, Cap)
+    scene->update();
+}

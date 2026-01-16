@@ -178,8 +178,8 @@ struct CrashReport {
 // ============================================================================
 
 inline QString getCrashLogDir() {
-    QString home = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-    QString logDir = home + "/.beaversim/crash_logs";
+    QString dataLocation = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QString logDir = dataLocation + "/crash_logs";
     QDir().mkpath(logDir);
     return logDir;
 }

@@ -165,6 +165,13 @@ public:
     // Explicit Probe Placement with Custom Tip Locations
     QString placeProbe(const QString& id, QPointF bodyPos, QPointF posTip, QPointF negTip);
 
+    // --- Phase 14.2: Bi-Directional Parsing ---
+    // Schematic -> Verilog-AMS Code
+    QString generateVerilogSnippet();
+    
+    // Verilog-AMS Code -> Schematic (Ghost Placement)
+    void parseVerilogToSchematic(const QString& code);
+
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
 

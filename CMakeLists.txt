@@ -88,6 +88,7 @@ qt_add_executable(${PROJECT_NAME}
     gui/simulator_window.cpp
     gui/simulator_window.h
     gui/schematic_editor.cpp
+    gui/schematic_editor_sync.cpp
     gui/schematic_editor.h
     gui/visual_component.cpp
     gui/visual_component.h
@@ -121,6 +122,8 @@ qt_add_executable(${PROJECT_NAME}
     ai_api/prompt_builder.h
     ai_api/topology_analyzer.cpp
     ai_api/topology_analyzer.h
+    ai_api/feedback_loop.cpp
+    ai_api/feedback_loop.h
     compute/physics_tensors.cpp
     compute/superposition.cpp
     compute/circuitsim_solver.cpp

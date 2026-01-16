@@ -47,6 +47,7 @@ private:
     
     // Core Components
     SchematicEditor* schematicEditor; // Active schematic editor (points to current RTL page)
+    HDLEditor* hdlEditor; // Phase 14: Code Editor
     SimulatorWindow* simulatorPanel;
     
     // Docks
@@ -96,6 +97,8 @@ private:
     QAction* toggleModeAction;
     
     void onModeToggle();
+    void syncSchematicToVerilog();
+    void syncVerilogToSchematic();
 
 private slots:
     void updateProperties(VisualComponent* item);
