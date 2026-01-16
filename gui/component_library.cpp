@@ -4,6 +4,7 @@ ComponentLibrary::ComponentLibrary(QWidget* parent) : QWidget(parent) {
     setupUi();
     populateLists();
     populateSystemList();
+    populateICsList();
     
     // Default to RTL stage (hides System tab)
     setStage(DesignStage::RTL_DESIGN);
@@ -20,11 +21,13 @@ void ComponentLibrary::setupUi() {
     activeList = new QListWidget();
     sourcesList = new QListWidget();
     systemList = new QListWidget();
+    icsList = new QListWidget();
 
     tabs->addTab(basicList, "Basic");
     tabs->addTab(activeList, "Active");
     tabs->addTab(sourcesList, "Sources");
     tabs->addTab(systemList, "PDN"); // Power Delivery Network parts
+    tabs->addTab(icsList, "ICs");    // IC Packages (System mode only)
     
     // Connect Signals
     auto setupConnection = [this](QListWidget* list) {
@@ -38,6 +41,7 @@ void ComponentLibrary::setupUi() {
     setupConnection(activeList);
     setupConnection(sourcesList);
     setupConnection(systemList);
+    setupConnection(icsList);
 }
 
 void ComponentLibrary::populateLists() {
@@ -65,6 +69,14 @@ void ComponentLibrary::populateSystemList() {
     addComponentItem(systemList, "Ferrite Bead", "ferrite.png", ComponentType::Inductor); // Models as inductor
 }
 
+void ComponentLibrary::populateICsList() {
+    // IC Packages (visible in System Integration mode)
+    addComponentItem(icsList, "ULN2003A", "uln2003a.png", ComponentType::ICPackage);
+    addComponentItem(icsList, "ULN2803A", "uln2803a.png", ComponentType::ICPackage);
+    addComponentItem(icsList, "LM7805", "lm7805.png", ComponentType::ICPackage);
+    addComponentItem(icsList, "NE555", "ne555.png", ComponentType::ICPackage);
+}
+
 void ComponentLibrary::addComponentItem(QListWidget* list, const QString& name, const QString& iconName, ComponentType type) {
     QListWidgetItem* item = new QListWidgetItem(name, list);
     // TODO: Add icons
@@ -89,5 +101,23 @@ void ComponentLibrary::setStage(DesignStage stage) {
             tabs->setTabVisible(pdnIdx, true);
             tabs->setTabVisible(srcIdx, false); // Hide ideal sources in physical stage
             break;
+    }
+}
+
+void ComponentLibrary::setMode(AppMode mode) {
+    int sysIdx = tabs->indexOf(systemList);
+    int icsIdx = tabs->indexOf(icsList);
+    int srcIdx = tabs->indexOf(sourcesList);
+    
+    if (mode == AppMode::SYSTEM_INTEGRATION) {
+        // Show PDN/System components and ICs
+        tabs->setTabVisible(sysIdx, true);
+        tabs->setTabVisible(icsIdx, true);
+        tabs->setTabVisible(srcIdx, false);  // Hide ideal sources in system mode
+    } else {
+        // Lab Benchmark: Hide PDN and ICs, show only ideal sources
+        tabs->setTabVisible(sysIdx, false);
+        tabs->setTabVisible(icsIdx, false);
+        tabs->setTabVisible(srcIdx, true);
     }
 }

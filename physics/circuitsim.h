@@ -327,7 +327,7 @@ private:
   static constexpr double RELTOL = 1e-3;
   static constexpr double VNTOL = 1e-6;
   static constexpr double ABSTOL = 1e-12; // 1 pico-Ampere resolution
-  static constexpr int MAX_NR_ITER = 20;
+  static constexpr int MAX_NR_ITER = 50;
   static constexpr double PCG_TOL = 1e-10;
   static constexpr int PCG_MAX_ITER = 1000;
 
@@ -338,7 +338,8 @@ private:
    */
   bool checkConvergence(const std::vector<double> &v_new,
                         const std::vector<double> &v_old,
-                        double max_kcl_error) {
+                        double max_kcl_error,
+                        double kcl_tol = 1e-6) {
     // 1. Check Voltage Updates (Standard RELTOL/VNTOL)
     if (v_new.size() != v_old.size())
       return false;
@@ -353,7 +354,7 @@ private:
     // 2. Check Physical KCL Conservation (Research-Grade)
     // Relax ABSTOL slightly for Norton-stamped voltage sources (which are
     // stiff)
-    if (max_kcl_error > 1e-6)
+    if (max_kcl_error > kcl_tol)
       return false;
 
     return true;
@@ -1099,9 +1100,9 @@ public:
     }
   }
 
-  void addDiagonalConditioning(int n) {
+  void addDiagonalConditioning(int n, double gmin = 1e-12) {
     for (int i = 0; i < n; ++i)
-      matrixBuilder.add(i, i, 1e-12);
+      matrixBuilder.add(i, i, gmin);
   }
 
   /**

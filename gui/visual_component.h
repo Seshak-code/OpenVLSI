@@ -22,7 +22,8 @@ enum class ComponentType {
     Bjt,
     CurrentSource,
     SchottkyDiode,
-    Probe
+    Probe,
+    ICPackage  // Hierarchical IC (e.g., ULN2003A, 555 Timer)
 };
 
 QString componentTypeToString(ComponentType t);

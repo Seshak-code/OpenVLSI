@@ -558,6 +558,56 @@ struct TensorBlock {
     }
 };
 
+// ============================================================================
+// SUBCIRCUIT DEFINITIONS (Hierarchical IC Packages)
+// ============================================================================
+
+/*
+ * SubCircuitDefinition - Represents the internal circuitry of an IC package.
+ * Used for hierarchical simulation where ICs like ULN2003A expand to their
+ * internal Darlington transistors, resistors, and protection diodes.
+ *
+ * Example: ULN2003A has 16 pins, 7 Darlington channels internally.
+ * Pin mapping connects external package pins to internal node indices.
+ */
+struct SubCircuitDefinition {
+    std::string name;                         // e.g., "ULN2003A"
+    std::string description;                  // Human-readable description
+    
+    // Package Information
+    int pinCount = 0;                         // Total pins (e.g., 16 for DIP-16)
+    std::vector<std::string> pinNames;        // e.g., {"1B", "2B", ..., "GND", "VCC"}
+    
+    // Internal Circuitry (uses local node indices starting from 0)
+    TensorBlock internalBlock;
+    
+    // Pin-to-Internal-Node Mapping
+    // Key: pin index (0-based), Value: internal node index
+    std::map<int, int> pinToInternalNode;
+    
+    // Helper to get internal node for a given pin
+    int getInternalNode(int pinIndex) const {
+        auto it = pinToInternalNode.find(pinIndex);
+        return (it != pinToInternalNode.end()) ? it->second : -1;
+    }
+};
+
+/*
+ * ICPackageInstance - An instance of a SubCircuitDefinition placed on the schematic.
+ * Stores the mapping from package pins to global netlist nodes.
+ */
+struct ICPackageInstance {
+    std::string instanceName;                 // e.g., "U1"
+    std::string subcircuitName;               // Reference to SubCircuitDefinition
+    
+    // Pin-to-Global-Node Mapping (set during netlist generation)
+    std::map<int, int> pinToGlobalNode;       // Key: pin index, Value: global node
+    
+    // Position (for GUI)
+    double x = 0.0, y = 0.0;
+    double rotation = 0.0;
+};
+
 // BlockInstance - A placed instance of a TensorBlock in the global netlist.
 
 struct BlockInstance {

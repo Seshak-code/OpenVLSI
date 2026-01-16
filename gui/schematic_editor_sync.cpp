@@ -3,6 +3,7 @@
 // ============================================================================
 #include "schematic_editor.h"
 #include <QRegularExpression>
+#include <QJsonObject>
 
 /**
  * Generates a Verilog-AMS representation of the current schematic.
@@ -78,6 +79,57 @@ QString SchematicEditor::generateVerilogSnippet() {
                 .arg(comp.gate)
                 .arg(comp.source)
                 .arg(comp.body);
+    }
+    
+    // Current Sources
+    for (size_t i = 0; i < netlist.globalBlock.currentSources.size(); ++i) {
+        const auto& comp = netlist.globalBlock.currentSources[i];
+        QString name = "I" + QString::number(i);
+        code += QString("  isource #(.i(%1)) %2 (.p(n%3), .n(n%4));\n")
+                .arg(comp.current_A)
+                .arg(name)
+                .arg(comp.nodePositive)
+                .arg(comp.nodeNegative);
+    }
+    
+    // Diodes
+    for (size_t i = 0; i < netlist.globalBlock.diodes.size(); ++i) {
+        const auto& comp = netlist.globalBlock.diodes[i];
+        QString name = "D" + QString::number(i);
+        code += QString("  diode #(.is(%1), .n(%2)) %3 (.a(n%4), .c(n%5));\n")
+                .arg(comp.saturationCurrent_I_S_A)
+                .arg(comp.emissionCoefficient_N)
+                .arg(name)
+                .arg(comp.anode)
+                .arg(comp.cathode);
+    }
+    
+    // BJTs
+    for (size_t i = 0; i < netlist.globalBlock.bjts.size(); ++i) {
+        const auto& comp = netlist.globalBlock.bjts[i];
+        QString name = QString::fromStdString(comp.instanceName);
+        if (name.isEmpty()) name = "Q" + QString::number(i);
+        
+        QString type = comp.isNPN ? "npn" : "pnp";
+        code += QString("  %1 #(.bf(%2), .is(%3)) %4 (.c(n%5), .b(n%6), .e(n%7));\n")
+                .arg(type)
+                .arg(comp.betaF)
+                .arg(comp.saturationCurrent_I_S_A)
+                .arg(name)
+                .arg(comp.nodeCollector)
+                .arg(comp.base)
+                .arg(comp.emitter);
+    }
+    
+    // Inductors
+    for (size_t i = 0; i < netlist.globalBlock.inductors.size(); ++i) {
+        const auto& comp = netlist.globalBlock.inductors[i];
+        QString name = "L" + QString::number(i);
+        code += QString("  inductor #(.l(%1)) %2 (.p(n%3), .n(n%4));\n")
+                .arg(comp.inductance_henries)
+                .arg(name)
+                .arg(comp.nodeCoil1)
+                .arg(comp.nodeCoil2);
     }
 
     code += "\nendmodule\n";

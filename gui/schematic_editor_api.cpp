@@ -1,5 +1,6 @@
 #include "schematic_editor.h"
 #include <QDebug>
+#include <QJsonObject>
 
 // ============================================================================
 // AI API IMPLEMENTATION

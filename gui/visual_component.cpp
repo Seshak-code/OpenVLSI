@@ -16,23 +16,25 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::SchottkyDiode: return "SchottkyDiode";
         case ComponentType::Wire: return "Wire";
         case ComponentType::Probe: return "Probe";
+        case ComponentType::ICPackage: return "ICPackage";
         default: return "Unknown";
     }
 }
 
 ComponentType stringToComponentType(const QString& s) {
     if (s == "Resistor") return ComponentType::Resistor;
-    if (s == "Capacitor") return ComponentType::Capacitor;
-    if (s == "Inductor") return ComponentType::Inductor;
-    if (s == "VoltageSource" || s == "Source") return ComponentType::VoltageSource;
+    if (s == "Capacitor" || s == "Decoupling Cap" || s == "DecouplingCap") return ComponentType::Capacitor;
+    if (s == "Inductor" || s == "Ferrite Bead" || s == "FerriteBead") return ComponentType::Inductor;
+    if (s == "VoltageSource" || s == "Source" || s == "Power Rail" || s == "PowerRail") return ComponentType::VoltageSource;
     if (s == "CurrentSource" || s == "ISettings") return ComponentType::CurrentSource;
-    if (s == "Ground" || s == "GND") return ComponentType::Ground;
+    if (s == "Ground" || s == "GND" || s == "Chassis Ground" || s == "ChassisGround") return ComponentType::Ground;
     if (s == "Diode") return ComponentType::Diode;
     if (s == "Schottky" || s == "SchottkyDiode") return ComponentType::SchottkyDiode;
     if (s == "Mosfet" || s == "NMOS" || s == "PMOS") return ComponentType::Mosfet;
     if (s == "Bjt" || s == "NPN" || s == "PNP" || s == "BJT_NPN" || s == "BJT_PNP") return ComponentType::Bjt;
     if (s == "Wire") return ComponentType::Wire;
     if (s == "Probe") return ComponentType::Probe;
+    if (s == "ICPackage" || s == "IC" || s == "ULN2003A" || s == "ULN2803A") return ComponentType::ICPackage;
     return ComponentType::Select;
 }
 
@@ -213,6 +215,13 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             probeNegativeTip = new ProbeTip(this, false);
             probeNegativeTip->setPos(0, 60);
             break;
+        case ComponentType::ICPackage:
+            name = "U?";
+            value = "ULN2003A";
+            params["Model"] = "ULN2003A";
+            params["PinCount"] = "16";
+            paramOptions["Model"] = {"ULN2003A", "ULN2803A", "LM7805", "NE555"};
+            break;
         default: 
             name = "U?"; 
             value = "0"; 
@@ -223,6 +232,10 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
 QRectF VisualComponent::boundingRect() const {
     if (type == ComponentType::Probe) {
         return QRectF(-20, -20, 40, 40);
+    }
+    if (type == ComponentType::ICPackage) {
+        // DIP-16 package: ~80px wide (8 pins * 10px spacing), ~120px tall
+        return QRectF(-50, -70, 100, 140);
     }
     return QRectF(-50, -50, 100, 100);
 }
@@ -270,6 +283,16 @@ QVector<QPointF> VisualComponent::getTerminals() const {
         case ComponentType::Probe:
              // NO fixed terminals. Measurement points are derived from tips.
              return {};
+        case ComponentType::ICPackage:
+             // DIP-16 layout: 8 pins per side, 20px spacing
+             // Left side pins 1-8 (bottom to top), right side pins 9-16 (top to bottom)
+             for (int i = 0; i < 8; ++i) {
+                 t << QPointF(-40, 60 - i * 20);  // Left side: pin 1 at bottom
+             }
+             for (int i = 0; i < 8; ++i) {
+                 t << QPointF(40, -60 + i * 20);  // Right side: pin 16 at top
+             }
+             break;
         default:
             break;
     }
@@ -519,6 +542,77 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                 painter->setFont(f);
                 painter->setPen(Qt::white);
                 painter->drawText(QRectF(-35, -5, 20, 12), Qt::AlignRight | Qt::AlignVCenter, name);
+            }
+            break;
+        
+        case ComponentType::ICPackage:
+            // DIP-16 Package Rendering (like ULN2003A)
+            {
+                // --- Body Rectangle ---
+                painter->setPen(QPen(Qt::white, 2));
+                painter->setBrush(QColor("#2D2D30"));
+                painter->drawRect(-35, -60, 70, 120);
+                
+                // --- Notch (Orientation Marker) ---
+                painter->setBrush(QColor("#1E1E1E"));
+                painter->drawEllipse(-8, -64, 16, 16);
+                
+                // --- Model Name (Center) ---
+                painter->setPen(Qt::white);
+                QFont f = painter->font();
+                f.setFamily("Consolas");
+                f.setPointSize(9);
+                f.setBold(true);
+                painter->setFont(f);
+                painter->drawText(QRectF(-35, -15, 70, 30), Qt::AlignCenter, value);
+                
+                // --- Instance Name (Above) ---
+                f.setPointSize(8);
+                f.setBold(false);
+                painter->setFont(f);
+                painter->drawText(QRectF(-35, -50, 70, 20), Qt::AlignCenter, name);
+                
+                // --- Pin Labels ---
+                f.setPointSize(6);
+                painter->setFont(f);
+                
+                // ULN2003A pin names (standard)
+                QStringList pinNames = {"1B", "2B", "3B", "4B", "5B", "6B", "7B", "GND",
+                                        "COM", "7C", "6C", "5C", "4C", "3C", "2C", "1C"};
+                
+                // Left side pins 1-8 (bottom to top)
+                for (int i = 0; i < 8; ++i) {
+                    int y = 60 - i * 20;
+                    // Pin leg
+                    painter->setPen(QPen(Qt::white, 1));
+                    painter->drawLine(-35, y, -40, y);
+                    // Pin number
+                    painter->setPen(Qt::gray);
+                    painter->drawText(QRectF(-33, y - 6, 15, 12), Qt::AlignLeft, QString::number(i + 1));
+                    // Pin label (if available)
+                    if (i < pinNames.size()) {
+                        painter->setPen(QColor("#888"));
+                        painter->drawText(QRectF(-55, y - 6, 15, 12), Qt::AlignRight, pinNames[i]);
+                    }
+                }
+                
+                // Right side pins 9-16 (bottom to top)
+                for (int i = 0; i < 8; ++i) {
+                    int y = 60 - i * 20;
+                    int pinNum = 16 - i;  // Pin 16 at top
+                    // Pin leg
+                    painter->setPen(QPen(Qt::white, 1));
+                    painter->drawLine(35, y, 40, y);
+                    // Pin number
+                    painter->setPen(Qt::gray);
+                    painter->drawText(QRectF(20, y - 6, 15, 12), Qt::AlignRight, QString::number(pinNum));
+                    // Pin label
+                    int labelIdx = 15 - i;
+                    if (labelIdx < pinNames.size()) {
+                        painter->setPen(QColor("#888"));
+                        painter->drawText(QRectF(42, y - 6, 20, 12), Qt::AlignLeft, pinNames[labelIdx]);
+                    }
+                }
             }
             break;
              

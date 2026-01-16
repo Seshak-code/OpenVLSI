@@ -338,6 +338,7 @@ TensorizedBlock tensorizeBlock(const struct TensorBlock& block);
  */
 inline void batchDiodePhysics(DiodeTensor& tensor, const std::vector<double>& voltages) {
     size_t n = tensor.size();
+    const double GMIN = 1e-12;
     
     for (size_t i = 0; i < n; ++i) {
         int nA = tensor.anodes[i];
@@ -352,25 +353,20 @@ inline void batchDiodePhysics(DiodeTensor& tensor, const std::vector<double>& vo
         double N = tensor.N[i];
         double Vt = tensor.Vt[i];
         double n_vt = N * Vt;
+        double Vcrit = 40.0 * n_vt;
         
         double arg = tensor.v_d[i] / n_vt;
         
-        // Linear continuation for numerical stability
-        if (arg > 40.0) {
-            double exp_max = std::exp(40.0);
-            double i_max = Is * (exp_max - 1.0);
-            double g_max = (Is / n_vt) * exp_max;
-            double delta = tensor.v_d[i] - (n_vt * 40.0);
-            tensor.i_d[i] = i_max + delta * g_max;
-            tensor.g_d[i] = g_max;
-        } else {
-            double exp_arg = std::exp(arg);
-            tensor.i_d[i] = Is * (exp_arg - 1.0);
-            tensor.g_d[i] = (Is / n_vt) * exp_arg;
-        }
+        // Linear continuation (branchless-style using std::min/max)
+        double arg_clamped = std::min(arg, 40.0);
+        double exp_arg = std::exp(arg_clamped);
         
-        // Clamp conductance for stability
-        if (tensor.g_d[i] < 1e-15) tensor.g_d[i] = 1e-15;
+        double i_base = Is * (exp_arg - 1.0);
+        double g_base = (Is / n_vt) * exp_arg;
+        
+        double delta = std::max(0.0, tensor.v_d[i] - Vcrit);
+        tensor.i_d[i] = i_base + delta * g_base;
+        tensor.g_d[i] = std::max(GMIN, g_base);
     }
 }
 
@@ -425,6 +421,7 @@ inline void batchMosfetPhysics(MosfetTensor& tensor, const std::vector<double>& 
  */
 inline void batchBJTPhysics(BJTTensor& tensor, const std::vector<double>& voltages) {
     size_t n = tensor.size();
+    const double GMIN = 1e-12;
     
     for (size_t i = 0; i < n; ++i) {
         int nC = tensor.collectors[i];
@@ -444,20 +441,24 @@ inline void batchBJTPhysics(BJTTensor& tensor, const std::vector<double>& voltag
         double BetaF = tensor.BetaF[i];
         double BetaR = tensor.BetaR[i];
         
-        // Safe exponential
-        auto safe_exp = [&](double v) {
-            double arg = v / Vt;
-            if (arg > 40.0) arg = 40.0;
-            return std::exp(arg);
+        const double Vcrit = 40.0 * Vt;
+
+        auto linear_continuation_diode = [&](double v_j) -> std::pair<double, double> {
+            double arg = v_j / Vt;
+            double arg_clamped = std::min(arg, 40.0);
+            
+            double exp_val = std::exp(arg_clamped);
+            double i_base = Is * (exp_val - 1.0);
+            double g_base = (Is / Vt) * exp_val;
+            
+            double delta = std::max(0.0, v_j - Vcrit);
+            double i_ext = g_base * delta;
+            
+            return {i_base + i_ext, std::max(GMIN, g_base)};
         };
         
-        double exp_be = safe_exp(v_be);
-        double exp_bc = safe_exp(v_bc);
-        
-        double i_f = Is * (exp_be - 1.0);
-        double i_r = Is * (exp_bc - 1.0);
-        double g_f = (Is / Vt) * exp_be;
-        double g_r = (Is / Vt) * exp_bc;
+        auto [i_f, g_f] = linear_continuation_diode(v_be);
+        auto [i_r, g_r] = linear_continuation_diode(v_bc);
         
         double invBetaF = 1.0 / BetaF;
         double invBetaR = 1.0 / BetaR;
@@ -479,27 +480,16 @@ inline void batchBJTPhysics(BJTTensor& tensor, const std::vector<double>& voltag
         double dIe_dVbe = -(dIc_dVbe + dIb_dVbe);
         double dIe_dVbc = -(dIc_dVbc + dIb_dVbc);
         
-        if (tensor.isNPN[i]) {
-            tensor.g_cc[i] = -dIc_dVbc;
-            tensor.g_cb[i] = dIc_dVbe + dIc_dVbc;
-            tensor.g_ce[i] = -dIc_dVbe;
-            tensor.g_bc[i] = -dIb_dVbc;
-            tensor.g_bb[i] = dIb_dVbe + dIb_dVbc;
-            tensor.g_be[i] = -dIb_dVbe;
-            tensor.g_ec[i] = -dIe_dVbc;
-            tensor.g_eb[i] = dIe_dVbe + dIe_dVbc;
-            tensor.g_ee[i] = -dIe_dVbe;
-        } else {
-            tensor.g_cc[i] = dIc_dVbc;
-            tensor.g_cb[i] = -(dIc_dVbe + dIc_dVbc);
-            tensor.g_ce[i] = dIc_dVbe;
-            tensor.g_bc[i] = dIb_dVbc;
-            tensor.g_bb[i] = -(dIb_dVbe + dIb_dVbc);
-            tensor.g_be[i] = dIb_dVbe;
-            tensor.g_ec[i] = dIe_dVbc;
-            tensor.g_eb[i] = -(dIe_dVbe + dIe_dVbc);
-            tensor.g_ee[i] = dIe_dVbe;
-        }
+        // Terminal Conductances (Common for NPN and PNP)
+        tensor.g_cc[i] = -dIc_dVbc;
+        tensor.g_cb[i] = dIc_dVbe + dIc_dVbc;
+        tensor.g_ce[i] = -dIc_dVbe;
+        tensor.g_bc[i] = -dIb_dVbc;
+        tensor.g_bb[i] = dIb_dVbe + dIb_dVbc;
+        tensor.g_be[i] = -dIb_dVbe;
+        tensor.g_ec[i] = -dIe_dVbc;
+        tensor.g_eb[i] = dIe_dVbe + dIe_dVbc;
+        tensor.g_ee[i] = -dIe_dVbe;
     }
 }
 

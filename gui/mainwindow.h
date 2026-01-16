@@ -20,6 +20,7 @@
 #include "hdl_editor.h"  // Phase 14.1
 #include <QStackedWidget>
 #include <QSplitter>
+#include "gui_types.h"
 
 // ============================================================================
 // MAIN WINDOW
@@ -32,8 +33,7 @@ public:
     SchematicEditor* getSchematicEditor() const { return schematicEditor; }
     
     // Mode Management
-    enum class AppMode { LAB_BENCHMARK, SYSTEM_INTEGRATION };
-    AppMode getMode() const { return currentMode; }
+    AppMode getMode() const; 
     void setMode(AppMode mode);
 
 protected:

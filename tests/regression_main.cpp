@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
     suite.registerTest("linear_divider_10v_2k_2k", Benchmarks::linearDivider);
     suite.registerTest("diode_iv_1a", Benchmarks::diodeCircuit);
     suite.registerTest("bridge_rectifier", Benchmarks::bridgeRectifier);
+    suite.registerTest("darlington_pair", Benchmarks::darlingtonPair);
 
     // Run Suite
     suite.run(updateGolden);

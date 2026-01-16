@@ -42,30 +42,19 @@ public:
                 SolverStep result = t.testFunc();
                 
                 if (updateGolden) {
-                    // Calculate KCL residual for the record
-                    CircuitSim sim; // Need sim to calc residuals? 
-                    // Wait, SolverStep doesn't have the netlist.
-                    // The test case generates the netlist and solves.
-                    // Ideally the test case should return the KCL residual too or we calculate it there.
-                    // For now, let's assume result.stats matches.
-                    
-                    // We need the KCL residual. result.stats.residual might be it if solveDC sets it.
-                    // Let's check circuitsim.h: Step stats has "residual" ???
-                    // solveDC returns {total_iterations, 0.0, converged}. Residual isn't explicitly returned in the simple struct?
-                    // Let's assume 0.0 for now if not available, or I need to update CircuitSim to return it.
-                    // Actually, solveDC calls checkConvergence which calculates it but doesn't return it in the struct.
-                    // I will check circuitsim.h again later.
-                    
                     db.update(t.name, result.nodeVoltages, result.stats.residual, result.stats.iterations, result.stats.converged);
-                    std::cout << "[UPDATED]\n";
+                    std::cout << "[UPDATED] (conv=" << (result.stats.converged ? "Y" : "N") 
+                              << ", iter=" << result.stats.iterations 
+                              << ", res=" << result.stats.residual << ")\n";
                     passed++;
                 } else {
                     bool ok = db.compare(t.name, result.nodeVoltages);
                     if (ok) {
-                        std::cout << "[PASS]\n";
+                        std::cout << "[PASS] (conv=" << (result.stats.converged ? "Y" : "N") 
+                                  << ", iter=" << result.stats.iterations 
+                                  << ", res=" << result.stats.residual << ")\n";
                         passed++;
                     } else {
-                        // Detailed error printed by db.compare
                         failed++;
                     }
                 }
@@ -121,6 +110,31 @@ SolverStep bridgeRectifier() {
     nl.addDiode(2, 3, 1e-14); // D3
     nl.addDiode(0, 2, 1e-14); // D4
     nl.addResistor(3, 0, 100.0); // Load
+    
+    // Anchor both ends of the source to ground via high impedance to avoid floating nodes
+    nl.addResistor(1, 0, 1e6); 
+    nl.addResistor(2, 0, 1e6); 
+    
+    CircuitSim sim;
+    return sim.solveDC(nl);
+}
+
+SolverStep darlingtonPair() {
+    TensorNetlist nl;
+    // Supply: Node 1 (10V)
+    nl.addVoltageSource(1, 0, 10.0);
+    
+    // Load: R1 (1 ohm) between VCC and Collector
+    nl.addResistor(1, 2, 1.0);
+    
+    // Transistors: Q1, Q2 in Darlington configuration
+    // Q1: Collector=2, Base=3, Emitter=4
+    nl.addBJT("Q1", 2, 3, 4, "genericNPN", true, 100.0, 1.0, 1e-14);
+    // Q2: Collector=2, Base=4, Emitter=0
+    nl.addBJT("Q2", 2, 4, 0, "genericNPN", true, 100.0, 1.0, 1e-14);
+    
+    // Biasing: Current Source (10uA) into Q1 Base
+    nl.addCurrentSource(1, 3, 1e-5);
     
     CircuitSim sim;
     return sim.solveDC(nl);

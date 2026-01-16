@@ -22,6 +22,11 @@ QString ContextEngine::generateSystemPrompt() {
     
     QString prompt = "You are an AI Copilot for BeaverSim - an Experimental Circuit Designer.\n";
     prompt += "CURRENT CIRCUIT CONTEXT:\n";
+    
+    QJsonObject meta = state["metadata"].toObject();
+    QString mode = meta["mode"].toString();
+    prompt += QString("Environment: %1\n").arg(mode == "SYSTEM" ? "System Integration (Realistic)" : "Lab Benchmark (Ideal)");
+
     prompt += QString("Total Components: %1\n").arg(components.size());
     
     // 1. List Components

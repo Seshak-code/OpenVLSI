@@ -1080,6 +1080,14 @@ void SchematicEditor::onSnappingToggled(bool checked) {
     scene->setSnappingEnabled(checked);
 }
 
+void SchematicEditor::setMode(AppMode mode) {
+    currentMode = mode;
+    statusLabel->setText(mode == AppMode::SYSTEM_INTEGRATION ? "Mode: System Integration" : "Mode: Lab Benchmark");
+    statusLabel->setStyleSheet(mode == AppMode::SYSTEM_INTEGRATION ? 
+        "background: #007ACC; color: white; padding: 4px; font-weight: bold;" :
+        "background: #2D8A2D; color: white; padding: 4px; font-weight: bold;");
+}
+
 void SchematicEditor::setTool(ComponentType t) {
     scene->setTool(t);
 }
@@ -1091,11 +1099,19 @@ void SchematicEditor::setWireName(VisualWire* wire, const QString& name) {
 }
 
 QStringList SchematicEditor::getAvailableComponents() {
-    return {
-        "Resistor", "Capacitor", "Inductor", 
-        "Ground", "Voltage Source", 
-        "Diode", "N-MOSFET", "NPN BJT"
-    };
+    if (getMode() == AppMode::SYSTEM_INTEGRATION) {
+        return {
+            "Resistor", "Decoupling Cap", "Ferrite Bead", 
+            "Chassis Ground", "Power Rail", 
+            "Diode", "N-MOSFET", "NPN BJT"
+        };
+    } else {
+        return {
+            "Resistor", "Capacitor", "Inductor", 
+            "Ground", "Voltage Source", "Current Source",
+            "Diode", "N-MOSFET", "NPN BJT"
+        };
+    }
 }
 
 void SchematicEditor::placeWirePath(const QVector<QPointF>& points) {
@@ -1103,7 +1119,11 @@ void SchematicEditor::placeWirePath(const QVector<QPointF>& points) {
 }
 
 QJsonObject SchematicEditor::getCircuitState() {
-    return scene->getCircuitState();
+    QJsonObject state = scene->getCircuitState();
+    QJsonObject meta = state["metadata"].toObject();
+    meta["mode"] = (currentMode == AppMode::SYSTEM_INTEGRATION) ? "SYSTEM" : "LAB";
+    state["metadata"] = meta;
+    return state;
 }
 
 QString SchematicEditor::dumpSceneState() {
@@ -1198,6 +1218,9 @@ QJsonObject GridScene::getCircuitState() {
     QJsonObject meta;
     meta["gridVisible"] = gridVisible;
     meta["snappingEnabled"] = snappingEnabled;
+    
+    // Pass mode from editor if possible, or just add it here
+    // For now, let's assume we'll inject it from SchematicEditor::getCircuitState
     root["metadata"] = meta;
     
     return root;

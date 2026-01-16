@@ -29,7 +29,7 @@ public:
     }
     
     static QStringList availableTemplates() {
-        return {"darlington", "current_mirror", "differential_pair", "inverter", "source_follower"};
+        return {"darlington", "current_mirror", "differential_pair", "inverter", "source_follower", "uln2003a"};
     }
 
 private:
@@ -171,6 +171,37 @@ private:
             };
             t.ports = {"M1.G", "M1.S", "M1.D", "Ibias.-"}; // Vin, Vout, VDD, GND
             map["source_follower"] = t;
+        }
+        
+        // ====== ULN2003A DARLINGTON ARRAY ======
+        // 7-channel Darlington driver IC (DIP-16)
+        {
+            CircuitTemplate t;
+            t.name = "uln2003a";
+            t.description = "ULN2003A - 7-Channel Darlington Driver IC (System Integration)";
+            
+            // Single IC package component for schematic representation
+            // Internal circuitry is expanded during netlist generation
+            t.components = QJsonArray{
+                QJsonObject{
+                    {"type", "ICPackage"}, 
+                    {"id", "U1"}, 
+                    {"x", 0}, {"y", 0}, 
+                    {"value", "ULN2003A"},
+                    {"params", QJsonObject{{"Model", "ULN2003A"}, {"PinCount", "16"}}}
+                }
+            };
+            
+            // No explicit wires - IC package has integrated connections
+            t.wires = QJsonArray{};
+            
+            // External ports map to IC pins
+            t.ports = {"U1.1", "U1.2", "U1.3", "U1.4", "U1.5", "U1.6", "U1.7", // Inputs 1B-7B
+                       "U1.8", // GND
+                       "U1.9", // COM (flyback common)
+                       "U1.10", "U1.11", "U1.12", "U1.13", "U1.14", "U1.15", "U1.16"}; // Outputs
+            
+            map["uln2003a"] = t;
         }
         
         return map;

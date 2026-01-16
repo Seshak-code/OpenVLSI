@@ -7,6 +7,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QInputDialog>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("AcuteSim - ASIC Design Suite");
@@ -51,6 +52,7 @@ void MainWindow::setupCentralWidget() {
     
     // Initial schematic page
     schematicEditor = new SchematicEditor(this);
+    schematicEditor->setMode(AppMode::LAB_BENCHMARK); // Default initial page to Labs
     rtlPageTabs->addTab(schematicEditor, "top.sch");
     
     // "+" button to add new pages
@@ -107,6 +109,10 @@ void MainWindow::setupCentralWidget() {
     connect(rtlPageTabs, &QTabWidget::currentChanged, this, [this](int idx) {
         if (idx >= 0) {
             schematicEditor = qobject_cast<SchematicEditor*>(rtlPageTabs->widget(idx));
+            // Update UI to match current page's mode
+            if (schematicEditor && libraryPanel) {
+                libraryPanel->setMode(schematicEditor->getMode());
+            }
         }
     });
     
@@ -126,6 +132,11 @@ void MainWindow::setupDocks() {
     createLibraryDock();
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
     tabifyDockWidget(projectDock, libraryDock);
+    
+    // Initial Sync: Component Library starts in the same mode as the initial schematic
+    if (libraryPanel && schematicEditor) {
+        libraryPanel->setMode(schematicEditor->getMode());
+    }
 
     // --- Properties Inspector (Right) ---
     createPropertiesDock();
@@ -468,16 +479,11 @@ void MainWindow::setupStageToolbar() {
     modeToolbar->addWidget(stageCombo);
     modeToolbar->addSeparator();
     
-    // Mode Toggle (Lab/System) - Keep for simulation mode within stages
+    // Mode Toggle - Removed as per request (mode is set at page creation)
+    /*
     toggleModeAction = new QAction("System Integration", this);
-    toggleModeAction->setCheckable(true);
-    toggleModeAction->setChecked(true);
-    toggleModeAction->setToolTip("Solver mode: Ideal (Lab) vs Realistic (System)");
-    connect(toggleModeAction, &QAction::toggled, this, &MainWindow::onModeToggle);
-    modeToolbar->addAction(toggleModeAction);
-    
-    // Initialize
-    onModeToggle();
+    ...
+    */
     
     modeToolbar->addSeparator();
     
@@ -532,36 +538,41 @@ void MainWindow::onStageChanged(DesignStage stage) {
 }
 
 void MainWindow::addRtlPage() {
-    static int pageCount = 1; // Simple counter for unique names
+    QStringList modes = {"Lab Benchmark (Ideal)", "System Integration (Realistic)"};
+    bool ok;
+    QString selection = QInputDialog::getItem(this, "New Schematic", 
+                                             "Select simulation environment:", 
+                                             modes, 0, false, &ok);
+    if (!ok) return;
+
+    static int pageCount = 1; 
     QString pageName = QString("module_%1.sch").arg(++pageCount);
     
     SchematicEditor* newEditor = new SchematicEditor(this);
+    AppMode mode = (selection == modes[0]) ? AppMode::LAB_BENCHMARK : AppMode::SYSTEM_INTEGRATION;
+    newEditor->setMode(mode);
+
     rtlPageTabs->addTab(newEditor, pageName);
     rtlPageTabs->setCurrentWidget(newEditor);
     
-    // Connect signals for the new editor
     connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
     connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
     
-    statusBar()->showMessage(QString("Added new schematic page: %1").arg(pageName), 3000);
+    statusBar()->showMessage(QString("Added %1 schematic: %2").arg(selection, pageName), 3000);
 }
 
-void MainWindow::onModeToggle() {
-    if (toggleModeAction->isChecked()) {
-        setMode(AppMode::SYSTEM_INTEGRATION);
-    } else {
-        setMode(AppMode::LAB_BENCHMARK);
-    }
+AppMode MainWindow::getMode() const {
+    return schematicEditor ? schematicEditor->getMode() : AppMode::SYSTEM_INTEGRATION;
 }
 
 void MainWindow::setMode(AppMode mode) {
-    currentMode = mode;
+    if (schematicEditor) {
+        schematicEditor->setMode(mode);
+    }
     
-    if (mode == AppMode::SYSTEM_INTEGRATION) {
-        toggleModeAction->setText("System Integration");
-        toggleModeAction->setToolTip("Simulation: Real PDN (ESR/Ripple) + High Precision Solver");
-    } else {
-        toggleModeAction->setText("Lab Benchmark");
-        toggleModeAction->setToolTip("Simulation: Ideal Sources (0 Resistance) + Fast Solver");
+    // Update Component Library filter
+    if (libraryPanel) {
+        libraryPanel->setMode(mode);
     }
 }
+

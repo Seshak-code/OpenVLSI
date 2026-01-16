@@ -18,8 +18,8 @@
 #include "circuit.h" // Logical circuit definitions (from components/)
 
 
-#include <QJsonObject>
 #include <QJsonArray>
+#include "gui_types.h"
 
 // ============================================================================
 // SCENE (Grid Handling + Validation)
@@ -99,6 +99,12 @@ protected:
 class SchematicEditor : public QWidget {
     Q_OBJECT
 public:
+    void setMode(AppMode mode);
+    AppMode getMode() const { return currentMode; }
+
+    explicit SchematicEditor(QWidget* parent = nullptr);
+    TensorNetlist toNetlist() { return scene->generateNetlist(); }
+    
     // Automation API (GenAI Hook)
     // Returns a JSON-like string description of the circuit
     QString dumpSceneState();
@@ -172,9 +178,6 @@ public:
     // Verilog-AMS Code -> Schematic (Ghost Placement)
     void parseVerilogToSchematic(const QString& code);
 
-    explicit SchematicEditor(QWidget* parent = nullptr);
-    TensorNetlist toNetlist() { return scene->generateNetlist(); }
-
 signals:
     void itemSelected(VisualComponent* item); 
     void wireSelected(VisualWire* wire);
@@ -184,6 +187,7 @@ private slots:
     void onSnappingToggled(bool checked);
 
 private:
+    AppMode currentMode = AppMode::SYSTEM_INTEGRATION;
     GridScene* scene;
     QGraphicsView* view;
     QLabel* statusLabel;

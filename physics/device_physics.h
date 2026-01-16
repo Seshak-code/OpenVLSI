@@ -87,6 +87,55 @@ inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 4
     return p.Is * (std::exp(arg) - 1.0);
 }
 
+/**
+ * pnjlim - SPICE-Style PN Junction Voltage Limiting
+ * 
+ * Limits the change in junction voltage during Newton-Raphson iteration to 
+ * prevent the exponential from overshooting and causing non-convergence.
+ * 
+ * Algorithm (SPICE3f5):
+ *   - If new voltage is increasing significantly, limit the step.
+ *   - vcrit = Vt * ln(Vt / (sqrt(2) * Is))  (critical turn-on voltage)
+ *   - Allow larger steps when turning on, smaller when conducting.
+ * 
+ * @param vnew  Proposed new junction voltage
+ * @param vold  Previous junction voltage
+ * @param vt    Thermal voltage (kT/q ≈ 26mV at room temp)
+ * @param vcrit Critical voltage (pre-computed for efficiency)
+ * @return      Limited junction voltage
+ */
+inline double pnjlim(double vnew, double vold, double vt, double vcrit) {
+    double vlim = vnew;
+    
+    if (vnew > vcrit && std::abs(vnew - vold) > 2.0 * vt) {
+        // Large forward step - apply limiting
+        if (vold > 0.0) {
+            double arg = 1.0 + (vnew - vold) / vt;
+            if (arg > 0.0) {
+                vlim = vold + vt * std::log(arg);
+            } else {
+                vlim = vcrit;
+            }
+        } else {
+            vlim = vt * std::log(vnew / vt);
+        }
+    } else if (vnew < -5.0 * vt) {
+        // Deep reverse bias - limit negative swing
+        // Prevent excessive negative voltages that could cause numerical issues
+        vlim = std::max(vnew, vold - 5.0 * vt);
+    }
+    
+    return vlim;
+}
+
+/**
+ * compute_vcrit - Compute critical voltage for pnjlim
+ * vcrit = Vt * ln(Vt / (sqrt(2) * Is))
+ */
+inline double compute_vcrit(double vt, double Is) {
+    return vt * std::log(vt / (std::sqrt(2.0) * Is));
+}
+
 // NOTE: Manual derivative functions (conductance) removed.
 // Use Dual<double> with diode_current to get {I, G}.
 
@@ -204,26 +253,34 @@ inline BJTCurrents bjt_ebers_moll(double v_c, double v_b, double v_e, bool isNPN
     v_be = sign * (v_b - v_e);
     v_bc = sign * (v_b - v_c);
 
-    // 2. Compute Diode Currents (Injection currents)
-    // I_F = Is * (exp(Vbe/Vt) - 1)
-    // I_R = Is * (exp(Vbc/Vt) - 1)
+    // 2. Compute Diode Currents with Linear Continuation (Branchless, GPU-Ready)
+    // For Vj > Vcrit: I = I(Vcrit) + G(Vcrit) * (Vj - Vcrit)
+    // This avoids exponential overflow and provides smooth derivatives.
     
-    // Limits to avoid overflow
-    auto safe_exp = [&](double v) { 
-        double arg = v / p.Vt;
-        if (arg > 40.0) arg = 40.0; // Clamp
-        return std::exp(arg);
+    const double Vcrit = 40.0 * p.Vt;  // Critical voltage for linear region
+    const double GMIN = 1e-12;         // Minimum conductance for cutoff
+    
+    // Branchless clamping using std::min/std::max (GPU-friendly)
+    auto linear_continuation_diode = [&](double v_j) -> std::pair<double, double> {
+        double arg = v_j / p.Vt;
+        double arg_clamped = std::min(arg, 40.0);  // Branchless clamp
+        
+        double exp_val = std::exp(arg_clamped);
+        double i_base = p.Is * (exp_val - 1.0);
+        double g_base = (p.Is / p.Vt) * exp_val;
+        
+        // Linear continuation for v_j > Vcrit
+        double delta = std::max(0.0, v_j - Vcrit);  // Branchless
+        double i_ext = g_base * delta;
+        
+        double i_total = i_base + i_ext;
+        double g_total = std::max(GMIN, g_base);  // Ensure minimum conductance
+        
+        return {i_total, g_total};
     };
-
-    double exp_be = safe_exp(v_be);
-    double exp_bc = safe_exp(v_bc);
-
-    double i_f = p.Is * (exp_be - 1.0);
-    double i_r = p.Is * (exp_bc - 1.0);
-
-    // Conductances of the internal diodes (g = dI/dV)
-    double g_f = (p.Is / p.Vt) * exp_be;
-    double g_r = (p.Is / p.Vt) * exp_bc;
+    
+    auto [i_f, g_f] = linear_continuation_diode(v_be);
+    auto [i_r, g_r] = linear_continuation_diode(v_bc);
 
     // 3. Terminal Currents (Ebers-Moll)
     // I_C = I_F - I_R/alpha_R  =>  I_F - I_R * (1 + 1/BetaR)
@@ -290,36 +347,21 @@ inline BJTCurrents bjt_ebers_moll(double v_c, double v_b, double v_e, bool isNPN
     // The sign factor handles NPN/PNP current direction, but conductance is always positive for passive-ish/stable regions? 
     // Wait, conductance is just slope.
     
-    // NPN Matrix
-    if (isNPN) {
-        res.g_cc = -dIc_dVbc; 
-        res.g_cb = dIc_dVbe + dIc_dVbc;
-        res.g_ce = -dIc_dVbe;
-        
-        res.g_bc = -dIb_dVbc;
-        res.g_bb = dIb_dVbe + dIb_dVbc;
-        res.g_be = -dIb_dVbe;
-        
-        res.g_ec = -dIe_dVbc;
-        res.g_eb = dIe_dVbe + dIe_dVbc;
-        res.g_ee = -dIe_dVbe;
-    } 
-    else { // PNP
-        // Vbe = Ve - Vb -> dVbe/dVe = 1, dVbe/dVb = -1
-        // Vbc = Vc - Vb -> dVbc/dVc = 1, dVbc/dVb = -1
-        
-        res.g_cc = dIc_dVbc;
-        res.g_cb = -(dIc_dVbe + dIc_dVbc); 
-        res.g_ce = dIc_dVbe;
-        
-        res.g_bc = dIb_dVbc;
-        res.g_bb = -(dIb_dVbe + dIb_dVbc); 
-        res.g_be = dIb_dVbe;
-        
-        res.g_ec = dIe_dVbc;
-        res.g_eb = -(dIe_dVbe + dIe_dVbc); 
-        res.g_ee = dIe_dVbe;
-    }
+    // Terminal Conductances (Common for NPN and PNP due to sign cancellation)
+    // dIdx / dVc = dIdx/dVbc * dVbc/dVc (NPN: -1, PNP: 1 but Ic is -1)
+    // dIdx / dVe = dIdx/dVbe * dVbe/dVe (NPN: -1, PNP: 1 but Ie is -1)
+    
+    res.g_cc = -dIc_dVbc; 
+    res.g_cb = dIc_dVbe + dIc_dVbc;
+    res.g_ce = -dIc_dVbe;
+    
+    res.g_bc = -dIb_dVbc;
+    res.g_bb = dIb_dVbe + dIb_dVbc;
+    res.g_be = -dIb_dVbe;
+    
+    res.g_ec = -dIe_dVbc;
+    res.g_eb = dIe_dVbe + dIe_dVbc;
+    res.g_ee = -dIe_dVbe;
     
     return res;
 }

@@ -10,6 +10,7 @@
 
 #include "circuitsim.h"
 #include "physics_tensors.h"
+#include "../physics/device_physics.h"
 
 SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   if (netlist.numGlobalNodes == 0)
@@ -34,9 +35,82 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
       voltageEstimate[diode.anode - 1] =
           std::max(voltageEstimate[diode.anode - 1], 0.6);
   }
+  
+  // Find the supply voltage (highest source voltage) for seeding reference
+  double vSupply = 5.0;
+  for (const auto &vs : netlist.globalBlock.voltageSources) {
+    if (vs.voltage_V > vSupply) vSupply = vs.voltage_V;
+  }
+  
+  // Current Source Node Seeding: 
+  // If a current source drives a BJT base, that node needs an initial guess.
+  // Estimate based on typical Vbe drops.
+  for (const auto &cs : netlist.globalBlock.currentSources) {
+    int nPos = cs.nodePositive - 1;
+    if (nPos >= 0 && nPos < (int)voltageEstimate.size()) {
+      // Check if this node is a BJT base
+      for (const auto &bjt : netlist.globalBlock.bjts) {
+        if (bjt.base - 1 == nPos) {
+          // Seed based on emitter + Vbe
+          int nE = bjt.emitter - 1;
+          double v_e = (nE >= 0) ? voltageEstimate[nE] : 0.0;
+          voltageEstimate[nPos] = std::max(voltageEstimate[nPos], 
+              bjt.isNPN ? v_e + 0.7 : v_e - 0.7);
+        }
+      }
+      // Default: If not connected to BJT, seed to mid-rail
+      if (voltageEstimate[nPos] == 0.0) {
+        voltageEstimate[nPos] = vSupply * 0.5;
+      }
+    }
+  }
+  
+  // BJT Initial Guess Seeding - MULTI-PASS for cascaded BJTs (Darlington)
+  // Run 3 passes to propagate voltages through cascaded stages
+  for (int pass = 0; pass < 3; ++pass) {
+    for (const auto &bjt : netlist.globalBlock.bjts) {
+      int nB = bjt.base - 1;
+      int nE = bjt.emitter - 1;
+      int nC = bjt.nodeCollector - 1;
+      
+      if (bjt.isNPN) {
+        // NPN: Base should be ~0.7V above emitter
+        if (nE >= 0 && nB >= 0) {
+          double v_e = voltageEstimate[nE];
+          voltageEstimate[nB] = std::max(voltageEstimate[nB], v_e + 0.7);
+        }
+        // Collector should be higher than base for forward-active
+        if (nC >= 0 && nB >= 0) {
+          voltageEstimate[nC] = std::max(voltageEstimate[nC], voltageEstimate[nB] + 0.5);
+        }
+      } else {
+        // PNP: Base should be ~0.7V below emitter
+        if (nE >= 0 && nB >= 0) {
+          double v_e = voltageEstimate[nE];
+          voltageEstimate[nB] = std::min(voltageEstimate[nB], v_e - 0.7);
+        }
+        // Collector should be lower than base for forward-active
+        if (nC >= 0 && nB >= 0) {
+          voltageEstimate[nC] = std::min(voltageEstimate[nC], voltageEstimate[nB] - 0.5);
+        }
+      }
+    }
+  }
 
   bool converged = false;
   int total_iterations = 0;
+  
+  // GMIN Stepping: Start with large parallel conductances, reduce each pass
+  // This prevents singular matrices for cold-start BJT circuits
+  double gmin_factor = 1.0; 
+  const int GMIN_STEPS = 10;
+  
+  for (int gmin_step = 0; gmin_step < GMIN_STEPS; ++gmin_step) {
+    // Scale GMIN: start at 1e-3, reduce to 1e-12 over steps
+    gmin_factor = std::pow(10.0, -(3 + gmin_step)); 
+    bool gmin_converged = false;
+    
+    std::cerr << "GMIN Step " << gmin_step << " (G=" << gmin_factor << ")\n";
 
   for (int iteration = 0; iteration < MAX_NR_ITER; ++iteration) {
     // Unified Stamping (Phase 1: Structural Abstraction)
@@ -46,77 +120,139 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     rhsVector.assign(netlist.numGlobalNodes, 0.0);
 
     stampAllElements(netlist, 0.0, voltageEstimate, 0.0);
-    addDiagonalConditioning(netlist.numGlobalNodes);
+    addDiagonalConditioning(netlist.numGlobalNodes, gmin_factor);
 
     Csr_matrix matrix = matrixBuilder.createCsr();
-    SolverResult result = solvePCG(matrix, rhsVector, 1e-6, PCG_MAX_ITER);
+    
+    // Solver Selection: Use LU for circuits with active (non-linear) devices
+    // PCG requires symmetric positive-definite, which BJTs violate
+    SolverResult result;
+    bool hasActiveDevices = !netlist.globalBlock.bjts.empty() || 
+                            !netlist.globalBlock.diodes.empty() ||
+                            !netlist.globalBlock.mosfets.empty();
+    
+    if (hasActiveDevices || netlist.numGlobalNodes < 20) {
+      // Direct LU solver for small matrices or active devices
+      result = solveLU_Pivoted(matrix, rhsVector);
+    } else {
+      // PCG for large linear-only circuits
+      result = solvePCG(matrix, rhsVector, 1e-6, PCG_MAX_ITER);
+      if (!result.converged) {
+        // Fallback to LU if PCG fails
+        result = solveLU_Pivoted(matrix, rhsVector);
+      }
+    }
+    if (!result.converged) {
+      // Matrix is singular - circuit topology error or floating node
+      continue; // Try next iteration/GMIN step
+    }
     
     std::vector<double> v_new = result.solution;
+    
+    // NaN Protection
+    for (double &v : v_new) {
+        if (std::isnan(v)) v = 0.0;
+    }
 
-    // PN Junction Limiting (pnjlim)
-    // We limit the voltage change across diodes to prevent the exponential
-    // current from overshooting into astronomical values that crash the solver.
+    // PN Junction Limiting (SPICE-Style pnjlim)
+    // Apply proper voltage limiting to prevent exponential overshoot
     const double thermalVoltage = 0.02585;
-    const double maxDelta = 2.0 * thermalVoltage;
 
+    // Diode voltage limiting
     for (const auto &d : netlist.globalBlock.diodes) {
       int a_idx = d.anode - 1;
       int c_idx = d.cathode - 1;
+      
+      // Compute vcrit for this diode
+      double vcrit = compute_vcrit(thermalVoltage, d.saturationCurrent_I_S_A);
 
-      double old_v_diode = (a_idx >= 0 ? voltageEstimate[a_idx] : 0.0) -
+      double v_diode_old = (a_idx >= 0 ? voltageEstimate[a_idx] : 0.0) -
                            (c_idx >= 0 ? voltageEstimate[c_idx] : 0.0);
-      double new_v_diode =
-          (a_idx >= 0 ? v_new[a_idx] : 0.0) - (c_idx >= 0 ? v_new[c_idx] : 0.0);
-
-      double delta = new_v_diode - old_v_diode;
-
-      if (std::abs(delta) > maxDelta) {
-        double limitedDelta = std::copysign(maxDelta, delta);
-        double correction = delta - limitedDelta;
-
-        // Back-propagate the correction to the node voltages
-        if (a_idx >= 0)
-          v_new[a_idx] -= correction;
-        if (c_idx >= 0)
-          v_new[c_idx] += correction;
+      double v_diode_new = (a_idx >= 0 ? v_new[a_idx] : 0.0) - 
+                           (c_idx >= 0 ? v_new[c_idx] : 0.0);
+      
+      // Apply pnjlim
+      double v_diode_limited = pnjlim(v_diode_new, v_diode_old, thermalVoltage, vcrit);
+      double correction = v_diode_new - v_diode_limited;
+      
+      // Apply correction to node voltages (distribute to both nodes)
+      if (std::abs(correction) > 1e-12) {
+        if (a_idx >= 0 && c_idx >= 0) {
+            v_new[a_idx] -= correction * 0.5;
+            v_new[c_idx] += correction * 0.5;
+        } else if (a_idx >= 0) {
+            v_new[a_idx] -= correction;
+        } else if (c_idx >= 0) {
+            v_new[c_idx] += correction;
+        }
       }
     }
 
-    // BJT Voltage Limiting (Base-Emitter and Base-Collector)
+    // BJT Voltage Limiting (Base-Emitter and Base-Collector junctions)
     for (const auto &q : netlist.globalBlock.bjts) {
         int nC = q.nodeCollector - 1;
         int nB = q.base - 1;
         int nE = q.emitter - 1;
-
-        auto limitJunction = [&](int p, int n, double limit) {
-             double v_old = (p >= 0 ? voltageEstimate[p] : 0.0) - (n >= 0 ? voltageEstimate[n] : 0.0);
-             double v_new_j = (p >= 0 ? v_new[p] : 0.0) - (n >= 0 ? v_new[n] : 0.0);
-             double d = v_new_j - v_old;
-             if (std::abs(d) > limit) {
-                 double corr = d - std::copysign(limit, d);
-                 if (p >= 0) v_new[p] -= corr;
-                 if (n >= 0) v_new[n] += corr;
-             }
+        
+        // Compute vcrit for BJT (using Is)
+        double vcrit = compute_vcrit(thermalVoltage, q.saturationCurrent_I_S_A);
+        
+        // Helper to apply pnjlim to a junction
+        auto limitJunction = [&](int p, int n) {
+            double v_old = (p >= 0 ? voltageEstimate[p] : 0.0) - (n >= 0 ? voltageEstimate[n] : 0.0);
+            double v_new_j = (p >= 0 ? v_new[p] : 0.0) - (n >= 0 ? v_new[n] : 0.0);
+            
+            double v_limited = pnjlim(v_new_j, v_old, thermalVoltage, vcrit);
+            double corr = v_new_j - v_limited;
+            
+            if (std::abs(corr) > 1e-12) {
+                if (p >= 0 && n >= 0) {
+                    v_new[p] -= corr * 0.5;
+                    v_new[n] += corr * 0.5;
+                } else if (p >= 0) {
+                    v_new[p] -= corr;
+                } else if (n >= 0) {
+                    v_new[n] += corr;
+                }
+            }
         };
 
-        limitJunction(nB, nE, 2.0*thermalVoltage); // Vbe
-        limitJunction(nB, nC, 2.0*thermalVoltage); // Vbc
+        limitJunction(nB, nE); // Vbe
+        limitJunction(nB, nC); // Vbc
     }
 
     // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
     double kcl_error = calculatePhysicalResiduals(netlist, v_new);
 
-    if (checkConvergence(v_new, voltageEstimate, kcl_error)) {
-      voltageEstimate = v_new;
-      converged = true;
-      total_iterations = iteration + 1;
-      // Return the actual KCL residual for validation
-      return {0.0, voltageEstimate, {total_iterations, kcl_error, converged}};
+    // During GMIN stepping, we relax the KCL check because GMIN itself adds residual.
+    // We only enforce strict KCL at the final (nominal GMIN) step.
+    double effective_kcl_tol = (gmin_step == GMIN_STEPS - 1) ? 1e-6 : 1.0;
+
+    if (checkConvergence(v_new, voltageEstimate, kcl_error, effective_kcl_tol)) {
+        voltageEstimate = v_new;
+        gmin_converged = true;
+        total_iterations += iteration + 1;
+        std::cerr << "  -> gmin_converged in " << iteration + 1 << " iterations\n";
+        break;
     }
+    
+    if (iteration % 10 == 0) std::cerr << "  iter " << iteration << " res=" << kcl_error << "\n";
 
     voltageEstimate = v_new;
-    total_iterations = iteration + 1;
   }
+  
+  // Only the final GMIN step should mark the overall simulation as converged
+  if (gmin_step == GMIN_STEPS - 1 && gmin_converged) {
+      converged = true;
+      break;
+  }
+  
+  // If we failed to converge a single GMIN step, the whole process fails
+  if (!gmin_converged) {
+      break;
+  }
+  
+  } // End GMIN stepping loop
 
   // If we didn't converge, calculate final residual
   double final_kcl_error = calculatePhysicalResiduals(netlist, voltageEstimate);
@@ -186,7 +322,7 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
              std::vector<double> v_new = lastResult.solution;
              
              double kcl_error = calculatePhysicalResiduals(netlist, v_new, actualTimeStep);
-             if (checkConvergence(v_new, nrEstimate, kcl_error)) {
+             if (checkConvergence(v_new, nrEstimate, kcl_error, 1e-6)) {
                  nrEstimate = v_new;
                  nrConverged = true;
                  break;
