@@ -353,12 +353,12 @@ inline void batchDiodePhysics(DiodeTensor& tensor, const std::vector<double>& vo
         double N = tensor.N[i];
         double Vt = tensor.Vt[i];
         double n_vt = N * Vt;
-        double Vcrit = 40.0 * n_vt;
+        double Vcrit = 30.0 * n_vt;
         
         double arg = tensor.v_d[i] / n_vt;
         
         // Linear continuation (branchless-style using std::min/max)
-        double arg_clamped = std::min(arg, 40.0);
+        double arg_clamped = std::min(arg, 30.0);
         double exp_arg = std::exp(arg_clamped);
         
         double i_base = Is * (exp_arg - 1.0);
@@ -441,11 +441,11 @@ inline void batchBJTPhysics(BJTTensor& tensor, const std::vector<double>& voltag
         double BetaF = tensor.BetaF[i];
         double BetaR = tensor.BetaR[i];
         
-        const double Vcrit = 40.0 * Vt;
+        const double Vcrit = 30.0 * Vt;
 
         auto linear_continuation_diode = [&](double v_j) -> std::pair<double, double> {
             double arg = v_j / Vt;
-            double arg_clamped = std::min(arg, 40.0);
+            double arg_clamped = std::min(arg, 30.0);
             
             double exp_val = std::exp(arg_clamped);
             double i_base = Is * (exp_val - 1.0);

@@ -65,7 +65,7 @@ inline T diode_current(T vd, const DiodeParams<P>& p)
  * Safe version for NR iteration. Clamps exponent to prevent inf/nan.
  */
 template <typename T, typename P>
-inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 40.0) 
+inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 30.0) 
 {
     // NASA Optimization: Keep params as scalars (double) to avoid Dual overhead
     auto n_vt = p.N * p.Vt;
@@ -107,9 +107,14 @@ inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 4
 inline double pnjlim(double vnew, double vold, double vt, double vcrit) {
     double vlim = vnew;
     
-    // Bypass limiting if we are in the linear continuation region (defined as > 40*Vt in physics)
+    // Bypass limiting if we are in the linear continuation region (defined as > 30*Vt in physics)
     // In this region, the device behaves as a linear resistor, so Newton-Raphson is stable/exact.
-    if (vold > 40.0 * vt && vnew > 40.0 * vt) {
+    if (vold > 30.0 * vt && vnew > 30.0 * vt) {
+        return vnew;
+    }
+    
+    // Bypass limiting in deep reverse bias (constant current region)
+    if (vold < -5.0 * vt && vnew < -5.0 * vt) {
         return vnew;
     }
 

@@ -162,7 +162,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     for (double &v : v_new) {
         if (std::isnan(v)) v = 0.0;
     }
-
+    
     // PN Junction Limiting (SPICE-Style pnjlim)
     // Apply proper voltage limiting to prevent exponential overshoot
     const double thermalVoltage = 0.02585;
@@ -229,7 +229,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
         limitJunction(nB, nE); // Vbe
         limitJunction(nB, nC); // Vbc
     }
-
+    
     // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
     double kcl_error = calculatePhysicalResiduals(netlist, v_new);
     final_kcl_error = kcl_error;

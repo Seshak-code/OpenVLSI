@@ -29,6 +29,8 @@ inline void stampResistor(int nodeI, int nodeJ, double resistance, MatrixConstru
 inline void stampVoltageSourceAsNorton(int nodePos, int nodeNeg, double voltage, 
                                         MatrixConstructor& matrixBuilder, std::vector<double>& rhsVector)
 {
+    // std::cout << "StampVSource: " << nodePos << " " << nodeNeg << " V=" << voltage << "\n";
+
     // We treat independent voltage sources as high-conductance Norton equivalents 
     // to keep the MNA matrix entirely in the voltage domain.
     double r_int = 1e-3;

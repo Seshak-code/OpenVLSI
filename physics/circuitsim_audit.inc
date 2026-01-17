@@ -24,7 +24,32 @@
       }
     }
 
-    // AUDIT 2: BJTs
+    // AUDIT 2: Current Sources
+    for (const auto &cs : netlist.globalBlock.currentSources) {
+      addRes(cs.nodePositive, -cs.current_A);
+      addRes(cs.nodeNegative, cs.current_A);
+    }
+
+    // AUDIT 3: Resistors
+    for (const auto &r : netlist.globalBlock.resistors) {
+       double v1 = getV(r.nodeTerminal1);
+       double v2 = getV(r.nodeTerminal2);
+       double i_r = (v1 - v2) / r.resistance_ohms;
+       addRes(r.nodeTerminal1, -i_r);
+       addRes(r.nodeTerminal2, i_r);
+    }
+
+    // AUDIT 4: Diodes
+    for (const auto &d : netlist.globalBlock.diodes) {
+       double v_a = getV(d.anode);
+       double v_c = getV(d.cathode);
+       DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N, d.thermalVoltage_V_T_V};
+       double i_d = diode_current_clamped(v_a - v_c, params, 30.0);
+       addRes(d.anode, -i_d);
+       addRes(d.cathode, i_d);
+    }
+
+    // AUDIT 5: BJTs
     for (const auto &q : netlist.globalBlock.bjts) {
         double v_c = getV(q.nodeCollector);
         double v_b = getV(q.base);
@@ -52,7 +77,7 @@
         if (std::abs(currents.Ie) > 10.0) report += "WARN: BJT " + q.instanceName + " Ie=" + std::to_string(currents.Ie) + " A\n";
     }
 
-    // AUDIT 3: KCL Check
+    // AUDIT 6: KCL Check
     for (int i=0; i<n; ++i) {
         if (std::abs(node_residuals[i]) > 10.0) {
             report += "FAIL: Node " + std::to_string(i+1) + " KCL Resid=" + std::to_string(node_residuals[i]) + " A. V=" + std::to_string(getV(i+1)) + "\n";

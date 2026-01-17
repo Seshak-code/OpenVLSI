@@ -2,6 +2,7 @@
 # Build Directories
 # ============================================
 build/
+build_desktop/
 build_wasm/
 build2/
 build-*/
@@ -57,6 +58,7 @@ desktop.ini
 # ============================================
 # Compiled Files & Executables
 # ============================================
+*.dSYM/
 *.app/
 *.exe
 *.out
@@ -76,6 +78,8 @@ AcuteSim
 AcuteSim.js
 AcuteSim.wasm
 AcuteSim.html
+run_debug
+test_diff_runner
 test_regression
 test_sensitivity
 
