@@ -223,6 +223,17 @@ target_include_directories(test_regression PRIVATE
 )
 target_compile_features(test_regression PUBLIC cxx_std_17)
 
+if(EMSCRIPTEN)
+    target_link_options(test_regression PRIVATE
+        "--bind" 
+        "-sWASM=1"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sEXIT_RUNTIME=1"
+        "-sEXPORTED_RUNTIME_METHODS=['FS']"
+    )
+endif()
+
+
 # Sensitivity Analysis Test (AD Gradient Check)
 add_executable(test_sensitivity 
     tests/test_sensitivity.cpp

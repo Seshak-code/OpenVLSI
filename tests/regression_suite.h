@@ -25,7 +25,7 @@ public:
         tests.push_back({name, test});
     }
 
-    void run(bool updateGolden = false) {
+    bool run(bool updateGolden = false) {
         std::cout << "==================================================\n";
         std::cout << " AUTOMATED REGRESSION SUITE\n";
         std::cout << " Tests: " << tests.size() << "\n";
@@ -42,13 +42,14 @@ public:
                 SolverStep result = t.testFunc();
                 
                 if (updateGolden) {
-                    db.update(t.name, result.nodeVoltages, result.stats.residual, result.stats.iterations, result.stats.converged);
+                    db.update(t.name, result.nodeVoltages, result.stats.residual, result.stats.iterations, result.stats.converged, result.topologyHash);
                     std::cout << "[UPDATED] (conv=" << (result.stats.converged ? "Y" : "N") 
                               << ", iter=" << result.stats.iterations 
-                              << ", res=" << result.stats.residual << ")\n";
+                              << ", res=" << result.stats.residual << ", hash=" << result.topologyHash << ")\n";
                     passed++;
                 } else {
-                    bool ok = db.compare(t.name, result.nodeVoltages);
+                    // Strict Tolerance: 1e-6 for DC
+                    bool ok = db.compare(t.name, result.nodeVoltages, result.topologyHash, 1e-6);
                     if (ok) {
                         std::cout << "[PASS] (conv=" << (result.stats.converged ? "Y" : "N") 
                                   << ", iter=" << result.stats.iterations 
@@ -73,6 +74,8 @@ public:
         std::cout << "==================================================\n";
         std::cout << " SUMMARY: " << passed << " Passed, " << failed << " Failed\n";
         std::cout << "==================================================\n";
+        
+        return (failed == 0);
     }
 };
 

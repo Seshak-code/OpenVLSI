@@ -14,7 +14,10 @@
 
 SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   if (netlist.numGlobalNodes == 0)
-    return {0.0, {}, {0, 0.0, true}};
+    return {0.0, {}, {0, 0.0, true}, 0};
+
+  // Ensure topology hash is fresh
+  netlist.globalBlock.computeTopologyHash();
 
   // Initialize SoA Block for this solve
   soaBlock = tensorizeBlock(netlist.globalBlock);
@@ -273,7 +276,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
       details = auditPhysicalResiduals(netlist, voltageEstimate);
   }
 
-  return {0.0, voltageEstimate, {total_iterations, final_kcl_error, converged, details}};
+  return {0.0, voltageEstimate, {total_iterations, final_kcl_error, converged, details}, netlist.globalBlock.topologyHash};
 }
 
 
@@ -281,7 +284,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
 SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
                                double currentTime) {
     if (netlist.numGlobalNodes == 0)
-        return {currentTime, {}, {0, 0.0, true}};
+        return {currentTime, {}, {0, 0.0, true}, 0};
 
     if (!arbiterInitialized) {
       arbiter.initialize(netlist);
@@ -451,11 +454,12 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
     }
 
     if (!simulationConverged)
-         return {currentTime, std::vector<double>(netlist.numGlobalNodes, 0.0), {lastResult.iterations, lastResult.finalResidual, false}};
+         return {currentTime, std::vector<double>(netlist.numGlobalNodes, 0.0), {lastResult.iterations, lastResult.finalResidual, false}, netlist.globalBlock.topologyHash};
 
     return {
         currentTime + actualTimeStep,
         finalVoltages,
-        {lastResult.iterations, lastResult.finalResidual, simulationConverged}
+        {lastResult.iterations, lastResult.finalResidual, simulationConverged},
+        netlist.globalBlock.topologyHash
     };
 }

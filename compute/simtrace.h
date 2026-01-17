@@ -29,6 +29,7 @@ struct SolverStep
     double time = 0.0;
     std::vector<double> nodeVoltages;
     SolverStats stats;
+    uint64_t topologyHash = 0;
 };
 
 class SolverTrace 

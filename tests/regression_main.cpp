@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     suite.registerTest("darlington_pair", Benchmarks::darlingtonPair);
 
     // Run Suite
-    suite.run(updateGolden);
+    bool success = suite.run(updateGolden);
 
-    return 0;
+    return success ? 0 : 1;
 }

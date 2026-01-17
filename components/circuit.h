@@ -34,6 +34,7 @@
  *   G[n1][n2] -= 1/R, G[n2][n1] -= 1/R
  */
 struct Resistor {
+    std::string name;             // e.g. "R1"
     int nodeTerminal1;            // First terminal (node index)
     int nodeTerminal2;            // Second terminal (node index)
     double resistance_ohms;       // Resistance in Ohms [Ω]
@@ -48,6 +49,7 @@ struct Resistor {
  * The capacitor is replaced by a conductance in parallel with a history current source.
  */
 struct Capacitor {
+    std::string name;             // e.g. "C1"
     int nodePlate1;               // Positive plate (node index)
     int nodePlate2;               // Negative plate (node index)
     double capacitance_farads;    // Capacitance in Farads [F]
@@ -66,6 +68,7 @@ struct Capacitor {
  * Inductor adds an auxiliary current variable to the MNA system.
  */
 struct Inductor {
+    std::string name;             // e.g. "L1"
     int nodeCoil1;                // First coil terminal (node index)
     int nodeCoil2;                // Second coil terminal (node index)
     double inductance_henries;    // Inductance in Henries [H]
@@ -497,33 +500,46 @@ struct TensorBlock {
         if (node > numInternalNodes) numInternalNodes = node;
     }
 
-    void addResistor(int n1, int n2, double R) {
+    void addResistor(const std::string& name, int n1, int n2, double R) {
         assert(n1 >= 0 && n2 >= 0 && "Node indices must be not negative");
         assert(R > 0 && "Resistance must be positive");
         if (isFrozen) return;
-        resistors.push_back({n1, n2, R});
+        resistors.push_back({name, n1, n2, R});
         updateNodeCount(n1); updateNodeCount(n2);
     }
-    void addCapacitor(int n1, int n2, double C) {
+    // Backward compatibility overload (generates name if missing, though typically netlist parser provides it)
+    void addResistor(int n1, int n2, double R) {
+        static int r_count = 0;
+        addResistor("R_AUTO_" + std::to_string(++r_count), n1, n2, R);
+    }
+    void addCapacitor(const std::string& name, int n1, int n2, double C) {
         assert(n1 >= 0 && n2 >= 0 && "Node indices must be not negative");
         assert(C > 0 && "Capacitance must be positive");
         if (isFrozen) return;
-        Capacitor cap = {n1, n2, C};
+        Capacitor cap = {name, n1, n2, C};
         // Initialize history with 3 slots (enough for Gear 3)
         cap.voltage_history.assign(3, 0.0);
         cap.current_history.assign(3, 0.0);
         capacitors.push_back(cap);
         updateNodeCount(n1); updateNodeCount(n2);
     }
-    void addInductor(int n1, int n2, double L) {
+    void addCapacitor(int n1, int n2, double C) {
+        static int c_count = 0;
+        addCapacitor("C_AUTO_" + std::to_string(++c_count), n1, n2, C);
+    }
+    void addInductor(const std::string& name, int n1, int n2, double L) {
         assert(n1 >= 0 && n2 >= 0 && "Node indices must be not negative");
         assert(L > 0 && "Inductance must be positive");
         if (isFrozen) return;
-        Inductor ind = {n1, n2, L};
+        Inductor ind = {name, n1, n2, L};
         ind.current_history.assign(3, 0.0);
         ind.voltage_history.assign(3, 0.0);
         inductors.push_back(ind);
         updateNodeCount(n1); updateNodeCount(n2);
+    }
+     void addInductor(int n1, int n2, double L) {
+        static int l_count = 0;
+        addInductor("L_AUTO_" + std::to_string(++l_count), n1, n2, L);
     }
     void addVoltageSource(int nPos, int nNeg, double V) {
         assert(nPos >= 0 && nNeg >= 0 && "Node indices must be not negative");
