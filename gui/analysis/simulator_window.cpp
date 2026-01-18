@@ -1,0 +1,231 @@
+#include "simulator_window.h"
+
+SimulatorWindow::SimulatorWindow(QWidget *parent) : QWidget(parent) {
+  auto *mainLayout = new QVBoxLayout(this);
+  mainLayout->setContentsMargins(20, 20, 20, 20);
+  mainLayout->setSpacing(15);
+
+  // Title
+  auto *title = new QLabel("⚡ Simulation Results", this);
+  title->setStyleSheet("font-size: 20px; font-weight: bold; color: #4CAF50;");
+  mainLayout->addWidget(title);
+
+  // Status Label
+  statusLabel = new QLabel("Ready. Click 'Start Simulation' to run.", this);
+  statusLabel->setStyleSheet("font-size: 14px; color: #888;");
+  mainLayout->addWidget(statusLabel);
+
+  // Tab Widget for Results
+  resultTabs = new QTabWidget(this);
+  mainLayout->addWidget(resultTabs, 1);
+
+  // Tab 1: Log Area
+  logArea = new QPlainTextEdit(this);
+  logArea->setReadOnly(true);
+  logArea->setPlaceholderText("Simulation output will appear here...");
+  logArea->setStyleSheet(
+      "QPlainTextEdit { background: #1e1e1e; color: #00ff00; font-family: monospace; font-size: 12px; border: 1px solid #444; }");
+  resultTabs->addTab(logArea, "Log");
+  
+  // Tab 2: Logic Analyzer (Phase 13.2)
+  logicAnalyzer = new LogicWaveformWidget(this);
+  resultTabs->addTab(logicAnalyzer, "Logic Analyzer");
+
+  // Run Button
+  btnRun = new QPushButton("▶ Start Simulation", this);
+  btnRun->setStyleSheet(
+      "QPushButton { background-color: #4CAF50; color: white; padding: 12px; font-size: 14px; border-radius: 5px; }"
+      "QPushButton:hover { background-color: #45a049; }");
+  mainLayout->addWidget(btnRun);
+
+  connect(btnRun, &QPushButton::clicked, this, &SimulatorWindow::startSimulation);
+
+  simTimer = new QTimer(this);
+  connect(simTimer, &QTimer::timeout, this, &SimulatorWindow::stepSimulation);
+}
+
+void SimulatorWindow::startSimulation() {
+  logArea->clear();
+  
+  if (netlist.numGlobalNodes == 0) {
+    logArea->appendPlainText("ERROR: No netlist provided!");
+    logArea->appendPlainText("Use 'Set Simulation' from schematic, then switch to this tab and click 'Start Simulation'.");
+    statusLabel->setText("❌ No circuit to simulate.");
+    return;
+  }
+
+  statusLabel->setText("🔄 Simulating...");
+  btnRun->setEnabled(false);
+
+  logArea->appendPlainText("=== Netlist Summary ===");
+  logArea->appendPlainText(QString("  Nodes: %1").arg(netlist.numGlobalNodes));
+  logArea->appendPlainText(QString("  Resistors: %1").arg(netlist.globalBlock.resistors.size()));
+  logArea->appendPlainText(QString("  Capacitors: %1").arg(netlist.globalBlock.capacitors.size()));
+  logArea->appendPlainText(QString("  Voltage Sources: %1").arg(netlist.globalBlock.voltageSources.size()));
+  logArea->appendPlainText(QString("  Current Sources: %1").arg(netlist.globalBlock.currentSources.size()));
+  logArea->appendPlainText(QString("  Diodes: %1").arg(netlist.globalBlock.diodes.size()));
+  logArea->appendPlainText(QString("  BJTs: %1").arg(netlist.globalBlock.bjts.size()));
+  logArea->appendPlainText(QString("  MOSFETs: %1").arg(netlist.globalBlock.mosfets.size()));
+  logArea->appendPlainText("");
+
+  // Reset Sim State
+  sim = CircuitSim();
+  sim.resetArbiter();
+  currentTime = 0.0;
+  trace.clear();
+  trace.clear();
+  trace.netlistName = "Schematic Circuit";
+  logicAnalyzer->clear();
+  logicAnalyzer->setTimeRange(totalTime);
+
+  // == DC Operating Point ==
+  logArea->appendPlainText("=== DC Operating Point ===");
+  SolverStep dcStep = sim.solveDC(netlist);
+  if (!dcStep.stats.converged) {
+    logArea->appendPlainText("ERROR: DC analysis failed to converge!");
+    logArea->appendPlainText(QString("  Iterations: %1, Residual: %2")
+        .arg(dcStep.stats.iterations).arg(dcStep.stats.residual, 0, 'e', 2));
+    
+    if (!dcStep.stats.error_detail.empty()) {
+        logArea->appendPlainText("--- DIAGNOSTICS ---");
+        logArea->appendPlainText(QString::fromStdString(dcStep.stats.error_detail));
+        logArea->appendPlainText("-------------------");
+    }
+
+    logArea->appendPlainText("Check for floating nodes or invalid circuit topology.");
+    logArea->appendPlainText("Partial solution (may be invalid):");
+    for (size_t i = 0; i < dcStep.nodeVoltages.size(); ++i) {
+      logArea->appendPlainText(QString("  V(node%1) = %2 V").arg(i+1).arg(dcStep.nodeVoltages[i], 0, 'f', 4));
+    }
+    statusLabel->setText("❌ DC OP failed.");
+    btnRun->setEnabled(true);
+    return;
+  }
+  logArea->appendPlainText(QString("Converged in %1 iterations (residual: %2)")
+      .arg(dcStep.stats.iterations).arg(dcStep.stats.residual, 0, 'e', 2));
+  logArea->appendPlainText("Initial node voltages:");
+  for (size_t i = 0; i < dcStep.nodeVoltages.size(); ++i) {
+    logArea->appendPlainText(QString("  V(node%1) = %2 V").arg(i+1).arg(dcStep.nodeVoltages[i], 0, 'f', 4));
+  }
+  logArea->appendPlainText("");
+
+  logArea->appendPlainText("=== Transient Analysis ===");
+  logArea->appendPlainText("Time          Probe Readings");
+  logArea->appendPlainText("-----------------------------");
+
+  // Start the non-blocking loop
+  simTimer->start(0);
+}
+
+void SimulatorWindow::stepSimulation() {
+  // Run a batch of steps per frame to keep UI responsive
+  for (int i = 0; i < 100; ++i) {
+    if (currentTime >= totalTime) {
+      simTimer->stop();
+      logArea->appendPlainText("");
+      logArea->appendPlainText("=== Simulation Complete ===");
+      statusLabel->setText("✅ Simulation finished.");
+      btnRun->setEnabled(true);
+      return;
+    }
+
+    // Perform one physics step
+    SolverStep step = sim.stepTransient(netlist, timeStep, currentTime);
+    
+    // Defensive guard: Check for convergence failure
+    if (!step.stats.converged) {
+      simTimer->stop();
+      logArea->appendPlainText("");
+      logArea->appendPlainText("=== SIMULATION FAILED ===");
+      logArea->appendPlainText(QString("Non-convergence at t=%1 ms").arg(currentTime * 1000, 0, 'f', 4));
+      logArea->appendPlainText("Try simplifying the circuit or checking for floating nodes.");
+      statusLabel->setText("❌ Simulation failed to converge.");
+      btnRun->setEnabled(true);
+      return;
+    }
+    
+    // Update state based on actual step taken
+    double actualDt = step.time - currentTime;
+    currentTime = step.time;
+
+    trace.addStep(currentTime, step.nodeVoltages, step.stats);
+
+    // Log output (decimate to avoid spamming the logs)
+    if (std::abs(std::fmod(currentTime, 0.0001)) < timeStep / 2.0) {
+      QString logLine = QString("%1 ms | ").arg(currentTime * 1000, 6, 'f', 3);
+      
+      if (!netlist.globalBlock.probes.empty()) {
+        // Show all probes
+        for (const auto& prb : netlist.globalBlock.probes) {
+          // Node 0 = ground (always 0V), other nodes are 1-indexed in solver
+          double v_pos = 0.0;
+          double v_neg = 0.0;
+          
+          // Handle ground node (0) vs circuit nodes (1+)
+          if (prb.nodePositive > 0 && prb.nodePositive <= (int)step.nodeVoltages.size()) {
+            v_pos = step.nodeVoltages[prb.nodePositive - 1];
+          }
+          if (prb.nodeNegative > 0 && prb.nodeNegative <= (int)step.nodeVoltages.size()) {
+            v_neg = step.nodeVoltages[prb.nodeNegative - 1];
+          }
+          
+          double v_diff = v_pos - v_neg;
+          logLine += QString("%1[n%2-n%3]: %4 V  ")
+                         .arg(QString::fromStdString(prb.name))
+                         .arg(prb.nodePositive)
+                         .arg(prb.nodeNegative)
+                         .arg(v_diff, 8, 'f', 4);
+        }
+      } else {
+        // Fallback: Show Node 1 if it exists
+        double v_out = 0.0;
+        if (step.nodeVoltages.size() >= 1)
+          v_out = step.nodeVoltages[0];
+        logLine += QString("V(1): %1 V").arg(v_out, 8, 'f', 4);
+      }
+
+      // --- Digital Bus Probes (Phase 13) ---
+      if (!netlist.globalBlock.busProbes.empty()) {
+        for (const auto& bp : netlist.globalBlock.busProbes) {
+             uint64_t val = 0;
+             QString binaryStr = "";
+             
+             // Process bits from MSB to LSB for reading
+             for (int i = bp.nodeIndices.size() - 1; i >= 0; --i) {
+                 int nodeIdx = bp.nodeIndices[i];
+                 double v = 0.0;
+                 if (nodeIdx > 0 && nodeIdx <= (int)step.nodeVoltages.size()) {
+                     v = step.nodeVoltages[nodeIdx - 1];
+                 }
+                 
+                 // Threshold Check
+                 if (v > bp.v_th_high) {
+                     val |= (1ULL << i);
+                     binaryStr += "1";
+                 } else if (v < bp.v_th_low) {
+                     binaryStr += "0";
+                 } else {
+                     binaryStr += "X"; // Metastable/Unknown
+                 }
+             }
+             
+             // Format: BUS: 0xDEAD (1101...)
+             logLine += QString("  %1: 0x%2")
+                 .arg(QString::fromStdString(bp.name))
+                 .arg(val, (bp.bit_width + 3) / 4, 16, QChar('0')).toUpper();
+             
+             // Phase 13.2: Stream to UI
+             if (logicAnalyzer) {
+                 BusProbe::DigitalSample s;
+                 s.time = currentTime;
+                 s.value = val;
+                 std::vector<BusProbe::DigitalSample> history = {s};
+                 logicAnalyzer->addBusData(bp.name, history, bp.bit_width);
+             }
+        }
+      }
+
+      logArea->appendPlainText(logLine);
+    }
+  }
+}
