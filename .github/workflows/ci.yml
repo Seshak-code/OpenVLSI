@@ -18,20 +18,31 @@ jobs:
           version: '6.8.0'
           host: 'windows'
           target: 'desktop'
-          arch: 'win64_msvc2019_64'
+          # FIX: Use msvc2022_64 to match Visual Studio 17 2022 generator
+          arch: 'win64_msvc2022_64'
           
       - name: Configure CMake
         run: |
-          cmake -S . -B out/build/windows-msvc -G "Visual Studio 17 2022" -A x64
+          cmake -S . -B out/build/windows-msvc -G "Visual Studio 17 2022" -A x64 -DQt6_DIR="${{ env.Qt6_DIR }}"
           
-      - name: Build
-        run: cmake --build out/build/windows-msvc --config Release
+      - name: Build Application
+        run: cmake --build out/build/windows-msvc --config Release --target AcuteSim
+        
+      - name: Build Regression Tests
+        run: cmake --build out/build/windows-msvc --config Release --target test_regression
+        
+      - name: Run Regression Suite
+        run: |
+          cd out/build/windows-msvc/Release
+          ./test_regression.exe
+        shell: bash
         
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AcuteSim-Windows
           path: out/build/windows-msvc/Release/AcuteSim.exe
+          if-no-files-found: warn
 
   build-macos:
     runs-on: macos-latest
@@ -52,11 +63,53 @@ jobs:
             -DCMAKE_PREFIX_PATH="$QT_PATH/lib/cmake" \
             -DCMAKE_BUILD_TYPE=Release
             
-      - name: Build
-        run: cmake --build out/build/macos
+      - name: Build Application
+        run: cmake --build out/build/macos --target AcuteSim
         
+      - name: Build Regression Tests
+        run: cmake --build out/build/macos --target test_regression
+        
+      - name: Run Regression Suite
+        run: |
+          cd out/build/macos
+          ./test_regression
+          
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AcuteSim-macOS
           path: out/build/macos/AcuteSim.app
+          if-no-files-found: warn
+
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build qt6-base-dev libgl1-mesa-dev
+          
+      - name: Configure CMake
+        run: |
+          cmake -S . -B out/build/linux -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+            
+      - name: Build Application
+        run: cmake --build out/build/linux --target AcuteSim
+        
+      - name: Build Regression Tests
+        run: cmake --build out/build/linux --target test_regression
+        
+      - name: Run Regression Suite
+        run: |
+          cd out/build/linux
+          ./test_regression
+          
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AcuteSim-Linux
+          path: out/build/linux/AcuteSim
+          if-no-files-found: warn
