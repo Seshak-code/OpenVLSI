@@ -92,6 +92,8 @@ qt_add_executable(${PROJECT_NAME}
     gui/editors/schematic_editor.h
     gui/editors/schematic_view.cpp
     gui/editors/schematic_view.h
+    gui/editors/component_wizard.cpp
+    gui/editors/component_wizard.h
     gui/components/visual_component.cpp
     gui/components/visual_component.h
     gui/widgets/ai_assistant.cpp

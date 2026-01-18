@@ -3,6 +3,7 @@
 #include <string>
 #include <algorithm>
 #include <map>
+#include <set>
 #include <cassert>
 #include <iostream>
 #include "graph_canonical.h"
@@ -797,3 +798,203 @@ public:
         globalBlock.busProbes.push_back(bp);
     }
 };
+
+// ============================================================================
+// SUBCIRCUIT EXTRACTION (Phase 1.7 - Component Abstraction)
+// ============================================================================
+
+/**
+ * PortInfo - Describes an external port for subcircuit extraction.
+ * Used to specify which nodes in the source netlist become pins in the subcircuit.
+ */
+struct PortInfo {
+    std::string pinName;      // Name for the pin (e.g., "VIN", "VOUT", "GND")
+    int globalNodeId;         // Node ID in the source TensorNetlist
+    bool isPowerPin = false;  // True for VDD/VSS pins (affects symbol rendering)
+};
+
+/**
+ * extractSubCircuit
+ * 
+ * Converts a flat TensorNetlist into a reusable SubCircuitDefinition.
+ * 
+ * @param source      The TensorNetlist to extract from (typically a Bench/Block design)
+ * @param name        Name for the new subcircuit (e.g., "MyInverter")
+ * @param description Human-readable description
+ * @param ports       List of PortInfo specifying which nodes become external pins
+ * @return            A SubCircuitDefinition ready for library storage
+ * 
+ * The algorithm:
+ * 1. Create a new TensorBlock from the source's globalBlock.
+ * 2. Build a node remapping table (global node → local node).
+ * 3. Port nodes are mapped to sequential local indices (1, 2, 3...).
+ * 4. Internal-only nodes are mapped after port nodes.
+ * 5. All component node references are rewritten using the remap table.
+ * 6. The resulting SubCircuitDefinition has pinToInternalNode set correctly.
+ */
+inline SubCircuitDefinition extractSubCircuit(
+    const TensorNetlist& source,
+    const std::string& name,
+    const std::string& description,
+    const std::vector<PortInfo>& ports)
+{
+    SubCircuitDefinition result;
+    result.name = name;
+    result.description = description;
+    result.pinCount = static_cast<int>(ports.size());
+    
+    // Build the pin names and port-to-node mapping
+    // Local node 0 = internal ground (if present)
+    // Local nodes 1..N = external pins
+    // Local nodes N+1.. = internal nodes
+    
+    std::map<int, int> globalToLocal;  // Global node → Local node
+    int nextLocalNode = 1;  // Start at 1 (0 is reserved for ground)
+    
+    // Step 1: Map port nodes first (in order specified)
+    for (size_t i = 0; i < ports.size(); ++i) {
+        const auto& port = ports[i];
+        result.pinNames.push_back(port.pinName);
+        
+        if (globalToLocal.find(port.globalNodeId) == globalToLocal.end()) {
+            globalToLocal[port.globalNodeId] = nextLocalNode;
+            result.pinToInternalNode[static_cast<int>(i)] = nextLocalNode;
+            nextLocalNode++;
+        } else {
+            // Port references an already-mapped node (shared pin)
+            result.pinToInternalNode[static_cast<int>(i)] = globalToLocal[port.globalNodeId];
+        }
+    }
+    
+    // Step 2: Collect all nodes used in the source netlist
+    std::set<int> allNodes;
+    const auto& block = source.globalBlock;
+    
+    for (const auto& r : block.resistors) {
+        allNodes.insert(r.nodeTerminal1);
+        allNodes.insert(r.nodeTerminal2);
+    }
+    for (const auto& c : block.capacitors) {
+        allNodes.insert(c.nodePlate1);
+        allNodes.insert(c.nodePlate2);
+    }
+    for (const auto& l : block.inductors) {
+        allNodes.insert(l.nodeCoil1);
+        allNodes.insert(l.nodeCoil2);
+    }
+    for (const auto& vs : block.voltageSources) {
+        allNodes.insert(vs.nodePositive);
+        allNodes.insert(vs.nodeNegative);
+    }
+    for (const auto& cs : block.currentSources) {
+        allNodes.insert(cs.nodePositive);
+        allNodes.insert(cs.nodeNegative);
+    }
+    for (const auto& d : block.diodes) {
+        allNodes.insert(d.anode);
+        allNodes.insert(d.cathode);
+    }
+    for (const auto& m : block.mosfets) {
+        allNodes.insert(m.drain);
+        allNodes.insert(m.gate);
+        allNodes.insert(m.source);
+        allNodes.insert(m.body);
+    }
+    for (const auto& b : block.bjts) {
+        allNodes.insert(b.nodeCollector);
+        allNodes.insert(b.base);
+        allNodes.insert(b.emitter);
+    }
+    
+    // Step 3: Map internal-only nodes
+    for (int node : allNodes) {
+        if (node == 0) continue;  // Ground stays as 0
+        if (globalToLocal.find(node) == globalToLocal.end()) {
+            globalToLocal[node] = nextLocalNode++;
+        }
+    }
+    globalToLocal[0] = 0;  // Ground is always 0
+    
+    // Helper lambda to remap a node
+    auto remap = [&](int globalNode) -> int {
+        auto it = globalToLocal.find(globalNode);
+        return (it != globalToLocal.end()) ? it->second : 0;
+    };
+    
+    // Step 4: Copy and remap all components
+    TensorBlock& out = result.internalBlock;
+    out.name = name + "_internal";
+    out.numInternalNodes = nextLocalNode - 1;
+    
+    // Resistors
+    for (const auto& r : block.resistors) {
+        Resistor newR = r;
+        newR.nodeTerminal1 = remap(r.nodeTerminal1);
+        newR.nodeTerminal2 = remap(r.nodeTerminal2);
+        out.resistors.push_back(newR);
+    }
+    
+    // Capacitors
+    for (const auto& c : block.capacitors) {
+        Capacitor newC = c;
+        newC.nodePlate1 = remap(c.nodePlate1);
+        newC.nodePlate2 = remap(c.nodePlate2);
+        out.capacitors.push_back(newC);
+    }
+    
+    // Inductors
+    for (const auto& l : block.inductors) {
+        Inductor newL = l;
+        newL.nodeCoil1 = remap(l.nodeCoil1);
+        newL.nodeCoil2 = remap(l.nodeCoil2);
+        out.inductors.push_back(newL);
+    }
+    
+    // Voltage Sources (Note: These become internal sources in the subcircuit)
+    for (const auto& vs : block.voltageSources) {
+        VoltageSource newVS = vs;
+        newVS.nodePositive = remap(vs.nodePositive);
+        newVS.nodeNegative = remap(vs.nodeNegative);
+        out.voltageSources.push_back(newVS);
+    }
+    
+    // Current Sources
+    for (const auto& cs : block.currentSources) {
+        CurrentSource newCS = cs;
+        newCS.nodePositive = remap(cs.nodePositive);
+        newCS.nodeNegative = remap(cs.nodeNegative);
+        out.currentSources.push_back(newCS);
+    }
+    
+    // Diodes
+    for (const auto& d : block.diodes) {
+        Diode newD = d;
+        newD.anode = remap(d.anode);
+        newD.cathode = remap(d.cathode);
+        out.diodes.push_back(newD);
+    }
+    
+    // MOSFETs
+    for (const auto& m : block.mosfets) {
+        Mosfet newM = m;
+        newM.drain = remap(m.drain);
+        newM.gate = remap(m.gate);
+        newM.source = remap(m.source);
+        newM.body = remap(m.body);
+        out.mosfets.push_back(newM);
+    }
+    
+    // BJTs
+    for (const auto& b : block.bjts) {
+        BJT newB = b;
+        newB.nodeCollector = remap(b.nodeCollector);
+        newB.base = remap(b.base);
+        newB.emitter = remap(b.emitter);
+        out.bjts.push_back(newB);
+    }
+    
+    // Note: Probes, BusProbes, and other runtime-only structures are NOT copied
+    // to the subcircuit definition (they are measurement tools, not circuit elements).
+    
+    return result;
+}

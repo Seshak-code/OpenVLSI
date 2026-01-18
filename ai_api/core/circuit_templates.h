@@ -3,7 +3,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
-#include "../gui/gui_types.h"
+#include "../../gui/core/gui_types.h"
 
 /**
  * circuit_templates.h - Predefined Circuit Topology Templates

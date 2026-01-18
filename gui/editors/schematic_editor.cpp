@@ -1,4 +1,5 @@
 #include "schematic_editor.h"
+#include "component_wizard.h"
 #include "../../ai_api/system/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
@@ -1068,6 +1069,32 @@ QWidget* SchematicEditor::createRibbon() {
         "QPushButton:hover { background: #444; }"
     );
     layout->addWidget(toolButtons[ComponentType::Probe]);
+    
+    // Separator before export tools
+    QFrame* sep2 = new QFrame();
+    sep2->setFrameShape(QFrame::VLine);
+    sep2->setStyleSheet("color: #555;");
+    layout->addWidget(sep2);
+    
+    // Extract as Component button (Phase 1.7)
+    QPushButton* extractBtn = new QPushButton("📦 Extract Component");
+    extractBtn->setFixedHeight(35);
+    extractBtn->setStyleSheet(
+        "QPushButton { background: #333; color: #4CAF50; border: 1px solid #4CAF50; border-radius: 3px; padding: 5px 10px; }"
+        "QPushButton:hover { background: #3a5a3a; }"
+    );
+    connect(extractBtn, &QPushButton::clicked, this, [this](){
+        ComponentWizard wizard(this, this);
+        if (wizard.exec() == QDialog::Accepted && wizard.wasSuccessful()) {
+            SubCircuitDefinition def = wizard.getResult();
+            // TODO: Save to library file
+            // For now, just log success
+            statusLabel->setText(QString("Extracted: %1 (%2 pins)")
+                .arg(QString::fromStdString(def.name))
+                .arg(def.pinCount));
+        }
+    });
+    layout->addWidget(extractBtn);
 
     layout->addStretch();
     return ribbon;
