@@ -83,51 +83,49 @@ qt_standard_project_setup()
 # Create executable
 qt_add_executable(${PROJECT_NAME} 
     main.cpp
-    gui/mainwindow.cpp
-    gui/mainwindow.h
-    gui/simulator_window.cpp
-    gui/simulator_window.h
-    gui/schematic_editor.cpp
-    gui/schematic_editor_sync.cpp
-    gui/schematic_editor.h
-    gui/schematic_view.cpp
-    gui/schematic_view.h
-    gui/visual_component.cpp
-    gui/visual_component.h
-    gui/ai_assistant.cpp
-    gui/ai_assistant.h
-    gui/component_library.cpp
-    gui/component_library.h
-    gui/schematic_editor_api.cpp
-    gui/system_inspector.cpp
-    gui/system_inspector.h
-    gui/design_flow.cpp
-    gui/design_flow.cpp
-    gui/design_flow.h
-    gui/logic_analyzer.cpp
-    gui/logic_analyzer.cpp
-    gui/logic_analyzer.h
-    gui/hdl_editor.cpp
-    gui/hdl_editor.h
-    gui/welcome_widget.cpp
-    gui/welcome_widget.h
-    ai_api/schema_api.cpp
-    ai_api/schema_api.h
-    ai_api/context_engine.cpp
-    ai_api/context_engine.h
-    ai_api/simulation_api.h
-    ai_api/simulation_trace.cpp
-    ai_api/simulation_trace.h
-    ai_api/failure_classifier.cpp
-    ai_api/failure_classifier.h
-    ai_api/speculative_runner.cpp
-    ai_api/speculative_runner.h
-    ai_api/prompt_builder.cpp
-    ai_api/prompt_builder.h
-    ai_api/topology_analyzer.cpp
-    ai_api/topology_analyzer.h
-    ai_api/feedback_loop.cpp
-    ai_api/feedback_loop.h
+    gui/core/mainwindow.cpp
+    gui/core/mainwindow.h
+    gui/analysis/simulator_window.cpp
+    gui/analysis/simulator_window.h
+    gui/editors/schematic_editor.cpp
+    gui/editors/schematic_editor_sync.cpp
+    gui/editors/schematic_editor.h
+    gui/editors/schematic_view.cpp
+    gui/editors/schematic_view.h
+    gui/components/visual_component.cpp
+    gui/components/visual_component.h
+    gui/widgets/ai_assistant.cpp
+    gui/widgets/ai_assistant.h
+    gui/widgets/component_library.cpp
+    gui/widgets/component_library.h
+    gui/editors/schematic_editor_api.cpp
+    gui/analysis/system_inspector.cpp
+    gui/analysis/system_inspector.h
+    gui/widgets/design_flow.cpp
+    gui/widgets/design_flow.h
+    gui/analysis/logic_analyzer.cpp
+    gui/analysis/logic_analyzer.h
+    gui/editors/hdl_editor.cpp
+    gui/editors/hdl_editor.h
+    gui/core/welcome_widget.cpp
+    gui/core/welcome_widget.h
+    ai_api/system/schema_api.cpp
+    ai_api/system/schema_api.h
+    ai_api/context/context_engine.cpp
+    ai_api/context/context_engine.h
+    ai_api/simulation/simulation_api.h
+    ai_api/simulation/simulation_trace.cpp
+    ai_api/simulation/simulation_trace.h
+    ai_api/analysis/failure_classifier.cpp
+    ai_api/analysis/failure_classifier.h
+    ai_api/simulation/speculative_runner.cpp
+    ai_api/simulation/speculative_runner.h
+    ai_api/context/prompt_builder.cpp
+    ai_api/context/prompt_builder.h
+    ai_api/analysis/topology_analyzer.cpp
+    ai_api/analysis/topology_analyzer.h
+    ai_api/system/feedback_loop.cpp
+    ai_api/system/feedback_loop.h
     compute/physics_tensors.cpp
     compute/superposition.cpp
     compute/circuitsim_solver.cpp
@@ -137,10 +135,20 @@ qt_add_executable(${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/compute
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 
