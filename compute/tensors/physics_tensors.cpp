@@ -1,5 +1,5 @@
 #include "physics_tensors.h"
-#include "../components/circuit.h"
+#include "../../components/circuit.h"
 #include <iostream>
 
 /*

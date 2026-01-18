@@ -10,7 +10,7 @@
 
 #include "circuitsim.h"
 #include "physics_tensors.h"
-#include "../physics/device_physics.h"
+#include "../../physics/device_physics.h"
 
 SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   if (netlist.numGlobalNodes == 0)

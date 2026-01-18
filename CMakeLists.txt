@@ -126,10 +126,10 @@ qt_add_executable(${PROJECT_NAME}
     ai_api/analysis/topology_analyzer.h
     ai_api/system/feedback_loop.cpp
     ai_api/system/feedback_loop.h
-    compute/physics_tensors.cpp
-    compute/superposition.cpp
-    compute/circuitsim_solver.cpp
-    compute/webgpu_solver.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+    compute/solvers/webgpu_solver.cpp
     components/circuit.h
 )
 
@@ -142,6 +142,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/core
@@ -219,13 +223,17 @@ install(TARGETS ${PROJECT_NAME}
 # Regression Test Suite (Standalone Backend)
 add_executable(test_regression 
     tests/regression_main.cpp
-    compute/physics_tensors.cpp
-    compute/superposition.cpp
-    compute/circuitsim_solver.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
 )
 target_include_directories(test_regression PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
@@ -245,13 +253,17 @@ endif()
 # Sensitivity Analysis Test (AD Gradient Check)
 add_executable(test_sensitivity 
     tests/test_sensitivity.cpp
-    compute/physics_tensors.cpp
-    compute/superposition.cpp
-    compute/circuitsim_solver.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
 )
 target_include_directories(test_sensitivity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
@@ -261,13 +273,17 @@ target_compile_features(test_sensitivity PUBLIC cxx_std_17)
 # Superposition Test
 add_executable(test_superposition 
     tests/test_superposition.cpp
-    compute/physics_tensors.cpp
-    compute/superposition.cpp
-    compute/circuitsim_solver.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
 )
 target_include_directories(test_superposition PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
