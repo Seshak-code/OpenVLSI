@@ -1054,7 +1054,7 @@ TensorNetlist GridScene::generateNetlist() {
             // relative to ground.
             // Terminals: 0 is Output (VDD), 1 is GND.
             if (nodes.size() >= 2) {
-                netlist.addVoltageSource(nodes[0], nodes[1], val); 
+                netlist.addVoltageSource(nodes[0], nodes[1], val, "RailDriver"); 
             }
             continue;
         }
@@ -1070,7 +1070,7 @@ TensorNetlist GridScene::generateNetlist() {
                 netlist.addInductor(nodes[0], nodes[1], val);
                 break;
             case ComponentType::VoltageSource:
-                netlist.addVoltageSource(nodes[0], nodes[1], val);
+                netlist.addVoltageSource(nodes[0], nodes[1], val, "Generic");
                 break;
             case ComponentType::CurrentSource:
                 netlist.addCurrentSource(nodes[0], nodes[1], val);

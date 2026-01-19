@@ -105,6 +105,7 @@ struct VoltageSource {
     int nodePositive;             // Positive terminal (+)
     int nodeNegative;             // Negative terminal (-)
     double voltage_V;             // DC Voltage [V]
+    std::string type = "";        // "RailDriver", "Generic", etc.
 };
 
 /*
@@ -542,10 +543,10 @@ struct TensorBlock {
         static int l_count = 0;
         addInductor("L_AUTO_" + std::to_string(++l_count), n1, n2, L);
     }
-    void addVoltageSource(int nPos, int nNeg, double V) {
+    void addVoltageSource(int nPos, int nNeg, double V, std::string type = "") {
         assert(nPos >= 0 && nNeg >= 0 && "Node indices must be not negative");
         if (isFrozen) return;
-        voltageSources.push_back({nPos, nNeg, V});
+        voltageSources.push_back({nPos, nNeg, V, type});
         updateNodeCount(nPos); updateNodeCount(nNeg);
     }
     void addCurrentSource(int nPos, int nNeg, double I) {
@@ -745,8 +746,8 @@ public:
         if (n1 > numGlobalNodes) numGlobalNodes = n1;
         if (n2 > numGlobalNodes) numGlobalNodes = n2;
     }
-    void addVoltageSource(int nPos, int nNeg, double V) {
-        globalBlock.addVoltageSource(nPos, nNeg, V);
+    void addVoltageSource(int nPos, int nNeg, double V, std::string type = "") {
+        globalBlock.addVoltageSource(nPos, nNeg, V, type);
         if (nPos > numGlobalNodes) numGlobalNodes = nPos;
         if (nNeg > numGlobalNodes) numGlobalNodes = nNeg;
     }

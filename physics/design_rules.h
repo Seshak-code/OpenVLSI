@@ -315,16 +315,54 @@ ViolationReport validate(const TensorBlock& block) {
     }
     
     // Check for independent sources (mode-dependent)
+    // BLOCK MODE: No sources allowed (unless we add exceptions later)
     if constexpr (!Constraints::allowIdealSources) {
-        if (!block.voltageSources.empty()) {
-            report.add(Violation::INDEPENDENT_SOURCE, -1, -1,
-                      "Independent voltage source not allowed in " + 
-                      modeToString(Mode) + " mode");
+        // SYSTEM MODE EXCEPTION: Allow "RailDriver"
+        bool isSystem = (Mode == DesignMode::SYSTEM);
+        
+        for (const auto& vs : block.voltageSources) {
+            bool valid = false;
+            // In System Mode, RailDriver is allowed
+            if (isSystem && vs.type == "RailDriver") valid = true;
+            
+            if (!valid) {
+                // If it's System mode, specifically complain about Generic Source
+                std::string msg = isSystem 
+                    ? "Generic Voltage Source not allowed in System Mode (Use RailDriver)"
+                    : "Independent voltage source not allowed in " + modeToString(Mode) + " mode";
+                
+                // Use a different code if we want specific highlighting? 
+                // For now, INDEPENDENT_SOURCE works.
+                report.add(Violation::INDEPENDENT_SOURCE, -1, vs.nodePositive, msg);
+            }
         }
+
         if (!block.currentSources.empty()) {
             report.add(Violation::INDEPENDENT_SOURCE, -1, -1,
                       "Independent current source not allowed in " + 
                       modeToString(Mode) + " mode");
+        }
+    }
+    
+    // Check Multiple Drivers (Short Circuit Risk)
+    // Only flag if strictly enforced, OR if it's a hard voltage short (always bad)
+    // Note: Series batteries are safe. Parallel are bad.
+    // Heuristic: Check collisions on Positive Terminal (Node Driver model)
+    {
+        std::map<int, int> posDriverCount;
+        for (const auto& vs : block.voltageSources) {
+            if (vs.nodePositive > 0) { // Ignore ground
+                posDriverCount[vs.nodePositive]++;
+            }
+        }
+        
+        for (const auto& kv : posDriverCount) {
+            if (kv.second > 1) {
+                report.add(Violation::MULTIPLE_DRIVERS, -1, kv.first,
+                          "Node " + std::to_string(kv.first) + 
+                          " driven by " + std::to_string(kv.second) + 
+                          " voltage sources (Potential Short)");
+            }
         }
     }
     
@@ -370,9 +408,22 @@ inline std::string ViolationReport::toJSON() const {
 
 inline ViolationEntry::Severity ViolationEntry::getSeverity(DesignMode mode) const {
     switch (mode) {
-        case DesignMode::BENCH:  return ModeConstraints<DesignMode::BENCH>::severity(code);
-        case DesignMode::BLOCK:  return ModeConstraints<DesignMode::BLOCK>::severity(code);
-        case DesignMode::SYSTEM: return ModeConstraints<DesignMode::SYSTEM>::severity(code);
+        case DesignMode::BENCH: {
+            using S = ViolationEntry::Severity;
+            // Add MULTIPLE_DRIVERS to Bench rules? usually OK to experiment, but hard short is bad.
+            if (code & Violation::MULTIPLE_DRIVERS) return S::WARN; 
+            return ModeConstraints<DesignMode::BENCH>::severity(code);
+        }
+        case DesignMode::BLOCK: {
+            using S = ViolationEntry::Severity;
+            if (code & Violation::MULTIPLE_DRIVERS) return S::ERR;
+            return ModeConstraints<DesignMode::BLOCK>::severity(code);
+        }
+        case DesignMode::SYSTEM: {
+            using S = ViolationEntry::Severity;
+            if (code & Violation::MULTIPLE_DRIVERS) return S::ERR;
+            return ModeConstraints<DesignMode::SYSTEM>::severity(code);
+        }
     }
     return Severity::INFO;
 }
