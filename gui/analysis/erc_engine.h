@@ -131,6 +131,7 @@ public:
         checkFloatingGates(scene);
         checkShortCircuits(scene);
         checkNearMisses(scene);
+        checkMultipleDrivers(scene);
 
         // Mode-Specific Checks
         if (currentMode_ == AppMode::BENCH_TEST) {
@@ -435,6 +436,59 @@ private:
             }
         }
     }
+    void checkMultipleDrivers(QGraphicsScene* scene) {
+        // Build map of netID -> List of Drivers
+        QMap<int, QList<QGraphicsItem*>> netDrivers;
+        
+        for (QGraphicsItem* item : scene->items()) {
+            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+                // Determine if this component IS a voltage driver
+                bool isDriver = (comp->type == ComponentType::VoltageSource || 
+                                 comp->type == ComponentType::RailDriver ||
+                                 comp->type == ComponentType::VCVS ||
+                                 comp->type == ComponentType::CCVS);
+                                 
+                // In Block Mode, Input Ports are also drivers (conceptually)
+                if (currentMode_ == AppMode::BLOCK_SUBSYSTEM && comp->type == ComponentType::PowerPort) {
+                    // Primitive direction check based on name? 
+                    // For now, assume ALL ports count as potential drivers to warn against conflicts
+                    // Better: check if name implies output? No, let's stick to electrical sources.
+                    // Actually, connecting a VoltageSource to an Input PowerPort is bad.
+                    // Connecting two Input PowerPorts is fine.
+                    // Connecting Output PowerPort to VoltageSource is bad.
+                }
+
+                if (isDriver) {
+                    // Find which net it drives (Terminal 1 is usually +, Terminal 0 is -)
+                    // For VSource: 1 is +
+                    QVector<QPointF> terms = comp->getTerminals();
+                    if (terms.size() >= 2) {
+                        QPointF pPlus = comp->mapToScene(terms[1]);
+                        QPair<int,int> key = {qRound(pPlus.x()), qRound(pPlus.y())};
+                        if (pointToNetID_.contains(key)) {
+                            int netID = pointToNetID_[key];
+                            netDrivers[netID].append(comp);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Report Conflicts
+        for (auto it = netDrivers.begin(); it != netDrivers.end(); ++it) {
+            if (it.value().size() > 1) {
+                // Conflict!
+                Violation v(
+                    ViolationType::MULTIPLE_DRIVERS,
+                    QString("Net is driven by %1 sources (Short Circuit risk!)").arg(it.value().size()),
+                    it.value().first()->scenePos().toPoint()
+                );
+                v.affectedItems = it.value();
+                violations_.append(v);
+            }
+        }
+    }
+    
     void checkBlockModeRules(QGraphicsScene* scene) {
         bool hasPorts = false;
         
@@ -446,7 +500,7 @@ private:
                     violations_.append(Violation(
                         ViolationType::ILLEGAL_SOURCE,
                         "Independent sources are forbidden in Block simulations. Use Ports.",
-                        comp->pos().toPoint()
+                        comp->scenePos().toPoint() // Use absolute scene coordinates
                     ));
                 }
                 
@@ -461,7 +515,7 @@ private:
             violations_.append(Violation(
                 ViolationType::MISSING_PORTS,
                 "Block subsystem requires at least one Input/Output Port.",
-                QPoint(0,0)
+                QPoint(-9999, -9999) // Global error
             ));
         }
     }
@@ -481,7 +535,7 @@ private:
                      violations_.append(Violation(
                         ViolationType::ILLEGAL_DRIVER,
                         "Generic Voltage Sources forbidden in System Integration. Use RailDriver.",
-                        comp->pos().toPoint()
+                        comp->scenePos().toPoint() 
                     ));
                 }
             }
@@ -491,7 +545,7 @@ private:
              violations_.append(Violation(
                 ViolationType::ILLEGAL_DRIVER,
                 "System needs a Rail Driver (Battery/Regulator) to power the circuit.",
-                QPoint(0,0)
+                QPoint(-9999, -9999) 
             ));
         }
     }

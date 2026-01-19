@@ -728,10 +728,22 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
             break;
 
         case ComponentType::PowerPort:
-            // Small square port
-            painter->drawRect(-10, -10, 20, 20);
-            painter->setPen(Qt::gray);
-            painter->drawText(QRectF(-40, -25, 80, 15), Qt::AlignCenter, value);
+            // Pentagon / Arrow shape for Port
+            {
+                QPolygonF poly;
+                poly << QPointF(-15, -10) << QPointF(5, -10) 
+                     << QPointF(15, 0)   // Point
+                     << QPointF(5, 10) << QPointF(-15, 10);
+                painter->drawPolygon(poly);
+                
+                painter->setPen(Qt::white); // Ensure text is visible
+                // Center text better
+                painter->drawText(QRectF(-15, -10, 20, 20), Qt::AlignCenter, value.mid(0, 3)); 
+                
+                // Full label outside
+                painter->setPen(Qt::gray);
+                painter->drawText(QRectF(-40, -25, 80, 15), Qt::AlignCenter, value);
+            }
             break;
 
         case ComponentType::PowerVdd:

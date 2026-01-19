@@ -68,7 +68,7 @@ void AiAssistantPanel::appendMessage(const QString& sender, const QString& msg, 
 
 void AiAssistantPanel::processCommand(const QString& cmd) {
     if (!editorContext) {
-        appendMessage("System", "⚠️ No active schematic found.\nPlease create a new schematic (File > New) or select an active tab.");
+        appendMessage("System", "[!] No active schematic found.\nPlease create a new schematic (File > New) or select an active tab.");
         return;
     }
 
@@ -83,7 +83,7 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
             QVector<QPointF> path;
             path << QPointF(0, 0) << QPointF(100, 0) << QPointF(100, 100);
             editorContext->placeWirePath(path);
-            appendMessage("Copilot", "✅ Placed demo wire path!");
+            appendMessage("Copilot", "[OK] Placed demo wire path!");
         }
         else if (cmd == "/parts") {
             QStringList parts = editorContext->getAvailableComponents();
@@ -92,15 +92,15 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
         else if (cmd == "/erc") {
             QStringList errors = editorContext->runERC();
             if (errors.isEmpty()) {
-                appendMessage("Copilot", "✅ ERC Passed! No issues found.");
+                appendMessage("Copilot", "[OK] ERC Passed! No issues found.");
             } else {
-                appendMessage("Copilot", "⚠️ ERC Issues:\n - " + errors.join("\n - "));
+                appendMessage("Copilot", "[!] ERC Issues:\n - " + errors.join("\n - "));
             }
         }
         else if (cmd == "/probe") {
             // Mode-aware probe placement for testing
             if (!editorContext) {
-                appendMessage("Copilot", "⚠️ No active schematic. Create one first.");
+                appendMessage("Copilot", "[!] No active schematic. Create one first.");
                 return;
             }
             
@@ -244,7 +244,7 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
         else if (cmd.startsWith("/validate")) {
             // Check mode
             if (!editorContext || editorContext->getMode() != AppMode::BLOCK_SUBSYSTEM) {
-                appendMessage("Copilot", "⚠️ Validation is primarily for Block Mode subsystems. Switch mode to Block Subsystem checking.");
+                appendMessage("Copilot", "[!] Validation is primarily for Block Mode subsystems. Switch mode to Block Subsystem checking.");
             }
             
             // Extract JSON args if present
@@ -255,7 +255,7 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
                 if (!doc.isNull() && doc.isObject()) {
                     stimuli = doc.object();
                 } else {
-                     appendMessage("Copilot", "⚠️ Invalid JSON stimuli format. Running with defaults.");
+                     appendMessage("Copilot", "[!] Invalid JSON stimuli format. Running with defaults.");
                 }
             }
             
@@ -294,9 +294,9 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
             QJsonObject result = AIAPI::validateComponent("CurrentCanvas", stimuli);
             
             if (result["passed"].toBool()) {
-                 appendMessage("Copilot", "✅ **Validation Passed**\n" + result["report"].toString());
+                 appendMessage("Copilot", "[OK] **Validation Passed**\n" + result["report"].toString());
             } else {
-                 appendMessage("Copilot", "❌ **Validation Failed**\n" + result["report"].toString());
+                 appendMessage("Copilot", "[X] **Validation Failed**\n" + result["report"].toString());
             }
 
             // Visible Harness Creation
@@ -304,7 +304,7 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
                 if (editorContext) {
                     if (MainWindow* mw = qobject_cast<MainWindow*>(editorContext->parent())) {
                         mw->openSchematicTab("Auto-Harness", result["harnessState"].toObject());
-                        appendMessage("Copilot", "🔬 **Test Harness Created**: Check the new 'Auto-Harness' tab.");
+                        appendMessage("Copilot", "[Lab] **Test Harness Created**: Check the new 'Auto-Harness' tab.");
                     }
                 }
             }
@@ -373,7 +373,7 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
                 showDiffCard(req);
                 return;
             } else {
-                appendMessage("Copilot", QString("⚠️ Could not find terminals for %1 or %2").arg(id1).arg(id2));
+                appendMessage("Copilot", QString("[!] Could not find terminals for %1 or %2").arg(id1).arg(id2));
                 return;
             }
         }
@@ -518,11 +518,11 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
         QJsonArray paths = AIAPI::ContextEngine::analyzeSignalPaths();
         
         if (paths.isEmpty()) {
-            appendMessage("Copilot", "⚠️ No signal paths found. Make sure you have sources (V/I) and a ground.");
+            appendMessage("Copilot", "[!] No signal paths found. Make sure you have sources (V/I) and a ground.");
             return;
         }
         
-        QString response = "📡 **Signal Path Analysis:**\n\n";
+        QString response = "[Signal] **Signal Path Analysis:**\n\n";
         for (const auto& pathVal : paths) {
             QJsonObject path = pathVal.toObject();
             response += QString("**Source:** %1 → **Sink:** %2\n").arg(path["source"].toString()).arg(path["sink"].toString());
@@ -548,15 +548,15 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
         QJsonArray suggestions = AIAPI::ContextEngine::getDebugSuggestions();
         
         if (suggestions.isEmpty()) {
-            appendMessage("Copilot", "✅ No issues detected. Circuit looks good!");
+            appendMessage("Copilot", "[OK] No issues detected. Circuit looks good!");
             return;
         }
         
-        QString response = "🔍 **Debug Suggestions:**\n\n";
+        QString response = "[Search] **Debug Suggestions:**\n\n";
         for (const auto& sugVal : suggestions) {
             QJsonObject sug = sugVal.toObject();
             int priority = sug["priority"].toInt();
-            QString icon = (priority == 1) ? "🔴" : ((priority == 2) ? "🟡" : "🔵");
+            QString icon = (priority == 1) ? "[High]" : ((priority == 2) ? "[Med]" : "[Low]");
             response += QString("%1 **%2**\n   %3\n\n").arg(icon).arg(sug["node"].toString()).arg(sug["reason"].toString());
         }
         
@@ -588,7 +588,7 @@ void AiAssistantPanel::showDiffCard(const ChangeRequest& request) {
     cardLayout->setSpacing(8);
     
     // Header
-    QLabel* header = new QLabel("📋 <b>Proposed Change</b>");
+    QLabel* header = new QLabel("[Plan] <b>Proposed Change</b>");
     header->setStyleSheet("color: #FFD700; font-size: 14px;");
     cardLayout->addWidget(header);
     
@@ -616,14 +616,14 @@ void AiAssistantPanel::showDiffCard(const ChangeRequest& request) {
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
     
-    QPushButton* approveBtn = new QPushButton("✅ Approve");
+    QPushButton* approveBtn = new QPushButton("[OK] Approve");
     approveBtn->setStyleSheet(
         "QPushButton { background-color: #28A745; color: white; border: none; padding: 6px 16px; font-weight: bold; border-radius: 4px; }"
         "QPushButton:hover { background-color: #218838; }"
     );
     connect(approveBtn, &QPushButton::clicked, this, &AiAssistantPanel::onApproveRequest);
     
-    QPushButton* rejectBtn = new QPushButton("❌ Reject");
+    QPushButton* rejectBtn = new QPushButton("[X] Reject");
     rejectBtn->setStyleSheet(
         "QPushButton { background-color: #DC3545; color: white; border: none; padding: 6px 16px; font-weight: bold; border-radius: 4px; }"
         "QPushButton:hover { background-color: #C82333; }"
@@ -643,13 +643,13 @@ void AiAssistantPanel::showDiffCard(const ChangeRequest& request) {
 }
 
 void AiAssistantPanel::onApproveRequest() {
-    appendMessage("Copilot", "✅ Approved! Executing...");
+    appendMessage("Copilot", "[OK] Approved! Executing...");
     executeChangeRequest(pendingRequest);
     clearDiffCard();
 }
 
 void AiAssistantPanel::onRejectRequest() {
-    appendMessage("Copilot", "❌ Rejected. No changes made.");
+    appendMessage("Copilot", "[X] Rejected. No changes made.");
     clearDiffCard();
 }
 
@@ -701,7 +701,7 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
                 offset = QPoint(clearSpot.x() - minX, clearSpot.y() - minY);
                 
                 appendMessage("Copilot", 
-                    QString("📍 Relocating template to clear space: (%1, %2)")
+                    QString("[Loc] Relocating template to clear space: (%1, %2)")
                         .arg(clearSpot.x()).arg(clearSpot.y()));
             }
         }
@@ -752,7 +752,7 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
             if (success) {
                 successCount++;
             } else {
-                appendMessage("Copilot", QString("⚠️ Failed to place %1 at (%2, %3). Area might be occupied.").arg(type).arg(x).arg(y));
+                appendMessage("Copilot", QString("[!] Failed to place %1 at (%2, %3). Area might be occupied.").arg(type).arg(x).arg(y));
             }
         }
         else if (actionType == "deleteComponent") {
@@ -762,7 +762,7 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
         }
         else if (actionType == "runSimulation") {
             // Trigger simulation (this would connect to SimulatorWindow)
-            appendMessage("Copilot", "🔬 Simulation requested. Open the Simulator window to see results.");
+            appendMessage("Copilot", "[Lab] Simulation requested. Open the Simulator window to see results.");
             successCount++;
         }
         else if (actionType == "placeProbe") {

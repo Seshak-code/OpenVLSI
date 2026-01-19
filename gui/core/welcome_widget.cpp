@@ -41,9 +41,9 @@ WelcomeWidget::WelcomeWidget(QWidget* parent) : QWidget(parent) {
         mainLayout->addWidget(btn, 0, Qt::AlignCenter);
     };
     
-    createButton("🧪  Bench Test", "Ideal sources, fast prototyping, implicit ground", AppMode::BENCH_TEST, "#2D8A2D");
-    createButton("📦  Block Subsystem", "Reusable blocks with PowerPort interfaces", AppMode::BLOCK_SUBSYSTEM, "#8A8A2D");
-    createButton("⚡  System Integration", "Full system with realistic PDN and ICs", AppMode::SYSTEM_INTEGRATION, "#007ACC");
+    createButton("[T]  Bench Test", "Ideal sources, fast prototyping, implicit ground", AppMode::BENCH_TEST, "#2D8A2D");
+    createButton("[B]  Block Subsystem", "Reusable blocks with PowerPort interfaces", AppMode::BLOCK_SUBSYSTEM, "#8A8A2D");
+    createButton("[S]  System Integration", "Full system with realistic PDN and ICs", AppMode::SYSTEM_INTEGRATION, "#007ACC");
     
     mainLayout->addStretch();
     

@@ -533,58 +533,76 @@ void GridScene::updateERC() {
 }
 
 void GridScene::drawViolationMarkers(QPainter* painter) {
+     int globalErrorOffset = 0;
+    
     for (const auto& v : currentViolations_) {
+        // --- 1. HANDLE GLOBAL SENTINEL ERRORS (Banner Style) ---
+        if (v.location.x() == -9999 && v.location.y() == -9999) {
+            if (views().isEmpty()) continue;
+            
+            // Draw a floating banner in the top-left corner of the view
+            // Since drawForeground is in scene coords, we map from view (0,0)
+            QRectF viewRect = views().first()->mapToScene(views().first()->viewport()->rect()).boundingRect();
+            QPointF bannerPos = viewRect.topLeft() + QPointF(10, 10 + globalErrorOffset);
+            
+            painter->setPen(QPen(QColor(200, 50, 50), 1));
+            painter->setBrush(QColor(40, 0, 0, 200));
+            QRectF bannerRect(bannerPos.x(), bannerPos.y(), 300, 20);
+            painter->drawRect(bannerRect);
+            
+            painter->setPen(Qt::white);
+            QFont f = painter->font();
+            f.setPixelSize(12);
+            painter->setFont(f);
+            painter->drawText(bannerRect.adjusted(5,0,0,0), Qt::AlignLeft | Qt::AlignVCenter, v.message);
+            
+            globalErrorOffset += 25;
+            continue;
+        }
+        
+        // --- 2. HANDLE LOCAL MARKERS ---
         QPoint loc = v.location;
         
         // Choose color based on severity
         QColor color;
         switch (v.severity) {
             case ERC::Severity::ERROR:
-                color = QColor(255, 60, 60, 200);   // Red
+                color = QColor(255, 60, 60);   // Red
                 break;
             case ERC::Severity::WARNING:
-                color = QColor(255, 200, 0, 200);   // Yellow/Orange
+                color = QColor(255, 200, 0);   // Yellow/Orange
                 break;
             case ERC::Severity::INFO:
-                color = QColor(100, 180, 255, 180); // Light blue
+                color = QColor(100, 180, 255); // Light blue
                 break;
         }
-        
-        // Draw marker circle
-        painter->setPen(QPen(color, 2));
-        painter->setBrush(color.lighter(150));
-        painter->drawEllipse(QPointF(loc.x(), loc.y()), 12, 12);
-        
-        // Draw icon based on violation type
-        painter->setPen(QPen(Qt::white, 2));
-        QFont font = painter->font();
-        font.setPixelSize(12);
-        font.setBold(true);
-        painter->setFont(font);
         
         QString icon;
         switch (v.type) {
-            case ERC::ViolationType::NO_GROUND:
-                icon = "⏚"; // Ground symbol
-                break;
-            case ERC::ViolationType::FLOATING_NODE:
-                icon = "○"; // Open circle
-                break;
-            case ERC::ViolationType::FLOATING_GATE:
-                icon = "⚡"; // Lightning
-                break;
-            case ERC::ViolationType::SHORT_CIRCUIT:
-                icon = "✖"; // X
-                break;
-            case ERC::ViolationType::NEAR_MISS:
-                icon = "↔"; // Arrows
-                break;
-            default:
-                icon = "?";
-                break;
+            case ERC::ViolationType::NO_GROUND:      icon = "GND"; break; // Was ⏚
+            case ERC::ViolationType::FLOATING_NODE:  icon = "NC"; break;  // Was ○ (Not Connected)
+            case ERC::ViolationType::FLOATING_GATE:  icon = "FLT"; break; // Was ⚡
+            case ERC::ViolationType::SHORT_CIRCUIT:  icon = "SHR"; break; // Was ✖
+            case ERC::ViolationType::MULTIPLE_DRIVERS: icon = "CNF"; break; // Was ⚔ (Conflict)
+            case ERC::ViolationType::NEAR_MISS:      icon = "GAP"; break; // Was ↔
+            case ERC::ViolationType::OPEN_DRAIN:     icon = "OD"; break;  // Was ⏒
+            case ERC::ViolationType::ILLEGAL_SOURCE: icon = "BAD"; break; // Was 🚫
+            case ERC::ViolationType::MISSING_PORTS:  icon = "P"; break;   // P represents Port
+            case ERC::ViolationType::ILLEGAL_DRIVER: icon = "PWR"; break; // Was 🔋
+            case ERC::ViolationType::MIXED_MODES:    icon = "MOD"; break; // Was !
+            default:                                 icon = "?"; break;
         }
         
-        QRectF textRect(loc.x() - 8, loc.y() - 8, 16, 16);
+        QFont font = painter->font();
+        font.setPixelSize(10); // Find simpler font size for text
+        font.setBold(true);
+        painter->setFont(font);
+
+        QRectF textRect(loc.x() - 15, loc.y() - 10, 30, 20); // Wider rect for text
+        // Add a subtle glow/outline for readability against grid
+        painter->setPen(QColor(0,0,0,150));
+        painter->drawText(textRect.translated(1,1), Qt::AlignCenter, icon); // Shadow
+        painter->setPen(color);
         painter->drawText(textRect, Qt::AlignCenter, icon);
         
         // For near-miss violations with auto-fix, draw dashed line to target
@@ -847,19 +865,163 @@ TensorNetlist GridScene::generateNetlist() {
         return -1; // Not on any wire
     };
     
-    // Step 3: Populate Netlist & Enforce Counts
-    // IMPORTANT: Skip probes in this loop - they are attached AFTER all nodes are finalized
+    // ============================================================================
+    // Step 2: Analyze Connectivity (Identify Roots & Grounds)
+    // ============================================================================
+    QSet<int> uniqueNets;
+    QMap<int, bool> netHasGround;
+    QSet<int> rootHasGround;
+    QMap<int, int> netConnectionCount;
+    int nodeCounter = 1;
+    // finalNodeMap is defined earlier
+
+    // Scan components for Ground and populate netHasGround
+    for (auto* item : allItems) {
+        auto* c = dynamic_cast<VisualComponent*>(item);
+        if (c && c->type == ComponentType::Ground) {
+             for (const auto& localP : c->getTerminals()) {
+                QPointF sceneP = c->mapToScene(localP);
+                QPair<int,int> key = {qRound(sceneP.x()), qRound(sceneP.y())};
+                if (pointToNetID.contains(key)) {
+                    netHasGround[pointToNetID[key]] = true;
+                }
+             }
+        }
+    }
+    
+    // Populate uniqueNets and rootHasGround (Initial Pass)
+    for (auto it = pointToNetID.begin(); it != pointToNetID.end(); ++it) {
+        int rawID = it.value();
+        int root = findSet(rawID);
+        uniqueNets.insert(root);
+        
+        if (netHasGround.contains(rawID) && netHasGround[rawID]) {
+             rootHasGround.insert(root);
+        }
+    }
+    
+    if (netHasGround.contains(0)) rootHasGround.insert(findSet(0));
+
+    // ============================================================================
+    // Step 3: Global Net Naming Optimization (Standardized Global Rails)
+    // ============================================================================
+    // Priority:
+    // 1. Global Power Symbol (VDD/VSS) -> Forces Net Name
+    // 2. User Label (Future)
+    // 3. Auto-Generated (nodeX)
+    
+    QMap<int, std::string> forcedNetNames;
+    
+    // Scan for Global Power Symbols
     for (auto* item : allItems) {
         auto* c = dynamic_cast<VisualComponent*>(item);
         if (!c) continue;
-        if (c->type == ComponentType::Probe) continue; // Probes handled separately
         
-        QVector<int> nodes;
-        for (QPointF p : c->getTerminals()) {
-            nodes.append(getFinalNode(c->mapToScene(p)));
+        if (c->type == ComponentType::PowerVdd || c->type == ComponentType::PowerVss) {
+            // Get the net this symbol is attached to
+            // Check terminals (index 0 is the pin)
+            QVector<QPointF> terms = c->getTerminals();
+            if (terms.isEmpty()) continue;
+            
+            QPointF sceneP = c->mapToScene(terms[0]);
+            QPair<int,int> key = {qRound(sceneP.x()), qRound(sceneP.y())};
+            
+            if (pointToNetID.contains(key)) {
+                int rawID = pointToNetID[key];
+                int rootID = findSet(rawID);
+                
+                if (c->type == ComponentType::PowerVdd) {
+                    forcedNetNames[rootID] = "VDD";
+                } else {
+                    forcedNetNames[rootID] = "VSS";
+                    // If VSS is tied to Ground component elsewhere, it becomes 0.
+                    // But if it's floating relative to 0 (isolated ground), it keeps VSS name.
+                }
+            }
+        }
+    }
+    
+    // Build Standard Map
+    for (int id : uniqueNets) {
+        if (rootHasGround.contains(id)) {
+            finalNodeMap[id] = 0; // GND is always 0
+        } else {
+             // Check forced names
+             if (forcedNetNames.contains(id)) {
+                 // For now, CuteApp uses int-based nodes. 
+                 // We don't change the integer ID in the map (that's for the solver matrix)
+                 // But we DO need to ensure all disjoint nets named "VDD" are merged.
+             }
+             finalNodeMap[id] = nodeCounter++;
+        }
+    }
+    
+    // RE-MERGE based on Global Names!
+    // If two disjoint nets are both labeled "VDD", they must be electrically the same.
+    QMap<std::string, int> nameToRootID;
+    for (auto it = forcedNetNames.begin(); it != forcedNetNames.end(); ++it) {
+        std::string name = it.value();
+        int rootID = it.key();
+        
+        if (nameToRootID.contains(name)) {
+            unionSets(rootID, nameToRootID[name]); // Merge disjoint VDDs
+        } else {
+            nameToRootID[name] = rootID;
+        }
+    }
+    
+    // Re-build unique sets after named merges
+    uniqueNets.clear();
+    rootHasGround.clear();
+    finalNodeMap.clear();
+    
+    // Re-scan ground after merge
+    for (auto it = netConnectionCount.begin(); it != netConnectionCount.end(); ++it) {
+        int root = findSet(it.key());
+        if (!uniqueNets.contains(root)) uniqueNets.insert(root);
+        if (netHasGround[it.key()]) rootHasGround.insert(root);
+    }
+    
+    // Assign Final Node IDs (0 for ground, 1..N for others)
+    nodeCounter = 1;
+    for (int id : uniqueNets) {
+        if (rootHasGround.contains(id)) {
+            finalNodeMap[id] = 0;
+        } else {
+            finalNodeMap[id] = nodeCounter++;
+        }
+    }
+
+    // =========================================================================
+    // Step 4: Component Netlisting (Standardized)
+    // ============================================================================
+    // netlist.reset() not needed
+    
+    for (auto* item : allItems) {
+        auto* c = dynamic_cast<VisualComponent*>(item);
+        if (!c) continue;
+        
+        // Skip purely visual symbols that don't stamp (unless they are sources)
+        if (c->type == ComponentType::Select || c->type == ComponentType::Wire || 
+            c->type == ComponentType::Probe || c->type == ComponentType::Ground ||
+            c->type == ComponentType::PowerPort || c->type == ComponentType::PowerVdd ||
+            c->type == ComponentType::PowerVss) continue;
+
+        // Get Node IDs for terminals
+        std::vector<int> nodes;
+        for (const auto& localP : c->getTerminals()) {
+            QPointF sceneP = c->mapToScene(localP);
+            QPair<int,int> key = {qRound(sceneP.x()), qRound(sceneP.y())};
+            if (pointToNetID.contains(key)) {
+                int rawID = pointToNetID[key];
+                int rootID = findSet(rawID);
+                nodes.push_back(finalNodeMap[rootID]);
+            } else {
+                nodes.push_back(0); 
+            }
         }
         
-        double val = parseValue(c->value); 
+        double val = parseValue(c->value);
         
         // Safety Checks
         int expected = 0;
@@ -871,16 +1033,32 @@ TensorNetlist GridScene::generateNetlist() {
             case ComponentType::CurrentSource: expected = 2; break;
             case ComponentType::Diode: expected = 2; break;
             case ComponentType::SchottkyDiode: expected = 2; break;
-            case ComponentType::Mosfet: expected = 3; break; // G, D, S
-            case ComponentType::Bjt: expected = 3; break; // C, B, E
+            case ComponentType::Mosfet: expected = 3; break; 
+            case ComponentType::Bjt: expected = 3; break;
+            case ComponentType::RailDriver: expected = 0; break; // Handled specially
+            case ComponentType::VCVS: expected = 4; break;
+            case ComponentType::CCVS: expected = 4; break;
+            case ComponentType::VCCS: expected = 4; break;
+            case ComponentType::CCCS: expected = 4; break;
             default: break;
         }
         
-        if (c->type != ComponentType::Ground && nodes.size() < expected) {
+        if (c->type != ComponentType::Ground && c->type != ComponentType::RailDriver && nodes.size() < expected) {
             emit messageLogged(QString("Warning: Component %1 has incomplete terminals!").arg(c->name));
-            continue;
+           continue;
         }
         
+        // SPECIAL HANDLING: RailDriver -> VoltageSource
+        if (c->type == ComponentType::RailDriver) {
+            // RailDriver explicitly drives the net it is on (which should be VDD)
+            // relative to ground.
+            // Terminals: 0 is Output (VDD), 1 is GND.
+            if (nodes.size() >= 2) {
+                netlist.addVoltageSource(nodes[0], nodes[1], val); 
+            }
+            continue;
+        }
+
         switch(c->type) {
             case ComponentType::Resistor:
                 netlist.addResistor(nodes[0], nodes[1], val);
@@ -897,32 +1075,25 @@ TensorNetlist GridScene::generateNetlist() {
             case ComponentType::CurrentSource:
                 netlist.addCurrentSource(nodes[0], nodes[1], val);
                 break;
-            case ComponentType::Ground:
-                break;
             case ComponentType::Diode:
                 netlist.addDiode(nodes[0], nodes[1], 1e-14); 
                 break;
             case ComponentType::SchottkyDiode:
-                netlist.addDiode(nodes[0], nodes[1], 200e-9); // Higher Is for lower Vf (~0.3V)
+                netlist.addDiode(nodes[0], nodes[1], 200e-9); 
                 break;
             case ComponentType::Mosfet:
                 {
                    double W = parseValue(c->params.value("W", "1u"));
                    double L = parseValue(c->params.value("L", "180n"));
                    std::string model = c->params.value("Model", "nfet").toStdString();
-                   // Indices: 0=G, 1=D, 2=S
                    netlist.addMosfet(c->name.toStdString(), nodes[1], nodes[0], nodes[2], nodes[2], model, W, L); 
                 }
                 break;
             case ComponentType::Bjt:
                 {
                     std::string model = c->params.value("Model", "2N2222").toStdString();
-                    // Maps: 0=Base, 1=Collector, 2=Emitter (from VisualComponent)
-                    // API: addBJT(name, C, B, E, ...)
                     if (nodes.size() >= 3)
                         netlist.addBJT(c->name.toStdString(), nodes[1], nodes[0], nodes[2], model, true);
-                    else
-                         emit messageLogged(QString("Warning: BJT %1 pins definition incomplete").arg(c->name));
                 }
                 break;
             default:
@@ -931,15 +1102,12 @@ TensorNetlist GridScene::generateNetlist() {
     }
     
     // =========================================================================
-    // Step 4: Attach Probes to EXISTING nodes (AFTER all components stamped)
-    // Probes are ideal oscilloscope cables - they find the nearest component
-    // terminal on the wire they touch and use that terminal's existing node ID.
+    // Step 5: Attach Probes to EXISTING nodes
     // =========================================================================
     auto findNearestTerminalNodeOnWire = [&](QPointF tipPos) -> int {
         int tx = qRound(tipPos.x());
         int ty = qRound(tipPos.y());
         
-        // First, find which wire the tip is touching
         VisualWire* touchedWire = nullptr;
         double minWireDist = 1e9;
         
@@ -952,7 +1120,6 @@ TensorNetlist GridScene::generateNetlist() {
             QPointF p2 = wire->mapToScene(l.p2());
             QPointF p(tx, ty);
             
-            // Distance from tip to wire segment
             double l2 = QLineF(p1, p2).length() * QLineF(p1, p2).length();
             double d = 0;
             if (l2 == 0) d = QLineF(p1, p).length();
@@ -968,33 +1135,27 @@ TensorNetlist GridScene::generateNetlist() {
             }
         }
         
-        if (!touchedWire) return -1; // Not touching any wire
+        if (!touchedWire) return -1;
         
-        // Now find the wire's net ID using its endpoints (which we DID register)
         QLineF wl = touchedWire->line();
         QPointF wp1 = touchedWire->mapToScene(wl.p1());
         QPointF wp2 = touchedWire->mapToScene(wl.p2());
         
-        // Check if wire endpoints are in our map
         QPair<int,int> key1 = {qRound(wp1.x()), qRound(wp1.y())};
         QPair<int,int> key2 = {qRound(wp2.x()), qRound(wp2.y())};
         
         if (pointToNetID.contains(key1)) {
             int rawID = pointToNetID[key1];
             int rootID = findSet(rawID);
-            if (finalNodeMap.contains(rootID)) {
-                return finalNodeMap[rootID];
-            }
+            if (finalNodeMap.contains(rootID)) return finalNodeMap[rootID];
         }
         if (pointToNetID.contains(key2)) {
             int rawID = pointToNetID[key2];
             int rootID = findSet(rawID);
-            if (finalNodeMap.contains(rootID)) {
-                return finalNodeMap[rootID];
-            }
+            if (finalNodeMap.contains(rootID)) return finalNodeMap[rootID];
         }
         
-        return -1; // Wire not connected to any known node
+        return -1;
     };
     
     // Attach all probes
@@ -1007,7 +1168,6 @@ TensorNetlist GridScene::generateNetlist() {
         int negNode = findNearestTerminalNodeOnWire(c->probeNegativeTip->scenePos());
         
         if (posNode >= 0 && negNode >= 0) {
-            // Both tips connected to valid existing nodes
             netlist.addProbe(c->name.toStdString(), posNode, negNode);
             emit messageLogged(QString("Probe %1: measuring V(node%2) - V(node%3)")
                 .arg(c->name).arg(posNode).arg(negNode));
@@ -1019,95 +1179,32 @@ TensorNetlist GridScene::generateNetlist() {
     
     return netlist; 
 }
-
 // ============================================================================
 // ERC (Electrical Rule Check)
 // ============================================================================
 QStringList GridScene::runERC() {
+    // Delegate fully to the ERC Engine
+    // ercEngine_ is a member object, no check needed.
+    
+    // Set current mode
+    auto* editor = qobject_cast<SchematicEditor*>(parent());
+    if (editor) {
+        ercEngine_.setMode(editor->getMode()); 
+    }
+    
+    // Run Check
+    QList<ERC::Violation> violations = ercEngine_.runFullCheck(this);
+    
+    // Convert to StringList for legacy compatibility / UI display
     QStringList errors;
-    
-    // --- Build Connectivity (Duplicated logic from generateNetlist, could be refactored) ---
-    QMap<QPair<int,int>, int> pointToNetID;
-    int nextNetID = 1;
-    
-    auto getNetID = [&](QPointF p) -> int {
-        QPair<int,int> key = {(int)round(p.x()), (int)round(p.y())};
-        if (!pointToNetID.contains(key)) {
-            pointToNetID[key] = nextNetID++;
-        }
-        return pointToNetID[key];
-    };
-    
-    QMap<int, int> merges;
-    std::function<int(int)> findSet = [&](int id) {
-        while (merges.contains(id)) id = merges[id];
-        return id;
-    };
-    
-    auto unionSets = [&](int id1, int id2) {
-        int r1 = findSet(id1), r2 = findSet(id2);
-        if (r1 != r2) { if (r1 < r2) merges[r2] = r1; else merges[r1] = r2; }
-    };
-    
-    // Wire Traversal - CRITICAL: Use scene coordinates
-    QList<QGraphicsItem*> allItems = items();
-    for (auto* item : allItems) {
-        if (auto* w = dynamic_cast<VisualWire*>(item)) {
-            if (!w->isVisible()) continue;
-            QLineF line = w->line();
-            QPointF sceneP1 = w->mapToScene(line.p1());
-            QPointF sceneP2 = w->mapToScene(line.p2());
-            int x1 = (int)round(sceneP1.x()), y1 = (int)round(sceneP1.y());
-            int x2 = (int)round(sceneP2.x()), y2 = (int)round(sceneP2.y());
-            int startID = getNetID(QPointF(x1, y1));
-            if (x1 == x2) { for (int y = std::min(y1,y2); y <= std::max(y1,y2); y += GRID_STEP) unionSets(startID, getNetID(QPointF(x1, y))); }
-            else if (y1 == y2) { for (int x = std::min(x1,x2); x <= std::max(x1,x2); x += GRID_STEP) unionSets(startID, getNetID(QPointF(x, y1))); }
-            else { unionSets(startID, getNetID(QPointF(x2, y2))); }
-        }
+    for (const auto& v : violations) {
+        QString prefix = (v.severity == ERC::Severity::ERROR) ? "Error" : 
+                        ((v.severity == ERC::Severity::WARNING) ? "Warning" : "Info");
+        errors << QString("[%1] %2").arg(prefix).arg(v.message);
     }
     
-    // Component Terminals
-    for (auto* item : allItems) {
-        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            for (const auto& localP : c->getTerminals()) getNetID(c->mapToScene(localP));
-        }
-    }
-    
-    // Count connections per net
-    QMap<int, int> netConnectionCount; // Root ID -> Count
-    for (auto* item : allItems) {
-        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            for (const auto& localP : c->getTerminals()) {
-                int rawID = getNetID(c->mapToScene(localP));
-                int rootID = findSet(rawID);
-                netConnectionCount[rootID]++;
-            }
-        }
-    }
-    
-    // --- ERC Checks ---
-    
-    // 1. Missing Ground
-    bool hasGround = false;
-    for (auto* item : allItems) {
-        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if (c->type == ComponentType::Ground) { hasGround = true; break; }
-        }
-    }
-    if (!hasGround) {
-        errors << "ERC Error: No Ground component found!";
-    }
-    
-    // 2. Floating Nodes (nets with only 1 connection)
-    for (auto it = netConnectionCount.begin(); it != netConnectionCount.end(); ++it) {
-        if (it.value() == 1) {
-            errors << QString("ERC Warning: Net has only 1 connection (floating?)");
-        }
-    }
-    
-    // 3. Unconnected Components (Any component not touching a wire?)
-    // Simple heuristic: If a pin's net has only 1 connection, it's from this pin alone.
-    // Already covered by #2. More advanced: check if pin touches a wire endpoint.
+    // Trigger repaint to show markers
+    update();
     
     return errors;
 }
@@ -1184,7 +1281,7 @@ QWidget* SchematicEditor::createRibbon() {
     layout->addWidget(sep2);
     
     // Extract as Component button (Phase 1.7)
-    QPushButton* extractBtn = new QPushButton("📦 Extract Component");
+    QPushButton* extractBtn = new QPushButton("[ ] Extract Component");
     extractBtn->setFixedHeight(35);
     extractBtn->setStyleSheet(
         "QPushButton { background: #333; color: #4CAF50; border: 1px solid #4CAF50; border-radius: 3px; padding: 5px 10px; }"
