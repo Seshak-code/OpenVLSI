@@ -83,7 +83,19 @@ QString routeWire(const RoutingConstraints& constraints) {
     }
     
     editor->placeWirePath(scaledPoints);
+    editor->placeWirePath(scaledPoints);
     return "WIRE_OK"; // TODO: Return actual wire IDs
+}
+
+bool optimizePlacement(const QString& componentId) {
+    // TODO: Implement rotation logic to minimize wire length/crossovers
+    return true; 
+}
+
+QString routeWithPhysics(const RoutingConstraints& constraints, const WirePhysics& physics) {
+    // TODO: Adjust width/spacing based on physics (current, crosstalk)
+    // For now, delegate to standard routing
+    return routeWire(constraints);
 }
 
 // Stub/Simple implementations for others

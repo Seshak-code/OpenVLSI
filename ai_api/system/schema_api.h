@@ -68,6 +68,24 @@ struct RoutingConstraints {
     bool allowVias;              // For multi-layer routing (future)
 };
 
+struct WirePhysics {
+    double currentRating;        // Amps (determines trace width)
+    double frequency;            // Hz (skin effect, impedance control)
+    double maxCrosstalkDb;       // Max allowed crosstalk (e.g., -60dB)
+    bool isDifferential;         // Requires differential pair routing
+    double impedanceTarget;      // Ohms (e.g., 50 or 100 for diff pairs)
+};
+
+/**
+ * Limit/Optimize component orientation for reduced wire length/crossovers.
+ */
+bool optimizePlacement(const QString& componentId);
+
+/**
+ * Route a wire with detailed physical constraints.
+ */
+QString routeWithPhysics(const RoutingConstraints& constraints, const WirePhysics& physics);
+
 /**
  * Route a wire with collision avoidance.
  * Returns: Wire ID or empty string if routing fails

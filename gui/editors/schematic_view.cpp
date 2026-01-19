@@ -7,6 +7,7 @@ SchematicView::SchematicView(QGraphicsScene* scene, QWidget* parent)
     setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     setDragMode(QGraphicsView::RubberBandDrag);
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 void SchematicView::wheelEvent(QWheelEvent* event) {

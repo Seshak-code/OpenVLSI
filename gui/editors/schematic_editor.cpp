@@ -7,6 +7,8 @@
 #include <QGraphicsRectItem>
 #include <cmath>
 #include <QDebug>
+#include <QMenu>
+#include <QAction>
 
 // ============================================================================
 // WIRE COMPONENT
@@ -243,7 +245,26 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             clearGhostWires();
             emit messageLogged("Wiring finished.");
         } else {
-            setTool(ComponentType::Select);
+            // Context Menu
+            QGraphicsItem* item = itemAt(event->scenePos(), QTransform());
+            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+                QMenu menu;
+                QAction* rotateAction = menu.addAction("Rotate (R)");
+                QAction* flipAction = menu.addAction("Flip (F)");
+                QAction* deleteAction = menu.addAction("Delete (Del)");
+                
+                QAction* selected = menu.exec(QCursor::pos());
+                if (selected == rotateAction) {
+                    comp->rotate90();
+                } else if (selected == flipAction) {
+                    comp->flip();
+                } else if (selected == deleteAction) {
+                    removeItem(comp);
+                    delete comp;
+                }
+            } else {
+                 setTool(ComponentType::Select);
+            }
         }
     }
 }
