@@ -22,6 +22,7 @@
 #include <QSplitter>
 #include "gui_types.h"
 #include "welcome_widget.h"
+#include "problems_panel.h"
 
 // ============================================================================
 // MAIN WINDOW
@@ -72,7 +73,7 @@ private:
     AiAssistantPanel* aiPanel;
 
     QDockWidget* messagesDock;
-    QTableWidget* messageTable;
+    ProblemsPanel* problemsPanel;
 
     // UI Setup Methods
     void setupMenus();

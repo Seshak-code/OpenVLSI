@@ -109,8 +109,15 @@ add_executable(${PROJECT_NAME}
     gui/analysis/system_inspector.h
     gui/widgets/design_flow.cpp
     gui/widgets/design_flow.h
+    gui/widgets/problems_panel.cpp
+    gui/widgets/problems_panel.h
     gui/analysis/logic_analyzer.cpp
     gui/analysis/logic_analyzer.h
+    gui/analysis/simulation_explorer.cpp
+    gui/analysis/simulation_explorer.h
+    gui/analysis/simulation_workspace.cpp
+    gui/analysis/simulation_workspace.h
+    physics/simulation_profile.h
     gui/editors/hdl_editor.cpp
     gui/editors/hdl_editor.h
     gui/core/welcome_widget.cpp

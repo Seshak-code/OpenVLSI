@@ -358,21 +358,37 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
 }
 
 void MainWindow::createMessagesDock() {
-    messagesDock = new QDockWidget("Messages", this);
+    messagesDock = new QDockWidget("Problems", this);
     messagesDock->setAllowedAreas(Qt::BottomDockWidgetArea);
     
-    messageTable = new QTableWidget(messagesDock);
-    messageTable->setColumnCount(3);
-    messageTable->setHorizontalHeaderLabels({"Time", "Type", "Message"});
-    messageTable->horizontalHeader()->setStretchLastSection(true);
-    messageTable->verticalHeader()->setVisible(false);
+    problemsPanel = new ProblemsPanel(messagesDock);
     
-    messageTable->setRowCount(1);
-    messageTable->setItem(0, 0, new QTableWidgetItem("10:00:00"));
-    messageTable->setItem(0, 1, new QTableWidgetItem("Info"));
-    messageTable->setItem(0, 2, new QTableWidgetItem("Application started."));
+    // Connect navigation signal to schematic editor
+    connect(problemsPanel, &ProblemsPanel::navigateToLocation, this, [this](QPoint loc) {
+        if (schematicEditor && schematicEditor->getScene()) {
+            // Center view on the violation location
+            schematicEditor->centerOn(loc.x(), loc.y());
+            // Optionally highlight the location
+            schematicEditor->getScene()->update();
+        }
+    });
+    
+    // Connect Run ERC button if schematic editor exists
+    if (schematicEditor) {
+        connect(problemsPanel->findChild<QPushButton*>("Run ERC"), &QPushButton::clicked, this, [this]() {
+            if (schematicEditor && schematicEditor->getScene()) {
+                auto* scene = qobject_cast<GridScene*>(schematicEditor->getScene());
+                if (scene) {
+                    scene->runERC();
+                    // Get violations and update panel
+                    QList<ERC::Violation> violations = scene->getViolations();
+                    problemsPanel->setViolations(violations);
+                }
+            }
+        });
+    }
 
-    messagesDock->setWidget(messageTable);
+    messagesDock->setWidget(problemsPanel);
 }
 
 void MainWindow::setupMenus() {
