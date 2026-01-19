@@ -2,7 +2,7 @@
 #include "context_engine.h"
 #include "schema_api.h"
 #include "crash_report.h"
-#include "topology_analyzer.h"
+#include "../analysis/topology_analyzer.h"
 #include "mainwindow.h"
 #include "schematic_editor.h"
 #include <QJsonArray>

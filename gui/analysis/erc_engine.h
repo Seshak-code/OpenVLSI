@@ -5,8 +5,8 @@
 #include <QVector>
 #include <QPoint>
 #include <QString>
-#include <QMap>
 #include <set>
+#include "../core/gui_types.h"
 
 /**
  * erc_engine.h
@@ -19,6 +19,7 @@
  * - Near-miss connection warnings
  * - Visual violation markers
  * - Simulation blocking on errors
+ * - Mode-specific rules (Bench vs Block vs System)
  */
 
 namespace ERC {
@@ -34,7 +35,13 @@ enum class ViolationType {
     SHORT_CIRCUIT,       // VDD to GND short (low resistance)
     MULTIPLE_DRIVERS,    // Multiple voltage sources on same net
     NEAR_MISS,           // Terminal almost connected (within 1-2 grid)
-    OPEN_DRAIN           // Output without load path
+    OPEN_DRAIN,          // Output without load path
+    
+    // Mode Violations
+    ILLEGAL_SOURCE,      // Source component used in Block mode
+    MISSING_PORTS,       // Block mode requires ports
+    ILLEGAL_DRIVER,      // System mode requires RailDrivers
+    MIXED_MODES          // Components from wrong mode
 };
 
 enum class Severity {
@@ -48,7 +55,12 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::NO_GROUND:
         case ViolationType::SHORT_CIRCUIT:
         case ViolationType::FLOATING_GATE:
-            return Severity::ERROR;
+        case ViolationType::ILLEGAL_SOURCE:
+        case ViolationType::ILLEGAL_DRIVER:
+             return Severity::ERROR;
+        case ViolationType::MISSING_PORTS:
+        case ViolationType::MIXED_MODES:
+             return Severity::ERROR;
         case ViolationType::FLOATING_NODE:
         case ViolationType::MULTIPLE_DRIVERS:
         case ViolationType::OPEN_DRAIN:
@@ -69,6 +81,10 @@ inline QString typeToString(ViolationType type) {
         case ViolationType::MULTIPLE_DRIVERS: return "Multiple Drivers";
         case ViolationType::NEAR_MISS: return "Near Miss";
         case ViolationType::OPEN_DRAIN: return "Open Drain";
+        case ViolationType::ILLEGAL_SOURCE: return "Illegal Source (Block Mode)";
+        case ViolationType::MISSING_PORTS: return "Missing Ports";
+        case ViolationType::ILLEGAL_DRIVER: return "Illegal Driver (System Mode)";
+        case ViolationType::MIXED_MODES: return "Mixed Mode Violation";
         default: return "Unknown";
     }
 }
@@ -110,14 +126,26 @@ public:
         // Build connectivity map
         buildConnectivityMap(scene);
         
-        // Run individual checks
-        checkGroundExists(scene);
+        // Mode-Independent Checks
         checkFloatingNodes(scene);
         checkFloatingGates(scene);
         checkShortCircuits(scene);
         checkNearMisses(scene);
+
+        // Mode-Specific Checks
+        if (currentMode_ == AppMode::BENCH_TEST) {
+             checkGroundExists(scene); // Bench requires implicit or explicit ground
+        } else if (currentMode_ == AppMode::BLOCK_SUBSYSTEM) {
+             checkBlockModeRules(scene);
+        } else if (currentMode_ == AppMode::SYSTEM_INTEGRATION) {
+             checkSystemModeRules(scene);
+        }
         
         return violations_;
+    }
+
+    void setMode(AppMode mode) {
+        currentMode_ = mode;
     }
     
     /**
@@ -167,15 +195,18 @@ public:
     /**
      * Get summary string for status bar
      */
+    /**
+     * Get summary string for status bar
+     */
     QString getSummary() const {
         int errors = errorCount();
         int warnings = warningCount();
         if (errors == 0 && warnings == 0) {
-            return "ERC: ✅ OK";
+            return "ERC: OK";
         } else if (errors > 0) {
-            return QString("ERC: ❌ %1 error(s), %2 warning(s)").arg(errors).arg(warnings);
+            return QString("ERC: %1 error(s), %2 warning(s)").arg(errors).arg(warnings);
         } else {
-            return QString("ERC: ⚠️ %1 warning(s)").arg(warnings);
+            return QString("ERC: %1 warning(s)").arg(warnings);
         }
     }
 
@@ -404,6 +435,69 @@ private:
             }
         }
     }
+    void checkBlockModeRules(QGraphicsScene* scene) {
+        bool hasPorts = false;
+        
+        for (QGraphicsItem* item : scene->items()) {
+            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+                // RULE 1: No independent sources allowed in Block Mode
+                if (comp->type == ComponentType::VoltageSource || 
+                    comp->type == ComponentType::CurrentSource) {
+                    violations_.append(Violation(
+                        ViolationType::ILLEGAL_SOURCE,
+                        "Independent sources are forbidden in Block simulations. Use Ports.",
+                        comp->pos().toPoint()
+                    ));
+                }
+                
+                if (comp->type == ComponentType::PowerPort) {
+                    hasPorts = true;
+                }
+            }
+        }
+        
+        // RULE 2: Must have at least one port (signal or power)
+        if (!hasPorts) {
+            violations_.append(Violation(
+                ViolationType::MISSING_PORTS,
+                "Block subsystem requires at least one Input/Output Port.",
+                QPoint(0,0)
+            ));
+        }
+    }
+    
+    void checkSystemModeRules(QGraphicsScene* scene) {
+        bool hasRailDriver = false;
+        
+        for (QGraphicsItem* item : scene->items()) {
+            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+                // RULE 1: Power must come from RailDrivers (Battery/LDO)
+                if (comp->type == ComponentType::RailDriver) {
+                    hasRailDriver = true;
+                }
+                
+                // RULE 2: No generic sources
+                if (comp->type == ComponentType::VoltageSource) {
+                     violations_.append(Violation(
+                        ViolationType::ILLEGAL_DRIVER,
+                        "Generic Voltage Sources forbidden in System Integration. Use RailDriver.",
+                        comp->pos().toPoint()
+                    ));
+                }
+            }
+        }
+        
+        if (!hasRailDriver) {
+             violations_.append(Violation(
+                ViolationType::ILLEGAL_DRIVER,
+                "System needs a Rail Driver (Battery/Regulator) to power the circuit.",
+                QPoint(0,0)
+            ));
+        }
+    }
+
+private:
+    AppMode currentMode_ = AppMode::BENCH_TEST;
 };
 
 } // namespace ERC

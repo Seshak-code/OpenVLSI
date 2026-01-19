@@ -70,7 +70,8 @@ if(EMSCRIPTEN)
 endif()
 
 # Find Qt6 (required)
-find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
+# Find Qt6 (required)
+find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
 
 # Find OpenMP (Optional, for physics engine performance)
 # Due to security issues with OpenMP on Emscripten, we only find it when not building for Emscripten
@@ -78,10 +79,13 @@ if(NOT EMSCRIPTEN)
     find_package(OpenMP)
 endif()
 
-qt_standard_project_setup()
+# qt_standard_project_setup()
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
 
 # Create executable
-qt_add_executable(${PROJECT_NAME} 
+add_executable(${PROJECT_NAME} 
     main.cpp
     gui/core/mainwindow.cpp
     gui/core/mainwindow.h
@@ -128,6 +132,8 @@ qt_add_executable(${PROJECT_NAME}
     ai_api/analysis/topology_analyzer.h
     ai_api/system/feedback_loop.cpp
     ai_api/system/feedback_loop.h
+    ai_api/simulation/auto_harness.cpp
+    ai_api/simulation/auto_harness.h
     compute/tensors/physics_tensors.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
@@ -179,6 +185,7 @@ if(EMSCRIPTEN)
         "-sEXIT_RUNTIME=1"
         "-sERROR_ON_UNDEFINED_SYMBOLS=0"
         "-sUSE_WEBGPU=1"
+        "-sEXPORTED_RUNTIME_METHODS=['specialHTMLTargets','UTF8ToString','stringToUTF8','ccall','cwrap']"
     )
     # Ensure the output filename is predictable for the HTML shell
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
@@ -290,3 +297,107 @@ target_include_directories(test_superposition PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 target_compile_features(test_superposition PUBLIC cxx_std_17)
+
+# Auto-Validation Harness Test (ERC + AI API)
+add_executable(test_auto_harness
+    tests/test_auto_harness.cpp
+    gui/components/visual_component.cpp
+    gui/editors/schematic_editor.cpp
+    gui/editors/schematic_view.cpp
+    gui/editors/component_wizard.cpp
+    gui/editors/schematic_editor_api.cpp
+    gui/editors/schematic_editor_sync.cpp
+    gui/widgets/ai_assistant.cpp
+    gui/widgets/component_library.cpp
+    gui/widgets/design_flow.cpp
+    gui/analysis/system_inspector.cpp
+    gui/analysis/logic_analyzer.cpp
+    gui/analysis/simulator_window.cpp
+    gui/editors/hdl_editor.cpp
+    gui/core/mainwindow.cpp
+    gui/core/welcome_widget.cpp
+    ai_api/system/schema_api.cpp
+    ai_api/context/context_engine.cpp
+    ai_api/analysis/failure_classifier.cpp
+    ai_api/simulation/auto_harness.cpp
+    ai_api/simulation/speculative_runner.cpp
+    ai_api/context/prompt_builder.cpp
+    ai_api/analysis/topology_analyzer.cpp
+    ai_api/system/feedback_loop.cpp
+    ai_api/simulation/simulation_trace.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_auto_harness PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+)
+target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_compile_features(test_auto_harness PUBLIC cxx_std_17)
+
+# Copilot Integration Test
+add_executable(test_copilot_validate
+    tests/test_copilot_validate.cpp
+    gui/components/visual_component.cpp
+    gui/editors/schematic_editor.cpp
+    gui/editors/schematic_view.cpp
+    gui/editors/component_wizard.cpp
+    gui/editors/schematic_editor_api.cpp
+    gui/editors/schematic_editor_sync.cpp
+    gui/widgets/ai_assistant.cpp
+    gui/widgets/component_library.cpp
+    gui/widgets/design_flow.cpp
+    gui/analysis/system_inspector.cpp
+    gui/analysis/logic_analyzer.cpp
+    gui/analysis/simulator_window.cpp
+    gui/editors/hdl_editor.cpp
+    gui/core/mainwindow.cpp
+    gui/core/welcome_widget.cpp
+    ai_api/system/schema_api.cpp
+    ai_api/context/context_engine.cpp
+    ai_api/analysis/failure_classifier.cpp
+    ai_api/simulation/auto_harness.cpp
+    ai_api/simulation/speculative_runner.cpp
+    ai_api/context/prompt_builder.cpp
+    ai_api/analysis/topology_analyzer.cpp
+    ai_api/system/feedback_loop.cpp
+    ai_api/simulation/simulation_trace.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_copilot_validate PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+)
+target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_compile_features(test_copilot_validate PUBLIC cxx_std_17)

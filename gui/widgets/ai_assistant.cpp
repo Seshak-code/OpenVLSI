@@ -2,6 +2,8 @@
 #include "../../ai_api/context/context_engine.h"
 #include "../../ai_api/core/nl_parser.h"
 #include "../../ai_api/core/circuit_templates.h"
+#include "../../ai_api/system/schema_api.h"
+#include "../core/mainwindow.h"
 #include <QScrollBar>
 #include <QDebug>
 #include <QJsonDocument>
@@ -173,6 +175,7 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
             
             // R1
             QJsonObject r1; r1["action"] = "placeComponent"; r1["type"] = "Resistor"; r1["x"] = 100; r1["y"] = 0; r1["id"] = "R1";
+            r1["rotation"] = 90.0;
             req.actions.append(r1);
             
             // GND
@@ -181,19 +184,28 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
             
             // Wire V1 -> R1
             QJsonObject w1; w1["action"] = "placeWire"; 
-            QJsonArray pts1; pts1.append(QJsonArray{0, -40}); pts1.append(QJsonArray{0, -60}); pts1.append(QJsonArray{100, -60}); pts1.append(QJsonArray{100, -20}); // Top wire
+            QJsonArray pts1; 
+            pts1.append(QJsonArray{0, -40});  // V1 Top
+            pts1.append(QJsonArray{0, -60}); 
+            pts1.append(QJsonArray{100, -60}); 
+            pts1.append(QJsonArray{100, -40}); // R1 Top
             w1["points"] = pts1;
             req.actions.append(w1);
             
             // Wire R1 -> GND
             QJsonObject w2; w2["action"] = "placeWire"; 
-            QJsonArray pts2; pts2.append(QJsonArray{100, 20}); pts2.append(QJsonArray{100, 60}); // Bottom wire
+            QJsonArray pts2; 
+            pts2.append(QJsonArray{100, 40}); // R1 Bot
+            pts2.append(QJsonArray{100, 60}); // GND Terminal
             w2["points"] = pts2;
             req.actions.append(w2);
             
-             // Wire V1 Bottom -> GND ?? (Implicitly V1 bottom is floating in this simple demo if not connected. Let's connect V1 bottom to GND too for loop)
+             // Wire V1 Bottom -> GND
             QJsonObject w3; w3["action"] = "placeWire"; 
-            QJsonArray pts3; pts3.append(QJsonArray{0, 40}); pts3.append(QJsonArray{0, 80}); pts3.append(QJsonArray{100, 80}); 
+            QJsonArray pts3; 
+            pts3.append(QJsonArray{0, 40}); // V1 Bot
+            pts3.append(QJsonArray{0, 60}); 
+            pts3.append(QJsonArray{100, 60}); // Connects to GND Node
             w3["points"] = pts3;
             req.actions.append(w3);
 
@@ -228,6 +240,74 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
                 else if (m == AppMode::SYSTEM_INTEGRATION) modeStr = "System";
             }
             appendMessage("Copilot", QString("Available Templates (Mode: %1):\n - ").arg(modeStr) + templates.join("\n - "));
+        }
+        else if (cmd.startsWith("/validate")) {
+            // Check mode
+            if (!editorContext || editorContext->getMode() != AppMode::BLOCK_SUBSYSTEM) {
+                appendMessage("Copilot", "⚠️ Validation is primarily for Block Mode subsystems. Switch mode to Block Subsystem checking.");
+            }
+            
+            // Extract JSON args if present
+            QJsonObject stimuli;
+            QString jsonStr = cmd.mid(9).trimmed();
+            if (!jsonStr.isEmpty()) {
+                QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
+                if (!doc.isNull() && doc.isObject()) {
+                    stimuli = doc.object();
+                } else {
+                     appendMessage("Copilot", "⚠️ Invalid JSON stimuli format. Running with defaults.");
+                }
+            }
+            
+            // Attempt auto-validation
+            // For now, we take the WHOLE current schematic as the "Component" to validate
+            // In reality, this would likely target a specific selected sub-block, OR treat the current open file as the block definition.
+            
+            // 1. Get current state as 'Definition'
+            QJsonObject blockDef = editorContext->getCircuitState();
+            
+            // 2. Auto-detect ports if no stimuli provided
+            if (stimuli.isEmpty()) {
+                QJsonArray autoStim;
+                QJsonArray components = blockDef["components"].toArray();
+                for(const auto& cVal : components) {
+                    QJsonObject c = cVal.toObject();
+                    if (c["type"].toString() == "PowerPort") {
+                         QString name = c["name"].toString();
+                         // Guess input vs output based on name
+                         if (name.contains("In") || name.contains("Gate") || name.contains("VCC")) {
+                             QJsonObject s;
+                             s["port"] = name;
+                             s["type"] = "PULSE"; // Default to pulse test
+                             QJsonObject p; p["v_low"]=0; p["v_high"]=1.0;
+                             s["params"] = p;
+                             autoStim.append(s);
+                         }
+                    }
+                }
+                stimuli["stimuli"] = autoStim;
+                appendMessage("Copilot", "Running validation with auto-detected port stimuli...");
+            }
+            
+            // 3. Call API
+            // We pass "CurrentCanvas" as ID implies we validate what's currently open
+            QJsonObject result = AIAPI::validateComponent("CurrentCanvas", stimuli);
+            
+            if (result["passed"].toBool()) {
+                 appendMessage("Copilot", "✅ **Validation Passed**\n" + result["report"].toString());
+            } else {
+                 appendMessage("Copilot", "❌ **Validation Failed**\n" + result["report"].toString());
+            }
+
+            // Visible Harness Creation
+            if (result.contains("harnessState")) {
+                if (editorContext) {
+                    if (MainWindow* mw = qobject_cast<MainWindow*>(editorContext->parent())) {
+                        mw->openSchematicTab("Auto-Harness", result["harnessState"].toObject());
+                        appendMessage("Copilot", "🔬 **Test Harness Created**: Check the new 'Auto-Harness' tab.");
+                    }
+                }
+            }
         }
         else {
             appendMessage("Copilot", "Unknown command. Try /help for options.");

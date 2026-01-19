@@ -1,5 +1,5 @@
 #include "topology_analyzer.h"
-#include "context_engine.h"
+#include "../context/context_engine.h"
 #include <QJsonArray>
 #include <QMap>
 #include <QSet>

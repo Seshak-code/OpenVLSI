@@ -62,6 +62,17 @@ public:
 
     QString netName;
     QGraphicsTextItem* labelItem = nullptr;
+    
+    // Physics Properties
+    double lineWidth = 2.0; 
+    double maxCurrent = 0.0; // Amps
+    
+    void setWidth(double width) {
+        lineWidth = width;
+        QPen p = pen();
+        p.setWidthF(width);
+        setPen(p);
+    }
 };
 
 // ============================================================================

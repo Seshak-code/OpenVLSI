@@ -281,6 +281,15 @@ bool importLEF(const QString& filename);
 /**
  * Get complete circuit state as JSON (for AI context).
  */
+/**
+ * Get complete circuit state as JSON (for AI context).
+ */
 QJsonObject getFullCircuitState();
+
+/**
+ * Run auto-validation on a component/block.
+ * Generates a test harness, runs stimuli, and returns results.
+ */
+QJsonObject validateComponent(const QString& componentId, const QJsonObject& stimuli);
 
 } // namespace AIAPI

@@ -3,7 +3,7 @@
 #include <QVector>
 #include <QJsonObject>
 #include <QMap>
-#include "context_engine.h"
+#include "../context/context_engine.h"
 
 namespace AIAPI {
 

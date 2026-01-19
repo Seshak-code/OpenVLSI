@@ -82,12 +82,6 @@ void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
     painter->drawLine(left, 0, right, 0);
 }
 
-QPointF GridScene::snapToGrid(const QPointF& pos) {
-    if (!snappingEnabled) return pos;
-    double x = std::round(pos.x() / GRID_STEP) * GRID_STEP;
-    double y = std::round(pos.y() / GRID_STEP) * GRID_STEP;
-    return QPointF(x, y);
-}
 
 void GridScene::clearGhostWires() {
     for (auto* wire : ghostWires) {
@@ -1294,6 +1288,10 @@ void SchematicEditor::setMode(AppMode mode) {
     
     statusLabel->setText(modeStr);
     statusLabel->setStyleSheet(QString("background: %1; color: white; padding: 4px; font-weight: bold;").arg(color));
+    
+    if (scene) {
+        scene->setMode(mode);
+    }
 }
 
 void SchematicEditor::setTool(ComponentType t) {
@@ -1323,7 +1321,43 @@ QStringList SchematicEditor::getAvailableComponents() {
 }
 
 void SchematicEditor::placeWirePath(const QVector<QPointF>& points) {
+    // Wire placement API (for AI auto-routing)
+    void placeWirePath(const QVector<QPointF>& points);
+    void placePhysicallyAwareWire(const QVector<QPointF>& points, float width, double current);
+
+    // AI Optimization API
+    bool optimizeComponentRotation(const QString& id);
+    
     scene->placeWirePath(points);
+}
+
+void SchematicEditor::placePhysicallyAwareWire(const QVector<QPointF>& points, float width, double current) {
+    if (!scene) return;
+    scene->placeWirePath(points); 
+    
+    // Apply width to the newly created wires (last N items)
+    // Note: This is a bit hacky, better to have GridScene::placeWirePath return the items or accept params.
+    // For now, let's iterate and find them, or just modify GridScene::placeWirePath.
+    // Actually, let's just implement the logic here directly since we access scene.
+    
+    if (points.size() < 2) return;
+    for (int i = 0; i < points.size() - 1; ++i) {
+        QPointF p1 = scene->snapToGrid(points[i]);
+        QPointF p2 = scene->snapToGrid(points[i+1]);
+        
+        // Find if we just added this? No, scene->placeWirePath already added it.
+        // Let's look for the wire at this location.
+        QGraphicsItem* item = scene->itemAt((p1+p2)/2, QTransform());
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            w->setWidth(width);
+            w->maxCurrent = current;
+            
+            // If high current, color it differently (e.g., slightly reddish)
+            if (current > 1.0) {
+                 w->setPen(QPen(QColor(200, 200, 220), width));
+            }
+        }
+    }
 }
 
 QJsonObject SchematicEditor::getCircuitState() {
@@ -1332,6 +1366,55 @@ QJsonObject SchematicEditor::getCircuitState() {
     meta["mode"] = (currentMode == AppMode::SYSTEM_INTEGRATION) ? "SYSTEM" : "LAB";
     state["metadata"] = meta;
     return state;
+}
+
+void SchematicEditor::loadState(const QJsonObject& state) {
+    if(!scene) return;
+    scene->clear(); 
+    
+    // Components
+    QJsonArray components = state["components"].toArray();
+    for(const auto& val : components) {
+        QJsonObject c = val.toObject();
+        
+        QPointF pos(c["x"].toDouble(), c["y"].toDouble());
+        double rot = c["rotation"].toDouble();
+        QString type = c["type"].toString();
+        
+        // Prepare params
+        QJsonObject params;
+        for(auto it = c.begin(); it != c.end(); ++it) {
+            if(it.key() != "type" && it.key() != "x" && it.key() != "y" 
+               && it.key() != "rotation" && it.key() != "id") {
+                params[it.key()] = it.value();   
+            }
+        }
+        
+        QString newId = placeComponent(type, pos, rot, params);
+        
+        // Restore ID
+        QString targetId = c["id"].toString();
+        if (!targetId.isEmpty()) {
+            if (VisualComponent* comp = findComponent(newId)) {
+                comp->name = targetId;
+            }
+        }
+    }
+    
+    // Wires
+    QJsonArray wires = state["wires"].toArray();
+    for(const auto& val : wires) {
+        QJsonObject w = val.toObject();
+        QJsonArray pointsArr = w["points"].toArray();
+        QVector<QPointF> points;
+        for(const auto& p : pointsArr) {
+            QJsonObject pt = p.toObject();
+            points.append(QPointF(pt["x"].toDouble(), pt["y"].toDouble()));
+        }
+        if (points.size() >= 2) {
+            scene->placeWirePath(points);
+        }
+    }
 }
 
 QString SchematicEditor::dumpSceneState() {

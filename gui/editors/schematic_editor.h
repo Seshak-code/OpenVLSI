@@ -33,6 +33,7 @@ public:
     explicit GridScene(QObject* parent = nullptr);
 
     void setTool(ComponentType t);
+    void setMode(AppMode mode) { ercEngine_.setMode(mode); updateERC(); }
     void setGridVisible(bool visible);
     void setSnappingEnabled(bool enabled);
     bool isSnappingEnabled() const { return snappingEnabled; }
@@ -49,6 +50,13 @@ public:
     
     void placeWirePath(const QVector<QPointF>& points);
 
+    QPointF snapToGrid(const QPointF& pos) {
+        if (!snappingEnabled) return pos;
+        double x = std::round(pos.x() / GRID_STEP) * GRID_STEP;
+        double y = std::round(pos.y() / GRID_STEP) * GRID_STEP;
+        return QPointF(x, y);
+    }
+
 protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override;
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
@@ -64,7 +72,6 @@ signals:
     void wireSelected(VisualWire* wire);
 
 private:
-    QPointF snapToGrid(const QPointF& pos);
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
     bool isWireValid(QGraphicsLineItem* wire); 
 
@@ -138,6 +145,7 @@ public:
     
     // Returns full circuit state as JSON object
     QJsonObject getCircuitState();
+    void loadState(const QJsonObject& state);
     
     // Returns a list of all available component types
     QStringList getAvailableComponents();
@@ -147,6 +155,10 @@ public:
     
     // Wire placement API (for AI auto-routing)
     void placeWirePath(const QVector<QPointF>& points);
+    void placePhysicallyAwareWire(const QVector<QPointF>& points, float width, double current);
+
+    // AI Optimization API
+    bool optimizeComponentRotation(const QString& id);
     
     // Tool Selection API
     void setTool(ComponentType t);

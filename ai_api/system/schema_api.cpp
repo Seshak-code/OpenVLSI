@@ -1,6 +1,8 @@
-
 #include "schema_api.h"
 #include "mainwindow.h"
+#include "schematic_editor.h"
+#include "../simulation/auto_harness.h"
+#include <QApplication>
 #include "schematic_editor.h"
 #include <QApplication>
 #include <QDebug>
@@ -88,14 +90,30 @@ QString routeWire(const RoutingConstraints& constraints) {
 }
 
 bool optimizePlacement(const QString& componentId) {
-    // TODO: Implement rotation logic to minimize wire length/crossovers
-    return true; 
+    SchematicEditor* editor = getEditor();
+    if (!editor) return false;
+    return editor->optimizeComponentRotation(componentId);
 }
 
 QString routeWithPhysics(const RoutingConstraints& constraints, const WirePhysics& physics) {
-    // TODO: Adjust width/spacing based on physics (current, crosstalk)
-    // For now, delegate to standard routing
-    return routeWire(constraints);
+    SchematicEditor* editor = getEditor();
+    if (!editor) return "";
+    
+    double scale = 20.0;
+    QVector<QPointF> scaledPoints;
+    for(const auto& p : constraints.waypoints) {
+        scaledPoints.append(QPointF(p.x() * scale, p.y() * scale));
+    }
+    
+    // Calculate required width based on physics
+    // Rule of Thumb (Simplified): Width = Current * k
+    // Let's say 1A = 2.0 width (default)
+    float width = physics.currentRating > 0 ? physics.currentRating * 2.0 : 2.0;
+    if (width < 1.0) width = 1.0;
+    if (width > 10.0) width = 10.0;
+    
+    editor->placePhysicallyAwareWire(scaledPoints, width, physics.currentRating);
+    return "WIRE_OK"; 
 }
 
 // Stub/Simple implementations for others
@@ -111,6 +129,48 @@ QJsonObject getFullCircuitState() {
      SchematicEditor* editor = getEditor();
      if (!editor) return QJsonObject();
      return editor->getCircuitState();
+}
+
+QJsonObject validateComponent(const QString& componentId, const QJsonObject& stimuli) {
+    // Convert JSON inputs to AutoValidator structs
+    QVector<AutoValidator::Stimulus> stimVec;
+    QJsonArray stimArr = stimuli["stimuli"].toArray();
+    for(const auto& val : stimArr) {
+        QJsonObject s = val.toObject();
+        AutoValidator::Stimulus stim;
+        stim.portName = s["port"].toString();
+        stim.type = s["type"].toString();
+        QJsonObject p = s["params"].toObject();
+        for(auto it = p.begin(); it != p.end(); ++it) {
+            stim.params[it.key()] = it.value().toDouble();
+        }
+        stimVec.append(stim);
+    }
+    
+    // Get Block Definition (Normally we'd fetch from Library, assuming passed here for now or fetching from Editor)
+    // For this prototype, we'll assume we can get it from the component instance or it's passed in stimuli for now.
+    // In a real flow: ComponentLibrary::instance()->getComponentDef(componentId);
+    // Let's create a temporary connection.
+    
+    AutoValidator validator;
+    QJsonObject blockDef; 
+    
+    // If validating current canvas, fetch state from editor
+    if (componentId == "CurrentCanvas") {
+        if (SchematicEditor* editor = getEditor()) {
+            blockDef = editor->getCircuitState();
+        }
+    } else {
+        blockDef["components"] = QJsonArray(); 
+    }
+    
+    auto result = validator.validateBlock(blockDef, stimVec);
+    
+    QJsonObject jsonRes;
+    jsonRes["passed"] = result.passed;
+    jsonRes["report"] = result.report;
+    jsonRes["trace"] = result.traceData;
+    return jsonRes;
 }
 
 } // namespace AIAPI

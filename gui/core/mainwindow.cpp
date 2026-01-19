@@ -612,3 +612,27 @@ void MainWindow::setMode(AppMode mode) {
     }
 }
 
+void MainWindow::openSchematicTab(const QString& title, const QJsonObject& content) {
+    SchematicEditor* newEditor = new SchematicEditor(this);
+    
+    // Auto-detect mode from content logic or default to Bench (Harness is usually Bench-like)
+    // For auto-harness, it uses Bench Mode components (Sources, Probes).
+    newEditor->setMode(AppMode::BENCH_TEST); 
+    
+    // Load content
+    newEditor->loadState(content);
+    
+    // Add tab
+    rtlPageTabs->addTab(newEditor, title);
+    rtlPageTabs->setCurrentWidget(newEditor);
+    
+    // Update active editor
+    schematicEditor = newEditor;
+    if (libraryPanel) libraryPanel->setMode(AppMode::BENCH_TEST);
+    if (aiPanel) aiPanel->setEditor(newEditor);
+    
+    connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+    connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+    
+    statusBar()->showMessage(QString("Opened %1").arg(title), 4000);
+}

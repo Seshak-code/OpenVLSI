@@ -37,6 +37,9 @@ public:
     AppMode getMode() const; 
     void setMode(AppMode mode);
 
+    // AI/API Access
+    void openSchematicTab(const QString& title, const QJsonObject& content);
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 

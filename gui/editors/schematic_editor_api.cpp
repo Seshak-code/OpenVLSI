@@ -262,6 +262,73 @@ bool SchematicEditor::alignWith(const QString& targetId, const QString& referenc
     return true;
 }
 
+bool SchematicEditor::optimizeComponentRotation(const QString& id) {
+    VisualComponent* comp = findComponent(id);
+    if (!comp) return false;
+    
+    // HEURISTIC:
+    // 1. Identify "Portness" of neighbors.
+    // 2. If neighbor is to the Left, we want our Input (if any) to face Left.
+    // 3. If neighbor is Right, Output face Right.
+    // 4. If PowerVdd is above, VDD pin up.
+    
+    // Simplified Heuristic: Minimize distance of terminals to nearest other component terminals.
+    
+    double bestScore = 1e9;
+    double bestRot = 0;
+    double currentRot = comp->rotation();
+    
+    // Collect interesting points (neighbors)
+    QVector<QPointF> neighborPoints;
+    QRectF myBounds = comp->sceneBoundingRect();
+    double searchRadius = 300.0;
+    
+    for (auto* item : scene->items()) {
+        if (auto* other = dynamic_cast<VisualComponent*>(item)) {
+            if (other == comp) continue;
+            double d = QLineF(myBounds.center(), other->sceneBoundingRect().center()).length();
+            if (d < searchRadius) {
+                // Add its terminals
+                QVector<QPointF> terms = other->getTerminals();
+                for(auto t : terms) neighborPoints.append(other->mapToScene(t));
+            }
+        }
+    }
+    
+    if (neighborPoints.isEmpty()) return false; // No context
+    
+    // Try 0, 90, 180, 270
+    for (int r = 0; r < 360; r += 90) {
+        comp->setRotation(r);
+        double score = 0;
+        
+        QVector<QPointF> myTerms = comp->getTerminals();
+        
+        for (const QPointF& myT_local : myTerms) {
+            QPointF myT_scene = comp->mapToScene(myT_local);
+            
+            // Find closest neighbor terminal
+            double minD = 1e9;
+            for (const QPointF& nb : neighborPoints) {
+                double d = QLineF(myT_scene, nb).length();
+                if (d < minD) minD = d;
+            }
+            score += minD;
+        }
+        
+        // Bonus for "Standard" orientation (0) if scores are close
+        if (r == 0) score -= 10; 
+        
+        if (score < bestScore) {
+            bestScore = score;
+            bestRot = r;
+        }
+    }
+    
+    comp->setRotation(bestRot);
+    return (bestRot != currentRot);
+}
+
 QPoint SchematicEditor::findClearSpace(int width, int height) {
     if (!scene) return QPoint(100, 100);
     

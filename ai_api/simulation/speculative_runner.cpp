@@ -1,6 +1,6 @@
 #include "speculative_runner.h"
 #include <QDateTime> // For timestamp
-#include "failure_classifier.h"
+#include "../analysis/failure_classifier.h"
 
 namespace AIAPI {
 
