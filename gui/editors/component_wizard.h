@@ -101,16 +101,50 @@ private:
 // ============================================================================
 // PAGE 3: Package Selection
 // ============================================================================
+
+/**
+ * PackagePreviewWidget - Visual preview of IC package and pin layout.
+ * 
+ * Draws a schematic symbol based on selected package type and pin count.
+ */
+class PackagePreviewWidget : public QWidget {
+    Q_OBJECT
+public:
+    PackagePreviewWidget(QWidget* parent = nullptr);
+    
+    void setPackageType(const QString& type);
+    void setPinCount(int count);
+    void setPinNames(const QStringList& names);
+    
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    
+private:
+    QString packageType = "DIP";
+    int pinCount = 8;
+    QStringList pinNames;
+    
+    void drawDIP(QPainter& painter, const QRect& rect);
+    void drawQFN(QPainter& painter, const QRect& rect);
+    void drawBGA(QPainter& painter, const QRect& rect);
+    void drawGeneric(QPainter& painter, const QRect& rect);
+};
+
 class PackageSelectionPage : public QWizardPage {
     Q_OBJECT
 public:
     PackageSelectionPage(QWidget* parent = nullptr);
     
     QString selectedPackage() const { return packageCombo->currentText(); }
+    void setPinInfo(int count, const QStringList& names);
+    
+private slots:
+    void onPackageChanged(int index);
     
 private:
     QComboBox* packageCombo;
-    QLabel* previewLabel;
+    PackagePreviewWidget* previewWidget;
+    QLabel* descriptionLabel;
 };
 
 // ============================================================================

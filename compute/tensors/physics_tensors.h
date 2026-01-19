@@ -36,6 +36,13 @@ struct DiodeTensor {
     std::vector<double> i_d;  // Current through diode [A]
     std::vector<double> g_d;  // Linearized conductance [S]
     
+    // Design Rule Validation Masks (GPU-compatible uint8)
+    // 0 = PASS, bit flags indicate specific violations
+    std::vector<uint8_t> dr_validity;
+    static constexpr uint8_t DR_OK = 0;
+    static constexpr uint8_t DR_THERMAL_VIOLATION = 1 << 0;
+    static constexpr uint8_t DR_REVERSE_BIAS_LIMIT = 1 << 1;
+    
     size_t size() const { return anodes.size(); }
     
     void reserve(size_t n) {
@@ -43,6 +50,7 @@ struct DiodeTensor {
         Is.reserve(n); N.reserve(n); Vt.reserve(n);
         Rs.reserve(n); Temp.reserve(n);
         v_d.reserve(n); i_d.reserve(n); g_d.reserve(n);
+        dr_validity.reserve(n);
     }
     
     void clear() {
@@ -50,6 +58,7 @@ struct DiodeTensor {
         Is.clear(); N.clear(); Vt.clear();
         Rs.clear(); Temp.clear();
         v_d.clear(); i_d.clear(); g_d.clear();
+        dr_validity.clear();
     }
     
     void push(int anode, int cathode, double is, double n, double vt, 
@@ -64,6 +73,7 @@ struct DiodeTensor {
         v_d.push_back(0.0);
         i_d.push_back(0.0);
         g_d.push_back(1e-12); // GMIN default
+        dr_validity.push_back(DR_OK);
     }
 };
 
@@ -95,6 +105,13 @@ struct MosfetTensor {
     std::vector<double> gm;      // Transconductance [S]
     std::vector<double> gds;     // Output conductance [S]
     
+    // Design Rule Validation Masks (GPU-compatible uint8)
+    std::vector<uint8_t> dr_validity;
+    static constexpr uint8_t DR_OK = 0;
+    static constexpr uint8_t DR_FLOATING_GATE = 1 << 0;
+    static constexpr uint8_t DR_OPEN_DRAIN = 1 << 1;
+    static constexpr uint8_t DR_THERMAL_VIOLATION = 1 << 2;
+    
     size_t size() const { return drains.size(); }
     
     void reserve(size_t n) {
@@ -102,6 +119,7 @@ struct MosfetTensor {
         W.reserve(n); L.reserve(n); Kp.reserve(n); Vth.reserve(n); lambda.reserve(n);
         Temp.reserve(n);
         vgs.reserve(n); vds.reserve(n); ids.reserve(n); gm.reserve(n); gds.reserve(n);
+        dr_validity.reserve(n);
     }
     
     void clear() {
@@ -109,6 +127,7 @@ struct MosfetTensor {
         W.clear(); L.clear(); Kp.clear(); Vth.clear(); lambda.clear();
         Temp.clear();
         vgs.clear(); vds.clear(); ids.clear(); gm.clear(); gds.clear();
+        dr_validity.clear();
     }
     
     void push(int d, int g, int s, int b, double w, double l, 
@@ -128,6 +147,7 @@ struct MosfetTensor {
         ids.push_back(0.0);
         gm.push_back(0.0);
         gds.push_back(1e-12);
+        dr_validity.push_back(DR_OK);
     }
 };
 
@@ -161,6 +181,12 @@ struct BJTTensor {
     std::vector<double> g_bc, g_bb, g_be;
     std::vector<double> g_ec, g_eb, g_ee;
     
+    // Design Rule Validation Masks (GPU-compatible uint8)
+    std::vector<uint8_t> dr_validity;
+    static constexpr uint8_t DR_OK = 0;
+    static constexpr uint8_t DR_FLOATING_BASE = 1 << 0;
+    static constexpr uint8_t DR_THERMAL_VIOLATION = 1 << 1;
+    
     size_t size() const { return collectors.size(); }
     
     void reserve(size_t n) {
@@ -171,6 +197,7 @@ struct BJTTensor {
         g_cc.reserve(n); g_cb.reserve(n); g_ce.reserve(n);
         g_bc.reserve(n); g_bb.reserve(n); g_be.reserve(n);
         g_ec.reserve(n); g_eb.reserve(n); g_ee.reserve(n);
+        dr_validity.reserve(n);
     }
     
     void clear() {
@@ -181,6 +208,7 @@ struct BJTTensor {
         g_cc.clear(); g_cb.clear(); g_ce.clear();
         g_bc.clear(); g_bb.clear(); g_be.clear();
         g_ec.clear(); g_eb.clear(); g_ee.clear();
+        dr_validity.clear();
     }
     
     void push(int c, int b, int e, double is, double betaF, double betaR, 
@@ -205,6 +233,7 @@ struct BJTTensor {
         g_cc.push_back(gmin); g_cb.push_back(0.0); g_ce.push_back(0.0);
         g_bc.push_back(0.0); g_bb.push_back(gmin); g_be.push_back(0.0);
         g_ec.push_back(0.0); g_eb.push_back(0.0); g_ee.push_back(gmin);
+        dr_validity.push_back(DR_OK);
     }
 };
 

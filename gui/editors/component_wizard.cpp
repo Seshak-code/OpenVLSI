@@ -246,8 +246,192 @@ std::vector<PortInfo> PinMappingPage::getPortInfo() const {
 }
 
 // ============================================================================
-// PAGE 3: Package Selection
+// PAGE 3: Package Selection & Preview Widget
 // ============================================================================
+
+#include <QPainter>
+#include <QPaintEvent>
+
+PackagePreviewWidget::PackagePreviewWidget(QWidget* parent) : QWidget(parent) {
+    setMinimumSize(200, 150);
+    setStyleSheet("background: #1e1e1e; border: 1px solid #444; border-radius: 4px;");
+}
+
+void PackagePreviewWidget::setPackageType(const QString& type) {
+    packageType = type;
+    update();  // Trigger repaint
+}
+
+void PackagePreviewWidget::setPinCount(int count) {
+    pinCount = count;
+    update();
+}
+
+void PackagePreviewWidget::setPinNames(const QStringList& names) {
+    pinNames = names;
+    update();
+}
+
+void PackagePreviewWidget::paintEvent(QPaintEvent* /*event*/) {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    QRect r = rect().adjusted(10, 10, -10, -10);
+    
+    if (packageType.contains("DIP") || packageType.contains("Rectangle")) {
+        drawDIP(painter, r);
+    } else if (packageType.contains("QFN")) {
+        drawQFN(painter, r);
+    } else if (packageType.contains("BGA")) {
+        drawBGA(painter, r);
+    } else {
+        drawGeneric(painter, r);
+    }
+}
+
+void PackagePreviewWidget::drawDIP(QPainter& painter, const QRect& r) {
+    // DIP package: Rectangle with pins on left and right
+    int pinsPerSide = (pinCount + 1) / 2;
+    int bodyWidth = r.width() * 0.5;
+    int bodyHeight = r.height() * 0.8;
+    
+    QRect body(r.center().x() - bodyWidth/2, r.center().y() - bodyHeight/2, 
+               bodyWidth, bodyHeight);
+    
+    // Draw body
+    painter.setBrush(QColor("#3a3a3a"));
+    painter.setPen(QPen(QColor("#888"), 2));
+    painter.drawRoundedRect(body, 4, 4);
+    
+    // Draw notch (top center)
+    painter.setBrush(QColor("#1e1e1e"));
+    painter.drawEllipse(body.center().x() - 8, body.top() - 4, 16, 12);
+    
+    // Draw component name
+    painter.setPen(QColor("#ccc"));
+    painter.setFont(QFont("Monospace", 8));
+    painter.drawText(body, Qt::AlignCenter, "IC");
+    
+    // Draw pins
+    painter.setPen(QPen(QColor("#ffd700"), 2));
+    int pinSpacing = bodyHeight / (pinsPerSide + 1);
+    
+    for (int i = 0; i < pinsPerSide && i < pinCount; ++i) {
+        int y = body.top() + pinSpacing * (i + 1);
+        
+        // Left pins
+        painter.drawLine(body.left() - 15, y, body.left(), y);
+        painter.setPen(QColor("#aaa"));
+        painter.setFont(QFont("Monospace", 7));
+        QString leftLabel = (i < pinNames.size()) ? pinNames[i] : QString::number(i + 1);
+        painter.drawText(body.left() - 45, y - 5, 30, 10, Qt::AlignRight, leftLabel);
+        painter.setPen(QPen(QColor("#ffd700"), 2));
+        
+        // Right pins (numbered from bottom)
+        int rightIdx = pinCount - 1 - i;
+        if (rightIdx >= pinsPerSide) {
+            painter.drawLine(body.right(), y, body.right() + 15, y);
+            painter.setPen(QColor("#aaa"));
+            QString rightLabel = (rightIdx < pinNames.size()) ? pinNames[rightIdx] : QString::number(rightIdx + 1);
+            painter.drawText(body.right() + 18, y - 5, 30, 10, Qt::AlignLeft, rightLabel);
+            painter.setPen(QPen(QColor("#ffd700"), 2));
+        }
+    }
+}
+
+void PackagePreviewWidget::drawQFN(QPainter& painter, const QRect& r) {
+    // QFN: Square with pins on all four sides
+    int size = qMin(r.width(), r.height()) * 0.7;
+    QRect body(r.center().x() - size/2, r.center().y() - size/2, size, size);
+    
+    // Draw body
+    painter.setBrush(QColor("#2d2d2d"));
+    painter.setPen(QPen(QColor("#666"), 2));
+    painter.drawRect(body);
+    
+    // Draw thermal pad
+    int padSize = size * 0.4;
+    QRect pad(body.center().x() - padSize/2, body.center().y() - padSize/2, padSize, padSize);
+    painter.setBrush(QColor("#3a3a3a"));
+    painter.drawRect(pad);
+    
+    // Draw corner marker
+    painter.setBrush(QColor("#555"));
+    painter.drawEllipse(body.topLeft().x() + 5, body.topLeft().y() + 5, 8, 8);
+    
+    // Draw pins on all sides
+    int pinsPerSide = pinCount / 4;
+    painter.setPen(QPen(QColor("#ffd700"), 1.5));
+    
+    for (int i = 0; i < pinsPerSide; ++i) {
+        double ratio = (i + 0.5) / pinsPerSide;
+        
+        // Top
+        int x = body.left() + size * ratio;
+        painter.drawLine(x, body.top() - 8, x, body.top());
+        
+        // Bottom
+        painter.drawLine(x, body.bottom(), x, body.bottom() + 8);
+        
+        // Left
+        int y = body.top() + size * ratio;
+        painter.drawLine(body.left() - 8, y, body.left(), y);
+        
+        // Right
+        painter.drawLine(body.right(), y, body.right() + 8, y);
+    }
+    
+    painter.setPen(QColor("#888"));
+    painter.setFont(QFont("Monospace", 9));
+    painter.drawText(body, Qt::AlignCenter, "QFN");
+}
+
+void PackagePreviewWidget::drawBGA(QPainter& painter, const QRect& r) {
+    // BGA: Square with ball grid
+    int size = qMin(r.width(), r.height()) * 0.7;
+    QRect body(r.center().x() - size/2, r.center().y() - size/2, size, size);
+    
+    painter.setBrush(QColor("#2a2a2a"));
+    painter.setPen(QPen(QColor("#555"), 2));
+    painter.drawRect(body);
+    
+    // Draw ball grid
+    int gridSize = 4;  // 4x4 grid for demo
+    int spacing = size / (gridSize + 1);
+    painter.setBrush(QColor("#888"));
+    painter.setPen(Qt::NoPen);
+    
+    for (int row = 0; row < gridSize; ++row) {
+        for (int col = 0; col < gridSize; ++col) {
+            int x = body.left() + spacing * (col + 1);
+            int y = body.top() + spacing * (row + 1);
+            painter.drawEllipse(x - 4, y - 4, 8, 8);
+        }
+    }
+    
+    // Corner marker
+    painter.setBrush(QColor("#ffd700"));
+    painter.drawEllipse(body.left() + spacing - 4, body.top() + spacing - 4, 8, 8);
+    
+    painter.setPen(QColor("#666"));
+    painter.setFont(QFont("Monospace", 8));
+    painter.drawText(body.adjusted(0, 0, 0, -size/3), Qt::AlignCenter, "BGA");
+}
+
+void PackagePreviewWidget::drawGeneric(QPainter& painter, const QRect& r) {
+    // Generic: Simple box symbol
+    int w = r.width() * 0.5;
+    int h = r.height() * 0.6;
+    QRect body(r.center().x() - w/2, r.center().y() - h/2, w, h);
+    
+    painter.setBrush(QColor("#333"));
+    painter.setPen(QPen(QColor("#777"), 2));
+    painter.drawRect(body);
+    
+    painter.setPen(QColor("#aaa"));
+    painter.setFont(QFont("Monospace", 10));
+    painter.drawText(body, Qt::AlignCenter, QString("%1").arg(pinCount) + " pins");
+}
 
 PackageSelectionPage::PackageSelectionPage(QWidget* parent) : QWizardPage(parent) {
     setTitle("Package Selection");
@@ -265,18 +449,60 @@ PackageSelectionPage::PackageSelectionPage(QWidget* parent) : QWizardPage(parent
     packageCombo->addItem("SOT-23 (3-pin)");
     packageCombo->addItem("SOT-223 (4-pin)");
     packageCombo->addItem("QFN-16 (16-pin)");
+    packageCombo->addItem("BGA (Ball Grid Array)");
+    connect(packageCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &PackageSelectionPage::onPackageChanged);
     layout->addWidget(packageCombo);
     
-    layout->addSpacing(20);
+    layout->addSpacing(10);
     
-    previewLabel = new QLabel(this);
-    previewLabel->setMinimumHeight(150);
-    previewLabel->setAlignment(Qt::AlignCenter);
-    previewLabel->setStyleSheet("background: #2a2a2a; border: 1px solid #555; border-radius: 5px;");
-    previewLabel->setText("[Package Preview Coming Soon]");
-    layout->addWidget(previewLabel);
+    // Live preview widget
+    previewWidget = new PackagePreviewWidget(this);
+    previewWidget->setMinimumHeight(180);
+    layout->addWidget(previewWidget);
+    
+    // Description label
+    descriptionLabel = new QLabel(this);
+    descriptionLabel->setWordWrap(true);
+    descriptionLabel->setStyleSheet("color: #888; font-size: 11px;");
+    layout->addWidget(descriptionLabel);
     
     layout->addStretch();
+    
+    // Initialize with default
+    onPackageChanged(0);
+}
+
+void PackageSelectionPage::onPackageChanged(int /*index*/) {
+    QString pkg = packageCombo->currentText();
+    previewWidget->setPackageType(pkg);
+    
+    // Extract pin count from package name
+    QRegularExpression rx("(\\d+)");
+    QRegularExpressionMatch match = rx.match(pkg);
+    if (match.hasMatch()) {
+        previewWidget->setPinCount(match.captured(1).toInt());
+    } else {
+        previewWidget->setPinCount(8);  // Default
+    }
+    
+    // Update description
+    if (pkg.contains("DIP")) {
+        descriptionLabel->setText("Dual Inline Package - Classic through-hole IC format with pins on two sides.");
+    } else if (pkg.contains("QFN")) {
+        descriptionLabel->setText("Quad Flat No-leads - Compact surface-mount package with thermal pad.");
+    } else if (pkg.contains("BGA")) {
+        descriptionLabel->setText("Ball Grid Array - High-density package for advanced ICs.");
+    } else if (pkg.contains("SOT")) {
+        descriptionLabel->setText("Small Outline Transistor - Compact package for discrete devices.");
+    } else {
+        descriptionLabel->setText("Generic rectangular symbol with configurable pin count.");
+    }
+}
+
+void PackageSelectionPage::setPinInfo(int count, const QStringList& names) {
+    previewWidget->setPinCount(count);
+    previewWidget->setPinNames(names);
 }
 
 // ============================================================================
