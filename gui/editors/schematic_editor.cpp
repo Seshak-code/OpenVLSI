@@ -200,6 +200,7 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
                      // Clean to prep next segment
                      clearGhostWires();
                      emit messageLogged("Segment placed.");
+                     updateERC(); // Real-time ERC after wire placement
                      
                      // Check if we hit a terminal? (Simplified: Just check if we hit a component pin)
                      // If so, finish.
@@ -230,6 +231,7 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
                 item->setRotation(ghostItem->rotation());
                 addItem(item);
                 emit messageLogged("Placed component.");
+                updateERC(); // Real-time ERC after component placement
             } else {
                 emit messageLogged("Invalid Placement: Overlap!");
             }
@@ -500,6 +502,96 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
     for (const auto& pt : connectedProbePoints) {
         painter->drawEllipse(QPointF(pt.first, pt.second), 5, 5);
     }
+    
+    // ====== ERC VIOLATION MARKERS ======
+    drawViolationMarkers(painter);
+}
+
+// ============================================================================
+// ERC IMPLEMENTATION
+// ============================================================================
+
+void GridScene::updateERC() {
+    if (!ercEnabled_) return;
+    currentViolations_ = ercEngine_.runFullCheck(this);
+    update(); // Trigger redraw
+}
+
+void GridScene::drawViolationMarkers(QPainter* painter) {
+    for (const auto& v : currentViolations_) {
+        QPoint loc = v.location;
+        
+        // Choose color based on severity
+        QColor color;
+        switch (v.severity) {
+            case ERC::Severity::ERROR:
+                color = QColor(255, 60, 60, 200);   // Red
+                break;
+            case ERC::Severity::WARNING:
+                color = QColor(255, 200, 0, 200);   // Yellow/Orange
+                break;
+            case ERC::Severity::INFO:
+                color = QColor(100, 180, 255, 180); // Light blue
+                break;
+        }
+        
+        // Draw marker circle
+        painter->setPen(QPen(color, 2));
+        painter->setBrush(color.lighter(150));
+        painter->drawEllipse(QPointF(loc.x(), loc.y()), 12, 12);
+        
+        // Draw icon based on violation type
+        painter->setPen(QPen(Qt::white, 2));
+        QFont font = painter->font();
+        font.setPixelSize(12);
+        font.setBold(true);
+        painter->setFont(font);
+        
+        QString icon;
+        switch (v.type) {
+            case ERC::ViolationType::NO_GROUND:
+                icon = "⏚"; // Ground symbol
+                break;
+            case ERC::ViolationType::FLOATING_NODE:
+                icon = "○"; // Open circle
+                break;
+            case ERC::ViolationType::FLOATING_GATE:
+                icon = "⚡"; // Lightning
+                break;
+            case ERC::ViolationType::SHORT_CIRCUIT:
+                icon = "✖"; // X
+                break;
+            case ERC::ViolationType::NEAR_MISS:
+                icon = "↔"; // Arrows
+                break;
+            default:
+                icon = "?";
+                break;
+        }
+        
+        QRectF textRect(loc.x() - 8, loc.y() - 8, 16, 16);
+        painter->drawText(textRect, Qt::AlignCenter, icon);
+        
+        // For near-miss violations with auto-fix, draw dashed line to target
+        if (v.hasAutoFix && v.type == ERC::ViolationType::NEAR_MISS) {
+            painter->setPen(QPen(QColor(100, 200, 255, 150), 1, Qt::DashLine));
+            painter->drawLine(QPointF(loc), QPointF(v.suggestedTarget));
+        }
+    }
+}
+
+void GridScene::showRoutingHint(const ERC::Violation& v) {
+    auto hint = ercAutoFix_.suggestFix(v, this);
+    ercAutoFix_.showHint(this, hint);
+}
+
+void GridScene::acceptRoutingHint() {
+    ercAutoFix_.acceptHint(this);
+    updateERC(); // Re-check after fix
+}
+
+void GridScene::dismissRoutingHint() {
+    ercAutoFix_.clearHint(this);
 }
 
 // ============================================================================

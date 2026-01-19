@@ -21,6 +21,8 @@
 
 #include <QJsonArray>
 #include "gui_types.h"
+#include "../analysis/erc_engine.h"
+#include "../analysis/erc_autofix.h"
 
 // ============================================================================
 // SCENE (Grid Handling + Validation)
@@ -89,6 +91,30 @@ private:
     
     // Compute alignment with existing components
     void updateAlignmentGuides(const QPointF& ghostPos);
+    
+    // ====== ERC (Electrical Rule Checking) ======
+    ERC::ERCEngine ercEngine_;
+    ERC::ERCAutoFix ercAutoFix_;
+    QList<ERC::Violation> currentViolations_;
+    bool ercEnabled_ = true;
+    
+    // Re-run ERC after schematic changes
+    void updateERC();
+    
+    // Draw violation markers
+    void drawViolationMarkers(QPainter* painter);
+
+public:
+    // Real-time ERC access
+    bool canSimulate() const { return ercEngine_.canSimulate(); }
+    QString getERCSummary() const { return ercEngine_.getSummary(); }
+    const QList<ERC::Violation>& getViolations() const { return currentViolations_; }
+    void setERCEnabled(bool enabled) { ercEnabled_ = enabled; if (enabled) updateERC(); }
+    
+    // Auto-fix hint API
+    void showRoutingHint(const ERC::Violation& v);
+    void acceptRoutingHint();
+    void dismissRoutingHint();
     
 protected:
     void drawForeground(QPainter* painter, const QRectF& rect) override;
