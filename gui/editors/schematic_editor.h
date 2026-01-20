@@ -23,6 +23,7 @@
 #include "gui_types.h"
 #include "../analysis/erc_engine.h"
 #include "../analysis/erc_autofix.h"
+#include "../../physics/simulation_profile.h"
 
 // ============================================================================
 // SCENE (Grid Handling + Validation)
@@ -71,6 +72,7 @@ signals:
     void toolChanged(ComponentType newTool);
     void componentSelected(VisualComponent* component); 
     void wireSelected(VisualWire* wire);
+    void violationsChanged(const QList<ERC::Violation>& violations);
 
 private:
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
@@ -136,6 +138,12 @@ class SchematicEditor : public QWidget {
 public:
     void setMode(AppMode mode);
     AppMode getMode() const { return currentMode; }
+    
+    // Per-file simulation profile management
+    const QMap<QString, Simulation::SimulationProfile>& getProfiles() const { return profiles_; }
+    void setProfiles(const QMap<QString, Simulation::SimulationProfile>& profiles) { profiles_ = profiles; }
+    QString getCurrentProfileId() const { return currentProfileId_; }
+    void setCurrentProfileId(const QString& id) { currentProfileId_ = id; }
 
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
@@ -162,6 +170,7 @@ public:
 signals:
     void topologyChanged(size_t hash); // Forwarded from GridScene
     void modeChanged(AppMode mode);    // Bench / Block / System
+    void violationsChanged(const QList<ERC::Violation>& violations); // Forwarded from GridScene
     
 public:
     // Wire placement API (for AI auto-routing)
@@ -242,6 +251,10 @@ private:
     GridScene* scene;
     SchematicView* view;
     QLabel* statusLabel;
+    
+    // Per-file simulation profiles
+    QMap<QString, Simulation::SimulationProfile> profiles_;
+    QString currentProfileId_;
     
     void setupUi();
     QWidget* createRibbon();

@@ -13,6 +13,7 @@
 #include "simulation_explorer.h"
 #include "simulation_profile.h"
 #include "../editors/schematic_editor.h"
+#include "../widgets/problems_panel.h"
 #include "circuitsim.h"
 
 /**
@@ -78,6 +79,7 @@ private:
     QPlainTextEdit* streamingLog_;
     QWidget* resultsPanel_;
     QWidget* waveformPanel_;
+    ProblemsPanel* problemsPanel_;
     
     // Toolbar
     QWidget* toolbar_;

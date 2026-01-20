@@ -208,6 +208,10 @@ void SimulationWorkspace::setupOutputTabs() {
         QTabBar::tab:selected { background: #1e1e1e; color: #ccc; }
     )");
     
+    // Problems panel (ERC violations)
+    problemsPanel_ = new ProblemsPanel(this);
+    outputTabs_->addTab(problemsPanel_, "Problems");
+    
     // Output log
     outputLog_ = new QPlainTextEdit(this);
     outputLog_->setReadOnly(true);
@@ -236,7 +240,29 @@ void SimulationWorkspace::setupOutputTabs() {
 }
 
 void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
+    // Disconnect previous editor if any
+    if (schematicEditor_) {
+        disconnect(schematicEditor_, nullptr, this, nullptr);
+        
+        // Save current profiles back to old editor
+        schematicEditor_->setProfiles(profiles_);
+        schematicEditor_->setCurrentProfileId(currentProfileId_);
+    }
+    
     schematicEditor_ = editor;
+    if (!editor) return;
+    
+    // Load profiles from new editor
+    profiles_ = editor->getProfiles();
+    currentProfileId_ = editor->getCurrentProfileId();
+    
+    // If editor has no profiles, initialize defaults
+    if (profiles_.isEmpty()) {
+        profiles_["quick_dc"] = Simulation::SimulationProfile::quickDC();
+        profiles_["transient_default"] = Simulation::SimulationProfile::transient();
+        profiles_["ac_sweep_default"] = Simulation::SimulationProfile::acSweep();
+        currentProfileId_ = "quick_dc";
+    }
     
     // Connect topology changes
     connect(editor, &SchematicEditor::topologyChanged, this, &SimulationWorkspace::onTopologyChanged);
@@ -244,10 +270,12 @@ void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
     // Connect mode changes
     connect(editor, &SchematicEditor::modeChanged, this, &SimulationWorkspace::onModeChanged);
     
+    // Connect ERC violations
+    connect(editor, &SchematicEditor::violationsChanged, problemsPanel_, &ProblemsPanel::setViolations);
+    
     // Initial sync
-    if (editor) {
-        onModeChanged(editor->getMode());
-    }
+    onModeChanged(editor->getMode());
+    updateProfileEditor();
 }
 
 void SimulationWorkspace::selectProfile(const QString& profileId) {

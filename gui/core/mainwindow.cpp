@@ -597,11 +597,13 @@ void MainWindow::onRtlTabChanged(int index) {
         schematicEditor = editor;
         if (libraryPanel) libraryPanel->setMode(editor->getMode());
         if (aiPanel) aiPanel->setEditor(editor);
+        if (simulationWorkspace) simulationWorkspace->setSchematicEditor(editor);
         statusBar()->showMessage(QString("Active: %1").arg(rtlPageTabs->tabText(index)));
     } else {
         // Welcome widget or placeholder - no active editor
         schematicEditor = nullptr;
         if (aiPanel) aiPanel->setEditor(nullptr);
+        if (simulationWorkspace) simulationWorkspace->setSchematicEditor(nullptr);
     }
 }
 

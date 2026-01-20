@@ -534,6 +534,7 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
 void GridScene::updateERC() {
     if (!ercEnabled_) return;
     currentViolations_ = ercEngine_.runFullCheck(this);
+    emit violationsChanged(currentViolations_);
     update(); // Trigger redraw
 }
 
@@ -1247,6 +1248,9 @@ SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {
     
     // Forward topology changes
     connect(scene, &GridScene::topologyChanged, this, &SchematicEditor::topologyChanged);
+    
+    // Forward ERC violations
+    connect(scene, &GridScene::violationsChanged, this, &SchematicEditor::violationsChanged);
 }
 
 QWidget* SchematicEditor::createRibbon() {
