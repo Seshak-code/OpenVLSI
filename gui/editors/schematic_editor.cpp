@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QMenu>
 #include <QAction>
+#include <QDateTime>
 
 // ============================================================================
 // WIRE COMPONENT
@@ -190,6 +191,7 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
                              // Create permanent copy
                              VisualWire* perm = new VisualWire(w->line());
                              addItem(perm);
+                             emit topologyChanged(QDateTime::currentMSecsSinceEpoch());
                          }
                      }
                      wireStart = p;
@@ -227,6 +229,7 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
                 item->setRotation(ghostItem->rotation());
                 addItem(item);
                 emit messageLogged("Placed component.");
+                emit topologyChanged(QDateTime::currentMSecsSinceEpoch());
                 updateERC(); // Real-time ERC after component placement
             } else {
                 emit messageLogged("Invalid Placement: Overlap!");
@@ -255,6 +258,7 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
                 } else if (selected == deleteAction) {
                     removeItem(comp);
                     delete comp;
+                    emit topologyChanged(QDateTime::currentMSecsSinceEpoch());
                 }
             } else {
                  setTool(ComponentType::Select);
@@ -348,6 +352,7 @@ void GridScene::keyPressEvent(QKeyEvent* event) {
             removeItem(item);
             delete item;
         }
+        emit topologyChanged(QDateTime::currentMSecsSinceEpoch());
     }
     else if (event->key() == Qt::Key_Escape) {
         setTool(ComponentType::Select);
@@ -1239,6 +1244,9 @@ SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {
 
     connect(scene, &GridScene::componentSelected, this, &SchematicEditor::itemSelected);
     connect(scene, &GridScene::wireSelected, this, &SchematicEditor::wireSelected);
+    
+    // Forward topology changes
+    connect(scene, &GridScene::topologyChanged, this, &SchematicEditor::topologyChanged);
 }
 
 QWidget* SchematicEditor::createRibbon() {
@@ -1389,6 +1397,8 @@ void SchematicEditor::setMode(AppMode mode) {
     if (scene) {
         scene->setMode(mode);
     }
+    
+    emit modeChanged(mode);
 }
 
 void SchematicEditor::setTool(ComponentType t) {

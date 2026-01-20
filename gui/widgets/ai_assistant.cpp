@@ -761,8 +761,8 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
             if (success) successCount++;
         }
         else if (actionType == "runSimulation") {
-            // Trigger simulation (this would connect to SimulatorWindow)
-            appendMessage("Copilot", "[Lab] Simulation requested. Open the Simulator window to see results.");
+            // Trigger simulation (connects to SimulationWorkspace)
+            appendMessage("Copilot", "[Lab] Simulation requested. Open the Simulation tab to see results.");
             successCount++;
         }
         else if (actionType == "placeProbe") {

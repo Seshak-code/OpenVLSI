@@ -92,8 +92,8 @@ void SimulationExplorer::addProfile(const Simulation::SimulationProfile& profile
     item->setIcon(0, getStatusIcon(profile.status));
     item->setToolTip(0, QString("Analysis: %1\nMode: %2")
         .arg(Simulation::analysisToString(profile.analysis))
-        .arg(profile.mode == DesignMode::BENCH ? "Bench" :
-             profile.mode == DesignMode::BLOCK ? "Block" : "System"));
+        .arg(profile.mode == AppMode::BENCH_TEST ? "Bench" :
+             profile.mode == AppMode::BLOCK_SUBSYSTEM ? "Block" : "System"));
 }
 
 void SimulationExplorer::updateProfileStatus(const QString& profileId, 

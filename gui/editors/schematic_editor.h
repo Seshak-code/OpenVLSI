@@ -65,6 +65,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
 
 signals:
+    void topologyChanged(size_t hash); // Emitted on component/wire add, remove, or property change
     void mouseMoved(int x, int y);
     void messageLogged(const QString& msg);
     void toolChanged(ComponentType newTool);
@@ -158,6 +159,11 @@ public:
     // Wire naming API
     void setWireName(VisualWire* wire, const QString& name);
     
+signals:
+    void topologyChanged(size_t hash); // Forwarded from GridScene
+    void modeChanged(AppMode mode);    // Bench / Block / System
+    
+public:
     // Wire placement API (for AI auto-routing)
     void placeWirePath(const QVector<QPointF>& points);
     void placePhysicallyAwareWire(const QVector<QPointF>& points, float width, double current);

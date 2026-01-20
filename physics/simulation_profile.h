@@ -4,7 +4,7 @@
 #include <QVariantMap>
 #include <QStringList>
 #include <QDateTime>
-#include "../components/component_library.h"  // For DesignMode enum
+#include "../gui/core/gui_types.h"  // For AppMode enum
 
 /**
  * simulation_profile.h
@@ -50,7 +50,7 @@ struct SimulationProfile {
     QString profileId;           // Unique ID: "ac_gain_nominal"
     QString name;                // Display name: "AC Gain Analysis"
     AnalysisType analysis = AnalysisType::DC;
-    DesignMode mode = DesignMode::BENCH;
+    AppMode mode = AppMode::BENCH_TEST;
     
     // Topology binding
     size_t topologyHash = 0;     // Links to TensorBlock::topologyHash

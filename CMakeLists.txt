@@ -89,8 +89,6 @@ add_executable(${PROJECT_NAME}
     main.cpp
     gui/core/mainwindow.cpp
     gui/core/mainwindow.h
-    gui/analysis/simulator_window.cpp
-    gui/analysis/simulator_window.h
     gui/editors/schematic_editor.cpp
     gui/editors/schematic_editor_sync.cpp
     gui/editors/schematic_editor.h
@@ -321,7 +319,6 @@ add_executable(test_auto_harness
     gui/widgets/design_flow.cpp
     gui/analysis/system_inspector.cpp
     gui/analysis/logic_analyzer.cpp
-    gui/analysis/simulator_window.cpp
     gui/editors/hdl_editor.cpp
     gui/core/mainwindow.cpp
     gui/core/welcome_widget.cpp
@@ -373,7 +370,6 @@ add_executable(test_copilot_validate
     gui/widgets/design_flow.cpp
     gui/analysis/system_inspector.cpp
     gui/analysis/logic_analyzer.cpp
-    gui/analysis/simulator_window.cpp
     gui/editors/hdl_editor.cpp
     gui/core/mainwindow.cpp
     gui/core/welcome_widget.cpp

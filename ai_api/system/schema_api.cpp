@@ -3,8 +3,7 @@
 #include "schematic_editor.h"
 #include "../simulation/auto_harness.h"
 #include <QApplication>
-#include "schematic_editor.h"
-#include <QApplication>
+#include <QDateTime>
 #include <QDebug>
 
 namespace AIAPI {
@@ -85,8 +84,10 @@ QString routeWire(const RoutingConstraints& constraints) {
     }
     
     editor->placeWirePath(scaledPoints);
-    editor->placeWirePath(scaledPoints);
-    return "WIRE_OK"; // TODO: Return actual wire IDs
+    
+    // Generate wire ID based on timestamp
+    QString wireId = QString("WIRE_%1").arg(QDateTime::currentMSecsSinceEpoch());
+    return wireId;
 }
 
 bool optimizePlacement(const QString& componentId) {

@@ -7,6 +7,7 @@
 #include <QCheckBox>
 #include <QUuid>
 #include <QDateTime>
+#include "../../physics/quick_analysis.h"
 
 SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     : QWidget(parent)
@@ -134,17 +135,54 @@ void SimulationWorkspace::setupProfileEditor() {
     analysisLayout->addWidget(new QLabel("Analysis:", profileEditor_));
     
     analysisCombo_ = new QComboBox(profileEditor_);
-    analysisCombo_->addItem("DC", static_cast<int>(Simulation::AnalysisType::DC));
-    analysisCombo_->addItem("AC", static_cast<int>(Simulation::AnalysisType::AC));
-    analysisCombo_->addItem("Transient", static_cast<int>(Simulation::AnalysisType::TRANSIENT));
-    analysisCombo_->addItem("Noise", static_cast<int>(Simulation::AnalysisType::NOISE));
+    QStandardItemModel* model = new QStandardItemModel(analysisCombo_);
+    analysisCombo_->setModel(model);
+    
+    auto addItem = [&](const QString& text, Simulation::AnalysisType type) {
+        QStandardItem* item = new QStandardItem(text);
+        item->setData(static_cast<int>(type), Qt::UserRole);
+        model->appendRow(item);
+    };
+    
+    addItem("DC", Simulation::AnalysisType::DC);
+    addItem("AC", Simulation::AnalysisType::AC);
+    addItem("Transient", Simulation::AnalysisType::TRANSIENT);
+    addItem("Noise", Simulation::AnalysisType::NOISE);
     
     connect(analysisCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (idx < 0) return;
         auto type = static_cast<Simulation::AnalysisType>(analysisCombo_->itemData(idx).toInt());
+        
+        // Enforce mode restrictions (redundant safety for UI)
+        bool allowed = true;
+        if (currentMode_ == AppMode::BLOCK_SUBSYSTEM) {
+            if (type == Simulation::AnalysisType::AC || type == Simulation::AnalysisType::NOISE) allowed = false;
+        } else if (currentMode_ == AppMode::SYSTEM_INTEGRATION) {
+            if (type != Simulation::AnalysisType::TRANSIENT) allowed = false;
+        }
+
+        if (!allowed) {
+            // Revert to a safe default (Transient is always safe in restricted modes)
+            int safeIdx = analysisCombo_->findData(static_cast<int>(Simulation::AnalysisType::TRANSIENT));
+            if (safeIdx >= 0 && safeIdx != idx) {
+                analysisCombo_->setCurrentIndex(safeIdx);
+            }
+            return;
+        }
+
         updateParametersForAnalysis(type);
     });
     
     analysisLayout->addWidget(analysisCombo_);
+    
+    // Advanced toggle
+    advancedParamsCheck_ = new QCheckBox("Advanced", profileEditor_);
+    advancedParamsCheck_->setStyleSheet("color: #aaa; margin-left: 10px;");
+    connect(advancedParamsCheck_, &QCheckBox::toggled, this, [this](bool){
+        updateProfileEditor(); // Re-render parameters
+    });
+    analysisLayout->addWidget(advancedParamsCheck_);
+    
     analysisLayout->addStretch();
     layout->addLayout(analysisLayout);
     
@@ -199,6 +237,17 @@ void SimulationWorkspace::setupOutputTabs() {
 
 void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
     schematicEditor_ = editor;
+    
+    // Connect topology changes
+    connect(editor, &SchematicEditor::topologyChanged, this, &SimulationWorkspace::onTopologyChanged);
+    
+    // Connect mode changes
+    connect(editor, &SchematicEditor::modeChanged, this, &SimulationWorkspace::onModeChanged);
+    
+    // Initial sync
+    if (editor) {
+        onModeChanged(editor->getMode());
+    }
 }
 
 void SimulationWorkspace::selectProfile(const QString& profileId) {
@@ -254,20 +303,30 @@ void SimulationWorkspace::updateParametersForAnalysis(Simulation::AnalysisType t
     auto* profile = currentProfile();
     
     // Add analysis-specific parameters
+    bool showAdvanced = advancedParamsCheck_ && advancedParamsCheck_->isChecked();
+    
+    // Add analysis-specific parameters
     switch (type) {
         case Simulation::AnalysisType::DC:
-            form->addRow("Accuracy:", createComboParam({"liberal", "moderate", "conservative"}, 
-                         profile ? profile->parameters.value("accuracy", "moderate").toString() : "moderate"));
-            form->addRow("Max Iterations:", createLineParam(
-                         profile ? profile->parameters.value("maxIter", "50").toString() : "50"));
+            // DC is usually parameter-free unless iterating options
+            if (showAdvanced) {
+                form->addRow("Accuracy:", createComboParam({"liberal", "moderate", "conservative"}, 
+                             profile ? profile->parameters.value("accuracy", "moderate").toString() : "moderate"));
+                form->addRow("Max Iterations:", createLineParam(
+                             profile ? profile->parameters.value("maxIter", "50").toString() : "50"));
+            } else {
+                 form->addRow(new QLabel("Standard DC Analysis (Default)", parametersWidget_));
+            }
             break;
             
         case Simulation::AnalysisType::TRANSIENT:
             form->addRow("Stop Time:", createLineParam(
                          profile ? profile->parameters.value("stopTime", "1ms").toString() : "1ms"));
-            form->addRow("Step Hint:", createLineParam(
-                         profile ? profile->parameters.value("stepHint", "100ns").toString() : "100ns"));
-            form->addRow("Accuracy:", createComboParam({"liberal", "moderate", "conservative"}, "moderate"));
+            if (showAdvanced) {
+                form->addRow("Step Hint:", createLineParam(
+                             profile ? profile->parameters.value("stepHint", "100ns").toString() : "100ns"));
+                form->addRow("Accuracy:", createComboParam({"liberal", "moderate", "conservative"}, "moderate"));
+            }
             break;
             
         case Simulation::AnalysisType::AC:
@@ -275,16 +334,20 @@ void SimulationWorkspace::updateParametersForAnalysis(Simulation::AnalysisType t
                          profile ? profile->parameters.value("fStart", "1Hz").toString() : "1Hz"));
             form->addRow("Stop Freq:", createLineParam(
                          profile ? profile->parameters.value("fStop", "1GHz").toString() : "1GHz"));
-            form->addRow("Points:", createLineParam(
-                         profile ? profile->parameters.value("points", "200").toString() : "200"));
-            form->addRow("Sweep Type:", createComboParam({"log", "linear"}, "log"));
+            if (showAdvanced) {
+                form->addRow("Points:", createLineParam(
+                             profile ? profile->parameters.value("points", "200").toString() : "200"));
+                form->addRow("Sweep Type:", createComboParam({"log", "linear"}, "log"));
+            }
             break;
             
         case Simulation::AnalysisType::NOISE:
-            form->addRow("Start Freq:", createLineParam("1Hz"));
-            form->addRow("Stop Freq:", createLineParam("1MHz"));
             form->addRow("Input Source:", createLineParam("Vin"));
             form->addRow("Output Node:", createLineParam("Vout"));
+            if (showAdvanced) {
+                form->addRow("Start Freq:", createLineParam("1Hz"));
+                form->addRow("Stop Freq:", createLineParam("1MHz"));
+            }
             break;
             
         default:
@@ -311,8 +374,69 @@ void SimulationWorkspace::onTopologyChanged(size_t newHash) {
     if (newHash != currentTopologyHash_) {
         currentTopologyHash_ = newHash;
         explorer_->markAllStale();
+        QuickAnalysis::invalidate(); // Invalidate hover preview cache
         appendLog(QString("[INFO] Topology changed (hash: 0x%1). Profiles marked stale.")
                   .arg(newHash, 8, 16, QChar('0')));
+    }
+}
+
+void SimulationWorkspace::onModeChanged(AppMode mode) {
+    currentMode_ = mode;
+    updateAnalysisVisibility();
+    
+    // Force parameter update if analysis type changed or needs filtering
+    if (currentProfile()) {
+        updateProfileEditor(); 
+    }
+}
+
+void SimulationWorkspace::updateAnalysisVisibility() {
+    if (!analysisCombo_) return;
+    
+    QStandardItemModel* model = qobject_cast<QStandardItemModel*>(analysisCombo_->model());
+    if (!model) {
+        appendLog("[ERROR] analysisCombo model is not QStandardItemModel");
+        return;
+    }
+    
+    appendLog(QString("[DEBUG] Updating visibility for mode: %1").arg(static_cast<int>(currentMode_)));
+    
+    // Rules:
+    // BENCH: All allowed
+    // BLOCK: DC, TRANSIENT only (No AC/Noise/Sensitivity)
+    // SYSTEM: TRANSIENT only
+    
+    for (int i = 0; i < analysisCombo_->count(); ++i) {
+        Simulation::AnalysisType type = static_cast<Simulation::AnalysisType>(analysisCombo_->itemData(i).toInt());
+        bool allowed = true;
+        
+        if (currentMode_ == AppMode::BLOCK_SUBSYSTEM) {
+            if (type == Simulation::AnalysisType::AC || type == Simulation::AnalysisType::NOISE) {
+                allowed = false;
+            }
+        } else if (currentMode_ == AppMode::SYSTEM_INTEGRATION) {
+            if (type != Simulation::AnalysisType::TRANSIENT) {
+                allowed = false;
+            }
+        }
+        
+        QStandardItem* item = model->item(i);
+        if (item) {
+            item->setEnabled(allowed); 
+            
+            // Visual indication (grey out text)
+            if (!allowed) item->setForeground(QBrush(Qt::gray));
+            else item->setForeground(QBrush(Qt::white));
+            
+            if (!allowed && i == analysisCombo_->currentIndex()) {
+                // Determine fallback
+                if (currentMode_ == AppMode::SYSTEM_INTEGRATION) {
+                    analysisCombo_->setCurrentIndex(analysisCombo_->findData(static_cast<int>(Simulation::AnalysisType::TRANSIENT)));
+                } else {
+                    analysisCombo_->setCurrentIndex(analysisCombo_->findData(static_cast<int>(Simulation::AnalysisType::TRANSIENT)));
+                }
+            }
+        }
     }
 }
 

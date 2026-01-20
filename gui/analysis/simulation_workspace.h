@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QTimer>
+#include <QStandardItemModel>
 #include "simulation_explorer.h"
 #include "simulation_profile.h"
 #include "../editors/schematic_editor.h"
@@ -37,6 +38,7 @@ public:
     
     // Topology invalidation
     void onTopologyChanged(size_t newHash);
+    void onModeChanged(AppMode mode);
     
 signals:
     void simulationStarted(const QString& profileId);
@@ -67,6 +69,7 @@ private:
     QWidget* profileEditor_;
     QLabel* profileNameLabel_;
     QComboBox* analysisCombo_;
+    QCheckBox* advancedParamsCheck_;
     QWidget* parametersWidget_;
     
     // Bottom panel
@@ -87,6 +90,7 @@ private:
     QMap<QString, Simulation::SimulationProfile> profiles_;
     QString currentProfileId_;
     size_t currentTopologyHash_ = 0;
+    AppMode currentMode_ = AppMode::BENCH_TEST;
     
     // Simulation engine
     CircuitSim sim_;
@@ -108,6 +112,7 @@ private:
     void updateParametersForAnalysis(Simulation::AnalysisType type);
     void finishSimulation();
     bool canRun() const;
+    void updateAnalysisVisibility();
     
     // Parameter widget helpers
     QWidget* createLineParam(const QString& defaultVal);
