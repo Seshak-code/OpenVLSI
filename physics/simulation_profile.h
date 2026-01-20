@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QDateTime>
 #include "../gui/core/gui_types.h"  // For AppMode enum
+#include "corner_config.h"          // For CornerConfig and RunMode
 
 /**
  * simulation_profile.h
@@ -116,6 +117,12 @@ struct SimulationProfile {
         p.parameters["sweepType"] = "log";
         return p;
     }
+    
+    // Corner configurations for PVT analysis
+    QList<CornerConfig> corners;  // Default: empty = typical corner only
+    
+    // Run mode preference
+    RunMode runMode = RunMode::FULL;
 };
 
 // ============================================================================
@@ -138,14 +145,8 @@ struct SimulationRun {
     };
     Status status = Status::PENDING;
     
-    // Execution mode
-    enum class Mode {
-        FULL,           // Complete solve
-        QUICK,          // Single iteration estimate
-        RESUME,         // Continue from previous
-        INCREMENTAL     // Reuse Jacobian if safe
-    };
-    Mode runMode = Mode::FULL;
+    // Execution mode from corner_config.h
+    RunMode runMode = RunMode::FULL;
     
     // Timing metrics
     double setupTime_ms = 0.0;
@@ -181,23 +182,6 @@ struct SimulationRun {
 // CORNER CONFIG (Foundation for 1.8)
 // ============================================================================
 
-struct CornerConfig {
-    QString name;                // "TT @ 27C"
-    double temperature_C = 27.0;
-    double vdd_V = 1.8;
-    QString process = "TT";      // TT, FF, SS, SF, FS
-    
-    static CornerConfig typical() {
-        return {"TT @ 27C", 27.0, 1.8, "TT"};
-    }
-    
-    static CornerConfig fast() {
-        return {"FF @ -40C", -40.0, 1.98, "FF"};
-    }
-    
-    static CornerConfig slow() {
-        return {"SS @ 125C", 125.0, 1.62, "SS"};
-    }
-};
+// CornerConfig is now in corner_config.h
 
 } // namespace Simulation

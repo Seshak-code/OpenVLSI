@@ -7,6 +7,8 @@
 #include <QCheckBox>
 #include <QUuid>
 #include <QDateTime>
+#include <QJsonObject>
+#include <QJsonArray>
 #include "../../physics/quick_analysis.h"
 
 SimulationWorkspace::SimulationWorkspace(QWidget* parent)
@@ -38,32 +40,42 @@ void SimulationWorkspace::setupUI() {
     // Main content splitter
     mainSplitter_ = new QSplitter(Qt::Horizontal, this);
     
-    // Left: Explorer
-    explorer_ = new SimulationExplorer(this);
-    explorer_->setMinimumWidth(180);
-    explorer_->setMaximumWidth(300);
-    mainSplitter_->addWidget(explorer_);
+    // Left: Schematic file selector
+    QWidget* leftPanel = new QWidget(this);
+    QVBoxLayout* leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->setContentsMargins(8, 8, 8, 8);
     
-    connect(explorer_, &SimulationExplorer::profileSelected,
-            this, &SimulationWorkspace::onProfileSelected);
-    connect(explorer_, &SimulationExplorer::runRequested,
-            this, &SimulationWorkspace::onRunRequested);
+    QLabel* fileLabel = new QLabel("Schematic:", leftPanel);
+    fileLabel->setStyleSheet("color: #ccc; font-weight: bold;");
+    leftLayout->addWidget(fileLabel);
     
-    // Right side: vertical splitter (editor + output)
-    rightSplitter_ = new QSplitter(Qt::Vertical, this);
+    schematicCombo_ = new QComboBox(leftPanel);
+    schematicCombo_->setStyleSheet("background: #333; color: #ccc; padding: 4px;");
+    leftLayout->addWidget(schematicCombo_);
     
-    // Center: Profile Editor
+    leftLayout->addStretch();
+    leftPanel->setMinimumWidth(180);
+    leftPanel->setMaximumWidth(250);
+    leftPanel->setStyleSheet("background: #252526;");
+    mainSplitter_->addWidget(leftPanel);
+    
+    // Right: Profile Editor + Help Panel (no output tabs)
+    QWidget* rightPanel = new QWidget(this);
+    QVBoxLayout* rightLayout = new QVBoxLayout(rightPanel);
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    
+    // Profile Editor
     setupProfileEditor();
-    rightSplitter_->addWidget(profileEditor_);
+    rightLayout->addWidget(profileEditor_, 1);
     
-    // Bottom: Output Tabs
-    setupOutputTabs();
-    rightSplitter_->addWidget(outputTabs_);
+    // Help/Explanation panel
+    helpLabel_ = new QLabel(rightPanel);
+    helpLabel_->setWordWrap(true);
+    helpLabel_->setStyleSheet("background: #1e1e1e; color: #888; padding: 12px; font-size: 11px;");
+    helpLabel_->setText(getAnalysisHelp(Simulation::AnalysisType::DC));
+    rightLayout->addWidget(helpLabel_);
     
-    rightSplitter_->setStretchFactor(0, 2);
-    rightSplitter_->setStretchFactor(1, 1);
-    
-    mainSplitter_->addWidget(rightSplitter_);
+    mainSplitter_->addWidget(rightPanel);
     mainSplitter_->setStretchFactor(0, 0);
     mainSplitter_->setStretchFactor(1, 1);
     
@@ -95,7 +107,40 @@ void SimulationWorkspace::setupToolbar() {
         selectProfile(id);
     });
     
-    layout->addSpacing(20);
+    layout->addSpacing(10);
+    
+    // Run mode selector
+    QLabel* modeLabel = new QLabel("Mode:", toolbar_);
+    modeLabel->setStyleSheet("color: #888;");
+    layout->addWidget(modeLabel);
+    
+    runModeCombo_ = new QComboBox(toolbar_);
+    runModeCombo_->addItem("Full", static_cast<int>(Simulation::RunMode::FULL));
+    runModeCombo_->addItem("Quick", static_cast<int>(Simulation::RunMode::QUICK));
+    runModeCombo_->addItem("Resume", static_cast<int>(Simulation::RunMode::RESUME));
+    runModeCombo_->addItem("Incremental", static_cast<int>(Simulation::RunMode::INCREMENTAL));
+    runModeCombo_->setMinimumWidth(90);
+    layout->addWidget(runModeCombo_);
+    
+    layout->addSpacing(10);
+    
+    // Corner selector
+    QLabel* cornerLabel = new QLabel("Corner:", toolbar_);
+    cornerLabel->setStyleSheet("color: #888;");
+    layout->addWidget(cornerLabel);
+    
+    cornerCombo_ = new QComboBox(toolbar_);
+    for(const auto& c : Simulation::CornerConfig::standard5()) {
+        cornerCombo_->addItem(c.name, c.name);
+    }
+    // Set tooltips for corner details
+    for(int i=0; i<cornerCombo_->count(); ++i) {
+        auto c = Simulation::CornerConfig::standard5()[i];
+        cornerCombo_->setItemData(i, QString("%1C, Vdd x%2").arg(c.temperature).arg(c.vddScale), Qt::ToolTipRole);
+    }
+    layout->addWidget(cornerCombo_);
+    
+    layout->addSpacing(10);
     
     // Run button
     runBtn_ = new QPushButton("Run", toolbar_);
@@ -171,6 +216,11 @@ void SimulationWorkspace::setupProfileEditor() {
         }
 
         updateParametersForAnalysis(type);
+        
+        // Update help text for the selected analysis
+        if (helpLabel_) {
+            helpLabel_->setText(getAnalysisHelp(type));
+        }
     });
     
     analysisLayout->addWidget(analysisCombo_);
@@ -200,43 +250,35 @@ void SimulationWorkspace::setupProfileEditor() {
     updateProfileEditor();
 }
 
-void SimulationWorkspace::setupOutputTabs() {
-    outputTabs_ = new QTabWidget(this);
-    outputTabs_->setStyleSheet(R"(
-        QTabWidget::pane { border: none; background: #1e1e1e; }
-        QTabBar::tab { background: #2d2d2d; color: #888; padding: 6px 12px; }
-        QTabBar::tab:selected { background: #1e1e1e; color: #ccc; }
-    )");
-    
-    // Problems panel (ERC violations)
-    problemsPanel_ = new ProblemsPanel(this);
-    outputTabs_->addTab(problemsPanel_, "Problems");
-    
-    // Output log
-    outputLog_ = new QPlainTextEdit(this);
-    outputLog_->setReadOnly(true);
-    outputLog_->setStyleSheet("background: #1e1e1e; color: #ccc; font-family: monospace;");
-    outputTabs_->addTab(outputLog_, "Output");
-    
-    // Streaming log
-    streamingLog_ = new QPlainTextEdit(this);
-    streamingLog_->setReadOnly(true);
-    streamingLog_->setStyleSheet("background: #1e1e1e; color: #4ec9b0; font-family: monospace;");
-    outputTabs_->addTab(streamingLog_, "Streaming");
-    
-    // Results (placeholder)
-    resultsPanel_ = new QWidget(this);
-    resultsPanel_->setLayout(new QVBoxLayout());
-    static_cast<QVBoxLayout*>(resultsPanel_->layout())->addWidget(
-        new QLabel("Results will appear here after simulation"));
-    outputTabs_->addTab(resultsPanel_, "Results");
-    
-    // Waveforms (placeholder)
-    waveformPanel_ = new QWidget(this);
-    waveformPanel_->setLayout(new QVBoxLayout());
-    static_cast<QVBoxLayout*>(waveformPanel_->layout())->addWidget(
-        new QLabel("Waveforms will appear here"));
-    outputTabs_->addTab(waveformPanel_, "Waveforms");
+QString SimulationWorkspace::getAnalysisHelp(Simulation::AnalysisType type) const {
+    switch (type) {
+        case Simulation::AnalysisType::DC:
+            return "DC Analysis finds the steady-state operating point of the circuit.\n\n"
+                   "• Computes DC voltages and currents at all nodes\n"
+                   "• Uses Newton-Raphson iteration for nonlinear devices\n"
+                   "• Required before AC or Noise analysis\n\n"
+                   "Use for: Bias point verification, power consumption calculations.";
+        case Simulation::AnalysisType::AC:
+            return "AC Analysis computes small-signal frequency response.\n\n"
+                   "• Linearizes circuit around DC operating point\n"
+                   "• Sweeps frequency to generate Bode plots\n"
+                   "• Shows gain, phase, and impedance vs frequency\n\n"
+                   "Use for: Amplifier gain, filter cutoff, stability analysis.";
+        case Simulation::AnalysisType::TRANSIENT:
+            return "Transient Analysis simulates time-domain behavior.\n\n"
+                   "• Computes voltages/currents vs time\n"
+                   "• Uses adaptive timestep integration\n"
+                   "• Handles switching and nonlinear dynamics\n\n"
+                   "Use for: Digital logic, switching waveforms, power-on behavior.";
+        case Simulation::AnalysisType::NOISE:
+            return "Noise Analysis computes equivalent input/output noise.\n\n"
+                   "• Models thermal, shot, and flicker noise sources\n"
+                   "• Requires specified input/output ports\n"
+                   "• Reports noise spectral density and integrated noise\n\n"
+                   "Use for: Low-noise amplifier design, SNR optimization.";
+        default:
+            return "Select an analysis type to see its description.";
+    }
 }
 
 void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
@@ -270,8 +312,8 @@ void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
     // Connect mode changes
     connect(editor, &SchematicEditor::modeChanged, this, &SimulationWorkspace::onModeChanged);
     
-    // Connect ERC violations
-    connect(editor, &SchematicEditor::violationsChanged, problemsPanel_, &ProblemsPanel::setViolations);
+    // Connect ERC violations - now handled in MainWindow bottom dock
+    // connect(editor, &SchematicEditor::violationsChanged, problemsPanel_, &ProblemsPanel::setViolations);
     
     // Initial sync
     onModeChanged(editor->getMode());
@@ -292,7 +334,8 @@ void SimulationWorkspace::selectProfile(const QString& profileId) {
         }
     }
     
-    emit explorer_->profileSelected(profileId);
+    // Notify profile change (explorer removed - UI simplified)
+    // emit explorer_->profileSelected(profileId);
 }
 
 Simulation::SimulationProfile* SimulationWorkspace::currentProfile() {
@@ -401,7 +444,7 @@ QWidget* SimulationWorkspace::createComboParam(const QStringList& options, const
 void SimulationWorkspace::onTopologyChanged(size_t newHash) {
     if (newHash != currentTopologyHash_) {
         currentTopologyHash_ = newHash;
-        explorer_->markAllStale();
+        // explorer_->markAllStale(); // Explorer removed
         QuickAnalysis::invalidate(); // Invalidate hover preview cache
         appendLog(QString("[INFO] Topology changed (hash: 0x%1). Profiles marked stale.")
                   .arg(newHash, 8, 16, QChar('0')));
@@ -509,6 +552,9 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     currentRun_.runId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
     currentRun_.profileId = profileId;
     currentRun_.topologyHash = currentTopologyHash_;
+    if (runModeCombo_) {
+        currentRun_.runMode = static_cast<Simulation::RunMode>(runModeCombo_->currentData().toInt());
+    }
     currentRun_.startTime = QDateTime::currentDateTime();
     currentRun_.status = Simulation::SimulationRun::Status::RUNNING;
     
@@ -520,7 +566,7 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     findChild<QLabel*>("statusLabel")->setStyleSheet("color: #dcdcaa;");
     
     // Clear streaming log
-    streamingLog_->clear();
+    // streamingLog_->clear(); // Now in MainWindow dock
     
     appendLog(QString("[%1] Starting %2...")
               .arg(QDateTime::currentDateTime().toString("hh:mm:ss"))
@@ -551,12 +597,21 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
                 appendStreamLog(QString("  V(%1) = %2 V")
                                .arg(i+1).arg(result.nodeVoltages[i], 0, 'g', 4));
             }
-            explorer_->updateProfileStatus(profileId, Simulation::SimulationProfile::Status::PASSED);
+            // explorer_->updateProfileStatus(profileId, Simulation::SimulationProfile::Status::PASSED);
+            
+            // Emit results for panel
+            QJsonObject jsonRes;
+            jsonRes["type"] = "DC";
+            QJsonArray voltages;
+            for(double v : result.nodeVoltages) voltages.append(v);
+            jsonRes["voltages"] = voltages;
+            emit resultsReady(jsonRes);
+            
         } else {
             appendStreamLog("FAILED to converge");
             currentRun_.failureReason = result.stats.error_detail.empty() ? 
                 "Non-convergence" : QString::fromStdString(result.stats.error_detail);
-            explorer_->updateProfileStatus(profileId, Simulation::SimulationProfile::Status::FAILED);
+            // explorer_->updateProfileStatus(profileId, Simulation::SimulationProfile::Status::FAILED);
         }
         
         finishSimulation();
@@ -583,6 +638,15 @@ void SimulationWorkspace::stepSimulation() {
         SolverStep result = sim_.stepTransient(netlist_, timeStep_, currentTime_);
         currentTime_ += timeStep_;
         currentRun_.iterations++;
+        
+        // Emit waveform data
+        QJsonObject point;
+        point["type"] = "TransientPoint";
+        point["time"] = currentTime_;
+        QJsonArray voltages;
+        for(double v : result.nodeVoltages) voltages.append(v);
+        point["voltages"] = voltages;
+        emit resultsReady(point);
         
         if (!result.stats.converged) {
             currentRun_.status = Simulation::SimulationRun::Status::FAILED;
@@ -616,7 +680,7 @@ void SimulationWorkspace::finishSimulation() {
     currentRun_.solveTime_ms = currentRun_.startTime.msecsTo(currentRun_.endTime);
     
     // Add to history
-    explorer_->addRun(currentRun_);
+    // explorer_->addRun(currentRun_); // Explorer removed
     runHistory_.prepend(currentRun_);
     
     // Update status
@@ -643,9 +707,9 @@ void SimulationWorkspace::stopSimulation() {
 }
 
 void SimulationWorkspace::appendLog(const QString& msg) {
-    outputLog_->appendPlainText(msg);
+    emit logMessage(msg);
 }
 
 void SimulationWorkspace::appendStreamLog(const QString& msg) {
-    streamingLog_->appendPlainText(msg);
+    emit streamMessage(msg);
 }

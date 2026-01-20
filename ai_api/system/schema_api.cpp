@@ -174,4 +174,136 @@ QJsonObject validateComponent(const QString& componentId, const QJsonObject& sti
     return jsonRes;
 }
 
+// ============================================================================
+// SIMULATION CONTEXT (Phase 1.7.9 - AI Integration Hooks)
+// ============================================================================
+
+// Static storage for convergence trace (populated by CircuitSim during solve)
+static QJsonArray s_convergenceTrace;
+static QString s_lastFailureReason;
+static QString s_lastRunStatus = "NOT_RUN";
+static double s_lastSolveTime_ms = 0.0;
+static QJsonObject s_lastNodeVoltages;
+
+void recordConvergenceStep(int iteration, double residual, double stepSize) {
+    QJsonObject step;
+    step["iteration"] = iteration;
+    step["residual"] = residual;
+    step["stepSize"] = stepSize;
+    s_convergenceTrace.append(step);
+}
+
+void clearConvergenceTrace() {
+    s_convergenceTrace = QJsonArray();
+}
+
+void setLastRunResult(const QString& status, const QString& failureReason, double solveTime_ms) {
+    s_lastRunStatus = status;
+    s_lastFailureReason = failureReason;
+    s_lastSolveTime_ms = solveTime_ms;
+}
+
+void setLastNodeVoltages(const QJsonObject& voltages) {
+    s_lastNodeVoltages = voltages;
+}
+
+QJsonObject getSimulationContext() {
+    SchematicEditor* editor = getEditor();
+    QJsonObject ctx;
+    
+    if (editor) {
+        // Topology hash
+        ctx["topologyHash"] = QString::number(editor->getTopologyHash(), 16);
+        
+        // Current mode
+        AppMode mode = editor->getMode();
+        ctx["currentMode"] = mode == AppMode::BENCH_TEST ? "BENCH_TEST" :
+                             mode == AppMode::BLOCK_SUBSYSTEM ? "BLOCK_SUBSYSTEM" : 
+                             "SYSTEM_INTEGRATION";
+        
+        // ERC violations
+        QJsonArray violations;
+        if (editor->getScene()) {
+            auto* scene = qobject_cast<GridScene*>(editor->getScene());
+            if (scene) {
+                for (const auto& v : scene->getViolations()) {
+                    QJsonObject vObj;
+                    vObj["type"] = static_cast<int>(v.type);
+                    vObj["severity"] = v.severity == ERC::Severity::ERROR ? "ERROR" :
+                                       v.severity == ERC::Severity::WARNING ? "WARNING" : "INFO";
+                    vObj["message"] = v.message;
+                    vObj["x"] = v.location.x();
+                    vObj["y"] = v.location.y();
+                    violations.append(vObj);
+                }
+            }
+        }
+        ctx["ercViolations"] = violations;
+        ctx["canSimulate"] = violations.isEmpty() || 
+                             std::none_of(violations.begin(), violations.end(), 
+                                         [](const QJsonValue& v){ return v["severity"] == "ERROR"; });
+    } else {
+        ctx["topologyHash"] = "0";
+        ctx["currentMode"] = "NONE";
+        ctx["ercViolations"] = QJsonArray();
+        ctx["canSimulate"] = false;
+    }
+    
+    // Last run status
+    ctx["lastRunStatus"] = s_lastRunStatus;
+    ctx["lastFailureReason"] = s_lastFailureReason;
+    ctx["lastSolveTime_ms"] = s_lastSolveTime_ms;
+    ctx["convergenceTrace"] = s_convergenceTrace;
+    ctx["nodeVoltages"] = s_lastNodeVoltages;
+    
+    return ctx;
+}
+
+QJsonArray getConvergenceTrace() {
+    return s_convergenceTrace;
+}
+
+QString analyzeFailure() {
+    if (s_lastRunStatus != "FAILED") {
+        return "No failure to analyze. Last run status: " + s_lastRunStatus;
+    }
+    
+    QString analysis;
+    analysis += "== SIMULATION FAILURE ANALYSIS ==\n\n";
+    analysis += "Failure Reason: " + s_lastFailureReason + "\n\n";
+    
+    // Analyze convergence trace
+    if (!s_convergenceTrace.isEmpty()) {
+        double lastResidual = s_convergenceTrace.last()["residual"].toDouble();
+        int iterations = s_convergenceTrace.size();
+        
+        analysis += QString("Iterations: %1\n").arg(iterations);
+        analysis += QString("Final Residual: %1\n\n").arg(lastResidual, 0, 'e', 3);
+        
+        // Detect convergence patterns
+        if (iterations >= 50) {
+            analysis += "DIAGNOSIS: Max iterations reached. Possible causes:\n";
+            analysis += "  - Floating node (check ERC)\n";
+            analysis += "  - No path to ground\n";
+            analysis += "  - Voltage source loop\n";
+            analysis += "  - Extremely high loop gain\n";
+        } else if (lastResidual > 1e6) {
+            analysis += "DIAGNOSIS: Divergent solution. Possible causes:\n";
+            analysis += "  - Physical impossibility (e.g., voltage source without load)\n";
+            analysis += "  - Short circuit\n";
+            analysis += "  - Numerical instability from extreme component values\n";
+        } else {
+            analysis += "DIAGNOSIS: Slow convergence. Consider:\n";
+            analysis += "  - Adding initial conditions\n";
+            analysis += "  - Relaxing tolerance\n";
+            analysis += "  - Simplifying circuit topology\n";
+        }
+    } else {
+        analysis += "No convergence trace available.\n";
+    }
+    
+    return analysis;
+}
+
 } // namespace AIAPI
+

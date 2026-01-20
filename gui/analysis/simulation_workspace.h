@@ -46,6 +46,11 @@ signals:
     void simulationCompleted(const Simulation::SimulationRun& run);
     void navigateToNode(int nodeId);
     
+    // Log messages for MainWindow bottom panels
+    void logMessage(const QString& msg);
+    void streamMessage(const QString& msg);
+    void resultsReady(const QJsonObject& results);
+    
 public slots:
     void runCurrent();
     void runQuickDC();
@@ -61,10 +66,9 @@ private slots:
 private:
     // Layout
     QSplitter* mainSplitter_;
-    QSplitter* rightSplitter_;
     
-    // Left panel
-    SimulationExplorer* explorer_;
+    // Left panel - Schematic selector
+    QComboBox* schematicCombo_;
     
     // Center panel
     QWidget* profileEditor_;
@@ -72,20 +76,15 @@ private:
     QComboBox* analysisCombo_;
     QCheckBox* advancedParamsCheck_;
     QWidget* parametersWidget_;
-    
-    // Bottom panel
-    QTabWidget* outputTabs_;
-    QPlainTextEdit* outputLog_;
-    QPlainTextEdit* streamingLog_;
-    QWidget* resultsPanel_;
-    QWidget* waveformPanel_;
-    ProblemsPanel* problemsPanel_;
+    QLabel* helpLabel_;
     
     // Toolbar
     QWidget* toolbar_;
     QPushButton* runBtn_;
     QPushButton* stopBtn_;
     QComboBox* profileCombo_;
+    QComboBox* runModeCombo_;
+    QComboBox* cornerCombo_;
     
     // State
     SchematicEditor* schematicEditor_ = nullptr;
@@ -109,12 +108,12 @@ private:
     void setupUI();
     void setupToolbar();
     void setupProfileEditor();
-    void setupOutputTabs();
     void updateProfileEditor();
     void updateParametersForAnalysis(Simulation::AnalysisType type);
     void finishSimulation();
     bool canRun() const;
     void updateAnalysisVisibility();
+    QString getAnalysisHelp(Simulation::AnalysisType type) const;
     
     // Parameter widget helpers
     QWidget* createLineParam(const QString& defaultVal);

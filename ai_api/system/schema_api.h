@@ -292,4 +292,44 @@ QJsonObject getFullCircuitState();
  */
 QJsonObject validateComponent(const QString& componentId, const QJsonObject& stimuli);
 
+// ============================================================================
+// SIMULATION CONTEXT (Phase 1.7.9 - AI Integration Hooks)
+// ============================================================================
+
+/**
+ * Get current simulation context for AI copilot queries.
+ * Includes: topology hash, mode, ERC violations, last run status.
+ * Used for "Why did this fail?" and debug assistance queries.
+ */
+struct SimulationContext {
+    size_t topologyHash;           // Current schematic topology hash
+    QString currentMode;           // "BENCH_TEST", "BLOCK_SUBSYSTEM", "SYSTEM_INTEGRATION"
+    QJsonArray ercViolations;      // Current ERC violations
+    bool canSimulate;              // Whether simulation can run (no blocking ERCs)
+    QString lastRunStatus;         // "CONVERGED", "FAILED", "CANCELLED", "NOT_RUN"
+    QString lastFailureReason;     // Detailed failure reason if applicable
+    QJsonArray convergenceTrace;   // Newton iteration convergence history
+    double lastSolveTime_ms;       // Execution time of last simulation
+    QJsonObject nodeVoltages;      // Last DC solution (if available)
+};
+
+/**
+ * Get simulation context for AI copilot.
+ * Returns JSON with full simulation state for "Why did this fail?" queries.
+ */
+QJsonObject getSimulationContext();
+
+/**
+ * Get convergence trace from last simulation.
+ * Returns array of {iteration, residual, step} objects.
+ */
+QJsonArray getConvergenceTrace();
+
+/**
+ * Get failure analysis for last failed simulation.
+ * Returns AI-friendly explanation of failure mode.
+ */
+QString analyzeFailure();
+
 } // namespace AIAPI
+

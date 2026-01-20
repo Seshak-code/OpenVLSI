@@ -144,6 +144,9 @@ public:
     void setProfiles(const QMap<QString, Simulation::SimulationProfile>& profiles) { profiles_ = profiles; }
     QString getCurrentProfileId() const { return currentProfileId_; }
     void setCurrentProfileId(const QString& id) { currentProfileId_ = id; }
+    
+    // Topology hash (for simulation state tracking)
+    size_t getTopologyHash() const { return topologyHash_; }
 
     explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
@@ -255,6 +258,7 @@ private:
     // Per-file simulation profiles
     QMap<QString, Simulation::SimulationProfile> profiles_;
     QString currentProfileId_;
+    size_t topologyHash_ = 0;
     
     void setupUi();
     QWidget* createRibbon();

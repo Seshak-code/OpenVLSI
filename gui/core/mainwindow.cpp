@@ -98,10 +98,28 @@ void MainWindow::setupCentralWidget() {
     verificationLabel->setAlignment(Qt::AlignCenter);
     stageTabs->addTab(verificationLabel, "Verification");
     
-    // Simulator Panel (can be shown in any stage)
+    // Simulator Panel (popup, not a tab - triggered from menu)
     simulationWorkspace = new SimulationWorkspace(this);
     simulationWorkspace->setSchematicEditor(schematicEditor);
-    stageTabs->addTab(simulationWorkspace, "Simulation");
+    // Note: NOT added to stageTabs - accessed via "Set Simulation" menu
+    
+    // Connect simulation logs to bottom panels
+    connect(simulationWorkspace, &SimulationWorkspace::logMessage, this, [this](const QString& msg) {
+        if (outputLog_) outputLog_->appendPlainText(msg);
+    });
+    connect(simulationWorkspace, &SimulationWorkspace::streamMessage, this, [this](const QString& msg) {
+        if (streamingLog_) streamingLog_->appendPlainText(msg);
+    });
+    connect(simulationWorkspace, &SimulationWorkspace::resultsReady, this, &MainWindow::onSimulationResults);
+    
+    connect(simulationWorkspace, &SimulationWorkspace::simulationStarted, this, [this](const QString&) {
+        // Clear panels before simulation run
+        if (outputLog_) outputLog_->clear();
+        if (streamingLog_) streamingLog_->clear();
+        if (problemsPanel) problemsPanel->clear();
+        if (resultsTree_) resultsTree_->clear();
+        if (waveformLog_) waveformLog_->clear();
+    });
     
     setCentralWidget(stageTabs);
     
@@ -158,6 +176,26 @@ void MainWindow::setupDocks() {
     // --- Message Console (Bottom) ---
     createMessagesDock();
     addDockWidget(Qt::BottomDockWidgetArea, messagesDock);
+    
+    // --- Debug Panels (Bottom, Tabbed with Problems) ---
+    createOutputDock();
+    addDockWidget(Qt::BottomDockWidgetArea, outputDock_);
+    tabifyDockWidget(messagesDock, outputDock_);
+    
+    createStreamingDock();
+    addDockWidget(Qt::BottomDockWidgetArea, streamingDock_);
+    tabifyDockWidget(outputDock_, streamingDock_);
+    
+    createResultsDock();
+    addDockWidget(Qt::BottomDockWidgetArea, resultsDock_);
+    tabifyDockWidget(streamingDock_, resultsDock_);
+    
+    createWaveformDock();
+    addDockWidget(Qt::BottomDockWidgetArea, waveformDock_);
+    tabifyDockWidget(resultsDock_, waveformDock_);
+    
+    // Make Problems tab active by default
+    messagesDock->raise();
 }
 
 void MainWindow::createAiDock() {
@@ -392,6 +430,79 @@ void MainWindow::createMessagesDock() {
     messagesDock->setWidget(problemsPanel);
 }
 
+void MainWindow::createOutputDock() {
+    outputDock_ = new QDockWidget("Output", this);
+    outputDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    
+    outputLog_ = new QPlainTextEdit(outputDock_);
+    outputLog_->setReadOnly(true);
+    outputLog_->setStyleSheet("background: #1e1e1e; color: #ccc; font-family: monospace;");
+    outputDock_->setWidget(outputLog_);
+}
+
+void MainWindow::createStreamingDock() {
+    streamingDock_ = new QDockWidget("Streaming", this);
+    streamingDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    
+    streamingLog_ = new QPlainTextEdit(streamingDock_);
+    streamingLog_->setReadOnly(true);
+    streamingLog_->setStyleSheet("background: #1e1e1e; color: #4ec9b0; font-family: monospace;");
+    streamingDock_->setWidget(streamingLog_);
+}
+
+void MainWindow::createResultsDock() {
+    resultsDock_ = new QDockWidget("Results", this);
+    resultsDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    
+    resultsTree_ = new QTreeWidget(resultsDock_);
+    resultsTree_->setHeaderLabels({"Node", "Value"});
+    resultsTree_->setColumnWidth(0, 150);
+    resultsTree_->setStyleSheet("QTreeWidget { background: #1e1e1e; color: #ccc; border: none; } "
+                               "QHeaderView::section { background: #2d2d2d; color: #888; border: none; padding: 4px; }");
+    resultsDock_->setWidget(resultsTree_);
+}
+
+void MainWindow::createWaveformDock() {
+    waveformDock_ = new QDockWidget("Waveforms", this);
+    waveformDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    
+    waveformLog_ = new QPlainTextEdit(waveformDock_);
+    waveformLog_->setReadOnly(true);
+    waveformLog_->setStyleSheet("background: #1e1e1e; color: #4ec9b0; font-family: monospace;");
+    waveformLog_->setPlaceholderText("Waveform data points will define trace here...");
+    waveformDock_->setWidget(waveformLog_);
+}
+
+void MainWindow::onSimulationResults(const QJsonObject& results) {
+    QString type = results["type"].toString();
+    
+    if (type == "DC") {
+        if (resultsTree_) {
+            resultsTree_->clear();
+            QJsonArray voltages = results["voltages"].toArray();
+            for (int i = 0; i < voltages.size(); ++i) {
+                QTreeWidgetItem* item = new QTreeWidgetItem(resultsTree_);
+                item->setText(0, QString("V(%1)").arg(i+1));
+                item->setText(1, QString("%1 V").arg(voltages[i].toDouble(), 0, 'f', 6));
+            }
+        }
+        // Force switch to Results tab logic (not possible directly with QDockWidget tabify logic without storing tabRef, 
+        // but user sees it populate)
+    } 
+    else if (type == "TransientPoint") {
+        if (waveformLog_) {
+            double time = results["time"].toDouble();
+            QJsonArray voltages = results["voltages"].toArray();
+            QString line = QString("t=%1u: ").arg(time * 1e6, 0, 'f', 2);
+            for (int i = 0; i < qMin(voltages.size(), 4); ++i) { // Show first 4 nodes
+                line += QString("V(%1)=%2 ").arg(i+1).arg(voltages[i].toDouble(), 0, 'f', 2);
+            }
+            if (voltages.size() > 4) line += "...";
+            waveformLog_->appendPlainText(line);
+        }
+    }
+}
+
 void MainWindow::setupMenus() {
     QMenuBar* mb = menuBar();
     
@@ -428,22 +539,31 @@ void MainWindow::openProject() {
 }
 
 void MainWindow::runSimulation() {
-    statusBar()->showMessage("Running ERC...");
+    // Show simulation setup popup dialog
+    QDialog* simDialog = new QDialog(this);
+    simDialog->setWindowTitle("Simulation Setup");
+    simDialog->setMinimumSize(800, 600);
+    simDialog->setAttribute(Qt::WA_DeleteOnClose);
     
-    // Run ERC
-    QStringList ercErrors = schematicEditor->runERC();
-    if (!ercErrors.isEmpty()) {
-        QString msg = "ERC Issues Found:\n" + ercErrors.join("\n");
-        QMessageBox::warning(this, "ERC Warnings", msg);
+    QVBoxLayout* layout = new QVBoxLayout(simDialog);
+    layout->setContentsMargins(0, 0, 0, 0);
+    
+    // Create a new workspace for the dialog (or reuse if we want to persist state)
+    SimulationWorkspace* dialogWorkspace = new SimulationWorkspace(simDialog);
+    if (schematicEditor) {
+        dialogWorkspace->setSchematicEditor(schematicEditor);
     }
+    layout->addWidget(dialogWorkspace);
     
-    statusBar()->showMessage("Generating Netlist...");
-    TensorNetlist netlist = schematicEditor->toNetlist();
-    statusBar()->showMessage(QString("Netlist Generated: %1 nodes").arg(netlist.numGlobalNodes));
-
-    // Pass netlist to simulation workspace and switch tab
-    stageTabs->setCurrentWidget(simulationWorkspace);
-    simulationWorkspace->runCurrent();
+    // Close button at bottom
+    QHBoxLayout* btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+    QPushButton* closeBtn = new QPushButton("Close", simDialog);
+    connect(closeBtn, &QPushButton::clicked, simDialog, &QDialog::close);
+    btnLayout->addWidget(closeBtn);
+    layout->addLayout(btnLayout);
+    
+    simDialog->show(); // Modeless - user can interact with main window
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {

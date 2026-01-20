@@ -5,6 +5,10 @@
 #include <QTreeWidget>
 #include <QTableWidget>
 #include <QTabWidget>
+#include <QDialog>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QPlainTextEdit>
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
@@ -74,6 +78,19 @@ private:
 
     QDockWidget* messagesDock;
     ProblemsPanel* problemsPanel;
+    
+    // Bottom dock panels for debug output
+    QDockWidget* outputDock_;
+    QPlainTextEdit* outputLog_;
+    QDockWidget* streamingDock_;
+    QPlainTextEdit* streamingLog_;
+    QDockWidget* resultsDock_;
+    QTreeWidget* resultsTree_;      // [NEW] Tree view for results
+    QDockWidget* waveformDock_;
+    QPlainTextEdit* waveformLog_;   // [NEW] Text view for waveform data dump (placeholder for plot)
+
+private slots:
+    void onSimulationResults(const QJsonObject& results);
 
     // UI Setup Methods
     void setupMenus();
@@ -86,6 +103,10 @@ private:
     void createPropertiesDock();
     void createAiDock();
     void createMessagesDock();
+    void createOutputDock();
+    void createStreamingDock();
+    void createResultsDock();
+    void createWaveformDock();
     
     // Actions
     void newProject();
