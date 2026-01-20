@@ -118,6 +118,8 @@ add_executable(${PROJECT_NAME}
     gui/analysis/simulation_workspace.cpp
     gui/analysis/simulation_workspace.h
     physics/simulation_profile.h
+    physics/quick_analysis.h
+    physics/quick_analysis.cpp
     gui/editors/hdl_editor.cpp
     gui/editors/hdl_editor.h
     gui/core/welcome_widget.cpp
@@ -427,3 +429,24 @@ target_include_directories(test_erc_rules PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 target_compile_features(test_erc_rules PUBLIC cxx_std_17)
+
+# Phase 1.7 Simulation Suite Tests
+add_executable(test_simulation 
+    tests/simulation_test_main.cpp
+    physics/quick_analysis.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_simulation PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_features(test_simulation PUBLIC cxx_std_17)
+target_link_libraries(test_simulation PRIVATE Qt6::Core)

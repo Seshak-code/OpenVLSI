@@ -14,7 +14,7 @@
 #include "schematic_editor.h"
 #include "ai_assistant.h"
 #include "component_library.h"
-#include "simulator_window.h"
+#include "simulation_workspace.h"
 #include "system_inspector.h"
 #include "design_flow.h"
 #include "hdl_editor.h"  // Phase 14.1
@@ -53,7 +53,7 @@ private:
     // Core Components
     SchematicEditor* schematicEditor; // Active schematic editor (points to current RTL page)
     HDLEditor* hdlEditor; // Phase 14: Code Editor
-    SimulatorWindow* simulatorPanel;
+    SimulationWorkspace* simulationWorkspace; // Phase 1.7: VS Code-style simulation
     WelcomeWidget* welcomeWidget;
     
     // Docks

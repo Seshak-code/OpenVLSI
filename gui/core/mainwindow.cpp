@@ -99,8 +99,9 @@ void MainWindow::setupCentralWidget() {
     stageTabs->addTab(verificationLabel, "Verification");
     
     // Simulator Panel (can be shown in any stage)
-    simulatorPanel = new SimulatorWindow(this);
-    stageTabs->addTab(simulatorPanel, "Simulation");
+    simulationWorkspace = new SimulationWorkspace(this);
+    simulationWorkspace->setSchematicEditor(schematicEditor);
+    stageTabs->addTab(simulationWorkspace, "Simulation");
     
     setCentralWidget(stageTabs);
     
@@ -440,9 +441,9 @@ void MainWindow::runSimulation() {
     TensorNetlist netlist = schematicEditor->toNetlist();
     statusBar()->showMessage(QString("Netlist Generated: %1 nodes").arg(netlist.numGlobalNodes));
 
-    // Pass netlist to simulator panel and switch tab
-    simulatorPanel->setNetlist(netlist); 
-    stageTabs->setCurrentWidget(simulatorPanel);
+    // Pass netlist to simulation workspace and switch tab
+    stageTabs->setCurrentWidget(simulationWorkspace);
+    simulationWorkspace->runCurrent();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {

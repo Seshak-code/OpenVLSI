@@ -1,6 +1,7 @@
 #include "visual_component.h"
 #include "schematic_editor.h" 
 #include <cmath>
+#include <QGraphicsSceneHoverEvent>
 
 QString componentTypeToString(ComponentType t) {
     switch(t) {
@@ -178,6 +179,7 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
     setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
     setTransformOriginPoint(0, 0); 
     setZValue(2); // Components above wires
+    setAcceptHoverEvents(true); // Enable hover for Quick Preview
     
     // Default Properties
     switch(t) {
@@ -815,4 +817,64 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
         painter->setBrush(Qt::NoBrush);
         painter->drawRect(boundingRect());
     }
+    
+    // Quick Preview tooltip (Phase 1.7)
+    // Draw estimated voltage badge for probes when hasQuickPreview is true
+    if (hasQuickPreview && (type == ComponentType::Probe || 
+                            type == ComponentType::VoltageSource ||
+                            type == ComponentType::RailDriver)) {
+        painter->save();
+        
+        // Yellow badge background
+        QRectF badgeRect(-25, -35, 50, 18);
+        painter->setBrush(QColor(255, 200, 50, 220)); // Yellow, semi-transparent
+        painter->setPen(QPen(QColor(180, 140, 0), 1));
+        painter->drawRoundedRect(badgeRect, 4, 4);
+        
+        // Draw approximate symbol and voltage
+        painter->setPen(Qt::black);
+        QFont font = painter->font();
+        font.setPointSize(9);
+        font.setBold(true);
+        painter->setFont(font);
+        
+        QString voltageText = QString::fromUtf8("≈") + QString::number(quickPreviewVoltage, 'g', 3) + "V";
+        painter->drawText(badgeRect, Qt::AlignCenter, voltageText);
+        
+        painter->restore();
+    }
+}
+
+// ============================================================================
+// HOVER EVENTS (Phase 1.7 Quick Preview)
+// ============================================================================
+
+void VisualComponent::hoverEnterEvent(QGraphicsSceneHoverEvent* event) {
+    Q_UNUSED(event);
+    
+    // Only show quick preview for probes and sources
+    if (type == ComponentType::Probe || 
+        type == ComponentType::VoltageSource ||
+        type == ComponentType::RailDriver) {
+        
+        // Set cursor to indicate hoverable
+        setCursor(Qt::CrossCursor);
+        
+        // Request quick preview from scene (GridScene will call setQuickPreview)
+        // This is handled by the scene's event filter or direct call
+        // For now, just mark as "hover active" for visual feedback
+        update();
+    }
+    
+    QGraphicsItem::hoverEnterEvent(event);
+}
+
+void VisualComponent::hoverLeaveEvent(QGraphicsSceneHoverEvent* event) {
+    Q_UNUSED(event);
+    
+    // Clear quick preview on hover exit
+    clearQuickPreview();
+    unsetCursor();
+    
+    QGraphicsItem::hoverLeaveEvent(event);
 }

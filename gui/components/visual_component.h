@@ -122,4 +122,26 @@ public:
     
     void rotate90(); 
     void flip(); // Flips horizontally around center 
+    
+    // Quick Preview (Phase 1.7)
+    // Stores estimated voltage for display (set by GridScene)
+    double quickPreviewVoltage = 0.0;
+    bool hasQuickPreview = false;
+    
+    // Set quick preview data (called by scene after QuickAnalysis)
+    void setQuickPreview(double voltage) {
+        quickPreviewVoltage = voltage;
+        hasQuickPreview = true;
+        update(); // Trigger repaint to show tooltip
+    }
+    
+    void clearQuickPreview() {
+        hasQuickPreview = false;
+        update();
+    }
+
+protected:
+    // Hover events for quick preview tooltip
+    void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
 };
