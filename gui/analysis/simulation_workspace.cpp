@@ -10,6 +10,10 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QMessageBox>
+#include <QJsonArray>
+#include <QMessageBox>
+#include <QDialog>
+#include "corner_setup_widget.h"
 #include "../../physics/quick_analysis.h"
 
 SimulationWorkspace::SimulationWorkspace(QWidget* parent)
@@ -116,10 +120,10 @@ void SimulationWorkspace::setupToolbar() {
     layout->addWidget(modeLabel);
     
     runModeCombo_ = new QComboBox(toolbar_);
-    runModeCombo_->addItem("Full", static_cast<int>(Simulation::RunMode::FULL));
-    runModeCombo_->addItem("Quick", static_cast<int>(Simulation::RunMode::QUICK));
-    runModeCombo_->addItem("Resume", static_cast<int>(Simulation::RunMode::RESUME));
-    runModeCombo_->addItem("Incremental", static_cast<int>(Simulation::RunMode::INCREMENTAL));
+    runModeCombo_->addItem("Full", static_cast<int>(acutesim::physics::RunMode::FULL));
+    runModeCombo_->addItem("Quick", static_cast<int>(acutesim::physics::RunMode::QUICK));
+    runModeCombo_->addItem("Resume", static_cast<int>(acutesim::physics::RunMode::RESUME));
+    runModeCombo_->addItem("Incremental", static_cast<int>(acutesim::physics::RunMode::INCREMENTAL));
     runModeCombo_->setMinimumWidth(90);
     layout->addWidget(runModeCombo_);
     
@@ -131,15 +135,21 @@ void SimulationWorkspace::setupToolbar() {
     layout->addWidget(cornerLabel);
     
     cornerCombo_ = new QComboBox(toolbar_);
-    for(const auto& c : Simulation::CornerConfig::standard5()) {
-        cornerCombo_->addItem(c.name, c.name);
-    }
-    // Set tooltips for corner details
-    for(int i=0; i<cornerCombo_->count(); ++i) {
-        auto c = Simulation::CornerConfig::standard5()[i];
-        cornerCombo_->setItemData(i, QString("%1C, Vdd x%2").arg(c.temperature).arg(c.vddScale), Qt::ToolTipRole);
+    int i = 0;
+    for (const auto& c : acutesim::physics::CornerConfig::standard5()) {
+        cornerCombo_->addItem(c.name, QVariant::fromValue(c));
+        cornerCombo_->setItemData(i, QString("%1C, Vdd x%2").arg(c.temperatureC).arg(c.voltageScale), Qt::ToolTipRole);
+        i++;
     }
     layout->addWidget(cornerCombo_);
+
+    // Configure Button (Gear Icon)
+    QPushButton* configCornersBtn = new QPushButton(toolbar_);
+    configCornersBtn->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+    configCornersBtn->setToolTip("Configure PVT / Monte Carlo...");
+    configCornersBtn->setFixedWidth(30);
+    connect(configCornersBtn, &QPushButton::clicked, this, &SimulationWorkspace::configureCorners);
+    layout->addWidget(configCornersBtn);
     
     layout->addSpacing(10);
     
@@ -164,6 +174,11 @@ void SimulationWorkspace::setupToolbar() {
     statusLabel->setStyleSheet("color: #4ec9b0;");
     statusLabel->setObjectName("statusLabel");
     layout->addWidget(statusLabel);
+    
+    // Trust Badge (Phase 1.7.9)
+    trustBadge_ = new TrustBadgeWidget(toolbar_);
+    trustBadge_->setMinimumWidth(200);
+    layout->addWidget(trustBadge_);
 }
 
 void SimulationWorkspace::setupProfileEditor() {
@@ -556,7 +571,7 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     currentRun_.profileId = profileId;
     currentRun_.topologyHash = currentTopologyHash_;
     if (runModeCombo_) {
-        currentRun_.runMode = static_cast<Simulation::RunMode>(runModeCombo_->currentData().toInt());
+        currentRun_.runMode = static_cast<acutesim::physics::RunMode>(runModeCombo_->currentData().toInt());
     }
     currentRun_.startTime = QDateTime::currentDateTime();
     currentRun_.status = Simulation::SimulationRun::Status::RUNNING;
@@ -581,44 +596,63 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     currentTime_ = 0.0;
     
     auto* profile = currentProfile();
+    
+    // Prepare corners (default to 1 nominal if empty)
+    QList<acutesim::physics::CornerConfig> runCorners = profile->corners;
+    if (runCorners.isEmpty()) {
+        runCorners.append(acutesim::physics::CornerConfig::Nominal());
+    }
+    
     if (profile && profile->analysis == Simulation::AnalysisType::DC) {
-        // Quick DC - single step
-        appendStreamLog("DC Analysis starting...");
-        SolverStep result = sim_.solveDC(netlist_);
+        // Quick DC - Run all configured corners (Batch)
+        appendStreamLog(QString("Starting DC Sweep (%1 corners)...").arg(runCorners.size()));
         
-        currentRun_.status = result.stats.converged ? 
+        bool allConverged = true;
+        
+        for (const auto& corner : runCorners) {
+            // APPLY PVT
+            sim_.applyCorner(netlist_, corner);
+            
+            appendStreamLog(QString("--> Corner: %1 (T=%2C, V=%3x)").arg(corner.name)
+                            .arg(corner.temperatureC).arg(corner.voltageScale));
+            
+            SolverStep result = sim_.solveDC(netlist_);
+            
+            if (result.stats.converged) {
+                 appendStreamLog(QString("   Converged in %1 iter").arg(result.stats.iterations));
+                 // Emit results per corner (tagged)
+                 QJsonObject jsonRes;
+                 jsonRes["type"] = "DC";
+                 jsonRes["corner"] = corner.name;
+                 QJsonArray voltages;
+                 for(double v : result.nodeVoltages) voltages.append(v);
+                 jsonRes["voltages"] = voltages;
+                 emit resultsReady(jsonRes);
+            } else {
+                 appendStreamLog("   FAILED");
+                 allConverged = false;
+            }
+        }
+        
+        currentRun_.status = allConverged ? 
             Simulation::SimulationRun::Status::CONVERGED : 
             Simulation::SimulationRun::Status::FAILED;
-        currentRun_.iterations = result.stats.iterations;
+            
         currentRun_.endTime = QDateTime::currentDateTime();
         currentRun_.solveTime_ms = currentRun_.startTime.msecsTo(currentRun_.endTime);
         
-        if (result.stats.converged) {
-            appendStreamLog(QString("Converged in %1 iterations")
-                           .arg(result.stats.iterations));
-            for (size_t i = 0; i < result.nodeVoltages.size(); ++i) {
-                appendStreamLog(QString("  V(%1) = %2 V")
-                               .arg(i+1).arg(result.nodeVoltages[i], 0, 'g', 4));
-            }
-            // explorer_->updateProfileStatus(profileId, Simulation::SimulationProfile::Status::PASSED);
-            
-            // Emit results for panel
-            QJsonObject jsonRes;
-            jsonRes["type"] = "DC";
-            QJsonArray voltages;
-            for(double v : result.nodeVoltages) voltages.append(v);
-            jsonRes["voltages"] = voltages;
-            emit resultsReady(jsonRes);
-            
-        } else {
-            appendStreamLog("FAILED to converge");
-            currentRun_.failureReason = result.stats.error_detail.empty() ? 
-                "Non-convergence" : QString::fromStdString(result.stats.error_detail);
-            // explorer_->updateProfileStatus(profileId, Simulation::SimulationProfile::Status::FAILED);
+        finishSimulation();
+        
+    } else {
+        // Transient - Only support single corner for now
+        if (runCorners.size() > 1) {
+             appendLog("[WARNING] Batch Transient not supported in GUI yet. Running first corner only.");
         }
         
-        finishSimulation();
-    } else {
+        // Apply FIRST corner
+        sim_.applyCorner(netlist_, runCorners.first());
+        appendStreamLog(QString("Corner: %1").arg(runCorners.first().name));
+        
         // Transient - use timer
         simTimer_->start(10); // 10ms between steps (for UI responsiveness)
     }
@@ -691,6 +725,23 @@ void SimulationWorkspace::finishSimulation() {
     findChild<QLabel*>("statusLabel")->setText(passed ? "Passed" : "Failed");
     findChild<QLabel*>("statusLabel")->setStyleSheet(passed ? "color: #4ec9b0;" : "color: #f44747;");
     
+    // Phase 1.7.9: Update Trust Badge
+    if (trustBadge_) {
+        TrustBadgeWidget::TrustLevel level = 
+            passed ? (currentRun_.trustGminUsed || currentRun_.trustSourceStepUsed ? 
+                      TrustBadgeWidget::TrustLevel::MEDIUM : 
+                      TrustBadgeWidget::TrustLevel::HIGH) :
+            TrustBadgeWidget::TrustLevel::LOW;
+        
+        trustBadge_->setTrustData(
+            level,
+            currentRun_.trustMethod.isEmpty() ? "Newton-Raphson" : currentRun_.trustMethod,
+            currentRun_.iterations,
+            currentRun_.trustMaxResidual,
+            currentRun_.trustProvenance
+        );
+    }
+    
     appendLog(QString("[%1] %2: %3 (%4 ms)")
               .arg(QDateTime::currentDateTime().toString("hh:mm:ss"))
               .arg(profiles_[currentProfileId_].name)
@@ -715,4 +766,37 @@ void SimulationWorkspace::appendLog(const QString& msg) {
 
 void SimulationWorkspace::appendStreamLog(const QString& msg) {
     emit streamMessage(msg);
+}
+
+void SimulationWorkspace::configureCorners() {
+    QDialog dlg(this);
+    dlg.setWindowTitle("Setup Simulation Corners");
+    dlg.resize(400, 300);
+    
+    QVBoxLayout* layout = new QVBoxLayout(&dlg);
+    
+    acutesim::gui::analysis::CornerSetupWidget* setupWidget = new acutesim::gui::analysis::CornerSetupWidget(&dlg);
+    layout->addWidget(setupWidget);
+    
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    layout->addWidget(buttons);
+    
+    if (dlg.exec() == QDialog::Accepted) {
+        // Apply corners to current profile
+        auto* profile = currentProfile();
+        if (profile) {
+            profile->corners = setupWidget->getCorners().toList(); // Convert QVector to QList
+            
+            // If Monte Carlo, update Run Mode?
+            // Actually, SimulationProfile handles the run logic.
+            // Just notify user
+            if (profile->corners.size() > 1) {
+                appendLog(QString("[INFO] Configured %1 corners for next run.").arg(profile->corners.size()));
+            } else {
+                 appendLog("[INFO] Configured single corner.");
+            }
+        }
+    }
 }

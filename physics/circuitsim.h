@@ -27,6 +27,7 @@
 
 #include "simtrace.h"
 #include "tensorscheduler.h"
+#include "corner_config.h"
 
 // ============================================================================
 // CIRCUITSIM CLASS
@@ -313,6 +314,64 @@ public:
   
   void resetArbiter() { arbiterInitialized = false; }
 
+  // Phase 1.8: PVT Application
+  void applyCorner(TensorNetlist &netlist, const acutesim::physics::CornerConfig& corner) {
+      netlist.environment.process = (SimulationEnvironment::Corner)corner.process;
+      netlist.environment.ambient_temp_K = corner.temperatureC + 273.15;
+      
+      // If voltage scale is 0 or negative, ignore (safety)
+      if (corner.voltageScale > 0.1) {
+          netlist.environment.global_voltage_scale = corner.voltageScale;
+      }
+      
+      // Monte Carlo Seed (Phase 1.8.2)
+      netlist.environment.monte_carlo_seed = corner.monteCarloSeed;
+  }
+  
+  // Deterministic RNG (FNV-1a Hash + Box-Muller)
+  static uint64_t fnv1a(const std::string& s, uint64_t seed) {
+      uint64_t hash = 14695981039346656037ULL;
+      hash ^= seed;
+      for (char c : s) {
+          hash ^= static_cast<uint64_t>(c);
+          hash *= 1099511628211ULL;
+      }
+      return hash;
+  }
+  
+  // Returns standard normal sample N(0, 1)
+  double getGaussian(uint64_t hash) {
+      // Split 64-bit hash into two 32-bit uniform variates
+      uint32_t h1 = (uint32_t)(hash & 0xFFFFFFFF);
+      uint32_t h2 = (uint32_t)(hash >> 32);
+      
+      // Avoid 0 (log(0) is bad)
+      if (h1 == 0) h1 = 1; 
+      
+      double u1 = h1 / 4294967296.0;
+      double u2 = h2 / 4294967296.0;
+      
+      // Box-Muller Transform
+      return std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * 3.14159265359 * u2);
+  }
+  
+  // Get MC-perturbed value
+  double getPerturbedValue(double nominal, double tolerance_pct, const std::string& name, int seed) {
+      if (tolerance_pct <= 1e-6 || seed == 0) return nominal;
+      
+      // Hash combining seed + name
+      uint64_t h = fnv1a(name, static_cast<uint64_t>(seed));
+      double z = getGaussian(h);
+      
+      // 3-sigma rule: tolerance is usually 3-sigma (or we treat it as 1-sigma?)
+      // Standard industry practice: Tolerance is usually 3-sigma limit.
+      // So sigma = tolerance / 3.
+      double sigma_pct = tolerance_pct / 3.0;
+      
+      double factor = 1.0 + (z * sigma_pct * 0.01);
+      return nominal * factor;
+  }
+
 private:
   MatrixConstructor matrixBuilder;
   std::vector<double> rhsVector;
@@ -595,7 +654,7 @@ public:
   }
 
   // Phase 2.5: Differentiable Physics
-  enum class ComponentType { RESISTOR, CAPACITOR, DIODE, MOSFET, BJT };
+  enum class ComponentType { RESISTOR, CAPACITOR, INDUCTOR, DIODE, MOSFET, BJT };
 
   /**
    * calculateSensitivity
@@ -690,8 +749,20 @@ public:
                // I_source enters (negative in F_source)
                if (m.source > 0) b_sens[m.source-1] += didp;
             }
+            // CAPACITOR SENSITIVITY (DC: dI/dC = 0, AC needs omega)
+            else if (type == ComponentType::CAPACITOR) {
+                if (index < 0 || index >= (int)netlist.globalBlock.capacitors.size()) return {};
+                // DC: Capacitors are open circuit, no current, so dI/dC = 0.
+                // For AC sensitivity, user would need to provide omega. Placeholder for now.
+            }
+            // INDUCTOR SENSITIVITY (DC: dI/dL = 0, AC needs omega)
+            else if (type == ComponentType::INDUCTOR) {
+                if (index < 0 || index >= (int)netlist.globalBlock.inductors.size()) return {};
+                // DC: Inductors are short, no L term in DC model. dI/dL = 0.
+            }
             // BJT SENSITIVITY
             else if (type == ComponentType::BJT) {
+
                if (index < 0 || index >= (int)netlist.globalBlock.bjts.size()) return {};
                const auto& q = netlist.globalBlock.bjts[index];
                
@@ -779,16 +850,24 @@ public:
    * block instance.
    */
   void stampBlockLinear(const TensorBlock &block,
-                        const std::function<int(int)> &mapNode, double h, double time) {
+                        const std::function<int(int)> &mapNode, double h, double time,
+                        double voltageScale = 1.0, int mcSeed = 0) {
     // 1. Resistors
     for (const auto &r : block.resistors) {
+      // MC Perturbation
+      double R = getPerturbedValue(r.resistance_ohms, r.tolerance_percent, r.name, mcSeed);
+      
       stampResistor(mapNode(r.nodeTerminal1), mapNode(r.nodeTerminal2),
-                    r.resistance_ohms, matrixBuilder);
+                    R, matrixBuilder);
     }
     // 2. Voltage Sources
     for (const auto &v : block.voltageSources) {
+      // Apply PVT Voltage Scale (e.g. 1.1x Vdd)
+      // Ideally we only scale power rails, but for now we scale all independent DC sources
+      double scaled_V = v.voltage_V * voltageScale;
+      
       stampVoltageSourceAsNorton(mapNode(v.nodePositive),
-                                 mapNode(v.nodeNegative), v.voltage_V,
+                                 mapNode(v.nodeNegative), scaled_V,
                                  matrixBuilder, rhsVector);
     }
     // 2.5 Power Rails (System Source)
@@ -801,7 +880,7 @@ public:
             i_prev_cap = rail.current_history[0]; // Stores capacitor current
         }
         
-        stampPowerRail(mapNode(rail.nodeRail), rail.nominal_V, rail.ripple_Vpp, rail.frequency_Hz,
+        stampPowerRail(mapNode(rail.nodeRail), rail.nominal_V * voltageScale, rail.ripple_Vpp, rail.frequency_Hz,
                        rail.ESR_ohms, rail.capacitance_F, h, time, 
                        v_prev, i_prev_cap,
                        matrixBuilder, rhsVector);
@@ -818,8 +897,10 @@ public:
     // 4. Capacitors (Transient)
     if (h > 1e-15 && integrator) {
       for (const auto &c : block.capacitors) {
+        double C = getPerturbedValue(c.capacitance_farads, c.tolerance_percent, c.name, mcSeed);
+        
         integrator->stampCapacitor(mapNode(c.nodePlate1), mapNode(c.nodePlate2),
-                                   c.capacitance_farads, h, c.voltage_history,
+                                   C, h, c.voltage_history,
                                    c.current_history, matrixBuilder, rhsVector);
       }
     }
@@ -828,7 +909,7 @@ public:
       for (const auto &ind : block.inductors) {
           int n1 = mapNode(ind.nodeCoil1);
           int n2 = mapNode(ind.nodeCoil2);
-          double L = ind.inductance_henries;
+          double L = getPerturbedValue(ind.inductance_henries, ind.tolerance_percent, ind.name, mcSeed);
           
           if (ind.current_history.empty() || ind.voltage_history.empty()) continue;
           
@@ -939,7 +1020,8 @@ public:
 
   void stampBlockNonLinear(const TensorBlock &block,
                            const std::function<int(int)> &mapNode,
-                           const std::vector<double> &v_guess) {
+                           const std::vector<double> &v_guess,
+                           double temp_K = 300.15) {
     auto getV = [&](int globalNode) {
       if (globalNode > 0 && globalNode <= (int)v_guess.size())
         return v_guess[globalNode - 1];
@@ -967,6 +1049,17 @@ public:
 
       DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
                             d.thermalVoltage_V_T_V};
+      
+      // Thermal Update: Vt = k T / q
+      // Scale Vt relative to default 300.15K (assuming stored Vt is at 300K)
+      double temp_scale = temp_K / 300.15;
+      params.Vt = params.Vt * temp_scale;
+      
+      // Simple Is Tempco (exponential leakage increase)
+      // Rule of thumb: doubles every 10C. 
+      // This is a heuristic until we have full models.
+      // double delta_T = temp_K - 300.15;
+      // params.Is *= std::pow(2.0, delta_T / 10.0);
       
       // Auto-differentiate: returns { I, dI/dV }
       Dual<double> i_diode = diode_current_clamped(v_diff_dual, params);
@@ -1043,6 +1136,9 @@ public:
         params.BetaR = q.betaR;
         params.Vt = q.thermalVoltage_V_T_V;
         
+        // Thermal Update
+        params.Vt = params.Vt * (temp_K / 300.15);
+        
         BJTCurrents res = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
         
         // Stamp Matrix (Conductances)
@@ -1084,9 +1180,9 @@ public:
                         const std::vector<double> &v_guess, double time) {
     // A. Global Block
     auto identityMap = [](int n) { return n; };
-    stampBlockLinear(netlist.globalBlock, identityMap, h, time);
+    stampBlockLinear(netlist.globalBlock, identityMap, h, time, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
     // stampBlockNonLinear(netlist.globalBlock, identityMap, v_guess); 
-    stampSoABlock(soaBlock, v_guess); // SoA for Global Block
+    stampSoABlock(soaBlock, v_guess); // SoA for Global Block - TODO: Pass PVT to SoA
 
     // B. Hierarchical Batches
     for (const auto &job : scheduler.jobs) {
@@ -1096,11 +1192,12 @@ public:
         auto mapNode = [&](int localNode) {
           return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
         };
-        stampBlockLinear(block, mapNode, h, time);
-        stampBlockNonLinear(block, mapNode, v_guess);
+        stampBlockLinear(block, mapNode, h, time, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
+        stampBlockNonLinear(block, mapNode, v_guess, netlist.environment.ambient_temp_K);
       }
     }
   }
+
 
   void addDiagonalConditioning(int n, double gmin = 1e-12) {
     for (int i = 0; i < n; ++i)

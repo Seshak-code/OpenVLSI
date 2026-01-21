@@ -77,11 +77,11 @@ inline bool test_run_creation() {
     run.profileId = "quick_dc";
     run.topologyHash = 0xABCD1234;
     run.status = Simulation::SimulationRun::Status::PENDING;
-    run.runMode = Simulation::RunMode::FULL;
+    run.runMode = acutesim::physics::RunMode::FULL;
     
     assert(run.runId == "test123");
     assert(run.status == Simulation::SimulationRun::Status::PENDING);
-    assert(run.runMode == Simulation::RunMode::FULL);
+    assert(run.runMode == acutesim::physics::RunMode::FULL);
     
     std::cout << "PASS\n";
     return true;
@@ -119,19 +119,19 @@ inline bool test_run_summary() {
 inline bool test_corner_config() {
     std::cout << "  [Corner Config] ";
     
-    auto typical = Simulation::CornerConfig::typical();
-    assert(typical.temperature == 27.0);
-    assert(typical.vddScale == 1.0);
-    assert(typical.name == "TT");
+    auto typical = acutesim::physics::CornerConfig::Nominal();
+    assert(typical.temperatureC == 27.0);
+    assert(typical.voltageScale == 1.0);
+    assert(typical.name == "Nominal");
     
-    auto fast = Simulation::CornerConfig::fast();
-    assert(fast.temperature == -40.0);
-    assert(fast.vddScale == 1.1);
-    assert(fast.name == "FF");
+    auto fast = acutesim::physics::CornerConfig::WorstCaseCold();
+    assert(fast.temperatureC == -40.0);
+    assert(fast.voltageScale == 1.1);
+    assert(fast.name == "Fast-Cold");
     
-    auto slow = Simulation::CornerConfig::slow();
-    assert(slow.temperature == 125.0);
-    assert(slow.name == "SS");
+    auto slow = acutesim::physics::CornerConfig::WorstCaseHot();
+    assert(slow.temperatureC == 125.0);
+    assert(slow.name == "Slow-Hot");
     
     std::cout << "PASS\n";
     return true;

@@ -26,9 +26,8 @@
 #include <QSplitter>
 #include "gui_types.h"
 #include "welcome_widget.h"
-#include "welcome_widget.h"
 #include "problems_panel.h"
-#include "gui/orchestration/worker_status_panel.h"
+#include "../orchestration/worker_status_panel.h"
 
 
 // ============================================================================
@@ -93,7 +92,6 @@ private:
     QDockWidget* resultsDock_;
     QTreeWidget* resultsTree_;      // [NEW] Tree view for results
     QDockWidget* waveformDock_;
-    QDockWidget* waveformDock_;
     QPlainTextEdit* waveformLog_;   // [NEW] Text view for waveform data dump (placeholder for plot)
 
     // Phase 12.3: Worker Orchestration
@@ -117,7 +115,6 @@ private slots:
     void createMessagesDock();
     void createOutputDock();
     void createStreamingDock();
-    void createResultsDock();
     void createResultsDock();
     void createWaveformDock();
     void createWorkerDock();

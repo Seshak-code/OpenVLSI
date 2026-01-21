@@ -122,10 +122,10 @@ struct SimulationProfile {
     }
     
     // Corner configurations for PVT analysis
-    QList<CornerConfig> corners;  // Default: empty = typical corner only
+    QList<acutesim::physics::CornerConfig> corners;  // Default: empty = typical corner only
     
     // Run mode preference
-    RunMode runMode = RunMode::FULL;
+    acutesim::physics::RunMode runMode = acutesim::physics::RunMode::FULL;
 };
 
 // ============================================================================
@@ -149,7 +149,7 @@ struct SimulationRun {
     Status status = Status::PENDING;
     
     // Execution mode from corner_config.h
-    RunMode runMode = RunMode::FULL;
+    acutesim::physics::RunMode runMode = acutesim::physics::RunMode::FULL;
     
     // Timing metrics
     double setupTime_ms = 0.0;

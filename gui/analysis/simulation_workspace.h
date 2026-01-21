@@ -14,6 +14,7 @@
 #include "simulation_profile.h"
 #include "../editors/schematic_editor.h"
 #include "../widgets/problems_panel.h"
+#include "../widgets/trust_badge_widget.h"
 #include "circuitsim.h"
 
 /**
@@ -55,6 +56,8 @@ public slots:
     void runCurrent();
     void runQuickDC();
     void stopSimulation();
+    void configureCorners();
+
     
 private slots:
     void onProfileSelected(const QString& profileId);
@@ -85,6 +88,7 @@ private:
     QComboBox* profileCombo_;
     QComboBox* runModeCombo_;
     QComboBox* cornerCombo_;
+    TrustBadgeWidget* trustBadge_ = nullptr;
     
     // State
     SchematicEditor* schematicEditor_ = nullptr;

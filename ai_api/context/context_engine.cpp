@@ -11,6 +11,29 @@
 
 namespace AIAPI {
 
+// Static member initialization
+AIPolicy ContextEngine::currentPolicy_ = AIPolicy::defaultPolicy();
+
+// Phase 1.7.10: Apply AI Policy to responses
+QString ContextEngine::applyPolicy(const QString& aiResponse, const QJsonObject& solverEvidence) {
+    // 1. Validate citations if required
+    if (currentPolicy_.requireCitations) {
+        auto validation = CitationValidator::validate(aiResponse, currentPolicy_);
+        if (!validation.valid) {
+            // Return error with guidance
+            return QString("⚠️ **Policy Violation**: %1\n\n"
+                          "Please revise your response to include specific citations.\n"
+                          "Example formats:\n"
+                          "- [Line 42] or [L:42]\n"
+                          "- (Log: \"Converged in 5 iterations\")\n"
+                          "- Residual: 1.23e-12 A").arg(validation.errorMessage);
+        }
+    }
+    
+    // 2. Wrap with evidence if "Raw Evidence First" is enabled
+    return CitationValidator::wrapWithEvidence(aiResponse, solverEvidence, currentPolicy_);
+}
+
 QJsonObject ContextEngine::getContextJson() {
     return AIAPI::getFullCircuitState();
 }

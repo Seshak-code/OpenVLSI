@@ -1,6 +1,7 @@
 #pragma once
 #include <QString>
 #include <QJsonObject>
+#include "../policy/ai_policy.h"
 
 namespace AIAPI {
 
@@ -75,6 +76,20 @@ private:
     static QString describeComponent(const QJsonObject& comp);
     static QString inferTopologyIntent(const QJsonObject& state);
     static QString getSpatialContext();
+    
+    // Phase 1.7.10: AI Policy Enforcement
+    static AIPolicy currentPolicy_;
+    
+public:
+    static void setPolicy(const AIPolicy& policy) { currentPolicy_ = policy; }
+    static AIPolicy getPolicy() { return currentPolicy_; }
+    
+    /**
+     * Applies policy to an AI response:
+     * 1. Validates citations if required.
+     * 2. Prepends solver evidence if "Raw Evidence First" is enabled.
+     */
+    static QString applyPolicy(const QString& aiResponse, const QJsonObject& solverEvidence);
 };
 
 } // namespace AIAPI

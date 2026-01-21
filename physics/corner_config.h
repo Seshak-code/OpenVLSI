@@ -1,83 +1,86 @@
 #pragma once
 
 #include <QString>
+#include <QMetaType>
 #include <QList>
+#include <random>
 
-namespace Simulation {
+namespace acutesim::physics {
+
+enum class ProcessCorner {
+    TT, // Typical-Typical
+    FF, // Fast-Fast
+    SS, // Slow-Slow
+    FS, // Fast-Slow
+    SF  // Slow-Fast
+};
+
+enum class VariationMode {
+    NONE,
+    WORST_CASE, // Linear worst-case combination
+    MONTE_CARLO // Statistical sampling
+};
+
+enum class RunMode {
+    FULL,       // Run full simulation
+    QUICK,      // 1-iteration preview
+    RESUME,     // Resume from last point
+    INCREMENTAL, // Only solve affected blocks
+    DRY_RUN,    // Just validate, don't solve
+    BATCH       // Part of a larger batch
+};
 
 /**
- * Corner configuration for PVT (Process/Voltage/Temperature) analysis.
- * Represents a single operating condition for simulation.
+ * @brief Configuration for a single Simulation Corner (PVT + Statistical)
  */
 struct CornerConfig {
-    QString name;           // "TT", "FF", "SS", "SF", "FS"
-    double temperature;     // Temperature in °C (e.g., -40, 27, 125)
-    double vddScale;        // VDD scaling factor (e.g., 0.9, 1.0, 1.1)
-    QString processFile;    // Optional: path to process model file
+    QString name; // e.g., "Worst-Case Hot"
     
-    // Predefined corners
-    static CornerConfig typical() {
-        return {"TT", 27.0, 1.0, ""};
+    // Environmental
+    double temperatureC = 27.0;
+    double voltageScale = 1.0; // 1.0 = Nominal VDD
+    
+    // Process
+    ProcessCorner process = ProcessCorner::TT;
+    
+    // Statistical
+    VariationMode mode = VariationMode::NONE;
+    int monteCarloSeed = 0;
+    int iterationIndex = 0; // 0 to N-1 for MC runs
+    
+    // Helper to generate a unique hash for caching
+    size_t hash() const {
+        return std::hash<double>{}(temperatureC) ^ 
+               std::hash<double>{}(voltageScale) ^
+               static_cast<size_t>(process) ^
+               std::hash<int>{}(monteCarloSeed);
     }
     
-    static CornerConfig fast() {
-        return {"FF", -40.0, 1.1, ""};
+    // Factory methods
+    static CornerConfig Nominal() { 
+        return { "Nominal", 27.0, 1.0, ProcessCorner::TT }; 
     }
     
-    static CornerConfig slow() {
-        return {"SS", 125.0, 0.9, ""};
+    static CornerConfig WorstCaseHot() {
+        return { "Slow-Hot", 125.0, 0.9, ProcessCorner::SS, VariationMode::WORST_CASE };
     }
     
-    static CornerConfig slowFast() {
-        return {"SF", 27.0, 1.0, ""};
+    static CornerConfig WorstCaseCold() {
+        return { "Fast-Cold", -40.0, 1.1, ProcessCorner::FF, VariationMode::WORST_CASE };
     }
     
-    static CornerConfig fastSlow() {
-        return {"FS", 27.0, 1.0, ""};
-    }
-    
-    // Standard 5-corner set
-    static QList<CornerConfig> standard5() {
-        return {typical(), fast(), slow(), slowFast(), fastSlow()};
-    }
-    
-    // Temperature corners (typical process)
-    static QList<CornerConfig> temperatureSweep() {
+    // Helper for UI population
+    static QVector<CornerConfig> standard5() {
         return {
-            {"TT_cold", -40.0, 1.0, ""},
-            {"TT_nom",   27.0, 1.0, ""},
-            {"TT_hot",  125.0, 1.0, ""}
-        };
-    }
-    
-    // Voltage corners (typical process, room temp)
-    static QList<CornerConfig> voltageSweep() {
-        return {
-            {"TT_low",  27.0, 0.9, ""},
-            {"TT_nom",  27.0, 1.0, ""},
-            {"TT_high", 27.0, 1.1, ""}
+            { "TT (Typical)", 27.0, 1.0, ProcessCorner::TT },
+            { "FF (Fast-Fast)", 27.0, 1.0, ProcessCorner::FF },
+            { "SS (Slow-Slow)", 27.0, 1.0, ProcessCorner::SS },
+            { "FS (Fast-Slow)", 27.0, 1.0, ProcessCorner::FS },
+            { "SF (Slow-Fast)", 27.0, 1.0, ProcessCorner::SF }
         };
     }
 };
 
-/**
- * Run mode for simulation execution.
- */
-enum class RunMode {
-    FULL,        // Complete simulation from t=0
-    QUICK,       // Single Newton iteration (for quick preview)
-    RESUME,      // Continue from last state
-    INCREMENTAL  // Re-simulate only changed subcircuits
-};
+} // namespace acutesim::physics
 
-inline QString runModeToString(RunMode mode) {
-    switch (mode) {
-        case RunMode::FULL: return "Full";
-        case RunMode::QUICK: return "Quick";
-        case RunMode::RESUME: return "Resume";
-        case RunMode::INCREMENTAL: return "Incremental";
-    }
-    return "Full";
-}
-
-} // namespace Simulation
+Q_DECLARE_METATYPE(acutesim::physics::CornerConfig)

@@ -41,7 +41,7 @@ std::vector<SuperpositionSolver::SubProblem> SuperpositionSolver::decompose(cons
     // SYSTEM INTEGRATION: Decompose Power Rails and Signal Generators
     else if (mode == Mode::SYSTEM_INTEGRATION) {
         const auto& rails = original.globalBlock.powerRails;
-        const auto& signals = original.globalBlock.signalSources;
+        const auto& signalSources = original.globalBlock.signalSources;
         
         // Helper to kill system sources while keeping parasitics (ESR/Decap) active
         auto createSystemSub = [&](std::string activeName, int railIdx, int sigIdx) {
@@ -71,7 +71,7 @@ std::vector<SuperpositionSolver::SubProblem> SuperpositionSolver::decompose(cons
         };
         
         for (size_t i=0; i < rails.size(); ++i) problems.push_back(createSystemSub(rails[i].name, i, -1));
-        for (size_t i=0; i < signals.size(); ++i) problems.push_back(createSystemSub(signals[i].name, -1, i));
+        for (size_t i=0; i < signalSources.size(); ++i) problems.push_back(createSystemSub(signalSources[i].name, -1, i));
     }
     
     return problems;

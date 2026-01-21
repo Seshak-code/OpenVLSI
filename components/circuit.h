@@ -39,6 +39,7 @@ struct Resistor {
     int nodeTerminal1;            // First terminal (node index)
     int nodeTerminal2;            // Second terminal (node index)
     double resistance_ohms;       // Resistance in Ohms [Ω]
+    double tolerance_percent = 0.0; // Monte Carlo Tolerance (e.g. 1.0 = 1%)
 };
 
 /*
@@ -58,6 +59,8 @@ struct Capacitor {
     // Generic History Buffer (Index 0 = t_n-1, Index 1 = t_n-2, etc.)
     std::vector<double> voltage_history; 
     std::vector<double> current_history;
+    
+    double tolerance_percent = 0.0;
 };
 
 /*
@@ -77,6 +80,8 @@ struct Inductor {
     // Generic History Buffer
     std::vector<double> current_history;
     std::vector<double> voltage_history;
+    
+    double tolerance_percent = 0.0;
 };
 
 /*
@@ -261,6 +266,8 @@ struct SimulationEnvironment {
     // Process Corners (Monte Carlo)
     enum Corner { TT, FF, SS, SF, FS } process = TT;
     double vdd_variation_sigma = 0.0; // σ for MC
+    double global_voltage_scale = 1.0; // PVT Voltage Scale
+    int monte_carlo_seed = 0;          // Deterministic seed for MC runs
     
     // Noise Profile
     bool thermal_noise_enabled = false;

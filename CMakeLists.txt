@@ -69,6 +69,9 @@ if(EMSCRIPTEN)
     endmacro()
 endif()
 
+# Global include directory (Project Root)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 # Find Qt6 (required)
 # Find Qt6 (required)
 find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
@@ -151,10 +154,16 @@ add_executable(${PROJECT_NAME}
     compute/solvers/circuitsim_solver.cpp
     compute/solvers/webgpu_solver.cpp
     compute/orchestration/grpc_worker_client.cpp
+    compute/orchestration/drivers/yosys_task.cpp
+    compute/orchestration/drivers/yosys_task.h
     gui/orchestration/worker_manager.cpp
     gui/orchestration/worker_manager.h
     gui/orchestration/worker_status_panel.cpp
     gui/orchestration/worker_status_panel.h
+    gui/analysis/corner_setup_widget.cpp
+    gui/analysis/corner_setup_widget.h
+    gui/widgets/trust_badge_widget.cpp
+    gui/widgets/trust_badge_widget.h
     components/circuit.h
 )
 
@@ -207,8 +216,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
     ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/orchestration
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 # Link Qt libraries
@@ -293,6 +303,7 @@ target_include_directories(test_regression PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
+target_link_libraries(test_regression PRIVATE Qt6::Core)
 target_compile_features(test_regression PUBLIC cxx_std_17)
 
 if(EMSCRIPTEN)
@@ -323,7 +334,9 @@ target_include_directories(test_sensitivity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
+target_link_libraries(test_sensitivity PRIVATE Qt6::Core)
 target_compile_features(test_sensitivity PUBLIC cxx_std_17)
 
 # Superposition Test
@@ -342,7 +355,9 @@ target_include_directories(test_superposition PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
+target_link_libraries(test_superposition PRIVATE Qt6::Core)
 target_compile_features(test_superposition PUBLIC cxx_std_17)
 
 # Auto-Validation Harness Test (ERC + AI API)
@@ -464,6 +479,7 @@ target_include_directories(test_erc_rules PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
+target_link_libraries(test_erc_rules PRIVATE Qt6::Core)
 target_compile_features(test_erc_rules PUBLIC cxx_std_17)
 
 # Phase 1.7 Simulation Suite Tests
