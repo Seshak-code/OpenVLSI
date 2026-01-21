@@ -276,7 +276,19 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
       details = auditPhysicalResiduals(netlist, voltageEstimate);
   }
 
-  return {0.0, voltageEstimate, {total_iterations, final_kcl_error, converged, details}, netlist.globalBlock.topologyHash};
+  // Phase 1.7.9: Build trust-enriched SolverStats
+  SolverStats stats;
+  stats.iterations = total_iterations;
+  stats.residual = final_kcl_error;
+  stats.converged = converged;
+  stats.error_detail = details;
+  stats.method = "Newton-Raphson";
+  stats.integrationMethod = "";  // DC has no integration
+  stats.gminSteppingUsed = (gmin_factor < 1e-3);  // If we progressed past initial steps
+  stats.sourceSteppingUsed = false;  // Not implemented yet
+  stats.convergenceTolerance = 1e-6;
+
+  return {0.0, voltageEstimate, stats, netlist.globalBlock.topologyHash};
 }
 
 

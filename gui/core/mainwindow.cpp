@@ -119,6 +119,12 @@ void MainWindow::setupCentralWidget() {
         if (problemsPanel) problemsPanel->clear();
         if (resultsTree_) resultsTree_->clear();
         if (waveformLog_) waveformLog_->clear();
+        
+        // Auto-focus Streaming tab for visibility
+        if (streamingDock_) {
+            streamingDock_->raise();
+            streamingDock_->show();
+        }
     });
     
     setCentralWidget(stageTabs);
@@ -193,6 +199,11 @@ void MainWindow::setupDocks() {
     createWaveformDock();
     addDockWidget(Qt::BottomDockWidgetArea, waveformDock_);
     tabifyDockWidget(resultsDock_, waveformDock_);
+    
+    // Phase 12.3: Worker Status
+    createWorkerDock();
+    addDockWidget(Qt::BottomDockWidgetArea, workerDock);
+    tabifyDockWidget(waveformDock_, workerDock);
     
     // Make Problems tab active by default
     messagesDock->raise();
@@ -524,6 +535,19 @@ void MainWindow::setupMenus() {
     viewMenu->addAction(propertiesDock->toggleViewAction());
     viewMenu->addAction(aiDock->toggleViewAction());
     viewMenu->addAction(messagesDock->toggleViewAction());
+    viewMenu->addSeparator();
+    
+    // Quick Preview Toggle
+    viewQuickPreviewAction = new QAction("Enable Quick Preview", this);
+    viewQuickPreviewAction->setCheckable(true);
+    viewQuickPreviewAction->setChecked(true); // Default ON
+    viewMenu->addAction(viewQuickPreviewAction);
+    
+    connect(viewQuickPreviewAction, &QAction::toggled, this, [this](bool checked) {
+        if (schematicEditor) {
+            schematicEditor->setQuickPreviewEnabled(checked);
+        }
+    });
 
     // Simulation
     QMenu* simMenu = mb->addMenu("&Simulation");
@@ -539,31 +563,47 @@ void MainWindow::openProject() {
 }
 
 void MainWindow::runSimulation() {
-    // Show simulation setup popup dialog
+    if (!simulationWorkspace) return;
+
+    // Check if simulationWorkspace is already in a visible dialog
+    QWidget* parent = simulationWorkspace->parentWidget();
+    if (parent && parent->isWindow()) {
+        parent->show();
+        parent->raise();
+        parent->activateWindow();
+        return;
+    }
+
+    // Create a wrapper dialog
     QDialog* simDialog = new QDialog(this);
-    simDialog->setWindowTitle("Simulation Setup");
-    simDialog->setMinimumSize(800, 600);
+    simDialog->setWindowTitle("Simulation Workspace");
+    simDialog->resize(1100, 700); // Larger default size for workspace
     simDialog->setAttribute(Qt::WA_DeleteOnClose);
     
     QVBoxLayout* layout = new QVBoxLayout(simDialog);
     layout->setContentsMargins(0, 0, 0, 0);
     
-    // Create a new workspace for the dialog (or reuse if we want to persist state)
-    SimulationWorkspace* dialogWorkspace = new SimulationWorkspace(simDialog);
+    // Move the member workspace into the dialog
+    layout->addWidget(simulationWorkspace);
+    simulationWorkspace->show();
+    
+    // Ensure the schematic editor link is fresh
     if (schematicEditor) {
-        dialogWorkspace->setSchematicEditor(schematicEditor);
+        simulationWorkspace->setSchematicEditor(schematicEditor);
     }
-    layout->addWidget(dialogWorkspace);
     
-    // Close button at bottom
-    QHBoxLayout* btnLayout = new QHBoxLayout();
-    btnLayout->addStretch();
-    QPushButton* closeBtn = new QPushButton("Close", simDialog);
-    connect(closeBtn, &QPushButton::clicked, simDialog, &QDialog::close);
-    btnLayout->addWidget(closeBtn);
-    layout->addLayout(btnLayout);
+    // When dialog closes, reclaim the workspace so it isn't destroyed
+    connect(simDialog, &QDialog::finished, this, [this, simDialog]() {
+        if (simulationWorkspace) {
+            simulationWorkspace->setParent(this); // Reparent back to MainWindow
+            simulationWorkspace->hide();
+        }
+    });
     
-    simDialog->show(); // Modeless - user can interact with main window
+    // Close button logic handled by window chrome, but we can add one if needed?
+    // The workspace has its own toolbar, so window chrome is sufficient.
+    
+    simDialog->show();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -774,4 +814,11 @@ void MainWindow::openSchematicTab(const QString& title, const QJsonObject& conte
     connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
     
     statusBar()->showMessage(QString("Opened %1").arg(title), 4000);
+}
+
+void MainWindow::createWorkerDock() {
+    workerDock = new QDockWidget("Worker Status", this);
+    workerDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::RightDockWidgetArea);
+    workerPanel = new acutesim::gui::orchestration::WorkerStatusPanel(workerDock);
+    workerDock->setWidget(workerPanel);
 }

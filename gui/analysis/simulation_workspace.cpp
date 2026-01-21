@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QMessageBox>
 #include "../../physics/quick_analysis.h"
 
 SimulationWorkspace::SimulationWorkspace(QWidget* parent)
@@ -540,7 +541,9 @@ void SimulationWorkspace::onProfileSelected(const QString& profileId) {
 
 void SimulationWorkspace::onRunRequested(const QString& profileId) {
     if (!canRun()) {
-        appendLog("[ERROR] Cannot run: ERC violations present or no schematic.");
+        QString error = "Cannot run simulation.\n\nPossible causes:\n1. ERC Violations (Fix errors in schematic)\n2. No schematic loaded\n3. Missing Ground reference";
+        appendLog("[ERROR] " + error.replace("\n", " "));
+        QMessageBox::warning(this, "Simulation Failed", error);
         return;
     }
     

@@ -1444,32 +1444,23 @@ void SchematicEditor::placeWirePath(const QVector<QPointF>& points) {
 
 void SchematicEditor::placePhysicallyAwareWire(const QVector<QPointF>& points, float width, double current) {
     if (!scene) return;
-    scene->placeWirePath(points); 
     
-    // Apply width to the newly created wires (last N items)
-    // Note: This is a bit hacky, better to have GridScene::placeWirePath return the items or accept params.
-    // For now, let's iterate and find them, or just modify GridScene::placeWirePath.
-    // Actually, let's just implement the logic here directly since we access scene.
+    // Instead of calling scene->placeWirePath(points), we manually create wires 
+    // so we can set their physics properties immediately.
     
     if (points.size() < 2) return;
     for (int i = 0; i < points.size() - 1; ++i) {
         QPointF p1 = scene->snapToGrid(points[i]);
         QPointF p2 = scene->snapToGrid(points[i+1]);
         
-        // Find if we just added this? No, scene->placeWirePath already added it.
-        // Let's look for the wire at this location.
-        QGraphicsItem* item = scene->itemAt((p1+p2)/2, QTransform());
-        if (auto* w = dynamic_cast<VisualWire*>(item)) {
-            w->setWidth(width);
-            w->maxCurrent = current;
-            
-            // If high current, color it differently (e.g., slightly reddish)
-            if (current > 1.0) {
-                 w->setPen(QPen(QColor(200, 200, 220), width));
-            }
-        }
+        VisualWire* wire = new VisualWire(QLineF(p1, p2));
+        wire->setWidth(width);
+        wire->maxCurrent = current;
+        scene->addItem(wire);
     }
+
 }
+
 
 QJsonObject SchematicEditor::getCircuitState() {
     QJsonObject state = scene->getCircuitState();
@@ -1668,6 +1659,22 @@ bool GridScene::isOccupied(const QRectF& rect, QGraphicsItem* exclude) {
 
 QStringList SchematicEditor::runERC() {
     return scene->runERC();
+}
+
+// ============================================================================
+// QUICK PREVIEW TOGGLE
+// ============================================================================
+void GridScene::setQuickPreviewEnabled(bool enabled) {
+    if (quickPreviewEnabled_ != enabled) {
+        quickPreviewEnabled_ = enabled;
+    }
+}
+
+void SchematicEditor::setQuickPreviewEnabled(bool enabled) {
+    quickPreviewEnabled_ = enabled;
+    if (GridScene* s = qobject_cast<GridScene*>(scene)) {
+        s->setQuickPreviewEnabled(enabled);
+    }
 }
 
 

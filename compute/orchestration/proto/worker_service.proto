@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package acutesim.worker;
+
+// The WorkerService defines the interface for all external EDA tools.
+// Whether the worker is a local Docker container or a cloud cluster,
+// the UI interacts with it via this API.
+service WorkerService {
+  // Check health and capabilities
+  rpc GetStatus (StatusRequest) returns (StatusResponse);
+
+  // Logic Synthesis (RTL -> Gate-Level Netlist)
+  rpc RunSynthesis (SynthesisRequest) returns (stream SynthesisLog);
+
+  // Place & Route (Netlist -> GDSII/DEF)
+  rpc RunPlaceAndRoute (PnRRequest) returns (stream PnRLog);
+
+  // Digital Simulation (Verilog/VHDL)
+  rpc RunSimulation (SimulationRequest) returns (stream SimulationLog);
+}
+
+// ============================================================================
+// COMMON TYPES
+// ============================================================================
+
+message StatusRequest {}
+
+message StatusResponse {
+  string worker_id = 1;
+  string version = 2;
+  bool ready = 3;
+  double cpu_usage = 4;
+  double memory_usage = 5;
+  repeated string supported_tools = 6; // ["yosys", "openroad", "verilator"]
+}
+
+message FileData {
+  string filename = 1;
+  bytes content = 2;
+}
+
+// ============================================================================
+// SYNTHESIS (Yosys)
+// ============================================================================
+
+message SynthesisRequest {
+  string job_id = 1;
+  repeated FileData source_files = 2; // Verilog/VHDL
+  string top_module = 3;
+  string target_library = 4;          // "sky130_fd_sc_hd"
+  
+  // Optimization constraints
+  message Constraints {
+    double max_area = 1;
+    double max_delay = 2;
+    string optimization_goal = 3;     // "AREA", "SPEED", "POWER"
+  }
+  Constraints constraints = 5;
+}
+
+message SynthesisLog {
+  string job_id = 1;
+  string log_line = 2;
+  bool is_error = 3;
+  bool is_finished = 4;
+  
+  // Result artifacts (only in final message)
+  FileData netlist = 5;
+  FileData report = 6;
+}
+
+// ============================================================================
+// PLACE & ROUTE (OpenROAD)
+// ============================================================================
+
+message PnRRequest {
+  string job_id = 1;
+  FileData netlist = 2;               // Gate-level netlist
+  string constraint_file = 3;         // SDC file content
+  
+  message Floorplan {
+    double die_width = 1;
+    double die_height = 2;
+    double core_width = 3;
+    double core_height = 4;
+  }
+  Floorplan floorplan = 4;
+}
+
+message PnRLog {
+  string job_id = 1;
+  string log_line = 2;
+  float progress = 3;                 // 0.0 to 1.0
+  bool is_finished = 4;
+  
+  // Result artifacts
+  FileData def_file = 5;
+  FileData gds_file = 6;
+}
+
+// ============================================================================
+// SIMULATION (Verilator/Icarus)
+// ============================================================================
+
+message SimulationRequest {
+  string job_id = 1;
+  repeated FileData source_files = 2;
+  string testbench_module = 3;
+}
+
+message SimulationLog {
+  string job_id = 1;
+  string log_line = 2;
+  bool is_finished = 3;
+  
+  // VCD waveform data
+  bytes vcd_chunk = 4;
+}

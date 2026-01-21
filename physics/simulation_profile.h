@@ -7,6 +7,9 @@
 #include "../gui/core/gui_types.h"  // For AppMode enum
 #include "corner_config.h"          // For CornerConfig and RunMode
 
+// Forward declaration - full definition in simulation_intent.h
+namespace Simulation { struct TrustSignature; }
+
 /**
  * simulation_profile.h
  * 
@@ -159,6 +162,16 @@ struct SimulationRun {
     // Failure info
     QString failureReason;
     int failureNode = -1;        // Node where issue occurred
+    
+    // Phase 1.7.9: Trust & Intent
+    // Note: TrustSignature is forward-declared; include simulation_intent.h for full struct
+    QString trustMethod;              // "Newton-Raphson", "GMIN Stepping"
+    QString trustIntegration;         // "Trapezoidal", "Gear2"
+    double trustMaxResidual = 0.0;    // Max KCL error (Amps)
+    bool trustGminUsed = false;
+    bool trustSourceStepUsed = false;
+    QString trustProvenance;          // Full explanation
+    QStringList linkedIntentIds;      // Intents evaluated by this run
     
     // For AI context
     QString toSummary() const {

@@ -77,6 +77,11 @@ find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
 # Due to security issues with OpenMP on Emscripten, we only find it when not building for Emscripten
 if(NOT EMSCRIPTEN)
     find_package(OpenMP)
+    
+    # Phase 12: Orchestration Dependencies (Provided by vcpkg)
+    # Only search for these if not in WASM/Emscripten mode (WASM uses gRPC-Web via JS)
+    find_package(protobuf CONFIG REQUIRED)
+    find_package(gRPC CONFIG REQUIRED)
 endif()
 
 # qt_standard_project_setup()
@@ -145,8 +150,40 @@ add_executable(${PROJECT_NAME}
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
     compute/solvers/webgpu_solver.cpp
+    compute/orchestration/grpc_worker_client.cpp
+    gui/orchestration/worker_manager.cpp
+    gui/orchestration/worker_manager.h
+    gui/orchestration/worker_status_panel.cpp
+    gui/orchestration/worker_status_panel.h
     components/circuit.h
 )
+
+# Phase 12: Orchestration Library (gRPC Worker Client)
+if(NOT EMSCRIPTEN)
+    # Generate C++ sources from Proto
+    get_target_property(grpc_cpp_plugin gRPC::grpc_cpp_plugin LOCATION)
+    
+    protobuf_generate(TARGET ${PROJECT_NAME} 
+        LANGUAGE cpp 
+        PROTOS compute/orchestration/proto/worker_service.proto
+        IMPORT_DIRS compute/orchestration/proto
+    )
+    protobuf_generate(TARGET ${PROJECT_NAME}
+        LANGUAGE grpc
+        GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+        PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin}"
+        PROTOS compute/orchestration/proto/worker_service.proto
+        IMPORT_DIRS compute/orchestration/proto
+    )
+    
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        gRPC::grpc++ 
+        protobuf::libprotobuf
+    )
+    
+    # Enable defining the WorkerClient implementation
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ACUTESIM_ENABLE_ORCHESTRATION)
+endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -167,7 +204,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/orchestration
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 

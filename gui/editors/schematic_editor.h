@@ -39,6 +39,9 @@ public:
     void setSnappingEnabled(bool enabled);
     bool isSnappingEnabled() const { return snappingEnabled; }
     
+    // Quick Preview
+    void setQuickPreviewEnabled(bool enabled);
+    bool isQuickPreviewEnabled() const { return quickPreviewEnabled_; }
     TensorNetlist generateNetlist();
     QStringList runERC();
     
@@ -107,6 +110,7 @@ private:
     ERC::ERCAutoFix ercAutoFix_;
     QList<ERC::Violation> currentViolations_;
     bool ercEnabled_ = true;
+    bool quickPreviewEnabled_ = true;
     
     // Re-run ERC after schematic changes
     void updateERC();
@@ -138,6 +142,10 @@ class SchematicEditor : public QWidget {
 public:
     void setMode(AppMode mode);
     AppMode getMode() const { return currentMode; }
+    
+    // Quick Preview
+    void setQuickPreviewEnabled(bool enabled);
+    bool isQuickPreviewEnabled() const { return quickPreviewEnabled_; }
     
     // Per-file simulation profile management
     const QMap<QString, Simulation::SimulationProfile>& getProfiles() const { return profiles_; }
@@ -256,9 +264,16 @@ private:
     QLabel* statusLabel;
     
     // Per-file simulation profiles
+    // State
     QMap<QString, Simulation::SimulationProfile> profiles_;
     QString currentProfileId_;
+    Simulation::SimulationProfile* currentProfile_ = nullptr;
     size_t topologyHash_ = 0;
+    
+    // Flags
+    bool ercEnabled_ = true;
+    bool quickPreviewEnabled_ = true; // Default: on
+    bool modified_ = false;
     
     void setupUi();
     QWidget* createRibbon();

@@ -77,11 +77,11 @@ inline bool test_run_creation() {
     run.profileId = "quick_dc";
     run.topologyHash = 0xABCD1234;
     run.status = Simulation::SimulationRun::Status::PENDING;
-    run.runMode = Simulation::SimulationRun::Mode::FULL;
+    run.runMode = Simulation::RunMode::FULL;
     
     assert(run.runId == "test123");
     assert(run.status == Simulation::SimulationRun::Status::PENDING);
-    assert(run.runMode == Simulation::SimulationRun::Mode::FULL);
+    assert(run.runMode == Simulation::RunMode::FULL);
     
     std::cout << "PASS\n";
     return true;
@@ -120,18 +120,18 @@ inline bool test_corner_config() {
     std::cout << "  [Corner Config] ";
     
     auto typical = Simulation::CornerConfig::typical();
-    assert(typical.temperature_C == 27.0);
-    assert(typical.vdd_V == 1.8);
-    assert(typical.process == "TT");
+    assert(typical.temperature == 27.0);
+    assert(typical.vddScale == 1.0);
+    assert(typical.name == "TT");
     
     auto fast = Simulation::CornerConfig::fast();
-    assert(fast.temperature_C == -40.0);
-    assert(fast.vdd_V == 1.98);
-    assert(fast.process == "FF");
+    assert(fast.temperature == -40.0);
+    assert(fast.vddScale == 1.1);
+    assert(fast.name == "FF");
     
     auto slow = Simulation::CornerConfig::slow();
-    assert(slow.temperature_C == 125.0);
-    assert(slow.process == "SS");
+    assert(slow.temperature == 125.0);
+    assert(slow.name == "SS");
     
     std::cout << "PASS\n";
     return true;

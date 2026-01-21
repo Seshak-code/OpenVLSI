@@ -26,7 +26,10 @@
 #include <QSplitter>
 #include "gui_types.h"
 #include "welcome_widget.h"
+#include "welcome_widget.h"
 #include "problems_panel.h"
+#include "gui/orchestration/worker_status_panel.h"
+
 
 // ============================================================================
 // MAIN WINDOW
@@ -58,6 +61,9 @@ private:
     SchematicEditor* schematicEditor; // Active schematic editor (points to current RTL page)
     HDLEditor* hdlEditor; // Phase 14: Code Editor
     SimulationWorkspace* simulationWorkspace; // Phase 1.7: VS Code-style simulation
+    
+    // Actions
+    QAction* viewQuickPreviewAction; // Phase 1.7.7 Toggle
     WelcomeWidget* welcomeWidget;
     
     // Docks
@@ -87,7 +93,13 @@ private:
     QDockWidget* resultsDock_;
     QTreeWidget* resultsTree_;      // [NEW] Tree view for results
     QDockWidget* waveformDock_;
+    QDockWidget* waveformDock_;
     QPlainTextEdit* waveformLog_;   // [NEW] Text view for waveform data dump (placeholder for plot)
+
+    // Phase 12.3: Worker Orchestration
+    QDockWidget* workerDock;
+    acutesim::gui::orchestration::WorkerStatusPanel* workerPanel;
+
 
 private slots:
     void onSimulationResults(const QJsonObject& results);
@@ -106,7 +118,10 @@ private slots:
     void createOutputDock();
     void createStreamingDock();
     void createResultsDock();
+    void createResultsDock();
     void createWaveformDock();
+    void createWorkerDock();
+
     
     // Actions
     void newProject();

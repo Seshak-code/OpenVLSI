@@ -22,6 +22,25 @@ struct SolverStats
     double residual = 0.0;
     bool converged = false;
     std::string error_detail;
+    
+    // Phase 1.7.9: Trust Metadata
+    std::string method = "Newton-Raphson";     // Solver method used
+    std::string integrationMethod;              // "Trapezoidal", "Gear2", "" for DC
+    bool gminSteppingUsed = false;
+    bool sourceSteppingUsed = false;
+    double convergenceTolerance = 1e-6;
+    double solveTimeMs = 0.0;
+    
+    std::string provenance() const {
+        std::string p = "Converged in " + std::to_string(iterations) + " iterations using " + method;
+        if (!integrationMethod.empty()) {
+            p += " (" + integrationMethod + ")";
+        }
+        p += ". Max KCL residual: " + std::to_string(residual) + " A.";
+        if (gminSteppingUsed) p += " GMIN stepping applied.";
+        if (sourceSteppingUsed) p += " Source stepping applied.";
+        return p;
+    }
 };
 
 struct SolverStep 
