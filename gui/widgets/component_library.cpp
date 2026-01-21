@@ -60,6 +60,8 @@ void ComponentLibrary::populateLists() {
     addComponentItem(activeList, "Diode", "diode.png", ComponentType::Diode);
     addComponentItem(activeList, "N-MOSFET", "nmos.png", ComponentType::Mosfet);
     addComponentItem(activeList, "NPN BJT", "bjt.png", ComponentType::Bjt);
+    addComponentItem(activeList, "N-JFET", "njfet.png", ComponentType::JFET_N);
+    addComponentItem(activeList, "P-JFET", "pjfet.png", ComponentType::JFET_P);
     addComponentItem(activeList, "Schottky Diode", "schottky.png", ComponentType::SchottkyDiode);
 
     // =========================================================================

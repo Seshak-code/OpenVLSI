@@ -249,3 +249,44 @@ inline void stampBJT(int c, int b, int e, double g_cc, double g_cb, double g_ce,
     addG(e, c, g_ec); addG(e, b, g_eb); addG(e, e, g_ee);
     addRHS(e, i_eq_e);
 }
+
+/**
+ * stampJFET - Linearized JFET Small-Signal Stamp
+ * 
+ * JFET has 3 terminals: Drain (D), Gate (G), Source (S)
+ * 
+ * Linearized model:
+ *   i_d = gm * (vg - vs) + gds * (vd - vs)
+ *   i_s = -i_d (assuming no gate current in Shichman-Hodges)
+ *   i_g = 0 (ideal gate)
+ * 
+ * The stamp follows MOSFET small-signal pattern.
+ */
+inline void stampJFET(int d, int g, int s, double gm, double gds, double ids,
+                       double vd, double vg, double vs,
+                       MatrixConstructor& mat, std::vector<double>& rhs) {
+    
+    // GM Term (VCCS: i_d = gm * vgs)
+    // Stamp pattern: i_d = gm * (v_g - v_s)
+    auto addG = [&](int r, int c, double val) {
+        if (r != 0 && c != 0) 
+            mat.add(r-1, c-1, val);
+    };
+    
+    // GDS Term (Output Conductance: i_d = gds * vds)
+    addG(d, d, gds);  addG(d, s, -gds);
+    addG(s, d, -gds); addG(s, s, gds);
+    
+    // GM Term (Transconductance)
+    addG(d, g, gm);  addG(d, s, -gm);
+    addG(s, g, -gm); addG(s, s, gm);
+    
+    // RHS: Equivalent current source
+    // I_eq = Ids(Vk) - (gm * (Vg - Vs) + gds * (Vd - Vs))
+    double vgs = vg - vs;
+    double vds = vd - vs;
+    double i_eq = ids - (gm * vgs + gds * vds);
+    
+    if (d != 0) rhs[d-1] -= i_eq; // Current leaving drain
+    if (s != 0) rhs[s-1] += i_eq; // Current entering source
+}

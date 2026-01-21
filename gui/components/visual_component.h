@@ -20,6 +20,8 @@ enum class ComponentType {
     Diode,
     Mosfet,
     Bjt,
+    JFET_N,         // N-Channel JFET
+    JFET_P,         // P-Channel JFET
     CurrentSource,
     SchottkyDiode,
     Probe,

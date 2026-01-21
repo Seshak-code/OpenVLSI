@@ -391,6 +391,34 @@ struct BJT {
     double temperature_K = 300.15;
 };
 
+/*
+ * JFET (J) - Junction Field Effect Transistor
+ * Shichman-Hodges Model:
+ *   Cutoff:     Vgs <= Vto (for N-ch) or Vgs >= -Vto (for P-ch)
+ *   Linear:     Id = Beta * (2*(Vgs-Vto)*Vds - Vds^2) * (1 + lambda*Vds)
+ *   Saturation: Id = Beta * (Vgs - Vto)^2 * (1 + lambda*Vds)
+ * Where:
+ *   Beta = IDSS / Vto^2 (typ. 1e-4 A/V^2)
+ *   Vto  = Pinch-off voltage (typ. -2V for N-ch, +2V for P-ch)
+ *   lambda = Channel-length modulation (typ. 0.01)
+ */
+struct JFET {
+    std::string instanceName;             // e.g., "J1"
+    int drain = -1;                       // D terminal
+    int gate = -1;                        // G terminal
+    int source = -1;                      // S terminal
+    std::string modelName = "default";
+    bool isNChannel = true;               // true=N-ch, false=P-ch
+    
+    // Model Parameters
+    double beta = 1e-4;                   // Transconductance parameter [A/V^2]
+    double Vto = -2.0;                    // Pinch-off voltage [V] (negative for N-ch)
+    double lambda = 0.01;                 // Channel-length modulation [1/V]
+    double thermalVoltage_V_T_V = 0.02585; // For gate-source diode (optional)
+    
+    double temperature_K = 300.15;
+};
+
 // ============================================================================
 // INTERCONNECTS & TRANSMISSION LINES
 // ============================================================================
@@ -456,6 +484,7 @@ struct TensorBlock {
     std::vector<Diode> diodes;
     std::vector<Mosfet> mosfets;
     std::vector<BJT> bjts;
+    std::vector<JFET> jfets;
     
     // Interconnects
     // Interconnects
@@ -641,6 +670,25 @@ struct TensorBlock {
 
         bjts.push_back(newBjt);
         updateNodeCount(C); updateNodeCount(B); updateNodeCount(E);
+    }
+    void addJFET(const std::string& name, int D, int G, int S, 
+                 const std::string& model, bool isNChannel = true,
+                 double beta = 1e-4, double Vto = -2.0, double lambda = 0.01) {
+        if (isFrozen) return;
+        
+        JFET newJfet;
+        newJfet.instanceName = name;
+        newJfet.drain = D;
+        newJfet.gate = G;
+        newJfet.source = S;
+        newJfet.modelName = model;
+        newJfet.isNChannel = isNChannel;
+        newJfet.beta = beta;
+        newJfet.Vto = Vto;
+        newJfet.lambda = lambda;
+        
+        jfets.push_back(newJfet);
+        updateNodeCount(D); updateNodeCount(G); updateNodeCount(S);
     }
     void addTransmissionLine(int p1p, int p1n, int p2p, int p2n, double Z0, double Td) {
         if (isFrozen) return;

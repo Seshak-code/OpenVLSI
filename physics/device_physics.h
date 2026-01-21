@@ -377,3 +377,119 @@ inline BJTCurrents bjt_ebers_moll(double v_c, double v_b, double v_e, bool isNPN
     return res;
 }
 
+// ============================================================================
+// JFET (SHICHMAN-HODGES MODEL) PHYSICS
+// ============================================================================
+
+template <typename T>
+struct JFETParams 
+{
+    T Beta;     // Transconductance parameter [A/V^2] = IDSS/Vto^2
+    T Vto;      // Pinch-off voltage [V] (negative for N-ch, positive for P-ch)
+    T lambda;   // Channel-length modulation [1/V]
+};
+
+enum class JFETRegion { CUTOFF, LINEAR, SATURATION };
+
+/**
+ * jfet_region
+ * Determines operating region from terminal voltages. (N-channel)
+ * For P-channel, the signs are inverted before calling.
+ */
+template <typename T, typename P>
+inline JFETRegion jfet_region(T vgs, T vds, const JFETParams<P>& p) 
+{
+    T vov = vgs - p.Vto; // For N-ch, Vto is negative, so vov = vgs - (-2) = vgs + 2
+    if (vov <= 0.0) return JFETRegion::CUTOFF;
+    if (vds < vov)  return JFETRegion::LINEAR;
+    return JFETRegion::SATURATION;
+}
+
+/**
+ * jfet_ids
+ * Shichman-Hodges Drain-Source Current (N-channel reference).
+ * For P-channel, caller should negate vgs, vds before and negate result after.
+ */
+template <typename T, typename P>
+inline T jfet_ids(T vgs, T vds, const JFETParams<P>& p) 
+{
+    T vov = vgs - p.Vto; // Overdrive voltage
+
+    if (vov <= 0.0) 
+        return 0.0; // Cutoff
+
+    if (vds < vov) 
+    {
+        // Linear Region: Ids = Beta * (2*Vov*Vds - Vds^2) * (1 + lambda*Vds)
+        return p.Beta * (2.0 * vov * vds - vds * vds) * (1.0 + p.lambda * vds);
+    } 
+    else 
+    {
+        // Saturation: Ids = Beta * Vov^2 * (1 + lambda * Vds)
+        return p.Beta * vov * vov * (1.0 + p.lambda * vds);
+    }
+}
+
+/**
+ * jfet_linearization
+ * Returns {Ids, gm, gds} at the operating point for NR stamping.
+ */
+struct JFETLinear {
+    double Ids;  // Drain current
+    double gm;   // dIds/dVgs (transconductance)
+    double gds;  // dIds/dVds (output conductance)
+};
+
+inline JFETLinear jfet_linearization(double vgs, double vds, bool isNChannel, const JFETParams<double>& p) 
+{
+    // P-channel: negate voltages for symmetric computation
+    double sign = isNChannel ? 1.0 : -1.0;
+    double vgs_eff = sign * vgs;
+    double vds_eff = sign * vds;
+    
+    double vov = vgs_eff - p.Vto;
+    
+    JFETLinear res = {0.0, 0.0, 0.0};
+    
+    if (vov <= 0.0) {
+        // Cutoff: small GMIN for stability
+        res.gds = 1e-12;
+        return res;
+    }
+    
+    if (vds_eff < vov) {
+        // Linear region
+        // Ids = Beta * (2*vov*vds - vds^2) * (1 + lambda*vds)
+        double base = 2.0 * vov * vds_eff - vds_eff * vds_eff;
+        double clm = 1.0 + p.lambda * vds_eff;
+        res.Ids = p.Beta * base * clm;
+        
+        // gm = dIds/dVgs = Beta * 2 * vds * clm (since d(vov)/d(vgs) = 1)
+        res.gm = p.Beta * 2.0 * vds_eff * clm;
+        
+        // gds = dIds/dVds = Beta * (2*vov - 2*vds) * clm + Beta * base * lambda
+        res.gds = p.Beta * (2.0 * vov - 2.0 * vds_eff) * clm + p.Beta * base * p.lambda;
+    } else {
+        // Saturation region
+        // Ids = Beta * vov^2 * (1 + lambda * vds)
+        double vov2 = vov * vov;
+        double clm = 1.0 + p.lambda * vds_eff;
+        res.Ids = p.Beta * vov2 * clm;
+        
+        // gm = dIds/dVgs = Beta * 2 * vov * clm
+        res.gm = p.Beta * 2.0 * vov * clm;
+        
+        // gds = dIds/dVds = Beta * vov^2 * lambda
+        res.gds = p.Beta * vov2 * p.lambda;
+    }
+    
+    // Ensure minimum conductance for numerical stability
+    res.gds = std::max(res.gds, 1e-12);
+    res.gm = std::max(res.gm, 1e-12);
+    
+    // For P-channel, negate current (current flows opposite)
+    res.Ids *= sign;
+    
+    return res;
+}
+

@@ -13,6 +13,8 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::Diode: return "Diode";
         case ComponentType::Mosfet: return "Mosfet";
         case ComponentType::Bjt: return "Bjt";
+        case ComponentType::JFET_N: return "JFET_N";
+        case ComponentType::JFET_P: return "JFET_P";
         case ComponentType::CurrentSource: return "CurrentSource";
         case ComponentType::SchottkyDiode: return "SchottkyDiode";
         case ComponentType::Wire: return "Wire";
@@ -42,6 +44,8 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "Schottky" || s == "SchottkyDiode") return ComponentType::SchottkyDiode;
     if (s == "Mosfet" || s == "NMOS" || s == "PMOS") return ComponentType::Mosfet;
     if (s == "Bjt" || s == "NPN" || s == "PNP" || s == "BJT_NPN" || s == "BJT_PNP") return ComponentType::Bjt;
+    if (s == "JFET_N" || s == "N-JFET" || s == "NJFET") return ComponentType::JFET_N;
+    if (s == "JFET_P" || s == "P-JFET" || s == "PJFET") return ComponentType::JFET_P;
     if (s == "Wire") return ComponentType::Wire;
     if (s == "Probe") return ComponentType::Probe;
     if (s == "ICPackage" || s == "IC" || s == "ULN2003A" || s == "ULN2803A") return ComponentType::ICPackage;
@@ -219,6 +223,24 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             params["Model"] = "2N2222";
             paramOptions["Model"] = {"2N2222", "2N3904", "2N3906", "BC547"};
             break;
+        case ComponentType::JFET_N:
+            name = "J?";
+            value = "N-JFET";
+            params["Model"] = "J201";
+            params["Beta"] = "1e-4";
+            params["Vto"] = "-2.0";
+            params["Lambda"] = "0.01";
+            paramOptions["Model"] = {"J201", "2N5457", "2N5458", "BF245A"};
+            break;
+        case ComponentType::JFET_P:
+            name = "J?";
+            value = "P-JFET";
+            params["Model"] = "J175";
+            params["Beta"] = "1e-4";
+            params["Vto"] = "2.0";
+            params["Lambda"] = "0.01";
+            paramOptions["Model"] = {"J175", "2N5460", "2N5461"};
+            break;
         case ComponentType::CurrentSource:
             name = "I?";
             value = "1mA";
@@ -339,6 +361,11 @@ QVector<QPointF> VisualComponent::getTerminals() const {
             break;
         case ComponentType::Mosfet:
              // Gate (-20, 0), Drain (20, -20), Source (20, 20)
+             t << QPointF(-20, 0) << QPointF(20, -20) << QPointF(20, 20); 
+             break;
+        case ComponentType::JFET_N:
+        case ComponentType::JFET_P:
+             // Gate (-20, 0), Drain (20, -20), Source (20, 20) - same as MOSFET
              t << QPointF(-20, 0) << QPointF(20, -20) << QPointF(20, 20); 
              break;
         case ComponentType::Probe:
@@ -576,6 +603,46 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                      QPointF tip(10, 15);
                      painter->drawLine(tip.x(), tip.y(), tip.x()-6, tip.y()-2);
                      painter->drawLine(tip.x(), tip.y(), tip.x()-2, tip.y()-6);
+                 }
+             }
+             break;
+             
+        case ComponentType::JFET_N:
+        case ComponentType::JFET_P:
+             // Draw JFET Symbol (distinct from MOSFET: dashed gate, symmetric channel)
+             {
+                 bool isPChannel = (type == ComponentType::JFET_P);
+                 
+                 // Gate lead
+                 painter->drawLine(-20, 0, -10, 0);
+                 
+                 // Gate bar (dashed to show depletion-mode)
+                 painter->setPen(QPen(Qt::white, 2, Qt::DashLine));
+                 painter->drawLine(-10, -12, -10, 12);
+                 painter->setPen(QPen(Qt::white, 2));
+                 
+                 // Channel (solid vertical bar)
+                 painter->drawLine(0, -15, 0, 15);
+                 
+                 // Drain lead (top)
+                 painter->drawLine(0, -15, 10, -15);
+                 painter->drawLine(10, -15, 20, -15);
+                 painter->drawLine(20, -15, 20, -20);
+                 
+                 // Source lead (bottom)
+                 painter->drawLine(0, 15, 10, 15);
+                 painter->drawLine(10, 15, 20, 15);
+                 painter->drawLine(20, 15, 20, 20);
+                 
+                 // Arrow on gate (direction indicates N/P channel)
+                 if (isPChannel) {
+                     // P-channel: Arrow pointing OUT from gate
+                     painter->drawLine(-10, 0, -5, -3);
+                     painter->drawLine(-10, 0, -5, 3);
+                 } else {
+                     // N-channel: Arrow pointing IN to gate
+                     painter->drawLine(-5, 0, -10, -3);
+                     painter->drawLine(-5, 0, -10, 3);
                  }
              }
              break;
