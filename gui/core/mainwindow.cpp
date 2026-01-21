@@ -169,8 +169,15 @@ void MainWindow::setupCentralWidget() {
                 
                 // Update simulation workspace if it exists
                 if (simulationWorkspace) {
-                    simulationWorkspace->setSchematicEditor(schematicEditor);
+                    simulationWorkspace->setSchematicEditor(newEditor);
                 }
+                
+                // Update Debug Suggestions Context
+                if (debugSuggestionsPanel) {
+                    debugSuggestionsPanel->setEditor(newEditor);
+                    debugSuggestionsPanel->refreshSuggestions();
+                }
+                
             }
             
             // Update UI to match current page's mode
@@ -188,12 +195,10 @@ void MainWindow::setupCentralWidget() {
 
 void MainWindow::setupDocks() {
     // --- Project Browser (Left) ---
-    qDebug() << "[DOCK] createProjectDock...";
     createProjectDock();
     addDockWidget(Qt::LeftDockWidgetArea, projectDock);
 
     // --- Component Library (Left, Tabbed or Below) ---
-    qDebug() << "[DOCK] createLibraryDock...";
     createLibraryDock();
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
     tabifyDockWidget(projectDock, libraryDock);
@@ -204,55 +209,50 @@ void MainWindow::setupDocks() {
     }
 
     // --- Properties Inspector (Right) ---
-    qDebug() << "[DOCK] createPropertiesDock...";
     createPropertiesDock();
     addDockWidget(Qt::RightDockWidgetArea, propertiesDock);
 
     // --- Copilot AI (Right, Tabbed) ---
-    qDebug() << "[DOCK] createAiDock...";
     createAiDock();
     addDockWidget(Qt::RightDockWidgetArea, aiDock);
     tabifyDockWidget(propertiesDock, aiDock); // Tab them together by default
 
     // --- Message Console (Bottom) ---
-    qDebug() << "[DOCK] createMessagesDock...";
     createMessagesDock();
     addDockWidget(Qt::BottomDockWidgetArea, messagesDock);
     
     // --- Debug Panels (Bottom, Tabbed with Problems) ---
-    qDebug() << "[DOCK] createOutputDock...";
     createOutputDock();
     addDockWidget(Qt::BottomDockWidgetArea, outputDock_);
     tabifyDockWidget(messagesDock, outputDock_);
     
-    qDebug() << "[DOCK] createStreamingDock...";
     createStreamingDock();
     addDockWidget(Qt::BottomDockWidgetArea, streamingDock_);
     tabifyDockWidget(outputDock_, streamingDock_);
     
-    qDebug() << "[DOCK] createResultsDock...";
     createResultsDock();
     addDockWidget(Qt::BottomDockWidgetArea, resultsDock_);
     tabifyDockWidget(streamingDock_, resultsDock_);
     
-    qDebug() << "[DOCK] createWaveformDock...";
     createWaveformDock();
     addDockWidget(Qt::BottomDockWidgetArea, waveformDock_);
     tabifyDockWidget(resultsDock_, waveformDock_);
     
     // Phase 12.3: Worker Status (disabled in WASM - requires threading)
 #ifndef __EMSCRIPTEN__
-    qDebug() << "[DOCK] createWorkerDock...";
     createWorkerDock();
     addDockWidget(Qt::BottomDockWidgetArea, workerDock);
     tabifyDockWidget(waveformDock_, workerDock);
 #else
-    qDebug() << "[DOCK] Skipping WorkerDock in WASM (requires threading)";
     workerDock = nullptr;
     workerPanel = nullptr;
 #endif
+
+    // [New] Debug Suggestions (Split with Problems)
+    createDebugSuggestionsDock();
+    addDockWidget(Qt::BottomDockWidgetArea, debugSuggestionsDock);
+    splitDockWidget(messagesDock, debugSuggestionsDock, Qt::Horizontal);
     
-    qDebug() << "[DOCK] All docks created";
     // Make Problems tab active by default
     messagesDock->raise();
 }
@@ -873,4 +873,14 @@ void MainWindow::createWorkerDock() {
     workerDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::RightDockWidgetArea);
     workerPanel = new acutesim::gui::orchestration::WorkerStatusPanel(workerDock);
     workerDock->setWidget(workerPanel);
+}
+
+void MainWindow::createDebugSuggestionsDock() {
+    debugSuggestionsDock = new QDockWidget("AI Debug Hints", this);
+    debugSuggestionsDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::RightDockWidgetArea);
+    
+    debugSuggestionsPanel = new acutesim::gui::widgets::DebugSuggestionsPanel(debugSuggestionsDock);
+    debugSuggestionsPanel->setEditor(schematicEditor); // Set initial editor
+    
+    debugSuggestionsDock->setWidget(debugSuggestionsPanel);
 }

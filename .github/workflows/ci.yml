@@ -113,3 +113,39 @@ jobs:
           name: AcuteSim-Linux
           path: out/build/linux/AcuteSim
           if-no-files-found: warn
+
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.56
+          
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.0'
+          target: 'wasm_singlethread'
+          arch: 'wasm_32'
+          
+      - name: Configure CMake
+        run: |
+          emcmake cmake -S . -B out/build/wasm -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+            
+      - name: Build Application
+        run: cmake --build out/build/wasm --target AcuteSim
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AcuteSim-WASM
+          path: |
+            out/build/wasm/AcuteSim.js
+            out/build/wasm/AcuteSim.wasm
+            out/build/wasm/AcuteSim.html
+            out/build/wasm/qtloader.js
+          if-no-files-found: warn

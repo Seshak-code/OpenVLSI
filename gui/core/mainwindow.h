@@ -28,6 +28,7 @@
 #include "welcome_widget.h"
 #include "problems_panel.h"
 #include "../orchestration/worker_status_panel.h"
+#include "../widgets/debug_suggestions_panel.h"
 
 
 // ============================================================================
@@ -83,6 +84,9 @@ private:
 
     QDockWidget* messagesDock;
     ProblemsPanel* problemsPanel;
+
+    QDockWidget* debugSuggestionsDock;
+    acutesim::gui::widgets::DebugSuggestionsPanel* debugSuggestionsPanel;
     
     // Bottom dock panels for debug output
     QDockWidget* outputDock_;
@@ -118,6 +122,7 @@ private slots:
     void createResultsDock();
     void createWaveformDock();
     void createWorkerDock();
+    void createDebugSuggestionsDock();
 
     
     // Actions

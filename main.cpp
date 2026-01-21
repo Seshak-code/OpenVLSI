@@ -38,27 +38,20 @@ int main(int argc, char *argv[]) {
 
   QApplication app(argc, argv);
 
-  qDebug() << "[WASM DEBUG] QApplication created";
-
   // Qt styling
   app.setStyle("Fusion");
 
-  qDebug() << "[WASM DEBUG] Creating MainWindow...";
   MainWindow w;
-  qDebug() << "[WASM DEBUG] MainWindow created successfully";
 
 #ifdef __EMSCRIPTEN__
   // Wasm-specific: Force window to match screen interaction size
   // This allows the browser to handle scaling via the viewport
   auto screen = app.primaryScreen();
-  qDebug() << "[WASM DEBUG] Got primary screen:" << (screen ? "valid" : "null");
   if (screen) {
     const QRect geometry = screen->availableGeometry();
-    qDebug() << "[WASM DEBUG] Setting geometry:" << geometry;
     w.setGeometry(geometry);
   }
   w.show();
-  qDebug() << "[WASM DEBUG] MainWindow shown, entering event loop";
 #else
   w.showMaximized();
 #endif
