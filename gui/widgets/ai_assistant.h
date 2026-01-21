@@ -47,6 +47,8 @@ private:
     // Approval Loop State
     ChangeRequest pendingRequest;
     QFrame* currentDiffCard;
+    QString pendingIntent_;       // Original user input for feedback
+    double pendingConfidence_ = 1.0; // Parser confidence for feedback
     
     void processCommand(const QString& cmd);
     void appendMessage(const QString& sender, const QString& msg, bool isUser = false);

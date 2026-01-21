@@ -1,5 +1,6 @@
 #include "ai_assistant.h"
 #include "../../ai_api/context/context_engine.h"
+#include "../../ai_api/context/rag_context.h"
 #include "../../ai_api/core/nl_parser.h"
 #include "../../ai_api/core/circuit_templates.h"
 #include "../../ai_api/system/schema_api.h"
@@ -211,6 +212,64 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
 
             showDiffCard(req);
         }
+        else if (cmd == "/debug") {
+            // Show AI debug suggestions
+            QJsonArray suggestions = AIAPI::ContextEngine::getDebugSuggestions();
+            
+            if (suggestions.isEmpty()) {
+                appendMessage("Copilot", "✅ **No issues detected.** Circuit looks good for probing!");
+                return;
+            }
+            
+            QString response = "🔍 **Debug Suggestions** (AI-recommended probe points):\n\n";
+            for (const auto& sugVal : suggestions) {
+                QJsonObject sug = sugVal.toObject();
+                int priority = sug["priority"].toInt();
+                QString icon = (priority == 1) ? "🔴" : ((priority == 2) ? "🟡" : "🔵");
+                QString node = sug["node"].toString();
+                QString reason = sug["reason"].toString();
+                
+                response += QString("%1 **%2**: %3\n").arg(icon).arg(node).arg(reason);
+            }
+            response += "\n_Double-click a suggestion or type 'place probe at [node]' to add._";
+            appendMessage("Copilot", response);
+        }
+        else if (cmd == "/paths") {
+            // Show AI-discovered signal paths
+            QJsonArray paths = AIAPI::ContextEngine::analyzeSignalPaths();
+            
+            if (paths.isEmpty()) {
+                appendMessage("Copilot", "[!] No signal paths found. Add sources (V/I) and ground first.");
+                return;
+            }
+            
+            QString response = "📡 **Signal Path Analysis:**\n\n";
+            for (const auto& pathVal : paths) {
+                QJsonObject path = pathVal.toObject();
+                QString src = path["source"].toString();
+                QString sink = path["sink"].toString();
+                
+                QJsonArray pathComps = path["path"].toArray();
+                QStringList pathList;
+                for (const auto& c : pathComps) pathList << c.toString();
+                
+                response += QString("**%1** → **%2**\n").arg(src).arg(sink);
+                response += QString("  Path: %1\n").arg(pathList.join(" → "));
+                
+                // Show recommended probes
+                QJsonArray probes = path["probePoints"].toArray();
+                if (!probes.isEmpty()) {
+                    response += "  📍 Probe Points: ";
+                    QStringList probeNodes;
+                    for (const auto& p : probes) {
+                        probeNodes << p.toObject()["node"].toString();
+                    }
+                    response += probeNodes.join(", ") + "\n";
+                }
+                response += "\n";
+            }
+            appendMessage("Copilot", response);
+        }
         else if (cmd == "/help") {
             appendMessage("Copilot", "Commands:\n"
                                      "/help - This msg\n"
@@ -220,11 +279,15 @@ void AiAssistantPanel::processCommand(const QString& cmd) {
                                      "/parts - List Components\n"
                                      "/erc - Run ERC\n"
                                      "/templates - List circuit templates\n"
-                                     "/demo - Build Resistive Divider\n\n"
+                                     "/demo - Build Resistive Divider\n"
+                                     "/debug - AI debug suggestions (probe placement)\n"
+                                     "/paths - Signal path analysis\n\n"
                                      "Natural Language:\n"
                                      "  'add a 1k resistor'\n"
                                      "  'connect V1 to R1'\n"
                                      "  'place probe'\n"
+                                     "  'analyze signal paths'\n"
+                                     "  'debug suggestions'\n"
                                      "  'delete R5'");
         }
         else if (cmd == "/context") {
@@ -381,6 +444,38 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
     // ====================================================
 
     AIAPI::ParsedIntent intent = AIAPI::NLParser::parseIntent(text);
+    
+    // Store for feedback recording
+    pendingIntent_ = text;
+    pendingConfidence_ = intent.confidence;
+    
+    // === NL-COMMAND VISUAL FEEDBACK ===
+    // Display recognized intent with confidence badge
+    QString confidenceColor = (intent.confidence >= 0.8) ? "#28A745" : 
+                              (intent.confidence >= 0.5) ? "#FFC107" : "#DC3545";
+    QString confidenceBadge = QString("<span style='background-color:%1; color:white; padding:2px 6px; border-radius:3px; font-size:10px;'>%2%</span>")
+                              .arg(confidenceColor).arg(static_cast<int>(intent.confidence * 100));
+    
+    if (intent.confidence >= 0.5) {
+        // Generate confidence explanation
+        AIAPI::ConfidenceExplanation explanation = AIAPI::RAGContextBuilder::explainConfidence(
+            text, intent.action, intent.confidence);
+        
+        QString intentDisplay = QString("<div style='background:#1E1E1E; border:1px solid #3E3E42; padding:8px; margin:5px 0; border-radius:4px;'>"
+                                        "<b style='color:#4EC9B0;'>Recognized Intent:</b> %1 %2<br/>"
+                                        "<span style='color:#888;'>Action:</span> <code style='color:#CE9178;'>%3</code>")
+                                .arg(intent.action).arg(confidenceBadge).arg(intent.action);
+        
+        // Add confidence reasons if < 100%
+        if (intent.confidence < 1.0 && !explanation.reasons.isEmpty()) {
+            intentDisplay += QString("<br/><span style='color:#888; font-size:11px;'>Why not 100%: %1</span>")
+                            .arg(explanation.reasons.join(", "));
+        }
+        
+        intentDisplay += "</div>";
+        chatHistory->append(intentDisplay);
+    }
+    // =====================================
     
     if (intent.confidence < 0.5) {
         appendMessage("Copilot", "I couldn't understand that request. Try:\n"
@@ -644,12 +739,32 @@ void AiAssistantPanel::showDiffCard(const ChangeRequest& request) {
 
 void AiAssistantPanel::onApproveRequest() {
     appendMessage("Copilot", "[OK] Approved! Executing...");
+    
+    // Record feedback for learning
+    AIAPI::UserFeedback fb;
+    fb.originalIntent = pendingIntent_;
+    fb.parsedAction = pendingRequest.description;
+    fb.confidence = pendingConfidence_;
+    fb.wasApproved = true;
+    fb.timestamp = QDateTime::currentDateTime();
+    AIAPI::FeedbackStore::recordFeedback(fb);
+    
     executeChangeRequest(pendingRequest);
     clearDiffCard();
 }
 
 void AiAssistantPanel::onRejectRequest() {
     appendMessage("Copilot", "[X] Rejected. No changes made.");
+    
+    // Record feedback for learning
+    AIAPI::UserFeedback fb;
+    fb.originalIntent = pendingIntent_;
+    fb.parsedAction = pendingRequest.description;
+    fb.confidence = pendingConfidence_;
+    fb.wasApproved = false;
+    fb.timestamp = QDateTime::currentDateTime();
+    AIAPI::FeedbackStore::recordFeedback(fb);
+    
     clearDiffCard();
 }
 

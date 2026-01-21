@@ -117,6 +117,8 @@ add_executable(${PROJECT_NAME}
     gui/widgets/design_flow.h
     gui/widgets/problems_panel.cpp
     gui/widgets/problems_panel.h
+    gui/widgets/debug_suggestions_panel.cpp
+    gui/widgets/debug_suggestions_panel.h
     gui/analysis/logic_analyzer.cpp
     gui/analysis/logic_analyzer.h
     gui/analysis/simulation_explorer.cpp
@@ -143,6 +145,8 @@ add_executable(${PROJECT_NAME}
     ai_api/simulation/speculative_runner.h
     ai_api/context/prompt_builder.cpp
     ai_api/context/prompt_builder.h
+    ai_api/context/rag_context.cpp
+    ai_api/context/rag_context.h
     ai_api/analysis/topology_analyzer.cpp
     ai_api/analysis/topology_analyzer.h
     ai_api/system/feedback_loop.cpp
@@ -383,12 +387,22 @@ add_executable(test_auto_harness
     ai_api/simulation/auto_harness.cpp
     ai_api/simulation/speculative_runner.cpp
     ai_api/context/prompt_builder.cpp
+    ai_api/context/rag_context.cpp
     ai_api/analysis/topology_analyzer.cpp
     ai_api/system/feedback_loop.cpp
     ai_api/simulation/simulation_trace.cpp
     compute/tensors/physics_tensors.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    gui/analysis/simulation_workspace.cpp
+    gui/analysis/simulation_explorer.cpp
+    gui/analysis/corner_setup_widget.cpp
+    gui/widgets/problems_panel.cpp
+    gui/widgets/trust_badge_widget.cpp
+    gui/orchestration/worker_status_panel.cpp
+    gui/orchestration/worker_manager.cpp
+    physics/quick_analysis.cpp
+    compute/orchestration/grpc_worker_client.cpp
 )
 target_include_directories(test_auto_harness PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -434,12 +448,22 @@ add_executable(test_copilot_validate
     ai_api/simulation/auto_harness.cpp
     ai_api/simulation/speculative_runner.cpp
     ai_api/context/prompt_builder.cpp
+    ai_api/context/rag_context.cpp
     ai_api/analysis/topology_analyzer.cpp
     ai_api/system/feedback_loop.cpp
     ai_api/simulation/simulation_trace.cpp
     compute/tensors/physics_tensors.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    gui/analysis/simulation_workspace.cpp
+    gui/analysis/simulation_explorer.cpp
+    gui/analysis/corner_setup_widget.cpp
+    gui/widgets/problems_panel.cpp
+    gui/widgets/trust_badge_widget.cpp
+    gui/orchestration/worker_status_panel.cpp
+    gui/orchestration/worker_manager.cpp
+    physics/quick_analysis.cpp
+    compute/orchestration/grpc_worker_client.cpp
 )
 target_include_directories(test_copilot_validate PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -502,3 +526,20 @@ target_include_directories(test_simulation PRIVATE
 )
 target_compile_features(test_simulation PUBLIC cxx_std_17)
 target_link_libraries(test_simulation PRIVATE Qt6::Core)
+
+# Emscripten link options for all test targets
+if(EMSCRIPTEN)
+    set(EMSCRIPTEN_TEST_LINK_OPTIONS
+        "--bind" 
+        "-sWASM=1"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sEXIT_RUNTIME=1"
+        "-sEXPORTED_RUNTIME_METHODS=['FS']"
+    )
+    target_link_options(test_simulation PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
+    target_link_options(test_sensitivity PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
+    target_link_options(test_superposition PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
+    target_link_options(test_erc_rules PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
+    target_link_options(test_auto_harness PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
+    target_link_options(test_copilot_validate PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
+endif()

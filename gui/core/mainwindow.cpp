@@ -11,25 +11,33 @@
 #include <QInputDialog>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
+    qDebug() << "[MW INIT] Constructor start";
     setWindowTitle("AcuteSim - ASIC Design Suite");
     resize(1280, 720);
     
+    qDebug() << "[MW INIT] Creating DesignFlowManager...";
     // Initialize Design Flow Manager
     flowManager = new DesignFlowManager(this);
     connect(flowManager, &DesignFlowManager::stageChanged, this, &MainWindow::onStageChanged);
     
+    qDebug() << "[MW INIT] setupCentralWidget...";
     // 1. Setup Central Area (Stage-based Workspace)
     setupCentralWidget();
 
+    qDebug() << "[MW INIT] setupDocks...";
     // 2. Setup Docks (Project, Properties, Messages)
     setupDocks();
 
+    qDebug() << "[MW INIT] setupMenus...";
     // 3. Setup Menus and Toolbar
     setupMenus();
+    
+    qDebug() << "[MW INIT] setupStageToolbar...";
     setupStageToolbar();
 
     // 4. Status Bar
     statusBar()->showMessage("Ready - RTL Design Stage");
+    qDebug() << "[MW INIT] Constructor complete";
 }
 
 void MainWindow::setupCentralWidget() {
@@ -100,7 +108,10 @@ void MainWindow::setupCentralWidget() {
     
     // Simulator Panel (popup, not a tab - triggered from menu)
     simulationWorkspace = new SimulationWorkspace(this);
-    simulationWorkspace->setSchematicEditor(schematicEditor);
+    // Note: schematicEditor may be nullptr at this point - will be set when first schematic is created
+    if (schematicEditor) {
+        simulationWorkspace->setSchematicEditor(schematicEditor);
+    }
     // Note: NOT added to stageTabs - accessed via "Set Simulation" menu
     
     // Connect simulation logs to bottom panels
@@ -140,7 +151,28 @@ void MainWindow::setupCentralWidget() {
     // Connect RTL page tab changes to update active schematic
     connect(rtlPageTabs, &QTabWidget::currentChanged, this, [this](int idx) {
         if (idx >= 0) {
-            schematicEditor = qobject_cast<SchematicEditor*>(rtlPageTabs->widget(idx));
+            SchematicEditor* newEditor = qobject_cast<SchematicEditor*>(rtlPageTabs->widget(idx));
+            
+            // If switching to a new editor, disconnect old and connect new
+            if (newEditor && newEditor != schematicEditor) {
+                // Disconnect from old editor if it exists
+                if (schematicEditor) {
+                    disconnect(schematicEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+                    disconnect(schematicEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+                }
+                
+                schematicEditor = newEditor;
+                
+                // Connect to new editor
+                connect(schematicEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+                connect(schematicEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+                
+                // Update simulation workspace if it exists
+                if (simulationWorkspace) {
+                    simulationWorkspace->setSchematicEditor(schematicEditor);
+                }
+            }
+            
             // Update UI to match current page's mode
             if (schematicEditor && libraryPanel) {
                 libraryPanel->setMode(schematicEditor->getMode());
@@ -148,19 +180,20 @@ void MainWindow::setupCentralWidget() {
         }
     });
     
-    // Connect schematic selection signals
-    connect(schematicEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
-    connect(schematicEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+    // Note: schematicEditor connections are now made dynamically in the tab change handler above
+    // This avoids null pointer issues since schematicEditor starts as nullptr
 }
 
 
 
 void MainWindow::setupDocks() {
     // --- Project Browser (Left) ---
+    qDebug() << "[DOCK] createProjectDock...";
     createProjectDock();
     addDockWidget(Qt::LeftDockWidgetArea, projectDock);
 
     // --- Component Library (Left, Tabbed or Below) ---
+    qDebug() << "[DOCK] createLibraryDock...";
     createLibraryDock();
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
     tabifyDockWidget(projectDock, libraryDock);
@@ -171,40 +204,55 @@ void MainWindow::setupDocks() {
     }
 
     // --- Properties Inspector (Right) ---
+    qDebug() << "[DOCK] createPropertiesDock...";
     createPropertiesDock();
     addDockWidget(Qt::RightDockWidgetArea, propertiesDock);
 
     // --- Copilot AI (Right, Tabbed) ---
+    qDebug() << "[DOCK] createAiDock...";
     createAiDock();
     addDockWidget(Qt::RightDockWidgetArea, aiDock);
     tabifyDockWidget(propertiesDock, aiDock); // Tab them together by default
 
     // --- Message Console (Bottom) ---
+    qDebug() << "[DOCK] createMessagesDock...";
     createMessagesDock();
     addDockWidget(Qt::BottomDockWidgetArea, messagesDock);
     
     // --- Debug Panels (Bottom, Tabbed with Problems) ---
+    qDebug() << "[DOCK] createOutputDock...";
     createOutputDock();
     addDockWidget(Qt::BottomDockWidgetArea, outputDock_);
     tabifyDockWidget(messagesDock, outputDock_);
     
+    qDebug() << "[DOCK] createStreamingDock...";
     createStreamingDock();
     addDockWidget(Qt::BottomDockWidgetArea, streamingDock_);
     tabifyDockWidget(outputDock_, streamingDock_);
     
+    qDebug() << "[DOCK] createResultsDock...";
     createResultsDock();
     addDockWidget(Qt::BottomDockWidgetArea, resultsDock_);
     tabifyDockWidget(streamingDock_, resultsDock_);
     
+    qDebug() << "[DOCK] createWaveformDock...";
     createWaveformDock();
     addDockWidget(Qt::BottomDockWidgetArea, waveformDock_);
     tabifyDockWidget(resultsDock_, waveformDock_);
     
-    // Phase 12.3: Worker Status
+    // Phase 12.3: Worker Status (disabled in WASM - requires threading)
+#ifndef __EMSCRIPTEN__
+    qDebug() << "[DOCK] createWorkerDock...";
     createWorkerDock();
     addDockWidget(Qt::BottomDockWidgetArea, workerDock);
     tabifyDockWidget(waveformDock_, workerDock);
+#else
+    qDebug() << "[DOCK] Skipping WorkerDock in WASM (requires threading)";
+    workerDock = nullptr;
+    workerPanel = nullptr;
+#endif
     
+    qDebug() << "[DOCK] All docks created";
     // Make Problems tab active by default
     messagesDock->raise();
 }
@@ -256,7 +304,9 @@ void MainWindow::createLibraryDock() {
     
     // Connect Selection
     connect(libraryPanel, &ComponentLibrary::componentSelected, this, [this](ComponentType type){
-         schematicEditor->setTool(type);
+        if (schematicEditor) {
+            schematicEditor->setTool(type);
+        }
     });
     
     libraryDock->setWidget(libraryPanel);
@@ -402,7 +452,9 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
     else if (activeWire) {
         if (col == 1 && row == 0) {
             // Renaming Net
-            schematicEditor->setWireName(activeWire, item->text());
+            if (schematicEditor) {
+                schematicEditor->setWireName(activeWire, item->text());
+            }
         }
     }
 }
