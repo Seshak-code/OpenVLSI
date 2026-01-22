@@ -4,6 +4,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QSplitter>
 #include <QPainter>
 #include <QMouseEvent>
@@ -297,16 +298,30 @@ public:
     
 signals:
     void highlightComponent(const QString& name);
+    void exportRequested();
     
 private:
     void setupUI() {
         auto* layout = new QVBoxLayout(this);
         layout->setContentsMargins(0, 0, 0, 0);
         
-        // Title
+        // Header Area
+        auto* header = new QWidget(this);
+        auto* hLayout = new QHBoxLayout(header);
+        
         auto* title = new QLabel("Statistical Analysis Dashboard");
         title->setStyleSheet("font-size: 14px; font-weight: bold; color: #2196F3; padding: 8px;");
-        layout->addWidget(title);
+        hLayout->addWidget(title);
+        
+        hLayout->addStretch();
+        
+        auto* exportBtn = new QPushButton("Export CSV", header);
+        exportBtn->setStyleSheet("QPushButton { background: #333; color: #ccc; border: 1px solid #555; padding: 4px 10px; }"
+                                 "QPushButton:hover { background: #444; }");
+        connect(exportBtn, &QPushButton::clicked, this, &StatisticalDashboard::exportRequested);
+        hLayout->addWidget(exportBtn);
+        
+        layout->addWidget(header);
         
         // Splitter for side-by-side or stacked view
         auto* splitter = new QSplitter(Qt::Horizontal, this);

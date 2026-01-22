@@ -140,4 +140,5 @@ private:
     void runMonteCarlo();
     void runSensitivity();
     StatisticalDashboard* statsDashboard_ = nullptr;
+    std::vector<double> lastMonteCarloResults_;
 };

@@ -1,4 +1,5 @@
 #include "simulation_workspace.h"
+#include "monte_carlo_setup_dialog.h"
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -10,8 +11,9 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QMessageBox>
-#include <QJsonArray>
-#include <QMessageBox>
+#include <QFileDialog>
+#include <QFile>
+#include <QTextStream>
 #include <QDialog>
 #include "corner_setup_widget.h"
 #include "../../physics/quick_analysis.h"
@@ -853,56 +855,51 @@ void SimulationWorkspace::setupStatisticalDashboard() {
     // Connect schematic highlighting
     connect(statsDashboard_, &StatisticalDashboard::highlightComponent, this, [this](const QString& name) {
         if (schematicEditor_) {
-            // schematicEditor_->highlightComponent(name); // TODO: Implement in SchematicEditor
+            schematicEditor_->highlightComponent(name);
             appendLog("Highlighting component: " + name);
         }
     });
 
-    // In a real app, we would add this to a TabWidget ("Results", "Waveforms", "Statistics")
-    // For now, let's assume there's a mechanism or just show it via a dialog for MVP
-    // Or simpler: Add it to the profile editor area when "Statistical" analysis is chosen
+    // Connect CSV export
+    connect(statsDashboard_, &StatisticalDashboard::exportRequested, this, [this]() {
+        if (lastMonteCarloResults_.empty()) {
+            QMessageBox::warning(this, "Export", "No Monte Carlo results available to export.");
+            return;
+        }
+
+        QString fileName = QFileDialog::getSaveFileName(this, "Export Monte Carlo Results", 
+                                                        "", "CSV Files (*.csv)");
+        if (fileName.isEmpty()) return;
+
+        QFile file(fileName);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&file);
+            out << "Run,Voltage\n";
+            for (size_t i = 0; i < lastMonteCarloResults_.size(); ++i) {
+                out << (i + 1) << "," << lastMonteCarloResults_[i] << "\n";
+            }
+            file.close();
+            appendLog("Exported results to: " + fileName);
+        } else {
+            QMessageBox::critical(this, "Export Failed", "Could not open file for writing.");
+        }
+    });
 }
 
 void SimulationWorkspace::runMonteCarlo() {
     if (!canRun()) return;
 
-    // 1. Setup Dialog
-    QDialog dlg(this);
-    dlg.setWindowTitle("Monte Carlo Setup");
-    QFormLayout* layout = new QFormLayout(&dlg);
-    
-    QSpinBox* spinRuns = new QSpinBox(&dlg);
-    spinRuns->setRange(10, 10000);
-    spinRuns->setValue(100);
-    layout->addRow("Number of Runs:", spinRuns);
-    
-    QComboBox* comboStrategy = new QComboBox(&dlg);
-    comboStrategy->addItem("Latin Hypercube (LHS)", "LHS");
-    comboStrategy->addItem("Random (Naive)", "RANDOM");
-    layout->addRow("Sampling Strategy:", comboStrategy);
-    
-    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-    layout->addRow(buttons);
-    
-    if (dlg.exec() != QDialog::Accepted) return;
-    
-    int nRuns = spinRuns->value();
-    QString strategyType = comboStrategy->currentData().toString();
-    
-    // 2. Prepare Netlist & Definitions
+    // 0. Update Netlist
     netlist_ = schematicEditor_->toNetlist();
+
+    // 1. Setup Advanced Dialog
+    acutesim::gui::analysis::MonteCarloSetupDialog setupDlg(netlist_, this);
+    if (setupDlg.exec() != QDialog::Accepted) return;
     
-    // Define variations (For MVP: 5% tolerance on ALL resistors)
-    std::map<std::string, Statistics::Distribution> variations;
-    for (const auto& r : netlist_.globalBlock.resistors) {
-        // Assume 5% tolerance (Gaussian, sigma = 5% of value / 3 for 3-sigma?)
-        // Let's use 5% as 3-sigma: sigma = 0.05 * R / 3
-        double val = r.resistance_ohms;
-        double sigma = (val * 0.05) / 3.0;
-        variations[r.name + ".resistance"] = Statistics::Distribution::Gaussian(val, sigma);
-    }
+    int nRuns = setupDlg.numRuns();
+    auto variations = setupDlg.variations();
+    int targetNode = setupDlg.targetNode();
+    auto strategy = setupDlg.strategy();
     
     appendLog(QString("Starting Monte Carlo (%1 runs, %2 vars)...").arg(nRuns).arg(variations.size()));
     
@@ -910,25 +907,17 @@ void SimulationWorkspace::runMonteCarlo() {
     
 
     
-    // Identify target node (e.g. from first probe or default to node 1)
-    int targetNode = -1;
-    if (!netlist_.globalBlock.probes.empty()) {
-        targetNode = netlist_.globalBlock.probes[0].nodePositive;
-        appendLog(QString("Metric: Voltage at Probe '%1' (Node %2)").arg(QString::fromStdString(netlist_.globalBlock.probes[0].name)).arg(targetNode));
-    } else if (netlist_.numGlobalNodes > 0) {
-        targetNode = 1; // Default to node 1
-        appendLog("Metric: Voltage at Node 1 (Default)");
-    }
+    appendLog(QString("Metric: Voltage at Node %1").arg(targetNode));
     
     // Launch Thread or Synchronous (WASM)
     // Note: We need to include "statistical_engine.h" for this to compile
     
-    auto runBatch = [this, nRuns, variations, targetNode]() -> std::vector<double> {
+    auto runBatch = [this, nRuns, variations, targetNode, strategy]() -> std::vector<double> {
         std::vector<double> outcomes;
         outcomes.reserve(nRuns);
         
         // Generate Scenarios
-        auto scenarios = Statistics::MonteCarloRunner::generateScenarios(variations, nRuns);
+        auto scenarios = Statistics::MonteCarloRunner::generateScenarios(variations, nRuns, strategy);
         
         // Local Solver
         CircuitSim localSim;
@@ -967,6 +956,7 @@ void SimulationWorkspace::runMonteCarlo() {
     QCoreApplication::processEvents(); 
     
     std::vector<double> results = runBatch();
+    lastMonteCarloResults_ = results; // Save for export
     
     // Update Dashboard
     setupStatisticalDashboard();
@@ -989,6 +979,7 @@ void SimulationWorkspace::runMonteCarlo() {
         
         // Calculate bounds for histogram
         if (!results.empty()) {
+            lastMonteCarloResults_ = results; // Save for export
             double sum = std::accumulate(results.begin(), results.end(), 0.0);
             double mean = sum / results.size();
             statsDashboard_->histogram()->setData(results, mean * 0.9, mean * 1.1); // +/- 10%
@@ -1028,3 +1019,4 @@ void SimulationWorkspace::runSensitivity() {
     statsDashboard_->pareto()->setData(items);
     statsDashboard_->show();
 }
+

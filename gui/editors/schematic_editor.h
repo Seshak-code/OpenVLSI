@@ -163,6 +163,7 @@ public:
     
     // Navigation helpers
     void centerOn(qreal x, qreal y) { if (view) view->centerOn(x, y); }
+    void highlightComponent(const QString& name);
     
     // Automation API (GenAI Hook)
     // Returns a JSON-like string description of the circuit

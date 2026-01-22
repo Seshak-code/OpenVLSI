@@ -153,7 +153,8 @@ public:
     // Generate N sets of parameter overrides using LHS
     static std::vector<std::vector<ParameterOverride>> generateScenarios(
         const std::map<std::string, Distribution>& variations, // Key: "R1.resistance"
-        int nSamples
+        int nSamples,
+        SamplingStrategy strategy = SamplingStrategy::LATIN_HYPERCUBE
     ) {
         RandomEngine rng;
         std::vector<std::vector<ParameterOverride>> scenarios(nSamples);
@@ -164,8 +165,16 @@ public:
             std::string compName = key.substr(0, dotPos);
             std::string paramName = key.substr(dotPos + 1);
 
-            // Get N stratified samples for this parameter
-            std::vector<double> samples = rng.sampleLHS(dist, nSamples);
+            // Get N samples for this parameter based on strategy
+            std::vector<double> samples;
+            if (strategy == SamplingStrategy::LATIN_HYPERCUBE) {
+                samples = rng.sampleLHS(dist, nSamples);
+            } else {
+                samples.resize(nSamples);
+                for (int i = 0; i < nSamples; ++i) {
+                    samples[i] = rng.sample(dist);
+                }
+            }
 
             // Distribute into scenarios
             for (int i = 0; i < nSamples; ++i) {

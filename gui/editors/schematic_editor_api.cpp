@@ -16,6 +16,17 @@ VisualComponent* SchematicEditor::findComponent(const QString& id) {
     return nullptr;
 }
 
+void SchematicEditor::highlightComponent(const QString& name) {
+    VisualComponent* comp = findComponent(name);
+    if (comp) {
+        scene->clearSelection();
+        comp->setSelected(true);
+        if (view) {
+            view->centerOn(comp);
+        }
+    }
+}
+
 QString SchematicEditor::generateUniqueId(ComponentType type) {
     QString prefix;
     switch(type) {

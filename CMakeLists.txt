@@ -129,6 +129,8 @@ add_executable(${PROJECT_NAME}
     gui/analysis/simulation_explorer.h
     gui/analysis/simulation_workspace.cpp
     gui/analysis/simulation_workspace.h
+    gui/analysis/monte_carlo_setup_dialog.cpp
+    gui/analysis/monte_carlo_setup_dialog.h
     gui/analysis/statistical_dashboard.cpp
     gui/analysis/statistical_dashboard.h
     physics/simulation_profile.h
@@ -520,6 +522,37 @@ target_include_directories(test_erc_rules PRIVATE
 )
 target_link_libraries(test_erc_rules PRIVATE Qt6::Core)
 target_compile_features(test_erc_rules PUBLIC cxx_std_17)
+
+# Phase 1.1 Statistical Interactivity Test
+add_executable(test_statistical_interactivity
+    tests/test_statistical_interactivity.cpp
+    gui/analysis/statistical_dashboard.cpp
+    gui/analysis/statistical_dashboard.h
+)
+target_include_directories(test_statistical_interactivity PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+)
+target_link_libraries(test_statistical_interactivity PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_compile_features(test_statistical_interactivity PUBLIC cxx_std_17)
+
+# Phase 1.26 AI Simulation Intelligence Test
+add_executable(test_ai_simulation_intelligence
+    tests/test_ai_simulation_intelligence.cpp
+    ai_api/simulation/simulation_trace.cpp
+)
+target_include_directories(test_ai_simulation_intelligence PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+)
+target_link_libraries(test_ai_simulation_intelligence PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_ai_simulation_intelligence PUBLIC cxx_std_17)
 
 # Phase 1.7 Simulation Suite Tests
 add_executable(test_simulation 
