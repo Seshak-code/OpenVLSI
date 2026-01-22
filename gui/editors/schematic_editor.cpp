@@ -1,5 +1,6 @@
 #include "schematic_editor.h"
 #include "component_wizard.h"
+#include "../../components/standard_cells.h"
 #include "../../ai_api/system/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
@@ -1100,6 +1101,31 @@ TensorNetlist GridScene::generateNetlist() {
                     std::string model = c->params.value("Model", "2N2222").toStdString();
                     if (nodes.size() >= 3)
                         netlist.addBJT(c->name.toStdString(), nodes[1], nodes[0], nodes[2], model, true);
+                }
+                break;
+            case ComponentType::ICPackage:
+                {
+                    // Instantiate IC as hierarchical subcircuit
+                    std::string modelName = c->params.value("Model", "ULN2003A").toStdString();
+                    const auto* icDef = StandardCells::StandardCellLibrary::instance().get(modelName);
+                    if (icDef) {
+                        // Register the block definition if not already present
+                        if (netlist.blockDefinitions.find(modelName) == netlist.blockDefinitions.end()) {
+                            netlist.defineBlock(icDef->internalBlock);
+                        }
+                        // Create node mapping: external pins -> global nodes
+                        // IC terminals should match pinCount
+                        std::vector<int> pinMapping;
+                        for (size_t i = 0; i < nodes.size() && i < static_cast<size_t>(icDef->pinCount); ++i) {
+                            pinMapping.push_back(nodes[i]);
+                        }
+                        netlist.addInstance(modelName, pinMapping);
+                        emit messageLogged(QString("IC %1 (%2): Instantiated as subcircuit")
+                            .arg(c->name).arg(QString::fromStdString(modelName)));
+                    } else {
+                        emit messageLogged(QString("Warning: IC %1 model %2 not found in StandardCellLibrary")
+                            .arg(c->name).arg(QString::fromStdString(modelName)));
+                    }
                 }
                 break;
             default:

@@ -40,6 +40,50 @@ struct SimulationKnowledgeObject {
     }
 };
 
+/**
+ * ReferenceDesignContext - Few-shot learning context for AI circuit generation.
+ * Provides structured examples of validated analog designs.
+ */
+struct ReferenceDesignContext {
+    QString designType;          // "LNA", "OpAmp", "Bandgap"
+    QString description;         // Human-readable description
+    QJsonObject topology;        // {stages: 2, compensation: "miller", etc.}
+    QJsonArray deviceList;       // [{type: "NMOS", role: "diff_pair", W: "10u", L: "500n"}]
+    QJsonObject designChoices;   // {why_cascode: "noise", why_miller: "stability"}
+    QJsonObject simResults;      // {gain_dB: 45, phase_margin: 60, Vref: 1.25}
+    QJsonObject spiceNetlist;    // Exportable SPICE representation
+    QString goldenStatus;        // "VERIFIED", "STALE", "PENDING"
+    double ngspiceCorrelation;   // Correlation with ngspice (0-1)
+    
+    QJsonObject toJson() const {
+        QJsonObject obj;
+        obj["designType"] = designType;
+        obj["description"] = description;
+        obj["topology"] = topology;
+        obj["deviceList"] = deviceList;
+        obj["designChoices"] = designChoices;
+        obj["simResults"] = simResults;
+        obj["goldenStatus"] = goldenStatus;
+        obj["ngspiceCorrelation"] = ngspiceCorrelation;
+        return obj;
+    }
+    
+    /**
+     * Generate prompt injection text for LLM.
+     */
+    QString toPromptText() const {
+        QString text;
+        text += QString("=== Reference Design: %1 ===\n").arg(designType);
+        text += QString("Description: %1\n").arg(description);
+        text += QString("Golden Status: %1 (ngspice correlation: %2)\n")
+                .arg(goldenStatus).arg(ngspiceCorrelation, 0, 'f', 4);
+        text += QString("Key Metrics: Gain=%1dB, PM=%2°\n")
+                .arg(simResults["gain_dB"].toDouble(), 0, 'f', 1)
+                .arg(simResults["phase_margin"].toDouble(), 0, 'f', 1);
+        return text;
+    }
+};
+
 // ============================================================================
 // USER FEEDBACK LEARNING - Capture approval/rejection signals for model tuning
 // ============================================================================
@@ -158,6 +202,56 @@ public:
         const QString& action,
         double rawConfidence
     );
+};
+
+/**
+ * ReferenceDesignProvider - Provides reference designs for AI few-shot learning.
+ * 
+ * Enables "create more like this" by injecting verified analog designs into
+ * LLM context as structured examples.
+ */
+class ReferenceDesignProvider {
+public:
+    /**
+     * Get all available reference design contexts.
+     */
+    static QList<ReferenceDesignContext> getAll();
+    
+    /**
+     * Get reference designs by type (LNA, OpAmp, Bandgap).
+     */
+    static QList<ReferenceDesignContext> getByType(const QString& designType);
+    
+    /**
+     * Get only VERIFIED (golden) designs.
+     */
+    static QList<ReferenceDesignContext> getVerifiedOnly();
+    
+    /**
+     * Build LNA reference context with default parameters.
+     */
+    static ReferenceDesignContext buildLNAContext();
+    
+    /**
+     * Build OpAmp reference context with default parameters.
+     */
+    static ReferenceDesignContext buildOpAmpContext();
+    
+    /**
+     * Build Bandgap reference context with default parameters.
+     */
+    static ReferenceDesignContext buildBandgapContext();
+    
+    /**
+     * Generate combined prompt text for LLM injection.
+     * Includes all verified designs as few-shot examples.
+     */
+    static QString generateFewShotPrompt(int maxTokens = 2000);
+    
+    /**
+     * Check if a design's verification is stale (topology changed since last verify).
+     */
+    static bool isStale(const QString& designType, const QString& currentTopologyHash);
 };
 
 } // namespace AIAPI

@@ -354,6 +354,37 @@ struct Diode {
     double temperature_K = 300.15;
 };
 
+/*
+ * Schottky Diode (D) - Metal-Semiconductor Junction
+ * Lower forward voltage drop (~0.3V vs ~0.7V PN), faster switching.
+ * SPICE Model: Same Shockley equation but different defaults:
+ *   I_S = 100nA - 1µA (higher than PN)
+ *   N = 1.05 (closer to ideal)
+ *   Rs = Series resistance (significant for high current)
+ *   Cj0 = Zero-bias junction capacitance
+ *   Vj = Junction potential (~0.4V for Schottky)
+ *   M = Grading coefficient (~0.5)
+ */
+struct SchottkyDiode {
+    std::string instanceName;             // e.g., "D1"
+    int anode = -1;                       // Metal side (+)
+    int cathode = -1;                     // Semiconductor side (-)
+    std::string modelName = "BAT54";      // SPICE model reference
+    
+    // DC Parameters
+    double saturationCurrent_I_S_A = 200e-9;   // Higher than PN (~200nA typ)
+    double emissionCoefficient_N = 1.05;       // Closer to ideal
+    double seriesResistance_Rs_ohms = 1.0;     // Package/bond wire resistance
+    double thermalVoltage_V_T_V = 0.02585;     // kT/q @ 300K
+    
+    // Junction Capacitance (AC/Transient)
+    double junctionCapacitance_Cj0_F = 2e-12;  // Zero-bias capacitance
+    double junctionPotential_Vj_V = 0.4;       // Lower than PN
+    double gradingCoefficient_M = 0.5;         // ~0.5 for abrupt junction
+    
+    double temperature_K = 300.15;
+};
+
 // ...
 
 struct Mosfet {
@@ -482,6 +513,7 @@ struct TensorBlock {
     
     // Semiconductors
     std::vector<Diode> diodes;
+    std::vector<SchottkyDiode> schottkyDiodes;
     std::vector<Mosfet> mosfets;
     std::vector<BJT> bjts;
     std::vector<JFET> jfets;
@@ -690,6 +722,23 @@ struct TensorBlock {
         jfets.push_back(newJfet);
         updateNodeCount(D); updateNodeCount(G); updateNodeCount(S);
     }
+    void addSchottkyDiode(const std::string& name, int anode, int cathode, 
+                          const std::string& model = "BAT54",
+                          double Is = 200e-9, double N = 1.05, double Rs = 1.0) {
+        if (isFrozen) return;
+        
+        SchottkyDiode newD;
+        newD.instanceName = name;
+        newD.anode = anode;
+        newD.cathode = cathode;
+        newD.modelName = model;
+        newD.saturationCurrent_I_S_A = Is;
+        newD.emissionCoefficient_N = N;
+        newD.seriesResistance_Rs_ohms = Rs;
+        
+        schottkyDiodes.push_back(newD);
+        updateNodeCount(anode); updateNodeCount(cathode);
+    }
     void addTransmissionLine(int p1p, int p1n, int p2p, int p2n, double Z0, double Td) {
         if (isFrozen) return;
         transmissionLines.push_back({p1p, p1n, p2p, p2n, Z0, Td});
@@ -823,6 +872,13 @@ public:
     }
     void addDiode(int anode, int cathode, double Is) {
         globalBlock.addDiode(anode, cathode, Is);
+        if (anode > numGlobalNodes) numGlobalNodes = anode;
+        if (cathode > numGlobalNodes) numGlobalNodes = cathode;
+    }
+    void addSchottkyDiode(const std::string& name, int anode, int cathode,
+                          const std::string& model = "BAT54",
+                          double Is = 200e-9, double N = 1.05, double Rs = 1.0) {
+        globalBlock.addSchottkyDiode(name, anode, cathode, model, Is, N, Rs);
         if (anode > numGlobalNodes) numGlobalNodes = anode;
         if (cathode > numGlobalNodes) numGlobalNodes = cathode;
     }
