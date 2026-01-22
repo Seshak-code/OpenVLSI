@@ -25,7 +25,7 @@ private slots:
 private:
     QLabel* m_statusLabel;
     QLabel* m_providerLabel;
-    QProgressBar* m_cpuBar;
+    class QProgressBar* m_cpuBar; // Elaborated type
     QTextEdit* m_logView;
     QPushButton* m_reconnectBtn;
 };

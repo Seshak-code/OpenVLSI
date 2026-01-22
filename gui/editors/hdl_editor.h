@@ -73,7 +73,7 @@ private:
 // Helper widget for line numbers
 class LineNumberArea : public QWidget {
 public:
-    LineNumberArea(HDLEditor *editor) : QWidget(editor), codeEditor(editor) {}
+    LineNumberArea(HDLEditor *editor) : QWidget(reinterpret_cast<QWidget*>(editor)), codeEditor(editor) {}
 
     QSize sizeHint() const override {
         return QSize(codeEditor->lineNumberAreaWidth(), 0);

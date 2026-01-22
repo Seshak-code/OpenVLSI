@@ -15,7 +15,19 @@
 #include "../editors/schematic_editor.h"
 #include "../widgets/problems_panel.h"
 #include "../widgets/trust_badge_widget.h"
+#ifndef Q_OS_WASM
+#include <QFutureWatcher>
+#include <QtConcurrent>
+#endif
+#include <QProgressDialog>
+#include "gui_types.h"
 #include "circuitsim.h"
+#include "statistical_dashboard.h"
+#include <QDialog>
+#include <QSpinBox>
+#include <QFormLayout>
+
+class StatisticalDashboard;
 
 /**
  * SimulationWorkspace - Main dockable simulation environment
@@ -122,4 +134,10 @@ private:
     // Parameter widget helpers
     QWidget* createLineParam(const QString& defaultVal);
     QWidget* createComboParam(const QStringList& options, const QString& defaultVal);
+
+    // Statistical Analysis
+    void setupStatisticalDashboard();
+    void runMonteCarlo();
+    void runSensitivity();
+    StatisticalDashboard* statsDashboard_ = nullptr;
 };

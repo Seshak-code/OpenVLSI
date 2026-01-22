@@ -217,6 +217,13 @@ void MainWindow::setupDocks() {
     addDockWidget(Qt::RightDockWidgetArea, aiDock);
     tabifyDockWidget(propertiesDock, aiDock); // Tab them together by default
 
+    // --- Simulation Workspace (Right, Tabbed with AI) ---
+    createSimulationDock();
+    addDockWidget(Qt::RightDockWidgetArea, simulationDock_);
+    tabifyDockWidget(aiDock, simulationDock_);
+    // Start with AI dock visible by default
+    aiDock->raise();
+
     // --- Message Console (Bottom) ---
     createMessagesDock();
     addDockWidget(Qt::BottomDockWidgetArea, messagesDock);
@@ -615,47 +622,20 @@ void MainWindow::openProject() {
 }
 
 void MainWindow::runSimulation() {
-    if (!simulationWorkspace) return;
+    if (!simulationDock_) return;
 
-    // Check if simulationWorkspace is already in a visible dialog
-    QWidget* parent = simulationWorkspace->parentWidget();
-    if (parent && parent->isWindow()) {
-        parent->show();
-        parent->raise();
-        parent->activateWindow();
-        return;
-    }
-
-    // Create a wrapper dialog
-    QDialog* simDialog = new QDialog(this);
-    simDialog->setWindowTitle("Simulation Workspace");
-    simDialog->resize(1100, 700); // Larger default size for workspace
-    simDialog->setAttribute(Qt::WA_DeleteOnClose);
-    
-    QVBoxLayout* layout = new QVBoxLayout(simDialog);
-    layout->setContentsMargins(0, 0, 0, 0);
-    
-    // Move the member workspace into the dialog
-    layout->addWidget(simulationWorkspace);
-    simulationWorkspace->show();
-    
-    // Ensure the schematic editor link is fresh
-    if (schematicEditor) {
-        simulationWorkspace->setSchematicEditor(schematicEditor);
-    }
-    
-    // When dialog closes, reclaim the workspace so it isn't destroyed
-    connect(simDialog, &QDialog::finished, this, [this, simDialog]() {
-        if (simulationWorkspace) {
-            simulationWorkspace->setParent(this); // Reparent back to MainWindow
-            simulationWorkspace->hide();
+    // Toggle visibility of the simulation dock
+    if (simulationDock_->isVisible()) {
+        simulationDock_->hide();
+    } else {
+        simulationDock_->show();
+        simulationDock_->raise();
+        
+        // Ensure the schematic editor link is fresh
+        if (schematicEditor && simulationWorkspace) {
+            simulationWorkspace->setSchematicEditor(schematicEditor);
         }
-    });
-    
-    // Close button logic handled by window chrome, but we can add one if needed?
-    // The workspace has its own toolbar, so window chrome is sufficient.
-    
-    simDialog->show();
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -883,4 +863,15 @@ void MainWindow::createDebugSuggestionsDock() {
     debugSuggestionsPanel->setEditor(schematicEditor); // Set initial editor
     
     debugSuggestionsDock->setWidget(debugSuggestionsPanel);
+}
+
+void MainWindow::createSimulationDock() {
+    simulationDock_ = new QDockWidget("Simulation", this);
+    simulationDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
+    
+    // simulationWorkspace is already created in setupCentralWidget
+    simulationDock_->setWidget(simulationWorkspace);
+    
+    // Start hidden - toggled via menu
+    simulationDock_->hide();
 }

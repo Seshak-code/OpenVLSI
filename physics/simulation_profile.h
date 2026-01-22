@@ -29,6 +29,7 @@ enum class AnalysisType {
     TRANSIENT,      // Time-domain transient
     NOISE,          // Noise analysis
     SENSITIVITY,    // Parameter sensitivity
+    MONTE_CARLO,    // Statistical distribution (Phase 1.1)
     DCMATCH,        // DC matching/mismatch
     PZ              // Pole-Zero analysis
 };

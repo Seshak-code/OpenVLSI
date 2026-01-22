@@ -1,5 +1,6 @@
 #include "worker_status_panel.h"
 #include <QVBoxLayout>
+#include <QProgressBar>
 #include <QHBoxLayout>
 #include <QGroupBox>
 

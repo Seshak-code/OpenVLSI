@@ -74,7 +74,11 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # Find Qt6 (required)
 # Find Qt6 (required)
-find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
+if(EMSCRIPTEN)
+    find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
+else()
+    find_package(Qt6 COMPONENTS Core Gui Widgets Test Concurrent REQUIRED)
+endif()
 
 # Find OpenMP (Optional, for physics engine performance)
 # Due to security issues with OpenMP on Emscripten, we only find it when not building for Emscripten
@@ -125,6 +129,8 @@ add_executable(${PROJECT_NAME}
     gui/analysis/simulation_explorer.h
     gui/analysis/simulation_workspace.cpp
     gui/analysis/simulation_workspace.h
+    gui/analysis/statistical_dashboard.cpp
+    gui/analysis/statistical_dashboard.h
     physics/simulation_profile.h
     physics/quick_analysis.h
     physics/quick_analysis.cpp
@@ -231,6 +237,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Gui
     Qt6::Widgets
 )
+
+if(NOT EMSCRIPTEN)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Concurrent)
+endif()
 
 # Link OpenMP only if found (and not Wasm)
 if(NOT EMSCRIPTEN AND OpenMP_CXX_FOUND)
@@ -398,11 +408,14 @@ add_executable(test_auto_harness
     gui/analysis/simulation_explorer.cpp
     gui/analysis/corner_setup_widget.cpp
     gui/widgets/problems_panel.cpp
+    gui/widgets/debug_suggestions_panel.cpp
     gui/widgets/trust_badge_widget.cpp
     gui/orchestration/worker_status_panel.cpp
     gui/orchestration/worker_manager.cpp
     physics/quick_analysis.cpp
+    physics/quick_analysis.cpp
     compute/orchestration/grpc_worker_client.cpp
+    gui/analysis/statistical_dashboard.cpp
 )
 target_include_directories(test_auto_harness PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -422,7 +435,7 @@ target_include_directories(test_auto_harness PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
 )
-target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
 target_compile_features(test_auto_harness PUBLIC cxx_std_17)
 
 # Copilot Integration Test
@@ -459,11 +472,13 @@ add_executable(test_copilot_validate
     gui/analysis/simulation_explorer.cpp
     gui/analysis/corner_setup_widget.cpp
     gui/widgets/problems_panel.cpp
+    gui/widgets/debug_suggestions_panel.cpp
     gui/widgets/trust_badge_widget.cpp
     gui/orchestration/worker_status_panel.cpp
     gui/orchestration/worker_manager.cpp
     physics/quick_analysis.cpp
     compute/orchestration/grpc_worker_client.cpp
+    gui/analysis/statistical_dashboard.cpp
 )
 target_include_directories(test_copilot_validate PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -483,7 +498,7 @@ target_include_directories(test_copilot_validate PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
 )
-target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
 target_compile_features(test_copilot_validate PUBLIC cxx_std_17)
 
 # ERC Rules Automated Test

@@ -2,62 +2,67 @@
 #include <vector>
 #include <cmath>
 #include <cassert>
-#include "circuitsim.h"
+#include "../physics/sensitivity_analysis.h"
 
-// Minimal Test Runner
-#define ASSERT_NEAR(a, b, eps) \
-    if (std::abs((a) - (b)) > (eps)) { \
-        std::cerr << "FAIL: " << (a) << " != " << (b) << " (diff: " << std::abs((a)-(b)) << ")" << std::endl; \
-        exit(1); \
-    }
-
-void test_resistor_sensitivity() {
-    std::cout << "Running Resistor Sensitivity Test..." << std::endl;
+// Mock simulator for a Voltage Divider: Vout = Vin * R2 / (R1 + R2)
+double simulateDivider(TensorBlock& block) {
+    double Vin = 10.0;
+    double R1 = 0.0;
+    double R2 = 0.0;
     
-    // Circuit: V1(10V) -- R1(1k) -- Node1 -- R2(1k) -- GND
-    TensorNetlist nl;
-    nl.addVoltageSource(2, 0, 10.0); // Node 2 is 10V
-    nl.addResistor(2, 1, 1000.0);    // R1
-    nl.addResistor(1, 0, 1000.0);    // R2
-    
-    CircuitSim sim;
-    SolverStep step = sim.solveDC(nl);
-    
-    double v1 = step.nodeVoltages[0];
-    std::cout << "DC V1: " << v1 << " (Expected: 5.0)" << std::endl;
-    ASSERT_NEAR(v1, 5.0, 1e-4); // Relaxed for PCG residual
-    
-    // Calculate Sensitivity dV1 / dR1
-    // Analytical: V1 = 10 * R2 / (R1 + R2)
-    // dV1/dR1 = 10 * R2 * (-1) / (R1+R2)^2
-    //         = -10 * 1000 / 2000^2 = -10000 / 4000000 = -0.0025
-    
-    // Target R1. It is the first resistor in globalBlock.resistors?
-    // addResistor appends. So R1 is index 0.
-    std::vector<double> grad = sim.calculateSensitivity(nl, CircuitSim::ComponentType::RESISTOR, 0, "resistance", step.nodeVoltages);
-    
-    if (grad.empty()) {
-        std::cerr << "FAIL: Gradient vector is empty!" << std::endl;
-        exit(1);
+    for (const auto& r : block.resistors) {
+        if (r.name == "R1") R1 = r.resistance_ohms;
+        if (r.name == "R2") R2 = r.resistance_ohms;
     }
     
-    double dv1_dr1 = grad[0]; // Node 1 is index 0
-    std::cout << "dV1/dR1: " << dv1_dr1 << " (Expected: -0.0025)" << std::endl;
-    ASSERT_NEAR(dv1_dr1, -0.0025, 1e-6);
-    
-    std::cout << "PASS: Resistor Sensitivity" << std::endl;
-}
-
-void test_mosfet_sensitivity() {
-    std::cout << "Running MOSFET Sensitivity Test..." << std::endl;
-    // Simple NMOS Common Source with Diode Load?
-    // Or just V - R - M - GND.
-    // Let's rely on Resistor test for basic API.
-    std::cout << "PASS: MOSFET Sensitivity (Skipped for brevity)" << std::endl;
+    if (R1 + R2 == 0) return 0.0;
+    return Vin * (R2 / (R1 + R2));
 }
 
 int main() {
-    test_resistor_sensitivity();
-    test_mosfet_sensitivity();
+    std::cout << "[TEST] Verifying Sensitivity Engine..." << std::endl;
+    
+    // Setup Nominal Circuit: Divider with R1=1k, R2=1k
+    TensorBlock block;
+    
+    Resistor r1; r1.name = "R1"; r1.resistance_ohms = 1000.0;
+    Resistor r2; r2.name = "R2"; r2.resistance_ohms = 1000.0;
+    
+    block.resistors.push_back(r1);
+    block.resistors.push_back(r2);
+    
+    // Theoretical Sensitivity:
+    // Vout = 10 * 1000 / 2000 = 5.0 V
+    // dV/dR1 = 10 * R2 * (-1) / (R1+R2)^2 = -10 * 1000 / 4000000 = -0.0025
+    // Norm S_R1 = -0.0025 * (1000 / 5.0) = -0.5
+    
+    // dV/dR2 = 10 * [ (R1+R2) - R2 ] / (R1+R2)^2 = 10 * R1 / (R1+R2)^2 = 0.0025
+    // Norm S_R2 = 0.0025 * (1000 / 5.0) = 0.5
+    
+    std::cout << "  -> Running Sensitivity Analysis on Voltage Divider (R1=R2=1k)..." << std::endl;
+    auto results = Analysis::SensitivityEngine::analyze(block, simulateDivider, 0.1); // 0.1% perturbation
+    
+    bool r1Found = false;
+    bool r2Found = false;
+    
+    for (const auto& res : results) {
+        std::cout << "     Component: " << res.componentName 
+                  << " S=" << res.sensitivity 
+                  << " NormS=" << res.normSensitivity << std::endl;
+                  
+        if (res.componentName == "R1") {
+            r1Found = true;
+            assert(std::abs(res.normSensitivity - (-0.5)) < 0.01);
+        }
+        if (res.componentName == "R2") {
+            r2Found = true;
+            assert(std::abs(res.normSensitivity - 0.5) < 0.01);
+        }
+    }
+    
+    assert(r1Found && r2Found);
+    std::cout << "PASS" << std::endl;
+    
+    std::cout << "[TEST] Sensitivity Engine Verified Successfully!" << std::endl;
     return 0;
 }

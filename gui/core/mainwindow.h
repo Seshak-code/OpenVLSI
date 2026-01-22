@@ -30,6 +30,9 @@
 #include "../orchestration/worker_status_panel.h"
 #include "../widgets/debug_suggestions_panel.h"
 
+class HDLEditor;
+class WelcomeWidget;
+
 
 // ============================================================================
 // MAIN WINDOW
@@ -102,6 +105,9 @@ private:
     QDockWidget* workerDock;
     acutesim::gui::orchestration::WorkerStatusPanel* workerPanel;
 
+    // Phase 1.7: Simulation Dock (VS Code-style sidebar)
+    QDockWidget* simulationDock_;
+
 
 private slots:
     void onSimulationResults(const QJsonObject& results);
@@ -123,6 +129,7 @@ private slots:
     void createWaveformDock();
     void createWorkerDock();
     void createDebugSuggestionsDock();
+    void createSimulationDock();
 
     
     // Actions

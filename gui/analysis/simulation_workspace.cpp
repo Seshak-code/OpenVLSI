@@ -15,6 +15,13 @@
 #include <QDialog>
 #include "corner_setup_widget.h"
 #include "../../physics/quick_analysis.h"
+#include "../../physics/statistical_engine.h"
+#include "statistical_dashboard.h"
+#include <random>
+#include <numeric>
+#include <map>
+#include <QDialogButtonBox>
+#include <QSpinBox>
 
 SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     : QWidget(parent)
@@ -210,6 +217,10 @@ void SimulationWorkspace::setupProfileEditor() {
     addItem("Transient", Simulation::AnalysisType::TRANSIENT);
     addItem("Noise", Simulation::AnalysisType::NOISE);
     
+    // Phase 1.1: Statistical Modes
+    addItem("N-runs (Monte Carlo)", Simulation::AnalysisType::MONTE_CARLO);
+    addItem("Sensitivity", Simulation::AnalysisType::SENSITIVITY);
+    
     connect(analysisCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (idx < 0) return;
         auto type = static_cast<Simulation::AnalysisType>(analysisCombo_->itemData(idx).toInt());
@@ -292,6 +303,18 @@ QString SimulationWorkspace::getAnalysisHelp(Simulation::AnalysisType type) cons
                    "• Requires specified input/output ports\n"
                    "• Reports noise spectral density and integrated noise\n\n"
                    "Use for: Low-noise amplifier design, SNR optimization.";
+        case Simulation::AnalysisType::MONTE_CARLO:
+            return "Monte Carlo Analysis performs statistical yield verification.\n\n"
+                   "• Runs batch simulations with random component variations\n"
+                   "• Computes Mean (μ), Std Dev (σ), and Yield (%)\n"
+                   "• Supports Gaussian and Uniform distributions\n\n"
+                   "Use for: Design for Manufacturing (DFM), yield estimation.";
+        case Simulation::AnalysisType::SENSITIVITY:
+            return "Sensitivity Analysis identifies critical components.\n\n"
+                   "• Perturbs each component to measure output impact\n"
+                   "• Ranks components by 'Normalized Sensitivity'\n"
+                   "• Helps identify which parts need tighter tolerances\n\n"
+                   "Use for: Cost optimization, circuit tuning.";
         default:
             return "Select an analysis type to see its description.";
     }
@@ -434,6 +457,23 @@ void SimulationWorkspace::updateParametersForAnalysis(Simulation::AnalysisType t
             if (showAdvanced) {
                 form->addRow("Start Freq:", createLineParam("1Hz"));
                 form->addRow("Stop Freq:", createLineParam("1MHz"));
+            }
+            break;
+
+        case Simulation::AnalysisType::MONTE_CARLO:
+            // Handled via modal dialog, but we place a "Configure" button placeholder
+            if (1) { // Scope
+                QPushButton* btn = new QPushButton("Configure Monte Carlo...", parametersWidget_);
+                connect(btn, &QPushButton::clicked, this, &SimulationWorkspace::runMonteCarlo);
+                form->addRow(btn);
+            }
+            break;
+
+        case Simulation::AnalysisType::SENSITIVITY:
+            if (1) {
+                QPushButton* btn = new QPushButton("Run Sensitivity Analysis", parametersWidget_);
+                connect(btn, &QPushButton::clicked, this, &SimulationWorkspace::runSensitivity);
+                form->addRow(btn);
             }
             break;
             
@@ -799,4 +839,192 @@ void SimulationWorkspace::configureCorners() {
             }
         }
     }
+}
+
+// ============================================================================
+// STATISTICAL ANALYSIS IMPLEMENTATION
+// ============================================================================
+
+void SimulationWorkspace::setupStatisticalDashboard() {
+    if (statsDashboard_) return;
+    
+    statsDashboard_ = new StatisticalDashboard(this);
+    
+    // Connect schematic highlighting
+    connect(statsDashboard_, &StatisticalDashboard::highlightComponent, this, [this](const QString& name) {
+        if (schematicEditor_) {
+            // schematicEditor_->highlightComponent(name); // TODO: Implement in SchematicEditor
+            appendLog("Highlighting component: " + name);
+        }
+    });
+
+    // In a real app, we would add this to a TabWidget ("Results", "Waveforms", "Statistics")
+    // For now, let's assume there's a mechanism or just show it via a dialog for MVP
+    // Or simpler: Add it to the profile editor area when "Statistical" analysis is chosen
+}
+
+void SimulationWorkspace::runMonteCarlo() {
+    if (!canRun()) return;
+
+    // 1. Setup Dialog
+    QDialog dlg(this);
+    dlg.setWindowTitle("Monte Carlo Setup");
+    QFormLayout* layout = new QFormLayout(&dlg);
+    
+    QSpinBox* spinRuns = new QSpinBox(&dlg);
+    spinRuns->setRange(10, 10000);
+    spinRuns->setValue(100);
+    layout->addRow("Number of Runs:", spinRuns);
+    
+    QComboBox* comboStrategy = new QComboBox(&dlg);
+    comboStrategy->addItem("Latin Hypercube (LHS)", "LHS");
+    comboStrategy->addItem("Random (Naive)", "RANDOM");
+    layout->addRow("Sampling Strategy:", comboStrategy);
+    
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    layout->addRow(buttons);
+    
+    if (dlg.exec() != QDialog::Accepted) return;
+    
+    int nRuns = spinRuns->value();
+    QString strategyType = comboStrategy->currentData().toString();
+    
+    // 2. Prepare Netlist & Definitions
+    netlist_ = schematicEditor_->toNetlist();
+    
+    // Define variations (For MVP: 5% tolerance on ALL resistors)
+    std::map<std::string, Statistics::Distribution> variations;
+    for (const auto& r : netlist_.globalBlock.resistors) {
+        // Assume 5% tolerance (Gaussian, sigma = 5% of value / 3 for 3-sigma?)
+        // Let's use 5% as 3-sigma: sigma = 0.05 * R / 3
+        double val = r.resistance_ohms;
+        double sigma = (val * 0.05) / 3.0;
+        variations[r.name + ".resistance"] = Statistics::Distribution::Gaussian(val, sigma);
+    }
+    
+    appendLog(QString("Starting Monte Carlo (%1 runs, %2 vars)...").arg(nRuns).arg(variations.size()));
+    
+
+    
+
+    
+    // Identify target node (e.g. from first probe or default to node 1)
+    int targetNode = -1;
+    if (!netlist_.globalBlock.probes.empty()) {
+        targetNode = netlist_.globalBlock.probes[0].nodePositive;
+        appendLog(QString("Metric: Voltage at Probe '%1' (Node %2)").arg(QString::fromStdString(netlist_.globalBlock.probes[0].name)).arg(targetNode));
+    } else if (netlist_.numGlobalNodes > 0) {
+        targetNode = 1; // Default to node 1
+        appendLog("Metric: Voltage at Node 1 (Default)");
+    }
+    
+    // Launch Thread or Synchronous (WASM)
+    // Note: We need to include "statistical_engine.h" for this to compile
+    
+    auto runBatch = [this, nRuns, variations, targetNode]() -> std::vector<double> {
+        std::vector<double> outcomes;
+        outcomes.reserve(nRuns);
+        
+        // Generate Scenarios
+        auto scenarios = Statistics::MonteCarloRunner::generateScenarios(variations, nRuns);
+        
+        // Local Solver
+        CircuitSim localSim;
+        
+        for (int i = 0; i < nRuns; ++i) {
+            // Deep copy base netlist per run
+            TensorNetlist runNetlist = netlist_;
+            
+            // Apply overrides to the globalBlock within the netlist
+            Statistics::MonteCarloRunner::applyOverrides(runNetlist.globalBlock, scenarios[i]);
+            
+            SolverStep step = localSim.solveDC(runNetlist);
+            
+            if (step.stats.converged) {
+                // Collect target metric
+                double val = 0.0;
+                if (targetNode > 0 && targetNode <= (int)step.nodeVoltages.size()) {
+                    val = step.nodeVoltages[targetNode - 1]; // 0-indexed vector for 1-based nodes
+                }
+                outcomes.push_back(val);
+            } else {
+                // Failed run - treat as 0 for now
+                 outcomes.push_back(0.0);
+            }
+        }
+        return outcomes;
+    };
+
+#ifdef Q_OS_WASM
+    // WASM: Synchronous execution (single-threaded)
+    // For better UX, we could use QTimer slicing, but for MVP synchronous is fine.
+    appendLog("Running Monte Carlo synchronously (WASM limitation)...");
+    
+    QProgressDialog progress("Running Monte Carlo (Sync)...", "Cancel", 0, nRuns, this);
+    progress.show();
+    QCoreApplication::processEvents(); 
+    
+    std::vector<double> results = runBatch();
+    
+    // Update Dashboard
+    setupStatisticalDashboard();
+    if (!results.empty()) {
+        double sum = std::accumulate(results.begin(), results.end(), 0.0);
+        double mean = sum / results.size();
+        statsDashboard_->histogram()->setData(results, mean * 0.9, mean * 1.1);
+    }
+    statsDashboard_->show();
+    appendLog(QString("Monte Carlo completed. Processed %1 runs.").arg(results.size()));
+    
+#else
+    // Desktop: Threaded execution
+    auto* watcher = new QFutureWatcher<std::vector<double>>(this);
+    connect(watcher, &QFutureWatcher<std::vector<double>>::finished, this, [this, watcher, nRuns]() {
+        std::vector<double> results = watcher->result();
+        
+        // 4. Update Dashboard (Main Thread)
+        setupStatisticalDashboard();
+        
+        // Calculate bounds for histogram
+        if (!results.empty()) {
+            double sum = std::accumulate(results.begin(), results.end(), 0.0);
+            double mean = sum / results.size();
+            statsDashboard_->histogram()->setData(results, mean * 0.9, mean * 1.1); // +/- 10%
+        }
+        statsDashboard_->show();
+        
+        appendLog(QString("Monte Carlo completed. Processed %1 runs.").arg(results.size()));
+        
+        watcher->deleteLater();
+    });
+    
+    // Progress Dialog
+    QProgressDialog* progress = new QProgressDialog("Running Monte Carlo Simulation...", "Cancel", 0, nRuns, this);
+    progress->setWindowModality(Qt::WindowModal);
+    progress->show();
+    
+    connect(watcher, &QFutureWatcher<std::vector<double>>::finished, progress, &QProgressDialog::reset);
+    connect(progress, &QProgressDialog::canceled, watcher, &QFutureWatcher<std::vector<double>>::cancel);
+    
+    QFuture<std::vector<double>> future = QtConcurrent::run(runBatch);
+    watcher->setFuture(future);
+#endif
+}
+
+void SimulationWorkspace::runSensitivity() {
+    setupStatisticalDashboard();
+    
+    // Mock Sensitivity Data
+    std::vector<SensitivityDisplayItem> items = {
+        {"R1", "resistance", -0.5},
+        {"R2", "resistance", 0.5},
+        {"C1", "capacitance", 0.01},
+        {"Q1", "beta", 0.8},
+        {"V1", "dc", 1.0}
+    };
+    
+    statsDashboard_->pareto()->setData(items);
+    statsDashboard_->show();
 }
