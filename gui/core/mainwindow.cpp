@@ -84,6 +84,9 @@ void MainWindow::setupCentralWidget() {
     hdlEditor->setLanguage(HDLSyntaxHighlighter::VERILOG_AMS); // Default to Mixed-Signal
     rtlSplitter->addWidget(hdlEditor);
     
+    // Store splitter reference for HDL toggle
+    rtlSplitter_ = rtlSplitter;
+    
     // Set Initial Ratios (70% Schematic, 30% Code)
     rtlSplitter->setStretchFactor(0, 7);
     rtlSplitter->setStretchFactor(1, 3);
@@ -270,6 +273,9 @@ void MainWindow::createAiDock() {
     
     aiPanel = new AiAssistantPanel(schematicEditor, this);
     aiDock->setWidget(aiPanel);
+    
+    // Connect AI simulation requests to the simulation workspace
+    connect(aiPanel, &AiAssistantPanel::simulationRequested, this, &MainWindow::onAiSimulationRequested);
 }
 
 void MainWindow::createProjectDock() {
@@ -418,10 +424,13 @@ void MainWindow::updateProperties(VisualComponent* item) {
             // Validate: if value is custom/not in list, add it or just set it?
             // For now, assume strict list or standard behavior.
             
-            connect(combo, &QComboBox::currentTextChanged, this, [this, item, key](const QString& text){
-                // Safety check: ensure item is still valid (simplified)
-                if (item && activeComponent == item) {
-                   item->params[key] = text;
+            // Phase 3 Hardening: Capture item as QPointer to prevent crash on late callback
+            QPointer<VisualComponent> safeItem(item);
+            
+            connect(combo, &QComboBox::currentTextChanged, this, [this, safeItem, key](const QString& text){
+                // Safety check: ensure item is still valid
+                if (safeItem && activeComponent == safeItem) {
+                   safeItem->params[key] = text;
                    // Trigger re-draw or logic update if needed?
                 }
             });
@@ -443,7 +452,8 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
     int row = item->row();
     int col = item->column();
     
-    if (activeComponent) {
+    // Phase 3 Hardening: QPointer checks
+    if (!activeComponent.isNull()) {
         if (col == 1) { // Value column
             if (row == 0) {
                 activeComponent->name = item->text();
@@ -452,11 +462,12 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
             } else if (row > 2) {
                 // Dynamic Param
                 QString key = propertiesTable->item(row, 0)->text();
+                // Ensure accessing map is safe? Yes, QPointer<T>-> works.
                 activeComponent->params[key] = item->text();
             }
         }
     } 
-    else if (activeWire) {
+    else if (!activeWire.isNull()) {
         if (col == 1 && row == 0) {
             // Renaming Net
             if (schematicEditor) {
@@ -556,8 +567,11 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
                 item->setText(1, QString("%1 V").arg(voltages[i].toDouble(), 0, 'f', 6));
             }
         }
-        // Force switch to Results tab logic (not possible directly with QDockWidget tabify logic without storing tabRef, 
-        // but user sees it populate)
+        // Phase 7: Auto-show results dock
+        if (resultsDock_) {
+            resultsDock_->show();
+            resultsDock_->raise();
+        }
     } 
     else if (type == "TransientPoint") {
         if (waveformLog_) {
@@ -605,6 +619,17 @@ void MainWindow::setupMenus() {
     connect(viewQuickPreviewAction, &QAction::toggled, this, [this](bool checked) {
         if (schematicEditor) {
             schematicEditor->setQuickPreviewEnabled(checked);
+        }
+    });
+    
+    // Phase 7: HDL Editor Toggle
+    hdlToggleAction = new QAction("HDL Editor", this);
+    hdlToggleAction->setCheckable(true);
+    hdlToggleAction->setChecked(true); // Default ON (visible)
+    viewMenu->addAction(hdlToggleAction);
+    connect(hdlToggleAction, &QAction::toggled, this, [this](bool checked) {
+        if (hdlEditor) {
+            hdlEditor->setVisible(checked);
         }
     });
 
@@ -784,18 +809,35 @@ void MainWindow::createSchematicFromWelcome(AppMode mode) {
 }
 
 void MainWindow::onRtlTabChanged(int index) {
+    // Phase 4: Dynamic Debug Logging
+    // Disconnect previous editor triggers
+    if (schematicEditor && problemsPanel) {
+        disconnect(schematicEditor, &SchematicEditor::violationsChanged, problemsPanel, &ProblemsPanel::setViolations);
+    }
+
     QWidget* current = rtlPageTabs->widget(index);
     if (auto* editor = qobject_cast<SchematicEditor*>(current)) {
         schematicEditor = editor;
         if (libraryPanel) libraryPanel->setMode(editor->getMode());
         if (aiPanel) aiPanel->setEditor(editor);
         if (simulationWorkspace) simulationWorkspace->setSchematicEditor(editor);
+        
+        // Connect new editor to problems panel
+        if (problemsPanel) {
+            connect(schematicEditor, &SchematicEditor::violationsChanged, problemsPanel, &ProblemsPanel::setViolations);
+            // Sync initial state
+            if (editor->getScene()) {
+                problemsPanel->setViolations(editor->getScene()->getViolations());
+            }
+        }
+        
         statusBar()->showMessage(QString("Active: %1").arg(rtlPageTabs->tabText(index)));
     } else {
         // Welcome widget or placeholder - no active editor
         schematicEditor = nullptr;
         if (aiPanel) aiPanel->setEditor(nullptr);
         if (simulationWorkspace) simulationWorkspace->setSchematicEditor(nullptr);
+        if (problemsPanel) problemsPanel->clear();
     }
 }
 
@@ -868,10 +910,40 @@ void MainWindow::createDebugSuggestionsDock() {
 void MainWindow::createSimulationDock() {
     simulationDock_ = new QDockWidget("Simulation", this);
     simulationDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
+    simulationDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     
     // simulationWorkspace is already created in setupCentralWidget
     simulationDock_->setWidget(simulationWorkspace);
     
     // Start hidden - toggled via menu
     simulationDock_->hide();
+}
+
+void MainWindow::onAiSimulationRequested(const QString& analysisType) {
+    // 1. Show the Simulation Dock
+    if (simulationDock_) {
+        simulationDock_->show();
+        simulationDock_->raise();
+    }
+    
+    // 2. Sync schematic editor if available
+    if (simulationWorkspace && schematicEditor) {
+        simulationWorkspace->setSchematicEditor(schematicEditor);
+    }
+    
+    // 3. Map analysis type to profile ID and run
+    if (simulationWorkspace) {
+        QString profileId = "quick_dc"; // Default
+        if (analysisType.compare("Transient", Qt::CaseInsensitive) == 0 || 
+            analysisType.compare("TRAN", Qt::CaseInsensitive) == 0) {
+            profileId = "transient_default";
+        } else if (analysisType.compare("AC", Qt::CaseInsensitive) == 0) {
+            profileId = "ac_sweep_default";
+        }
+        
+        simulationWorkspace->selectProfile(profileId);
+        simulationWorkspace->runCurrent();
+    }
+    
+    statusBar()->showMessage(QString("AI-requested %1 simulation started").arg(analysisType), 4000);
 }

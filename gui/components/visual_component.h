@@ -49,9 +49,22 @@ ComponentType stringToComponentType(const QString& s);
 // ============================================================================
 // VISUAL WIRE
 // ============================================================================
-class VisualWire : public QGraphicsLineItem {
+// Note: We inherit QGraphicsObject (for QPointer) but we must manually handle the line shape
+// since we can't multiple-inherit QGraphicsLineItem + QGraphicsObject easily.
+// Ideally usage of QPointer requires QObject. 
+// VisualWire was QGraphicsLineItem. We will change to QGraphicsObject and implement shape()/boundingRect() manually like a line.
+
+class VisualWire : public QGraphicsObject {
+    Q_OBJECT
 public:
     VisualWire(QLineF line);
+
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+
+    // Line management (since we are no longer QGraphicsLineItem)
+    void setLine(const QLineF& line);
+    QLineF line() const { return m_line; }
 
     void paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) override;
     
@@ -71,10 +84,17 @@ public:
     
     void setWidth(double width) {
         lineWidth = width;
-        QPen p = pen();
-        p.setWidthF(width);
-        setPen(p);
+        m_pen.setWidthF(width);
+        update(); // Trigger repaint
     }
+
+    // Helper to get effective pen
+    QPen pen() const { return m_pen; }
+    void setPen(const QPen& p) { m_pen = p; update(); }
+
+private:
+    QLineF m_line;
+    QPen m_pen; // QGraphicsObject doesn't store a pen like QGraphicsLineItem/PathItem does
 };
 
 // ============================================================================
@@ -99,7 +119,8 @@ public:
 // ============================================================================
 // VISUAL COMPONENT
 // ============================================================================
-class VisualComponent : public QGraphicsItem {
+class VisualComponent : public QGraphicsObject {
+    Q_OBJECT
 public:
     ComponentType type;
     QString name;

@@ -125,7 +125,11 @@ QVariant ProbeTip::itemChange(GraphicsItemChange change, const QVariant &value) 
 // ============================================================================
 // VISUAL WIRE
 // ============================================================================
-VisualWire::VisualWire(QLineF line) : QGraphicsLineItem(line) {
+// ============================================================================
+// VISUAL WIRE
+// ============================================================================
+VisualWire::VisualWire(QLineF line) : QGraphicsObject() {
+    m_line = line;
     setPen(QPen(Qt::lightGray, 2));
     setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
     setZValue(1); // Wires below components 
@@ -137,6 +141,32 @@ VisualWire::VisualWire(QLineF line) : QGraphicsLineItem(line) {
     f.setPointSize(10);
     labelItem->setFont(f);
     labelItem->setVisible(false); // Hidden by default if empty
+}
+
+void VisualWire::setLine(const QLineF& line) {
+    if (m_line == line) return;
+    prepareGeometryChange();
+    m_line = line;
+    update();
+}
+
+QRectF VisualWire::boundingRect() const {
+    qreal extra = (m_pen.widthF() + 10) / 2.0;
+    return QRectF(m_line.p1(), m_line.p2())
+        .normalized()
+        .adjusted(-extra, -extra, extra, extra);
+}
+
+QPainterPath VisualWire::shape() const {
+    QPainterPath path;
+    if (m_line.length() == 0) return path;
+    
+    QPainterPathStroker stroker;
+    stroker.setWidth(m_pen.widthF() + 10); // Generous hit area
+    stroker.setCapStyle(Qt::RoundCap);
+    path.moveTo(m_line.p1());
+    path.lineTo(m_line.p2());
+    return stroker.createStroke(path);
 }
 
 void VisualWire::setName(const QString& name) {
@@ -160,7 +190,7 @@ void VisualWire::paint(QPainter* painter, const QStyleOptionGraphicsItem* option
     if (isSelected()) {
         painter->setPen(QPen(Qt::green, 2, Qt::DashLine));
     }
-    painter->drawLine(line());
+    painter->drawLine(m_line);
 }
 
 QVariant VisualWire::itemChange(GraphicsItemChange change, const QVariant &value) {

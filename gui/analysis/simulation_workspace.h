@@ -15,7 +15,7 @@
 #include "../editors/schematic_editor.h"
 #include "../widgets/problems_panel.h"
 #include "../widgets/trust_badge_widget.h"
-#ifndef Q_OS_WASM
+#ifndef __EMSCRIPTEN__
 #include <QFutureWatcher>
 #include <QtConcurrent>
 #endif

@@ -6,11 +6,146 @@
  * - stepTransient: Transient Analysis (Adaptive Time-Stepping)
  * 
  * Extracted from circuitsim.h for modularity.
+ * 
+ * Phase 1 Hardening: Refactored for NASA-style safety.
  */
 
 #include "circuitsim.h"
 #include "physics_tensors.h"
 #include "../../physics/device_physics.h"
+#include "../../physics/physics_constants.h"
+#include "../infrastructure/safe_utils.h"
+
+// =============================================================================
+// PHASE 1 HARDENING: Helper Method Implementations
+// =============================================================================
+
+void CircuitSim::seedInitialGuess(const TensorNetlist& netlist, 
+                                   std::vector<double>& voltageEstimate) {
+    const size_t N = voltageEstimate.size();
+    
+    // 1. Seed from Voltage Sources (direct)
+    for (const auto& source : netlist.globalBlock.voltageSources) {
+        int idx = SafeUtils::safe_idx(source.nodePositive, N, "VSource seed");
+        if (idx >= 0) {
+            voltageEstimate[idx] = source.voltage_V;
+        }
+    }
+    
+    // 2. Seed Diode anodes (0.6V initial for silicon)
+    for (const auto& diode : netlist.globalBlock.diodes) {
+        int idx = SafeUtils::safe_idx(diode.anode, N, "Diode seed");
+        if (idx >= 0) {
+            voltageEstimate[idx] = std::max(voltageEstimate[idx], 
+                                             PhysicsConstants::V_DIODE_SEED);
+        }
+    }
+    
+    // 3. Find supply voltage for mid-rail seeding
+    double vSupply = PhysicsConstants::V_SUPPLY_DEFAULT;
+    for (const auto& vs : netlist.globalBlock.voltageSources) {
+        if (vs.voltage_V > vSupply) vSupply = vs.voltage_V;
+    }
+    
+    // 4. Current Source Node Seeding (BJT base detection)
+    for (const auto& cs : netlist.globalBlock.currentSources) {
+        int nPos = SafeUtils::safe_idx(cs.nodePositive, N, "ISource seed");
+        if (nPos < 0) continue;
+        
+        // Check if this node is a BJT base
+        bool isBase = false;
+        for (const auto& bjt : netlist.globalBlock.bjts) {
+            if (SafeUtils::safe_idx(bjt.base, N, "BJT base check") == nPos) {
+                int nE = SafeUtils::safe_idx(bjt.emitter, N, "BJT emitter");
+                double v_e = (nE >= 0) ? voltageEstimate[nE] : 0.0;
+                double vbe = bjt.isNPN ? PhysicsConstants::V_BE_SEED : -PhysicsConstants::V_BE_SEED;
+                voltageEstimate[nPos] = std::max(voltageEstimate[nPos], v_e + vbe);
+                isBase = true;
+                break;
+            }
+        }
+        // Default: mid-rail for unconnected current source nodes
+        if (!isBase && voltageEstimate[nPos] == 0.0) {
+            voltageEstimate[nPos] = vSupply * 0.5;
+        }
+    }
+    
+    // 5. BJT Multi-Pass Seeding (Darlington propagation)
+    for (int pass = 0; pass < 3; ++pass) {
+        for (const auto& bjt : netlist.globalBlock.bjts) {
+            int nB = SafeUtils::safe_idx(bjt.base, N, "BJT base");
+            int nE = SafeUtils::safe_idx(bjt.emitter, N, "BJT emitter");
+            int nC = SafeUtils::safe_idx(bjt.nodeCollector, N, "BJT collector");
+            
+            if (bjt.isNPN) {
+                if (nE >= 0 && nB >= 0) {
+                    voltageEstimate[nB] = std::max(voltageEstimate[nB], 
+                        voltageEstimate[nE] + PhysicsConstants::V_BE_SEED);
+                }
+                if (nC >= 0 && nB >= 0) {
+                    voltageEstimate[nC] = std::max(voltageEstimate[nC], 
+                        voltageEstimate[nB] + 0.5);
+                }
+            } else { // PNP
+                if (nE >= 0 && nB >= 0) {
+                    voltageEstimate[nB] = std::min(voltageEstimate[nB], 
+                        voltageEstimate[nE] - PhysicsConstants::V_BE_SEED);
+                }
+                if (nC >= 0 && nB >= 0) {
+                    voltageEstimate[nC] = std::min(voltageEstimate[nC], 
+                        voltageEstimate[nB] - 0.5);
+                }
+            }
+        }
+    }
+}
+
+void CircuitSim::applyPnJunctionLimits(const TensorNetlist& netlist,
+                                        std::vector<double>& v_new,
+                                        const std::vector<double>& v_old) {
+    const size_t N = v_new.size();
+    const double Vt = PhysicsConstants::V_THERMAL_300K;
+    
+    // Helper lambda for limiting a single junction
+    auto limitJunction = [&](int p_node, int n_node, double Is) {
+        int p = SafeUtils::safe_idx(p_node, N, "pnjlim p");
+        int n = SafeUtils::safe_idx(n_node, N, "pnjlim n");
+        
+        double vcrit = compute_vcrit(Vt, Is);
+        double v_junction_old = (p >= 0 ? v_old[p] : 0.0) - (n >= 0 ? v_old[n] : 0.0);
+        double v_junction_new = (p >= 0 ? v_new[p] : 0.0) - (n >= 0 ? v_new[n] : 0.0);
+        
+        double v_limited = pnjlim(v_junction_new, v_junction_old, Vt, vcrit);
+        double corr = v_junction_new - v_limited;
+        
+        if (std::abs(corr) > PhysicsConstants::ABSTOL) {
+            if (p >= 0 && n >= 0) {
+                v_new[p] -= corr * 0.5;
+                v_new[n] += corr * 0.5;
+            } else if (p >= 0) {
+                v_new[p] -= corr;
+            } else if (n >= 0) {
+                v_new[n] += corr;
+            }
+        }
+    };
+    
+    // 1. Diode Limiting
+    for (const auto& d : netlist.globalBlock.diodes) {
+        limitJunction(d.anode, d.cathode, d.saturationCurrent_I_S_A);
+    }
+    
+    // 2. BJT Junction Limiting (Vbe and Vbc)
+    for (const auto& q : netlist.globalBlock.bjts) {
+        limitJunction(q.base, q.emitter, q.saturationCurrent_I_S_A);
+        limitJunction(q.base, q.nodeCollector, q.saturationCurrent_I_S_A);
+    }
+}
+
+// =============================================================================
+// MAIN SOLVER METHODS
+// =============================================================================
+
 
 SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   if (netlist.numGlobalNodes == 0)
@@ -24,81 +159,8 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
 
   std::vector<double> voltageEstimate(netlist.numGlobalNodes, 0.0);
 
-  // Seed the solver with initial guesses to speed up convergence
-  for (const auto &source : netlist.globalBlock.voltageSources) {
-    if (source.nodePositive > 0 &&
-        source.nodePositive <= (int)voltageEstimate.size())
-      voltageEstimate[source.nodePositive - 1] = source.voltage_V;
-  }
-
-  for (const auto &diode : netlist.globalBlock.diodes) {
-    // 0.6V is a safe starting guess for silicon diodes to avoid high-impedance
-    // "cold start" issues
-    if (diode.anode > 0 && diode.anode <= (int)voltageEstimate.size())
-      voltageEstimate[diode.anode - 1] =
-          std::max(voltageEstimate[diode.anode - 1], 0.6);
-  }
-  
-  // Find the supply voltage (highest source voltage) for seeding reference
-  double vSupply = 5.0;
-  for (const auto &vs : netlist.globalBlock.voltageSources) {
-    if (vs.voltage_V > vSupply) vSupply = vs.voltage_V;
-  }
-  
-  // Current Source Node Seeding: 
-  // If a current source drives a BJT base, that node needs an initial guess.
-  // Estimate based on typical Vbe drops.
-  for (const auto &cs : netlist.globalBlock.currentSources) {
-    int nPos = cs.nodePositive - 1;
-    if (nPos >= 0 && nPos < (int)voltageEstimate.size()) {
-      // Check if this node is a BJT base
-      for (const auto &bjt : netlist.globalBlock.bjts) {
-        if (bjt.base - 1 == nPos) {
-          // Seed based on emitter + Vbe
-          int nE = bjt.emitter - 1;
-          double v_e = (nE >= 0) ? voltageEstimate[nE] : 0.0;
-          voltageEstimate[nPos] = std::max(voltageEstimate[nPos], 
-              bjt.isNPN ? v_e + 0.7 : v_e - 0.7);
-        }
-      }
-      // Default: If not connected to BJT, seed to mid-rail
-      if (voltageEstimate[nPos] == 0.0) {
-        voltageEstimate[nPos] = vSupply * 0.5;
-      }
-    }
-  }
-  
-  // BJT Initial Guess Seeding - MULTI-PASS for cascaded BJTs (Darlington)
-  // Run 3 passes to propagate voltages through cascaded stages
-  for (int pass = 0; pass < 3; ++pass) {
-    for (const auto &bjt : netlist.globalBlock.bjts) {
-      int nB = bjt.base - 1;
-      int nE = bjt.emitter - 1;
-      int nC = bjt.nodeCollector - 1;
-      
-      if (bjt.isNPN) {
-        // NPN: Base should be ~0.7V above emitter
-        if (nE >= 0 && nB >= 0) {
-          double v_e = voltageEstimate[nE];
-          voltageEstimate[nB] = std::max(voltageEstimate[nB], v_e + 0.7);
-        }
-        // Collector should be higher than base for forward-active
-        if (nC >= 0 && nB >= 0) {
-          voltageEstimate[nC] = std::max(voltageEstimate[nC], voltageEstimate[nB] + 0.5);
-        }
-      } else {
-        // PNP: Base should be ~0.7V below emitter
-        if (nE >= 0 && nB >= 0) {
-          double v_e = voltageEstimate[nE];
-          voltageEstimate[nB] = std::min(voltageEstimate[nB], v_e - 0.7);
-        }
-        // Collector should be lower than base for forward-active
-        if (nC >= 0 && nB >= 0) {
-          voltageEstimate[nC] = std::min(voltageEstimate[nC], voltageEstimate[nB] - 0.5);
-        }
-      }
-    }
-  }
+  // Phase 1 Hardening: Use extracted helper for initial guess seeding
+  seedInitialGuess(netlist, voltageEstimate);
 
   bool converged = false;
   int total_iterations = 0;
@@ -158,77 +220,11 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     
     std::vector<double> v_new = result.solution;
     
-    // NaN Protection
-    for (double &v : v_new) {
-        if (std::isnan(v)) v = 0.0;
-    }
+    // NaN Protection using SafeUtils
+    SafeUtils::sanitize_vector(v_new, 0.0);
     
-    // PN Junction Limiting (SPICE-Style pnjlim)
-    // Apply proper voltage limiting to prevent exponential overshoot
-    const double thermalVoltage = 0.02585;
-
-    // Diode voltage limiting
-    for (const auto &d : netlist.globalBlock.diodes) {
-      int a_idx = d.anode - 1;
-      int c_idx = d.cathode - 1;
-      
-      // Compute vcrit for this diode
-      double vcrit = compute_vcrit(thermalVoltage, d.saturationCurrent_I_S_A);
-
-      double v_diode_old = (a_idx >= 0 ? voltageEstimate[a_idx] : 0.0) -
-                           (c_idx >= 0 ? voltageEstimate[c_idx] : 0.0);
-      double v_diode_new = (a_idx >= 0 ? v_new[a_idx] : 0.0) - 
-                           (c_idx >= 0 ? v_new[c_idx] : 0.0);
-      
-      // Apply pnjlim
-      double v_diode_limited = pnjlim(v_diode_new, v_diode_old, thermalVoltage, vcrit);
-      double correction = v_diode_new - v_diode_limited;
-      
-      // Apply correction to node voltages (distribute to both nodes)
-      if (std::abs(correction) > 1e-12) {
-        if (a_idx >= 0 && c_idx >= 0) {
-            v_new[a_idx] -= correction * 0.5;
-            v_new[c_idx] += correction * 0.5;
-        } else if (a_idx >= 0) {
-            v_new[a_idx] -= correction;
-        } else if (c_idx >= 0) {
-            v_new[c_idx] += correction;
-        }
-      }
-    }
-
-    // BJT Voltage Limiting (Base-Emitter and Base-Collector junctions)
-    for (const auto &q : netlist.globalBlock.bjts) {
-        int nC = q.nodeCollector - 1;
-        int nB = q.base - 1;
-        int nE = q.emitter - 1;
-        
-        // Compute vcrit for BJT (using Is)
-        double vcrit = compute_vcrit(thermalVoltage, q.saturationCurrent_I_S_A);
-        
-        // Helper to apply pnjlim to a junction
-        auto limitJunction = [&](int p, int n) {
-            double v_old = (p >= 0 ? voltageEstimate[p] : 0.0) - (n >= 0 ? voltageEstimate[n] : 0.0);
-            double v_new_j = (p >= 0 ? v_new[p] : 0.0) - (n >= 0 ? v_new[n] : 0.0);
-            
-            double v_limited = pnjlim(v_new_j, v_old, thermalVoltage, vcrit);
-            double corr = v_new_j - v_limited;
-            
-            if (std::abs(corr) > 1e-12) {
-                if (p >= 0 && n >= 0) {
-                    v_new[p] -= corr * 0.5;
-                    v_new[n] += corr * 0.5;
-                } else if (p >= 0) {
-                    v_new[p] -= corr;
-                } else if (n >= 0) {
-                    v_new[n] += corr;
-                }
-            }
-        };
-
-        limitJunction(nB, nE); // Vbe
-        limitJunction(nB, nC); // Vbc
-    }
+    // Phase 1 Hardening: Use extracted helper for PN junction limiting
+    applyPnJunctionLimits(netlist, v_new, voltageEstimate);
     
     // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
     double kcl_error = calculatePhysicalResiduals(netlist, v_new);

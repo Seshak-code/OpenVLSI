@@ -380,9 +380,26 @@ private:
   // SoA Tensor Storage (Batch Physics)
   TensorizedBlock soaBlock;
 
+  // =========================================================================
+  // PHASE 1 HARDENING: Helper Methods (Decomposition of solveDC)
+  // =========================================================================
 
+  /**
+   * seedInitialGuess - Initialize voltage estimates for Newton-Raphson.
+   * Encapsulates heuristic seeding for Diodes, BJTs, and supply nodes.
+   */
+  void seedInitialGuess(const TensorNetlist& netlist, std::vector<double>& voltageEstimate);
 
-  // NR Parameters
+  /**
+   * applyPnJunctionLimits - Apply SPICE-style pnjlim to prevent NR overshoot.
+   * Modifies v_new in-place based on v_old.
+   */
+  void applyPnJunctionLimits(const TensorNetlist& netlist,
+                              std::vector<double>& v_new,
+                              const std::vector<double>& v_old);
+
+  // NR Parameters (Using centralized PhysicsConstants)
+  // Note: Kept as local constexpr for backward compatibility; prefer PhysicsConstants::
   static constexpr double RELTOL = 1e-3;
   static constexpr double VNTOL = 1e-6;
   static constexpr double ABSTOL = 1e-12; // 1 pico-Ampere resolution

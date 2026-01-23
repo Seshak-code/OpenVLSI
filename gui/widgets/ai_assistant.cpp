@@ -876,8 +876,11 @@ void AiAssistantPanel::executeChangeRequest(const ChangeRequest& request) {
             if (success) successCount++;
         }
         else if (actionType == "runSimulation") {
-            // Trigger simulation (connects to SimulationWorkspace)
-            appendMessage("Copilot", "[Lab] Simulation requested. Open the Simulation tab to see results.");
+            // Trigger simulation (connects to SimulationWorkspace via MainWindow)
+            QString analysisType = action["type"].toString();
+            if (analysisType.isEmpty()) analysisType = "DC";
+            emit simulationRequested(analysisType);
+            appendMessage("Copilot", QString("[Lab] Starting %1 simulation...").arg(analysisType));
             successCount++;
         }
         else if (actionType == "placeProbe") {

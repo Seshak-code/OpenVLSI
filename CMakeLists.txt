@@ -75,7 +75,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # Find Qt6 (required)
 # Find Qt6 (required)
 if(EMSCRIPTEN)
-    find_package(Qt6 COMPONENTS Core Gui Widgets Test Concurrent REQUIRED)
+    find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
 else()
     find_package(Qt6 COMPONENTS Core Gui Widgets Test Concurrent REQUIRED)
 endif()
@@ -377,131 +377,135 @@ target_link_libraries(test_superposition PRIVATE Qt6::Core)
 target_compile_features(test_superposition PUBLIC cxx_std_17)
 
 # Auto-Validation Harness Test (ERC + AI API)
-add_executable(test_auto_harness
-    tests/test_auto_harness.cpp
-    gui/components/visual_component.cpp
-    gui/editors/schematic_editor.cpp
-    gui/editors/schematic_view.cpp
-    gui/editors/component_wizard.cpp
-    gui/editors/schematic_editor_api.cpp
-    gui/editors/schematic_editor_sync.cpp
-    gui/widgets/ai_assistant.cpp
-    gui/widgets/component_library.cpp
-    gui/widgets/design_flow.cpp
-    gui/analysis/system_inspector.cpp
-    gui/analysis/logic_analyzer.cpp
-    gui/editors/hdl_editor.cpp
-    gui/core/mainwindow.cpp
-    gui/core/welcome_widget.cpp
-    ai_api/system/schema_api.cpp
-    ai_api/context/context_engine.cpp
-    ai_api/analysis/failure_classifier.cpp
-    ai_api/simulation/auto_harness.cpp
-    ai_api/simulation/speculative_runner.cpp
-    ai_api/context/prompt_builder.cpp
-    ai_api/context/rag_context.cpp
-    ai_api/analysis/topology_analyzer.cpp
-    ai_api/system/feedback_loop.cpp
-    ai_api/simulation/simulation_trace.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    gui/analysis/simulation_workspace.cpp
-    gui/analysis/simulation_explorer.cpp
-    gui/analysis/corner_setup_widget.cpp
-    gui/widgets/problems_panel.cpp
-    gui/widgets/debug_suggestions_panel.cpp
-    gui/widgets/trust_badge_widget.cpp
-    gui/orchestration/worker_status_panel.cpp
-    gui/orchestration/worker_manager.cpp
-    physics/quick_analysis.cpp
-    physics/quick_analysis.cpp
-    compute/orchestration/grpc_worker_client.cpp
-    gui/analysis/statistical_dashboard.cpp
-)
-target_include_directories(test_auto_harness PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
-)
-target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
-target_compile_features(test_auto_harness PUBLIC cxx_std_17)
+if(NOT EMSCRIPTEN)
+    add_executable(test_auto_harness
+        tests/test_auto_harness.cpp
+        gui/components/visual_component.cpp
+        gui/editors/schematic_editor.cpp
+        gui/editors/schematic_view.cpp
+        gui/editors/component_wizard.cpp
+        gui/editors/schematic_editor_api.cpp
+        gui/editors/schematic_editor_sync.cpp
+        gui/widgets/ai_assistant.cpp
+        gui/widgets/component_library.cpp
+        gui/widgets/design_flow.cpp
+        gui/analysis/system_inspector.cpp
+        gui/analysis/logic_analyzer.cpp
+        gui/editors/hdl_editor.cpp
+        gui/core/mainwindow.cpp
+        gui/core/welcome_widget.cpp
+        ai_api/system/schema_api.cpp
+        ai_api/context/context_engine.cpp
+        ai_api/analysis/failure_classifier.cpp
+        ai_api/simulation/auto_harness.cpp
+        ai_api/simulation/speculative_runner.cpp
+        ai_api/context/prompt_builder.cpp
+        ai_api/context/rag_context.cpp
+        ai_api/analysis/topology_analyzer.cpp
+        ai_api/system/feedback_loop.cpp
+        ai_api/simulation/simulation_trace.cpp
+        compute/tensors/physics_tensors.cpp
+        compute/solvers/superposition.cpp
+        compute/solvers/circuitsim_solver.cpp
+        gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_explorer.cpp
+        gui/analysis/corner_setup_widget.cpp
+        gui/widgets/problems_panel.cpp
+        gui/widgets/debug_suggestions_panel.cpp
+        gui/widgets/trust_badge_widget.cpp
+        gui/orchestration/worker_status_panel.cpp
+        gui/orchestration/worker_manager.cpp
+        physics/quick_analysis.cpp
+        physics/quick_analysis.cpp
+        compute/orchestration/grpc_worker_client.cpp
+        gui/analysis/statistical_dashboard.cpp
+    )
+    target_include_directories(test_auto_harness PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    )
+    target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
+    target_compile_features(test_auto_harness PUBLIC cxx_std_17)
+endif()
 
 # Copilot Integration Test
-add_executable(test_copilot_validate
-    tests/test_copilot_validate.cpp
-    gui/components/visual_component.cpp
-    gui/editors/schematic_editor.cpp
-    gui/editors/schematic_view.cpp
-    gui/editors/component_wizard.cpp
-    gui/editors/schematic_editor_api.cpp
-    gui/editors/schematic_editor_sync.cpp
-    gui/widgets/ai_assistant.cpp
-    gui/widgets/component_library.cpp
-    gui/widgets/design_flow.cpp
-    gui/analysis/system_inspector.cpp
-    gui/analysis/logic_analyzer.cpp
-    gui/editors/hdl_editor.cpp
-    gui/core/mainwindow.cpp
-    gui/core/welcome_widget.cpp
-    ai_api/system/schema_api.cpp
-    ai_api/context/context_engine.cpp
-    ai_api/analysis/failure_classifier.cpp
-    ai_api/simulation/auto_harness.cpp
-    ai_api/simulation/speculative_runner.cpp
-    ai_api/context/prompt_builder.cpp
-    ai_api/context/rag_context.cpp
-    ai_api/analysis/topology_analyzer.cpp
-    ai_api/system/feedback_loop.cpp
-    ai_api/simulation/simulation_trace.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    gui/analysis/simulation_workspace.cpp
-    gui/analysis/simulation_explorer.cpp
-    gui/analysis/corner_setup_widget.cpp
-    gui/widgets/problems_panel.cpp
-    gui/widgets/debug_suggestions_panel.cpp
-    gui/widgets/trust_badge_widget.cpp
-    gui/orchestration/worker_status_panel.cpp
-    gui/orchestration/worker_manager.cpp
-    physics/quick_analysis.cpp
-    compute/orchestration/grpc_worker_client.cpp
-    gui/analysis/statistical_dashboard.cpp
-)
-target_include_directories(test_copilot_validate PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
-)
-target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
-target_compile_features(test_copilot_validate PUBLIC cxx_std_17)
+if(NOT EMSCRIPTEN)
+    add_executable(test_copilot_validate
+        tests/test_copilot_validate.cpp
+        gui/components/visual_component.cpp
+        gui/editors/schematic_editor.cpp
+        gui/editors/schematic_view.cpp
+        gui/editors/component_wizard.cpp
+        gui/editors/schematic_editor_api.cpp
+        gui/editors/schematic_editor_sync.cpp
+        gui/widgets/ai_assistant.cpp
+        gui/widgets/component_library.cpp
+        gui/widgets/design_flow.cpp
+        gui/analysis/system_inspector.cpp
+        gui/analysis/logic_analyzer.cpp
+        gui/editors/hdl_editor.cpp
+        gui/core/mainwindow.cpp
+        gui/core/welcome_widget.cpp
+        ai_api/system/schema_api.cpp
+        ai_api/context/context_engine.cpp
+        ai_api/analysis/failure_classifier.cpp
+        ai_api/simulation/auto_harness.cpp
+        ai_api/simulation/speculative_runner.cpp
+        ai_api/context/prompt_builder.cpp
+        ai_api/context/rag_context.cpp
+        ai_api/analysis/topology_analyzer.cpp
+        ai_api/system/feedback_loop.cpp
+        ai_api/simulation/simulation_trace.cpp
+        compute/tensors/physics_tensors.cpp
+        compute/solvers/superposition.cpp
+        compute/solvers/circuitsim_solver.cpp
+        gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_explorer.cpp
+        gui/analysis/corner_setup_widget.cpp
+        gui/widgets/problems_panel.cpp
+        gui/widgets/debug_suggestions_panel.cpp
+        gui/widgets/trust_badge_widget.cpp
+        gui/orchestration/worker_status_panel.cpp
+        gui/orchestration/worker_manager.cpp
+        physics/quick_analysis.cpp
+        compute/orchestration/grpc_worker_client.cpp
+        gui/analysis/statistical_dashboard.cpp
+    )
+    target_include_directories(test_copilot_validate PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    )
+    target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
+    target_compile_features(test_copilot_validate PUBLIC cxx_std_17)
+endif()
 
 # ERC Rules Automated Test
 add_executable(test_erc_rules 
@@ -524,43 +528,55 @@ target_link_libraries(test_erc_rules PRIVATE Qt6::Core)
 target_compile_features(test_erc_rules PUBLIC cxx_std_17)
 
 # Phase 1.1 Statistical Interactivity Test
-add_executable(test_statistical_interactivity
-    tests/test_statistical_interactivity.cpp
-    gui/analysis/statistical_dashboard.cpp
-    gui/analysis/statistical_dashboard.h
-)
-target_include_directories(test_statistical_interactivity PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-)
-target_link_libraries(test_statistical_interactivity PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
-target_compile_features(test_statistical_interactivity PUBLIC cxx_std_17)
+if(NOT EMSCRIPTEN)
+    add_executable(test_statistical_interactivity
+        tests/test_statistical_interactivity.cpp
+        gui/analysis/statistical_dashboard.cpp
+        gui/analysis/statistical_dashboard.h
+    )
+    target_include_directories(test_statistical_interactivity PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+    )
+    target_link_libraries(test_statistical_interactivity PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+    target_compile_features(test_statistical_interactivity PUBLIC cxx_std_17)
+endif()
 
 # Phase 1.26 AI Simulation Intelligence Test
-add_executable(test_ai_simulation_intelligence
-    tests/test_ai_simulation_intelligence.cpp
-    ai_api/simulation/simulation_trace.cpp
-    ai_api/simulation/speculative_runner.cpp
-    ai_api/analysis/failure_classifier.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/tensors/physics_tensors.cpp
+if(NOT EMSCRIPTEN)
+    add_executable(test_ai_simulation_intelligence
+        tests/test_ai_simulation_intelligence.cpp
+        ai_api/simulation/simulation_trace.cpp
+        ai_api/simulation/speculative_runner.cpp
+        ai_api/analysis/failure_classifier.cpp
+        compute/solvers/circuitsim_solver.cpp
+        compute/tensors/physics_tensors.cpp
+    )
+    target_include_directories(test_ai_simulation_intelligence PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    )
+    target_link_libraries(test_ai_simulation_intelligence PRIVATE Qt6::Core Qt6::Test Qt6::Concurrent)
+    target_compile_features(test_ai_simulation_intelligence PUBLIC cxx_std_17)
+endif()
+
+# Phase 2 I/O Safety Tests
+add_executable(test_safe_io tests/test_safe_io.cpp)
+target_include_directories(test_safe_io PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
 )
-target_include_directories(test_ai_simulation_intelligence PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-)
-target_link_libraries(test_ai_simulation_intelligence PRIVATE Qt6::Core Qt6::Test Qt6::Concurrent)
-target_compile_features(test_ai_simulation_intelligence PUBLIC cxx_std_17)
+target_link_libraries(test_safe_io PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_safe_io PUBLIC cxx_std_17)
 
 # Phase 1.7 Simulation Suite Tests
 add_executable(test_simulation 
@@ -596,6 +612,29 @@ if(EMSCRIPTEN)
     target_link_options(test_sensitivity PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     target_link_options(test_superposition PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     target_link_options(test_erc_rules PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
-    target_link_options(test_auto_harness PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
-    target_link_options(test_copilot_validate PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
+    # test_auto_harness and test_copilot_validate excluded from WASM due to threading
 endif()
+
+# =============================================================================
+# Testing Configuration
+# =============================================================================
+enable_testing()
+
+add_test(NAME test_safe_io COMMAND test_safe_io)
+add_test(NAME test_ai_simulation_intelligence COMMAND test_ai_simulation_intelligence)
+
+# Phase 5 GUI Logic Test
+add_executable(test_gui_logic tests/test_gui_logic.cpp gui/components/visual_component.cpp)
+target_include_directories(test_gui_logic PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_gui_logic PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+# visual_component.cpp needs these to link if it references SchemeEditor or similar? 
+# VisualComponent only depends on Qt Graphics, so simple link should work unless circular deps exist.
+add_test(NAME test_gui_logic COMMAND test_gui_logic)
+

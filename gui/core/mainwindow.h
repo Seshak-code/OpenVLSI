@@ -24,6 +24,7 @@
 #include "hdl_editor.h"  // Phase 14.1
 #include <QStackedWidget>
 #include <QSplitter>
+#include <QPointer>
 #include "gui_types.h"
 #include "welcome_widget.h"
 #include "problems_panel.h"
@@ -67,6 +68,8 @@ private:
     
     // Actions
     QAction* viewQuickPreviewAction; // Phase 1.7.7 Toggle
+    QAction* hdlToggleAction;        // Phase 7: HDL Editor visibility
+    QSplitter* rtlSplitter_;         // Phase 7: Access for HDL toggle
     WelcomeWidget* welcomeWidget;
     
     // Docks
@@ -111,6 +114,7 @@ private:
 
 private slots:
     void onSimulationResults(const QJsonObject& results);
+    void onAiSimulationRequested(const QString& analysisType);
 
     // UI Setup Methods
     void setupMenus();
@@ -160,7 +164,7 @@ private slots:
     void onPropertyEdited(QTableWidgetItem* item);
 
 private:
-    VisualComponent* activeComponent = nullptr;
-    VisualWire* activeWire = nullptr;
+    QPointer<VisualComponent> activeComponent;
+    QPointer<VisualWire> activeWire;
     bool isUpdating = false; // Prevent feedback loop
 };

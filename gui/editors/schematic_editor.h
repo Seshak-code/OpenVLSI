@@ -60,6 +60,12 @@ public:
         double y = std::round(pos.y() / GRID_STEP) * GRID_STEP;
         return QPointF(x, y);
     }
+    
+    // Manually trigger updates (for API/UndoRedo)
+    void triggerTopologyUpdate() {
+        emit topologyChanged(QDateTime::currentMSecsSinceEpoch());
+        updateERC();
+    }
 
 protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override;
@@ -79,7 +85,7 @@ signals:
 
 private:
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
-    bool isWireValid(QGraphicsLineItem* wire); 
+    bool isWireValid(VisualWire* wire); 
 
     bool gridVisible = true;
     bool snappingEnabled = true;

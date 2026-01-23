@@ -15,6 +15,8 @@
 #include <QFile>
 #include <QTextStream>
 #include <QDialog>
+#include <QDockWidget>
+#include <QMainWindow>
 #include "corner_setup_widget.h"
 #include "../../physics/quick_analysis.h"
 #include "../../physics/statistical_engine.h"
@@ -356,6 +358,12 @@ void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
     // Connect ERC violations - now handled in MainWindow bottom dock
     // connect(editor, &SchematicEditor::violationsChanged, problemsPanel_, &ProblemsPanel::setViolations);
     
+    // Phase 7: Populate schematic combo with current editor
+    if (schematicCombo_) {
+        schematicCombo_->clear();
+        schematicCombo_->addItem("Current Schematic");
+    }
+    
     // Initial sync
     onModeChanged(editor->getMode());
     updateProfileEditor();
@@ -598,9 +606,16 @@ void SimulationWorkspace::onProfileSelected(const QString& profileId) {
 
 void SimulationWorkspace::onRunRequested(const QString& profileId) {
     if (!canRun()) {
-        QString error = "Cannot run simulation.\n\nPossible causes:\n1. ERC Violations (Fix errors in schematic)\n2. No schematic loaded\n3. Missing Ground reference";
+        QString error = "Cannot run simulation.\nPossible causes:\n1. ERC Violations (Fix errors in schematic)\n2. No schematic loaded\n3. Missing Ground reference";
         appendLog("[ERROR] " + error.replace("\n", " "));
-        QMessageBox::warning(this, "Simulation Failed", error);
+        
+        // WASM-SAFE: Do NOT use blocking QMessageBox here as it may crash the browser context if invoked from async path.
+        // The error is already logged to the output panel.
+        // QMessageBox::warning(this, "Simulation Failed", error); 
+        
+        // Flash status bar red
+        findChild<QLabel*>("statusLabel")->setText("Failed: ERC / Checks");
+        findChild<QLabel*>("statusLabel")->setStyleSheet("color: #f44747;");
         return;
     }
     
@@ -790,6 +805,18 @@ void SimulationWorkspace::finishSimulation() {
               .arg(passed ? "PASSED" : "FAILED")
               .arg(currentRun_.solveTime_ms, 0, 'f', 1));
     
+    // Phase 7: Completion notification (non-blocking for WASM compatibility)
+    // The status is already shown in the toolbar statusLabel and log panel
+#ifndef __EMSCRIPTEN__
+    if (passed) {
+        QMessageBox::information(this, "Simulation Complete", 
+            QString("Simulation PASSED in %1 ms").arg(currentRun_.solveTime_ms, 0, 'f', 1));
+    } else {
+        QMessageBox::warning(this, "Simulation Complete", 
+            "Simulation FAILED\n\nCheck streaming log for details.");
+    }
+#endif
+    
     emit simulationCompleted(currentRun_);
 }
 
@@ -946,7 +973,7 @@ void SimulationWorkspace::runMonteCarlo() {
         return outcomes;
     };
 
-#ifdef Q_OS_WASM
+#ifdef __EMSCRIPTEN__
     // WASM: Synchronous execution (single-threaded)
     // For better UX, we could use QTimer slicing, but for MVP synchronous is fine.
     appendLog("Running Monte Carlo synchronously (WASM limitation)...");

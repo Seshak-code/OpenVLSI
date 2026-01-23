@@ -95,6 +95,7 @@ QString SchematicEditor::placeComponent(const QString& typeStr, QPointF pos, dou
     }
     
     scene->addItem(comp);
+    scene->triggerTopologyUpdate();
     
     return comp->name;
 }
@@ -118,6 +119,7 @@ bool SchematicEditor::deleteComponent(const QString& id) {
     if (!comp) return false;
     scene->removeItem(comp);
     delete comp;
+    scene->triggerTopologyUpdate();
     return true;
 }
 
@@ -193,6 +195,8 @@ QString SchematicEditor::placeProbe(const QString& id, QPointF bodyPos, QPointF 
     if (comp->probeNegativeTip) {
         comp->probeNegativeTip->setPos(comp->mapFromScene(negTip));
     }
+    
+    scene->triggerTopologyUpdate();
     
     return comp->name;
 }

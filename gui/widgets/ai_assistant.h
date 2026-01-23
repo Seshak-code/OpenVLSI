@@ -32,6 +32,13 @@ public:
     // Dynamic editor context update
     void setEditor(SchematicEditor* editor) { editorContext = editor; }
 
+signals:
+    /**
+     * Emitted when the user requests a simulation via natural language.
+     * @param analysisType The type of analysis requested (e.g., "DC", "Transient").
+     */
+    void simulationRequested(const QString& analysisType);
+
 private slots:
     void onSendMessage();
     void onApproveRequest();

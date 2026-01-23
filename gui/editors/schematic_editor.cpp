@@ -127,7 +127,7 @@ void GridScene::setSnappingEnabled(bool enabled) {
     snappingEnabled = enabled;
 }
 
-bool GridScene::isWireValid(QGraphicsLineItem* wire) {
+bool GridScene::isWireValid(VisualWire* wire) {
     if (!wire) return false;
     // Check collision with all items that are VisualComponents
     QList<QGraphicsItem*> collisions = wire->collidingItems();

@@ -1,4 +1,5 @@
 #include "rag_context.h"
+#include "safe_io.h"
 #include "../../components/reference_designs.h"
 #include <QFile>
 #include <QDir>
@@ -8,7 +9,7 @@
 namespace AIAPI {
 
 // ============================================================================
-// FeedbackStore Implementation
+// FeedbackStore Implementation (Phase 2 Hardened)
 // ============================================================================
 
 QString FeedbackStore::getFeedbackFilePath() {
@@ -24,8 +25,8 @@ void FeedbackStore::recordFeedback(const UserFeedback& feedback) {
     QList<UserFeedback> history = loadHistory();
     history.append(feedback);
     
-    // Limit to last 1000 entries to prevent unbounded growth
-    while (history.size() > 1000) {
+    // Limit to last N entries to prevent unbounded growth
+    while (history.size() > SafeIo::MAX_HISTORY_ENTRIES) {
         history.removeFirst();
     }
     
@@ -34,26 +35,36 @@ void FeedbackStore::recordFeedback(const UserFeedback& feedback) {
         arr.append(fb.toJson());
     }
     
-    QFile file(getFeedbackFilePath());
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(QJsonDocument(arr).toJson(QJsonDocument::Compact));
-        file.close();
+    // Phase 2 Hardening: Use atomic write to prevent corruption
+    SafeIo::WriteResult result = SafeIo::write_json_safe(getFeedbackFilePath(), arr);
+    if (!result.success) {
+        qWarning() << "[FeedbackStore] Failed to write feedback:" << result.errorMessage;
     }
 }
 
 QList<UserFeedback> FeedbackStore::loadHistory() {
     QList<UserFeedback> result;
     
-    QFile file(getFeedbackFilePath());
-    if (file.open(QIODevice::ReadOnly)) {
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        file.close();
-        
-        if (doc.isArray()) {
-            for (const auto& val : doc.array()) {
-                result.append(UserFeedback::fromJson(val.toObject()));
-            }
+    QString path = getFeedbackFilePath();
+    
+    // Phase 2 Hardening: Use bounded reading to prevent memory exhaustion
+    SafeIo::JsonReadResult readResult = SafeIo::read_json_file_bounded(path, SafeIo::MAX_AI_CONTEXT_SIZE);
+    
+    if (!readResult.success) {
+        // Not an error if file doesn't exist (fresh install)
+        if (!QFile::exists(path)) {
+            return result; // Empty history is valid
         }
+        qWarning() << "[FeedbackStore] Failed to load history:" << readResult.errorMessage;
+        return result;
+    }
+    
+    if (readResult.isArray()) {
+        for (const auto& val : readResult.toArray()) {
+            result.append(UserFeedback::fromJson(val.toObject()));
+        }
+    } else {
+        qWarning() << "[FeedbackStore] Invalid format: expected JSON array";
     }
     
     return result;
