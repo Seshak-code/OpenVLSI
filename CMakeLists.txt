@@ -75,7 +75,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # Find Qt6 (required)
 # Find Qt6 (required)
 if(EMSCRIPTEN)
-    find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
+    find_package(Qt6 COMPONENTS Core Gui Widgets Test Concurrent REQUIRED)
 else()
     find_package(Qt6 COMPONENTS Core Gui Widgets Test Concurrent REQUIRED)
 endif()
@@ -542,6 +542,10 @@ target_compile_features(test_statistical_interactivity PUBLIC cxx_std_17)
 add_executable(test_ai_simulation_intelligence
     tests/test_ai_simulation_intelligence.cpp
     ai_api/simulation/simulation_trace.cpp
+    ai_api/simulation/speculative_runner.cpp
+    ai_api/analysis/failure_classifier.cpp
+    compute/solvers/circuitsim_solver.cpp
+    compute/tensors/physics_tensors.cpp
 )
 target_include_directories(test_ai_simulation_intelligence PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -550,8 +554,12 @@ target_include_directories(test_ai_simulation_intelligence PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
 )
-target_link_libraries(test_ai_simulation_intelligence PRIVATE Qt6::Core Qt6::Test)
+target_link_libraries(test_ai_simulation_intelligence PRIVATE Qt6::Core Qt6::Test Qt6::Concurrent)
 target_compile_features(test_ai_simulation_intelligence PUBLIC cxx_std_17)
 
 # Phase 1.7 Simulation Suite Tests

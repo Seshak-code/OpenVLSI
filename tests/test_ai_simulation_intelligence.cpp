@@ -1,6 +1,7 @@
 #include <QtTest>
 #include "ai_api/simulation/trace_chunker.h"
 #include "ai_api/simulation/local_vector_store.h"
+#include "ai_api/simulation/speculative_indexing.h"
 
 class TestAISimulationIntelligence : public QObject {
     Q_OBJECT
@@ -151,6 +152,48 @@ private slots:
             }
         }
         QVERIFY(foundDifferent);
+    }
+
+    void testSpeculativeManager() {
+        auto store = std::make_shared<AIAPI::LocalVectorStore>();
+        AIAPI::SpeculativeManager manager(store);
+        
+        // Setup minimal netlist
+        TensorNetlist netlist;
+        netlist.numGlobalNodes = 2; // Node 1 and 2
+        // Add a resistor to ensure physics runs
+        Resistor r;
+        r.nodeTerminal1 = 1;
+        r.nodeTerminal2 = 2;
+        r.resistance_ohms = 1000.0;
+        netlist.globalBlock.resistors.push_back(r);
+        
+        AIAPI::SpeculativeOverrides overrides;
+        overrides.timeStepOverride = 1e-9;
+        
+        // Run Async
+        QFuture<QString> future = manager.runAndIndexAsync(netlist, overrides);
+        future.waitForFinished();
+        QString traceId = future.result();
+        
+        QVERIFY(!traceId.isEmpty());
+        
+        // Verify it's in the store
+        QVERIFY(store->hasTrace(traceId));
+        
+        // Verify we can find it as counterfactual
+        AIAPI::TraceConfig config;
+        // The default config in SpeculativeRunner uses predictionEnabled=true
+        // Let's query for something with that config logic from LocalVectorStore
+        // Actually, store->findCounterfactuals matches by topologyHash.
+        // SpeculativeRunner uses dummy hash "12345".
+        
+        AIAPI::SimulationTrace stored = store->getTrace(traceId);
+        QCOMPARE(stored.topologyHash, QString("12345"));
+        QCOMPARE(stored.configParams.predictionEnabled, true);
+        
+        // Check chunks were generated
+        QVERIFY(!stored.ragChunks.isEmpty());
     }
 };
 
