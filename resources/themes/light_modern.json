@@ -1,0 +1,20 @@
+{
+    "name": "Light Modern",
+    "version": 1,
+    "type": "light",
+    "colors": {
+        "ui.background": "#ffffff",
+        "ui.text": "#333333",
+        "ui.header": "#f3f3f3",
+        "ui.border": "#e0e0e0",
+        "ui.accent": "#007acc",
+        "ui.error": "#e51400",
+        "input.background": "#ffffff",
+        "input.text": "#333333",
+        "schematic.background": "#ffffff",
+        "schematic.grid": "#e0e0e0",
+        "schematic.wire": "#333333",
+        "schematic.pin": "#000000",
+        "schematic.selection": "#40007acc"
+    }
+}

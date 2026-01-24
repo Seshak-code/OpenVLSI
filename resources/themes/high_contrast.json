@@ -1,0 +1,20 @@
+{
+    "name": "High Contrast",
+    "version": 1,
+    "type": "dark",
+    "colors": {
+        "ui.background": "#000000",
+        "ui.text": "#ffffff",
+        "ui.header": "#000000",
+        "ui.border": "#ffffff",
+        "ui.accent": "#ffff00",
+        "ui.error": "#ff00ff",
+        "input.background": "#000000",
+        "input.text": "#ffffff",
+        "schematic.background": "#000000",
+        "schematic.grid": "#ffffff",
+        "schematic.wire": "#ffff00",
+        "schematic.pin": "#00ffff",
+        "schematic.selection": "#ffffff"
+    }
+}

@@ -1,0 +1,22 @@
+{
+    "name": "Dark Modern",
+    "version": 1,
+    "type": "dark",
+    "colors": {
+        "ui.background": "#1e1e1e",
+        "ui.text": "#cccccc",
+        "ui.header": "#252526",
+        "ui.border": "#3e3e42",
+        "ui.accent": "#007acc",
+        "ui.error": "#f48771",
+
+        "input.background": "#3c3c3c",
+        "input.text": "#cccccc",
+
+        "schematic.background": "#1e1e1e",
+        "schematic.grid": "#3c3c3c",
+        "schematic.wire": "#cccccc",
+        "schematic.pin": "#ffffff",
+        "schematic.selection": "#40007acc"
+    }
+}
