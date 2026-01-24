@@ -118,4 +118,16 @@ inline int sanitize_vector(std::vector<double>& vec, double fallback = 0.0) {
         } \
     } while(0)
 
+/**
+ * SAFE_FAIL - Unconditional failure for explicitly unreachable code paths.
+ * Use in default switch cases, after exhaustive enums, or where logic errors
+ * indicate a programming bug rather than a runtime condition.
+ */
+#define SAFE_FAIL(message) \
+    do { \
+        std::cerr << "[FATAL] SAFE_FAIL: " << (message) \
+                  << " at " << __FILE__ << ":" << __LINE__ << std::endl; \
+        assert(false && "Unreachable code reached"); \
+    } while(0)
+
 } // namespace SafeUtils

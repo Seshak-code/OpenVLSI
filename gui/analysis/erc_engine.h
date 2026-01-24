@@ -41,7 +41,12 @@ enum class ViolationType {
     ILLEGAL_SOURCE,      // Source component used in Block mode
     MISSING_PORTS,       // Block mode requires ports
     ILLEGAL_DRIVER,      // System mode requires RailDrivers
-    MIXED_MODES          // Components from wrong mode
+    MIXED_MODES,         // Components from wrong mode
+    
+    // Solver Violations (Dynamic)
+    SOLVER_SINGULAR_MATRIX,  // LU decomposition failed (rank deficiency)
+    SOLVER_DIVERGENCE,       // Newton-Raphson failed to converge
+    SOLVER_TIMEOUT           // Simulation exceeded iteration/time limit
 };
 
 enum class Severity {
@@ -57,6 +62,8 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::FLOATING_GATE:
         case ViolationType::ILLEGAL_SOURCE:
         case ViolationType::ILLEGAL_DRIVER:
+        case ViolationType::SOLVER_SINGULAR_MATRIX:
+        case ViolationType::SOLVER_DIVERGENCE:
              return Severity::ERROR;
         case ViolationType::MISSING_PORTS:
         case ViolationType::MIXED_MODES:
@@ -64,6 +71,7 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::FLOATING_NODE:
         case ViolationType::MULTIPLE_DRIVERS:
         case ViolationType::OPEN_DRAIN:
+        case ViolationType::SOLVER_TIMEOUT:
             return Severity::WARNING;
         case ViolationType::NEAR_MISS:
             return Severity::INFO;
@@ -85,6 +93,9 @@ inline QString typeToString(ViolationType type) {
         case ViolationType::MISSING_PORTS: return "Missing Ports";
         case ViolationType::ILLEGAL_DRIVER: return "Illegal Driver (System Mode)";
         case ViolationType::MIXED_MODES: return "Mixed Mode Violation";
+        case ViolationType::SOLVER_SINGULAR_MATRIX: return "Singular Matrix (Solver)";
+        case ViolationType::SOLVER_DIVERGENCE: return "Divergence (Solver)";
+        case ViolationType::SOLVER_TIMEOUT: return "Timeout (Solver)";
         default: return "Unknown";
     }
 }

@@ -416,9 +416,9 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
         physics/quick_analysis.cpp
-        physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
+        gui/analysis/monte_carlo_setup_dialog.cpp
     )
     target_include_directories(test_auto_harness PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -484,6 +484,7 @@ if(NOT EMSCRIPTEN)
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
+        gui/analysis/monte_carlo_setup_dialog.cpp
     )
     target_include_directories(test_copilot_validate PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui

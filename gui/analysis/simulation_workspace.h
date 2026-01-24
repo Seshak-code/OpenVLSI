@@ -13,6 +13,7 @@
 #include "simulation_explorer.h"
 #include "simulation_profile.h"
 #include "../editors/schematic_editor.h"
+#include "../analysis/erc_engine.h"
 #include "../widgets/problems_panel.h"
 #include "../widgets/trust_badge_widget.h"
 #ifndef __EMSCRIPTEN__
@@ -63,6 +64,7 @@ signals:
     void logMessage(const QString& msg);
     void streamMessage(const QString& msg);
     void resultsReady(const QJsonObject& results);
+    void solverViolation(const ERC::Violation& violation);
     
 public slots:
     void runCurrent();

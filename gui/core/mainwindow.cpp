@@ -15,6 +15,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle("AcuteSim - ASIC Design Suite");
     resize(1280, 720);
     
+    // NASA Principle: Enable dock nesting for flexible workspace layout
+    // Allows up to 3-way horizontal splits of bottom panel docks (Results, Waveforms, etc.)
+    setDockNestingEnabled(true);
+    
     qDebug() << "[MW INIT] Creating DesignFlowManager...";
     // Initialize Design Flow Manager
     flowManager = new DesignFlowManager(this);
@@ -125,6 +129,34 @@ void MainWindow::setupCentralWidget() {
         if (streamingLog_) streamingLog_->appendPlainText(msg);
     });
     connect(simulationWorkspace, &SimulationWorkspace::resultsReady, this, &MainWindow::onSimulationResults);
+
+    // Connect solver violations to problems panel
+    connect(simulationWorkspace, &SimulationWorkspace::solverViolation, this, [this](const ERC::Violation& v) {
+        if (problemsPanel) {
+            // Get existing violations (if any) or just append
+            // ProblemsPanel::setViolations replaces the list, so we need to be careful
+            // Ideally we'd have addViolation, but for now let's assume valid flow:
+            // 1. Run starts -> clear()
+            // 2. Solver fails -> emits violation
+            // So we can just set a list containing this violation.
+            // Or better, if there were static ERC errors, we want to keep them?
+            // Usually simulation is blocked if static ERC errors exist, so this list starts empty or with warnings.
+            // Let's retrieve current violations from the active scene if possible?
+            
+            QList<ERC::Violation> violations; 
+            if (schematicEditor && schematicEditor->getScene()) {
+                 violations = schematicEditor->getScene()->getViolations();
+            }
+            violations.append(v);
+            problemsPanel->setViolations(violations);
+            
+            // Auto-focus problems tab
+            if (messagesDock) {
+                messagesDock->raise();
+                messagesDock->show();
+            }
+        }
+    });
     
     connect(simulationWorkspace, &SimulationWorkspace::simulationStarted, this, [this](const QString&) {
         // Clear panels before simulation run
@@ -262,6 +294,14 @@ void MainWindow::setupDocks() {
     createDebugSuggestionsDock();
     addDockWidget(Qt::BottomDockWidgetArea, debugSuggestionsDock);
     splitDockWidget(messagesDock, debugSuggestionsDock, Qt::Horizontal);
+    
+    // NASA Principle: Verify all bottom docks created successfully
+    // This catches initialization failures early rather than crashing later
+    Q_ASSERT(messagesDock && "Problems dock creation failed");
+    Q_ASSERT(outputDock_ && "Output dock creation failed");
+    Q_ASSERT(streamingDock_ && "Streaming dock creation failed");
+    Q_ASSERT(resultsDock_ && "Results dock creation failed");
+    Q_ASSERT(waveformDock_ && "Waveforms dock creation failed");
     
     // Make Problems tab active by default
     messagesDock->raise();
@@ -479,7 +519,8 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
 
 void MainWindow::createMessagesDock() {
     messagesDock = new QDockWidget("Problems", this);
-    messagesDock->setAllowedAreas(Qt::BottomDockWidgetArea);
+    // NASA: Allow all areas for flexible splitting within bottom panel
+    messagesDock->setAllowedAreas(Qt::AllDockWidgetAreas);
     
     problemsPanel = new ProblemsPanel(messagesDock);
     
@@ -513,7 +554,8 @@ void MainWindow::createMessagesDock() {
 
 void MainWindow::createOutputDock() {
     outputDock_ = new QDockWidget("Output", this);
-    outputDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    // NASA: Allow all areas for flexible splitting within bottom panel
+    outputDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
     
     outputLog_ = new QPlainTextEdit(outputDock_);
     outputLog_->setReadOnly(true);
@@ -523,7 +565,8 @@ void MainWindow::createOutputDock() {
 
 void MainWindow::createStreamingDock() {
     streamingDock_ = new QDockWidget("Streaming", this);
-    streamingDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    // NASA: Allow all areas for flexible splitting within bottom panel
+    streamingDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
     
     streamingLog_ = new QPlainTextEdit(streamingDock_);
     streamingLog_->setReadOnly(true);
@@ -533,7 +576,8 @@ void MainWindow::createStreamingDock() {
 
 void MainWindow::createResultsDock() {
     resultsDock_ = new QDockWidget("Results", this);
-    resultsDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    // NASA: Allow all areas for flexible splitting within bottom panel
+    resultsDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
     
     resultsTree_ = new QTreeWidget(resultsDock_);
     resultsTree_->setHeaderLabels({"Node", "Value"});
@@ -545,7 +589,8 @@ void MainWindow::createResultsDock() {
 
 void MainWindow::createWaveformDock() {
     waveformDock_ = new QDockWidget("Waveforms", this);
-    waveformDock_->setAllowedAreas(Qt::BottomDockWidgetArea);
+    // NASA: Allow all areas for flexible splitting within bottom panel
+    waveformDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
     
     waveformLog_ = new QPlainTextEdit(waveformDock_);
     waveformLog_->setReadOnly(true);
@@ -608,6 +653,13 @@ void MainWindow::setupMenus() {
     viewMenu->addAction(propertiesDock->toggleViewAction());
     viewMenu->addAction(aiDock->toggleViewAction());
     viewMenu->addAction(messagesDock->toggleViewAction());
+    
+    // Bottom Panel Docks - allow restoring closed/split panels
+    viewMenu->addAction(outputDock_->toggleViewAction());
+    viewMenu->addAction(streamingDock_->toggleViewAction());
+    viewMenu->addAction(resultsDock_->toggleViewAction());
+    viewMenu->addAction(waveformDock_->toggleViewAction());
+    if (debugSuggestionsDock) viewMenu->addAction(debugSuggestionsDock->toggleViewAction());
     viewMenu->addSeparator();
     
     // Quick Preview Toggle

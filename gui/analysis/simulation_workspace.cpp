@@ -688,6 +688,18 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
             } else {
                  appendStreamLog("   FAILED");
                  allConverged = false;
+                 
+                 // Emit Solver Violation
+                 ERC::ViolationType vType = ERC::ViolationType::SOLVER_DIVERGENCE;
+                 QString detail = QString::fromStdString(result.stats.error_detail);
+                 if (detail.contains("Singular Matrix", Qt::CaseInsensitive)) {
+                     vType = ERC::ViolationType::SOLVER_SINGULAR_MATRIX;
+                 }
+                 
+                 ERC::Violation v(vType, 
+                     QString("Solver Failed: %1 (Corner %2)").arg(detail).arg(corner.name), 
+                     QPoint(-9999, -9999));
+                 emit solverViolation(v);
             }
         }
         
@@ -744,8 +756,23 @@ void SimulationWorkspace::stepSimulation() {
         
         if (!result.stats.converged) {
             currentRun_.status = Simulation::SimulationRun::Status::FAILED;
-            currentRun_.failureReason = result.stats.error_detail.empty() ? 
+            QString reason = result.stats.error_detail.empty() ? 
                 "Transient step failed" : QString::fromStdString(result.stats.error_detail);
+            currentRun_.failureReason = reason;
+            
+            // Emit Solver Violation
+            ERC::ViolationType vType = ERC::ViolationType::SOLVER_DIVERGENCE;
+            if (reason.contains("Singular Matrix", Qt::CaseInsensitive)) {
+                vType = ERC::ViolationType::SOLVER_SINGULAR_MATRIX;
+            } else if (reason.contains("Time step underflow", Qt::CaseInsensitive)) {
+                 vType = ERC::ViolationType::SOLVER_TIMEOUT; // Or divergence?
+            }
+            
+            ERC::Violation v(vType, 
+                QString("Transient Failed at t=%1s: %2").arg(currentTime_).arg(reason), 
+                QPoint(-9999, -9999));
+            emit solverViolation(v);
+            
             simTimer_->stop();
             finishSimulation();
             return;
