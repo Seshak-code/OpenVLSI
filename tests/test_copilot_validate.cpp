@@ -2,9 +2,11 @@
 #include <QSignalSpy>
 #include <QTextEdit>
 #include <QLineEdit>
-#include "../gui/widgets/ai_assistant.h"
+#include "../gui/panels/ai_assistant_panel.h"
 #include "../gui/editors/schematic_editor.h"
 #include "../ai_api/system/schema_api.h"
+
+using acutesim::gui::panels::AiAssistantPanel;
 
 class CopilotValidateTest : public QObject {
     Q_OBJECT

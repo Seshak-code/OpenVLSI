@@ -30,6 +30,7 @@
 #include "problems_panel.h"
 #include "../orchestration/worker_status_panel.h"
 #include "../widgets/debug_suggestions_panel.h"
+#include "../widgets/command_palette.h"
 
 class HDLEditor;
 class WelcomeWidget;
@@ -168,7 +169,12 @@ private:
     
     // VS Code Style
     acutesim::gui::core::ActivityBar* activityBar_;
-    void setupActivityBar(); // Phase 13
+    acutesim::gui::widgets::CommandPalette* commandPalette_;
+    void setupActivityBar();
+    void setupCommandPalette();
+    void setupKeybindings();
+    void showCommandPalette();
+    void showKeybindingsDialog();
 
 private slots:
     void updateProperties(VisualComponent* item);

@@ -3,6 +3,8 @@
 #include "layout_manager.h"
 #include "docking_manager.h"
 #include "activity_bar.h"
+#include "keybinding_manager.h"
+#include "keybindings_dialog.h"
 #include <QApplication>
 #include <QHeaderView>
 #include <QStatusBar>
@@ -14,6 +16,7 @@
 #include <QInputDialog>
 #include <QToolButton>
 #include <QMenu>
+#include <QShortcut>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     qDebug() << "[MW INIT] Constructor start";
@@ -49,6 +52,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     
     qDebug() << "[MW INIT] setupStageToolbar...";
     setupStageToolbar();
+
+    qDebug() << "[MW INIT] setupCommandPalette...";
+    setupCommandPalette();
 
     // 4. Status Bar
     statusBar()->showMessage("Ready - RTL Design Stage");
@@ -385,8 +391,29 @@ void MainWindow::createProjectDock() {
     projectView->setColumnHidden(3, true); // Hide Date
     projectView->setAlternatingRowColors(true);
     
-    // Style
-    projectView->setStyleSheet("QTreeView { font-size: 11pt; }");
+    // High-density style for project explorer
+    projectView->setStyleSheet(R"(
+        QTreeView {
+            font-size: 11px;
+            background: transparent;
+            border: none;
+            outline: none;
+        }
+        QTreeView::item {
+            padding: 2px 4px;
+            border: none;
+        }
+        QTreeView::item:hover { background: #2a2d2e; }
+        QTreeView::item:selected { background: #094771; }
+        QTreeView::branch { border: none; }
+        QHeaderView::section {
+            background: #252526;
+            color: #888;
+            border: none;
+            padding: 4px;
+            font-size: 10px;
+        }
+    )");
     
     // Connect double click to open (Action placeholder)
     connect(projectView, &QTreeView::doubleClicked, this, [this](const QModelIndex& index){
@@ -430,7 +457,30 @@ void MainWindow::createPropertiesDock() {
     propertiesTable->setHorizontalHeaderLabels({"Property", "Value"});
     propertiesTable->horizontalHeader()->setStretchLastSection(true);
     propertiesTable->verticalHeader()->setVisible(false);
-    propertiesTable->setAlternatingRowColors(true);
+    propertiesTable->setAlternatingRowColors(false);
+
+    // High-density styling for properties table
+    propertiesTable->setStyleSheet(R"(
+        QTableWidget {
+            background: transparent;
+            border: none;
+            font-size: 11px;
+            gridline-color: #333;
+        }
+        QTableWidget::item {
+            padding: 2px 4px;
+            border: none;
+        }
+        QTableWidget::item:selected { background: #094771; }
+        QHeaderView::section {
+            background: #252526;
+            color: #888;
+            border: none;
+            padding: 3px 4px;
+            font-size: 10px;
+        }
+    )");
+    propertiesTable->verticalHeader()->setDefaultSectionSize(22); // Compact row height
     
     // Example placeholder
     propertiesTable->setRowCount(3);
@@ -717,6 +767,8 @@ void MainWindow::setupMenus() {
     QMenu* editMenu = mb->addMenu("&Edit");
     editMenu->addAction("Undo");
     editMenu->addAction("Redo");
+    editMenu->addSeparator();
+    editMenu->addAction("Keyboard Shortcuts...", this, &MainWindow::showKeybindingsDialog);
 
     // View
     QMenu* viewMenu = mb->addMenu("&View");
@@ -1168,4 +1220,408 @@ void MainWindow::setupActivityBar() {
     activityBar_->setActive("explorer");
     currentSidebarId = "explorer";
     if (projectDock) projectDock->show();
+}
+
+void MainWindow::setupCommandPalette() {
+    using namespace acutesim::gui::widgets;
+
+    commandPalette_ = new CommandPalette(this);
+
+    // Register common commands
+    CommandPalette::Command cmd;
+
+    // File commands
+    cmd.id = "file.new";
+    cmd.label = "New Project";
+    cmd.category = "File";
+    cmd.shortcut = "Ctrl+N";
+    cmd.callback = [this]() { newProject(); };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "file.open";
+    cmd.label = "Open Project";
+    cmd.category = "File";
+    cmd.shortcut = "Ctrl+O";
+    cmd.callback = [this]() { openProject(); };
+    commandPalette_->registerCommand(cmd);
+
+    // View commands
+    cmd.id = "view.explorer";
+    cmd.label = "Show Explorer";
+    cmd.category = "View";
+    cmd.shortcut = "Ctrl+Shift+E";
+    cmd.callback = [this]() {
+        if (activityBar_) activityBar_->setActive("explorer");
+        if (projectDock) projectDock->show();
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "view.components";
+    cmd.label = "Show Components";
+    cmd.category = "View";
+    cmd.shortcut = "Ctrl+Shift+C";
+    cmd.callback = [this]() {
+        if (activityBar_) activityBar_->setActive("components");
+        if (libraryDock) libraryDock->show();
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "view.copilot";
+    cmd.label = "Show AI Copilot";
+    cmd.category = "View";
+    cmd.shortcut = "Ctrl+Shift+A";
+    cmd.callback = [this]() {
+        if (aiDock) {
+            aiDock->show();
+            aiDock->raise();
+        }
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "view.problems";
+    cmd.label = "Show Problems Panel";
+    cmd.category = "View";
+    cmd.shortcut = "Ctrl+Shift+M";
+    cmd.callback = [this]() {
+        if (messagesDock) {
+            messagesDock->show();
+            messagesDock->raise();
+        }
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "view.output";
+    cmd.label = "Show Output Panel";
+    cmd.category = "View";
+    cmd.shortcut = "Ctrl+Shift+U";
+    cmd.callback = [this]() {
+        if (outputDock_) {
+            outputDock_->show();
+            outputDock_->raise();
+        }
+    };
+    commandPalette_->registerCommand(cmd);
+
+    // Simulation commands
+    cmd.id = "simulation.run";
+    cmd.label = "Run Simulation";
+    cmd.category = "Simulation";
+    cmd.shortcut = "F5";
+    cmd.callback = [this]() { runSimulation(); };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "simulation.runQuickDC";
+    cmd.label = "Run Quick DC Analysis";
+    cmd.category = "Simulation";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        if (simulationWorkspace) simulationWorkspace->runQuickDC();
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "simulation.stop";
+    cmd.label = "Stop Simulation";
+    cmd.category = "Simulation";
+    cmd.shortcut = "Shift+F5";
+    cmd.callback = [this]() {
+        if (simulationWorkspace) simulationWorkspace->stopSimulation();
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "simulation.configureCorners";
+    cmd.label = "Configure PVT Corners";
+    cmd.category = "Simulation";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        if (simulationWorkspace) simulationWorkspace->configureCorners();
+    };
+    commandPalette_->registerCommand(cmd);
+
+    // Schematic commands
+    cmd.id = "schematic.runERC";
+    cmd.label = "Run ERC Check";
+    cmd.category = "Schematic";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        if (schematicEditor) schematicEditor->runERC();
+    };
+    commandPalette_->registerCommand(cmd);
+
+    // Sync commands
+    cmd.id = "sync.toHDL";
+    cmd.label = "Schematic to HDL";
+    cmd.category = "Sync";
+    cmd.shortcut = "";
+    cmd.callback = [this]() { syncSchematicToVerilog(); };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "sync.fromHDL";
+    cmd.label = "HDL to Schematic";
+    cmd.category = "Sync";
+    cmd.shortcut = "";
+    cmd.callback = [this]() { syncVerilogToSchematic(); };
+    commandPalette_->registerCommand(cmd);
+
+    // Layout commands
+    cmd.id = "layout.reset";
+    cmd.label = "Reset Window Layout";
+    cmd.category = "Layout";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        acutesim::gui::core::LayoutManager::instance().resetToFactory();
+        statusBar()->showMessage("Window layout reset to default", 3000);
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "layout.save";
+    cmd.label = "Save Layout As...";
+    cmd.category = "Layout";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        QString name = QInputDialog::getText(this, "Save Layout",
+            "Enter layout name:", QLineEdit::Normal, "My Layout");
+        if (!name.isEmpty()) {
+            acutesim::gui::core::LayoutManager::instance().saveLayoutAs(name, this);
+            statusBar()->showMessage("Layout saved: " + name, 3000);
+        }
+    };
+    commandPalette_->registerCommand(cmd);
+
+    // Built-in layout presets
+    cmd.id = "layout.default";
+    cmd.label = "Layout: Default";
+    cmd.category = "Layout";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        acutesim::gui::core::LayoutManager::instance().loadLayout("default", this);
+        statusBar()->showMessage("Switched to Default layout", 3000);
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "layout.analog_debug";
+    cmd.label = "Layout: Analog Debugging";
+    cmd.category = "Layout";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        acutesim::gui::core::LayoutManager::instance().loadLayout("analog_debug", this);
+        // Optimize for analog: show waveform, hide project explorer
+        if (waveformDock_) { waveformDock_->show(); waveformDock_->raise(); }
+        if (projectDock) projectDock->hide();
+        if (activityBar_) activityBar_->setActive("components");
+        statusBar()->showMessage("Switched to Analog Debugging layout", 3000);
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "layout.rtl_synthesis";
+    cmd.label = "Layout: RTL Synthesis";
+    cmd.category = "Layout";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        acutesim::gui::core::LayoutManager::instance().loadLayout("rtl_synthesis", this);
+        // Show HDL editor, hide waveform
+        if (hdlToggleAction) hdlToggleAction->setChecked(true);
+        if (waveformDock_) waveformDock_->hide();
+        statusBar()->showMessage("Switched to RTL Synthesis layout", 3000);
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "layout.simulation";
+    cmd.label = "Layout: Simulation Focus";
+    cmd.category = "Layout";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        acutesim::gui::core::LayoutManager::instance().loadLayout("simulation", this);
+        // Show all bottom panels
+        if (waveformDock_) { waveformDock_->show(); waveformDock_->raise(); }
+        if (outputDock_) outputDock_->show();
+        if (messagesDock) messagesDock->show();
+        statusBar()->showMessage("Switched to Simulation Focus layout", 3000);
+    };
+    commandPalette_->registerCommand(cmd);
+
+    cmd.id = "layout.minimal";
+    cmd.label = "Layout: Minimal";
+    cmd.category = "Layout";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        acutesim::gui::core::LayoutManager::instance().loadLayout("minimal", this);
+        // Hide all side panels for maximum canvas
+        if (projectDock) projectDock->hide();
+        if (libraryDock) libraryDock->hide();
+        if (aiDock) aiDock->hide();
+        if (waveformDock_) waveformDock_->hide();
+        if (outputDock_) outputDock_->hide();
+        if (messagesDock) messagesDock->hide();
+        if (activityBar_) activityBar_->setActive("");
+        statusBar()->showMessage("Switched to Minimal layout", 3000);
+    };
+    commandPalette_->registerCommand(cmd);
+
+    // Register keybindings using the centralized KeybindingManager
+    setupKeybindings();
+}
+
+void MainWindow::setupKeybindings() {
+    using namespace acutesim::gui::core;
+    auto& km = KeybindingManager::instance();
+
+    // =========================================================================
+    // General / Global
+    // =========================================================================
+    km.registerCallback("general.commandPalette", "Command Palette", "General",
+                       QKeySequence("Ctrl+Shift+P"),
+                       [this]() { showCommandPalette(); }, this, "global");
+
+    km.registerCallback("general.help", "Help / Command Palette", "General",
+                       QKeySequence("F1"),
+                       [this]() { showCommandPalette(); }, this, "global");
+
+    km.registerCallback("general.keybindings", "Keyboard Shortcuts", "General",
+                       QKeySequence("Ctrl+K Ctrl+S"),
+                       [this]() { showKeybindingsDialog(); }, this, "global");
+
+    // =========================================================================
+    // File Operations
+    // =========================================================================
+    km.registerCallback("file.newProject", "New Project", "File",
+                       QKeySequence("Ctrl+N"),
+                       [this]() { newProject(); }, this, "global");
+
+    km.registerCallback("file.openProject", "Open Project", "File",
+                       QKeySequence("Ctrl+O"),
+                       [this]() { openProject(); }, this, "global");
+
+    km.registerCallback("file.save", "Save", "File",
+                       QKeySequence("Ctrl+S"),
+                       [this]() { statusBar()->showMessage("Saved", 2000); }, this, "global");
+
+    // =========================================================================
+    // Simulation
+    // =========================================================================
+    km.registerCallback("simulation.run", "Run Simulation", "Simulation",
+                       QKeySequence("F5"),
+                       [this]() {
+                           if (simulationWorkspace) {
+                               // Access simulation via workspace if available
+                               statusBar()->showMessage("Running simulation...", 2000);
+                           }
+                       }, this, "global");
+
+    km.registerCallback("simulation.stop", "Stop Simulation", "Simulation",
+                       QKeySequence("Shift+F5"),
+                       [this]() {
+                           statusBar()->showMessage("Stopping simulation...", 2000);
+                       }, this, "global");
+
+    km.registerCallback("simulation.runERC", "Run ERC Check", "Simulation",
+                       QKeySequence("Ctrl+Shift+E"),
+                       [this]() {
+                           if (schematicEditor) {
+                               QStringList violations = schematicEditor->runERC();
+                               if (violations.isEmpty()) {
+                                   statusBar()->showMessage("ERC passed - no violations", 2000);
+                               } else {
+                                   statusBar()->showMessage(QString("ERC found %1 violations").arg(violations.size()), 2000);
+                               }
+                           }
+                       }, this, "global");
+
+    // =========================================================================
+    // View / Layout
+    // =========================================================================
+    km.registerCallback("view.toggleSidebar", "Toggle Sidebar", "View",
+                       QKeySequence("Ctrl+B"),
+                       [this]() {
+                           if (projectDock && projectDock->isVisible()) {
+                               projectDock->hide();
+                               if (libraryDock) libraryDock->hide();
+                           } else {
+                               if (projectDock) projectDock->show();
+                           }
+                       }, this, "global");
+
+    km.registerCallback("view.toggleBottomPanel", "Toggle Bottom Panel", "View",
+                       QKeySequence("Ctrl+J"),
+                       [this]() {
+                           bool anyVisible = (outputDock_ && outputDock_->isVisible()) ||
+                                           (messagesDock && messagesDock->isVisible());
+                           if (anyVisible) {
+                               if (outputDock_) outputDock_->hide();
+                               if (messagesDock) messagesDock->hide();
+                               if (resultsDock_) resultsDock_->hide();
+                           } else {
+                               if (outputDock_) outputDock_->show();
+                           }
+                       }, this, "global");
+
+    km.registerCallback("view.zoomIn", "Zoom In", "View",
+                       QKeySequence("Ctrl+="),
+                       [this]() {
+                           if (schematicEditor && schematicEditor->getView()) {
+                               schematicEditor->getView()->scale(1.2, 1.2);
+                           }
+                       }, this, "editor");
+
+    km.registerCallback("view.zoomOut", "Zoom Out", "View",
+                       QKeySequence("Ctrl+-"),
+                       [this]() {
+                           if (schematicEditor && schematicEditor->getView()) {
+                               schematicEditor->getView()->scale(1.0/1.2, 1.0/1.2);
+                           }
+                       }, this, "editor");
+
+    km.registerCallback("view.fitToWindow", "Fit to Window", "View",
+                       QKeySequence("Ctrl+0"),
+                       [this]() {
+                           if (schematicEditor && schematicEditor->getView() && schematicEditor->getScene()) {
+                               schematicEditor->getView()->fitInView(schematicEditor->getScene()->sceneRect(), Qt::KeepAspectRatio);
+                           }
+                       }, this, "editor");
+
+    // =========================================================================
+    // Editor
+    // =========================================================================
+    km.registerCallback("editor.delete", "Delete Selected", "Editor",
+                       QKeySequence("Delete"),
+                       [this]() {
+                           if (schematicEditor && schematicEditor->getScene()) {
+                               // Delete selected items from scene
+                               QList<QGraphicsItem*> selected = schematicEditor->getScene()->selectedItems();
+                               for (auto* item : selected) {
+                                   schematicEditor->getScene()->removeItem(item);
+                                   delete item;
+                               }
+                           }
+                       }, this, "editor");
+
+    km.registerCallback("editor.selectAll", "Select All", "Editor",
+                       QKeySequence("Ctrl+A"),
+                       [this]() {
+                           if (schematicEditor && schematicEditor->getScene()) {
+                               for (auto* item : schematicEditor->getScene()->items()) {
+                                   item->setSelected(true);
+                               }
+                           }
+                       }, this, "editor");
+
+    km.registerCallback("editor.escape", "Cancel / Deselect", "Editor",
+                       QKeySequence("Escape"),
+                       [this]() {
+                           if (schematicEditor && schematicEditor->getScene()) {
+                               schematicEditor->getScene()->clearSelection();
+                           }
+                       }, this, "editor");
+
+    qDebug() << "[MW] Keybindings registered:" << km.getAllBindings().size();
+}
+
+void MainWindow::showCommandPalette() {
+    if (commandPalette_) {
+        commandPalette_->show();
+    }
+}
+
+void MainWindow::showKeybindingsDialog() {
+    acutesim::gui::widgets::KeybindingsDialog dialog(this);
+    dialog.exec();
 }

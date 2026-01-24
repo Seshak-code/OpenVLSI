@@ -166,7 +166,8 @@ public:
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
     
     GridScene* getScene() const { return scene; }
-    
+    SchematicView* getView() const { return view; }
+
     // Navigation helpers
     void centerOn(qreal x, qreal y) { if (view) view->centerOn(x, y); }
     void highlightComponent(const QString& name);

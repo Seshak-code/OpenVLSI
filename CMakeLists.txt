@@ -110,6 +110,8 @@ add_executable(${PROJECT_NAME}
     gui/core/platform_helper.h
     gui/core/activity_bar.cpp
     gui/core/activity_bar.h
+    gui/core/keybinding_manager.cpp
+    gui/core/keybinding_manager.h
     gui/editors/schematic_editor.cpp
     gui/editors/schematic_editor_sync.cpp
     gui/editors/schematic_editor.h
@@ -194,6 +196,8 @@ add_executable(${PROJECT_NAME}
     gui/widgets/output_dock_widget.h
     gui/widgets/waveform_widget.cpp
     gui/widgets/waveform_widget.h
+    gui/widgets/command_palette.cpp
+    gui/widgets/command_palette.h
     gui/styling/theme_manager.cpp
     gui/styling/theme_manager.h
     gui/panels/ai_assistant_panel.cpp
@@ -202,6 +206,8 @@ add_executable(${PROJECT_NAME}
     gui/widgets/ghost_diff_viewer.h
     gui/widgets/toast_manager.cpp
     gui/widgets/toast_manager.h
+    gui/widgets/keybindings_dialog.cpp
+    gui/widgets/keybindings_dialog.h
     components/circuit.h
 )
 
@@ -463,6 +469,16 @@ if(NOT EMSCRIPTEN)
         gui/core/platform_helper.cpp
         gui/core/activity_bar.cpp
         gui/core/activity_bar.h
+        gui/widgets/command_palette.cpp
+        gui/widgets/command_palette.h
+        gui/widgets/ghost_diff_viewer.cpp
+        gui/widgets/ghost_diff_viewer.h
+        gui/widgets/toast_manager.cpp
+        gui/widgets/toast_manager.h
+        gui/core/keybinding_manager.cpp
+        gui/core/keybinding_manager.h
+        gui/widgets/keybindings_dialog.cpp
+        gui/widgets/keybindings_dialog.h
     )
     target_include_directories(test_auto_harness PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -536,6 +552,18 @@ if(NOT EMSCRIPTEN)
         gui/widgets/output_dock_widget.cpp
         gui/widgets/terminal_widget.cpp
         gui/core/platform_helper.cpp
+        gui/core/activity_bar.cpp
+        gui/core/activity_bar.h
+        gui/widgets/command_palette.cpp
+        gui/widgets/command_palette.h
+        gui/widgets/ghost_diff_viewer.cpp
+        gui/widgets/ghost_diff_viewer.h
+        gui/widgets/toast_manager.cpp
+        gui/widgets/toast_manager.h
+        gui/core/keybinding_manager.cpp
+        gui/core/keybinding_manager.h
+        gui/widgets/keybindings_dialog.cpp
+        gui/widgets/keybindings_dialog.h
     )
     target_include_directories(test_copilot_validate PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -691,8 +719,16 @@ target_link_libraries(test_gui_logic PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6
 add_test(NAME test_gui_logic COMMAND test_gui_logic)
 
 # Phase 11.2 Docking Interaction Test
-add_executable(test_docking_interaction tests/test_docking_interaction.cpp gui/core/layout_manager.cpp gui/widgets/terminal_widget.cpp gui/widgets/output_dock_widget.cpp gui/widgets/waveform_widget.cpp gui/styling/theme_manager.cpp gui/core/docking_manager.cpp)
-target_include_directories(test_docking_interaction PRIVATE 
+add_executable(test_docking_interaction
+    tests/test_docking_interaction.cpp
+    gui/core/layout_manager.cpp
+    gui/widgets/terminal_widget.cpp
+    gui/widgets/output_dock_widget.cpp
+    gui/widgets/waveform_widget.cpp
+    gui/styling/theme_manager.cpp
+    gui/core/platform_helper.cpp
+)
+target_include_directories(test_docking_interaction PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/styling

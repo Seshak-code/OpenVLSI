@@ -11,9 +11,38 @@ ComponentLibrary::ComponentLibrary(QWidget* parent) : QWidget(parent) {
 void ComponentLibrary::setupUi() {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
     tabs = new QTabWidget(this);
     layout->addWidget(tabs);
+
+    // High-density styling for tabs
+    tabs->setStyleSheet(R"(
+        QTabWidget::pane { border: none; }
+        QTabBar::tab {
+            padding: 4px 8px;
+            font-size: 11px;
+            min-width: 40px;
+        }
+        QTabBar::tab:selected { background: #37373d; }
+        QTabBar::tab:hover { background: #2a2d2e; }
+    )");
+
+    // High-density list widget style
+    QString listStyle = R"(
+        QListWidget {
+            background: transparent;
+            border: none;
+            font-size: 11px;
+            outline: none;
+        }
+        QListWidget::item {
+            padding: 3px 6px;
+            border: none;
+        }
+        QListWidget::item:hover { background: #2a2d2e; }
+        QListWidget::item:selected { background: #094771; }
+    )";
 
     basicList = new QListWidget();
     activeList = new QListWidget();
@@ -21,6 +50,22 @@ void ComponentLibrary::setupUi() {
     interfacesList = new QListWidget();
     systemList = new QListWidget();
     icsList = new QListWidget();
+
+    // Apply compact styling to all lists
+    basicList->setStyleSheet(listStyle);
+    activeList->setStyleSheet(listStyle);
+    sourcesList->setStyleSheet(listStyle);
+    interfacesList->setStyleSheet(listStyle);
+    systemList->setStyleSheet(listStyle);
+    icsList->setStyleSheet(listStyle);
+
+    // Set uniform item heights for density
+    basicList->setUniformItemSizes(true);
+    activeList->setUniformItemSizes(true);
+    sourcesList->setUniformItemSizes(true);
+    interfacesList->setUniformItemSizes(true);
+    systemList->setUniformItemSizes(true);
+    icsList->setUniformItemSizes(true);
 
     tabs->addTab(basicList, "Basic");
     tabs->addTab(activeList, "Active");
