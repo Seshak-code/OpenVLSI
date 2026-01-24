@@ -10,4 +10,5 @@ public:
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
+    bool viewportEvent(QEvent* event) override;
 };

@@ -6,6 +6,7 @@
 #include <QNativeGestureEvent>
 #include <QScrollBar>
 #include <QDebug>
+#include <QLabel>
 #include "../../gui/styling/theme_manager.h"
 
 // ============================================================================
@@ -21,7 +22,7 @@ WaveformWidget::WaveformWidget(QWidget* parent) : QWidget(parent) {
     toolbar_->setIconSize(QSize(16, 16));
     
     toggleModeAction_ = toolbar_->addAction("Promote to Tab");
-    toggleModeAction_->setIcon(QIcon::fromTheme("view-fullscreen")); // Placeholder icon
+    toggleModeAction_->setIcon(QIcon::fromTheme("view-fullscreen")); 
     connect(toggleModeAction_, &QAction::triggered, this, &WaveformWidget::onToggleViewMode);
     
     toolbar_->addSeparator();
@@ -29,9 +30,14 @@ WaveformWidget::WaveformWidget(QWidget* parent) : QWidget(parent) {
 
     layout->addWidget(toolbar_);
 
-    // View
-    view_ = new WaveformView(this);
-    layout->addWidget(view_);
+    // View (Placeholder to prevent WASM crash)
+    QLabel* placeholder = new QLabel("Waveform View Loading...", this);
+    placeholder->setAlignment(Qt::AlignCenter);
+    placeholder->setStyleSheet("color: #888;");
+    layout->addWidget(placeholder);
+    
+    // view_ = new WaveformView(this);
+    // layout->addWidget(view_);
     
     // Style
     auto& tm = acutesim::gui::styling::ThemeManager::instance();
@@ -81,7 +87,8 @@ WaveformView::WaveformView(QWidget* parent) : QGraphicsView(parent) {
     setScene(scene_);
     
     curveItem_ = new QGraphicsPathItem();
-    QPen pen(Qt::green);
+    auto& tm = acutesim::gui::styling::ThemeManager::instance();
+    QPen pen(tm.getColor("schematic.wire"));
     // Phase 11.4: Strict Cosmetic Contract
     // Width 0 means 1 physical pixel on device (ignores zoom)
     // Width 1 means 1 logical unit (scales with zoom)
@@ -99,6 +106,9 @@ WaveformView::WaveformView(QWidget* parent) : QGraphicsView(parent) {
     setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     setDragMode(QGraphicsView::RubberBandDrag); // Or ScrollHandDrag
+    
+    // Set Background
+    setBackgroundBrush(tm.getColor("schematic.background"));
 }
 
 void WaveformView::setData(const QVector<QPointF>& data) {

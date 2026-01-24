@@ -3,6 +3,12 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include "visual_component.h"
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QFile>
+#include <QKeyEvent> // For input testing
+#include <QFileInfo>
+#include <QDir>
 #include "../../gui/styling/theme_manager.h"
 #include "../../gui/core/platform_helper.h"
 
@@ -18,6 +24,13 @@ public:
         // Simple logic for test: valid if we have > 0 items
         return items().size() > 0; 
     }
+};
+
+// Wrapper to expose protected event handler for testing
+class TestableComponent : public VisualComponent {
+public:
+    TestableComponent(ComponentType t) : VisualComponent(t) {}
+    using VisualComponent::keyPressEvent; // Expose protected
 };
 
 class TestGuiLogic : public QObject {
@@ -355,7 +368,200 @@ private slots:
         t = view.transform();
         QVERIFY(qAbs(t.m11() - t.m22()) < 0.001);
     }
+    
+    // 13. Verify Phase 11.5: Theme Registry & JSON Loading
+    void testThemeRegistryAndJson() {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        
+        // Load High Contrast JSON (Mock path or resource)
+        // Since we don't have resource system fully mocked in test, we might fallback 
+        // to manual file creation or use the internal method.
+        
+        // 1. Internal High Contrast Fallback
+        tm.loadHighContrastTheme();
+        QCOMPARE(tm.currentTheme(), "High Contrast");
+        
+        // Verify Token Existence
+        QColor bg = tm.getColor("ui.background");
+        QVERIFY(bg == Qt::black); // #000000
+        
+        // Verify Contrast Ratio Logic
+        double ratio = tm.getContrastRatio(Qt::white, Qt::black); // 21:1
+        QVERIFY(ratio > 20.0);
+        
+        // Verify Helper
+        QVERIFY(tm.validateContrast(Qt::white, Qt::black, true)); // Pass AAA
+        QVERIFY(!tm.validateContrast(QColor(50,50,50), Qt::black, false)); // Fail Low Contrast
+    }
+    
+    // 14. Verify Atomic Theme Switching (Stability)
+    void testAtomicThemeSwitching() {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        tm.loadTheme("Dark"); // Reset
+        QString original = tm.currentTheme();
+        
+        // Attempt load invalid JSON
+        bool success = tm.loadThemeFromJson("invalid/path.json");
+        QVERIFY(!success);
+        
+        // Assert state did not change
+        QCOMPARE(tm.currentTheme(), original);
+        QCOMPARE(tm.getColor("ui.background").name(), "#1e1e1e");
+    }
+
+    // 15. Verify Theme Inheritance & Override
+    void testThemeInheritance() {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        
+        // Create Parent Theme
+        QFile parent("parent_theme.json");
+        if (parent.open(QIODevice::WriteOnly)) {
+            QJsonObject root;
+            root["name"] = "Parent";
+            QJsonObject colors;
+            colors["ui.background"] = "#111111"; // Specific Color
+            colors["ui.text"] = "#aaaaaa"; 
+            // Add required tokens to satisfy registry (or let validation fill defaults, but better to be clean)
+            // But validation only checks final map.
+            root["colors"] = colors;
+            parent.write(QJsonDocument(root).toJson());
+            parent.close();
+        }
+        
+        // Create Child Theme
+        QFile child("child_theme.json");
+        if (child.open(QIODevice::WriteOnly)) {
+            QJsonObject root;
+            root["name"] = "Child";
+            root["extends"] = "parent_theme"; // Refers to parent_theme.json
+            QJsonObject colors;
+            colors["ui.text"] = "#ffffff"; // Override text, inherit background
+            root["colors"] = colors;
+            child.write(QJsonDocument(root).toJson());
+            child.close();
+        }
+        
+        // Load Child (use absolute path to be sure)
+        QFileInfo childInfo("child_theme.json");
+        bool success = tm.loadThemeFromJson(childInfo.absoluteFilePath());
+        QVERIFY(success);
+        
+        // Verify Inheritance
+        QCOMPARE(tm.currentTheme(), "Child");
+        QCOMPARE(tm.getColor("ui.background").name(), "#111111"); // Inherited
+        QCOMPARE(tm.getColor("ui.text").name(), "#ffffff"); // Overridden
+        
+        // Cleanup - remove files
+        // (If test fails, these might persist, but that's typical for temp file tests)
+        parent.remove();
+        child.remove();
+    }
+
+
+    // 16. Verify Theme System Stress & Resilience (Phase 11.5)
+    void testStressThemeSwitching() {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        
+        // 1. Create a set of temporary theme files
+        QStringList themes;
+        for (int i = 0; i < 5; ++i) {
+             QString name = QString("stress_theme_%1").arg(i);
+             QString filename = name + ".json";
+             QFile f(filename);
+             if (f.open(QIODevice::WriteOnly)) {
+                 QJsonObject root;
+                 root["name"] = name;
+                 QJsonObject colors;
+                 // Varied colors
+                 colors["ui.background"] = (i % 2 == 0) ? "#000000" : "#ffffff";
+                 colors["ui.text"] = "#888888";
+                 root["colors"] = colors;
+                 f.write(QJsonDocument(root).toJson());
+                 f.close();
+                 themes << f.fileName();
+             }
+        }
+        
+        // 2. Loop load (Stress)
+        QFileInfo info(themes[0]);
+        QString absPath = info.absolutePath(); // Dir
+        
+        // We will toggle rapidly between them
+        for (int k = 0; k < 50; ++k) {
+            int idx = k % themes.size();
+            QFileInfo tInfo(themes[idx]);
+            bool result = tm.loadThemeFromJson(tInfo.absoluteFilePath());
+            QVERIFY(result);
+            QCOMPARE(tm.currentTheme(), QString("stress_theme_%1").arg(idx));
+            
+            // Verify Consistency immediately
+            QColor expectedBg = (idx % 2 == 0) ? QColor("#000000") : QColor("#ffffff");
+            QCOMPARE(tm.getColor("ui.background"), expectedBg);
+        }
+        
+        // 3. Cleanup
+        for (const QString& f : themes) {
+            QFile::remove(f);
+        }
+        
+        // 4. Verify Fallback after stress
+        tm.loadTheme("Dark");
+        QCOMPARE(tm.getColor("ui.background").name(), "#1e1e1e");
+    }
+    // 17. Verify Ghost Rendering & State (Phase 11.6)
+    void testGhostRendering() {
+         VisualComponent comp(ComponentType::Resistor);
+         
+         // 1. Initial State: None
+         QVERIFY(!comp.isGhost());
+         QVERIFY(comp.isNetlistMember());
+         
+         // 2. Set Ghost State
+         comp.setGhostState(GhostState::Preview);
+         QVERIFY(comp.isGhost());
+         QVERIFY(!comp.isNetlistMember()); // Must be excluded from simulation
+         
+         // 3. Verify Confidence
+         comp.ghostConfidence = 0.5f;
+         // Rendering logic is internal to paint(), tough to test pixel-perfectly here without rendering loop.
+         // But state is verificated.
+    }
+    
+
+
+    // 18. Verify Ghost Interaction (Tab-to-Accept)
+    void testGhostInteraction() {
+         GridScene scene;
+         TestableComponent* ghost = new TestableComponent(ComponentType::Resistor);
+         ghost->setGhostState(GhostState::Focused); // Ready to accept
+         scene.addItem(ghost);
+         
+         QVERIFY(ghost->isGhost());
+         
+         // Direct Event Call (Bypassing Scene/View machinery which is flakey in headless)
+         QKeyEvent tabEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
+         ghost->keyPressEvent(&tabEvent);
+         
+         // Should transition to Accepted, then back to None
+         QVERIFY(!ghost->isGhost()); 
+         QVERIFY(ghost->isNetlistMember());
+         QVERIFY(tabEvent.isAccepted());
+         
+         // Test Reject (Esc)
+         TestableComponent* rejectGhost = new TestableComponent(ComponentType::Capacitor);
+         rejectGhost->setGhostState(GhostState::Preview);
+         scene.addItem(rejectGhost);
+         
+         QKeyEvent escEvent(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+         rejectGhost->keyPressEvent(&escEvent);
+         
+         // Logic sets visible(false) or Rejected state
+         QCOMPARE(rejectGhost->ghostState, GhostState::Rejected);
+         QVERIFY(!rejectGhost->isVisible());
+         QVERIFY(escEvent.isAccepted());
+    }
+
 };
 
-QTEST_MAIN(TestGuiLogic)
+    QTEST_MAIN(TestGuiLogic)
 #include "test_gui_logic.moc"

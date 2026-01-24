@@ -108,6 +108,8 @@ add_executable(${PROJECT_NAME}
     gui/core/docking_manager.h
     gui/core/platform_helper.cpp
     gui/core/platform_helper.h
+    gui/core/activity_bar.cpp
+    gui/core/activity_bar.h
     gui/editors/schematic_editor.cpp
     gui/editors/schematic_editor_sync.cpp
     gui/editors/schematic_editor.h
@@ -117,8 +119,7 @@ add_executable(${PROJECT_NAME}
     gui/editors/component_wizard.h
     gui/components/visual_component.cpp
     gui/components/visual_component.h
-    gui/widgets/ai_assistant.cpp
-    gui/widgets/ai_assistant.h
+
     gui/widgets/component_library.cpp
     gui/widgets/component_library.h
     gui/editors/schematic_editor_api.cpp
@@ -143,6 +144,10 @@ add_executable(${PROJECT_NAME}
     physics/simulation_profile.h
     physics/quick_analysis.h
     physics/quick_analysis.cpp
+    physics/quick_analysis.cpp
+    gui/ai/ai_action_history.cpp
+    gui/ai/ai_action_history.h
+    gui/ai/ai_action_envelope.h
     gui/editors/hdl_editor.cpp
     gui/editors/hdl_editor.h
     gui/core/welcome_widget.cpp
@@ -191,6 +196,12 @@ add_executable(${PROJECT_NAME}
     gui/widgets/waveform_widget.h
     gui/styling/theme_manager.cpp
     gui/styling/theme_manager.h
+    gui/panels/ai_assistant_panel.cpp
+    gui/panels/ai_assistant_panel.h
+    gui/widgets/ghost_diff_viewer.cpp
+    gui/widgets/ghost_diff_viewer.h
+    gui/widgets/toast_manager.cpp
+    gui/widgets/toast_manager.h
     components/circuit.h
 )
 
@@ -243,7 +254,10 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
     ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/ai
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/panels
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}
@@ -258,6 +272,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 if(NOT EMSCRIPTEN)
     target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Concurrent)
+else()
+    # Export runtime methods but do NOT generate HTML (we manage it manually)
+    set_target_properties(${PROJECT_NAME} PROPERTIES 
+        LINK_OPTIONS "SHELL:-s EXPORTED_RUNTIME_METHODS=['printErr','ccall','cwrap'] -s ALLOW_MEMORY_GROWTH=1 -s ASSERTIONS=1"
+    )
 endif()
 
 # Link OpenMP only if found (and not Wasm)
@@ -402,7 +421,7 @@ if(NOT EMSCRIPTEN)
         gui/editors/component_wizard.cpp
         gui/editors/schematic_editor_api.cpp
         gui/editors/schematic_editor_sync.cpp
-        gui/widgets/ai_assistant.cpp
+        gui/panels/ai_assistant_panel.cpp
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
@@ -435,6 +454,15 @@ if(NOT EMSCRIPTEN)
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
         gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/styling/theme_manager.cpp
+        gui/core/layout_manager.cpp
+        gui/core/docking_manager.cpp
+        gui/widgets/waveform_widget.cpp
+        gui/widgets/output_dock_widget.cpp
+        gui/widgets/terminal_widget.cpp
+        gui/core/platform_helper.cpp
+        gui/core/activity_bar.cpp
+        gui/core/activity_bar.h
     )
     target_include_directories(test_auto_harness PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -468,7 +496,7 @@ if(NOT EMSCRIPTEN)
         gui/editors/component_wizard.cpp
         gui/editors/schematic_editor_api.cpp
         gui/editors/schematic_editor_sync.cpp
-        gui/widgets/ai_assistant.cpp
+        gui/panels/ai_assistant_panel.cpp
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
@@ -501,6 +529,13 @@ if(NOT EMSCRIPTEN)
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
         gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/styling/theme_manager.cpp
+        gui/core/layout_manager.cpp
+        gui/core/docking_manager.cpp
+        gui/widgets/waveform_widget.cpp
+        gui/widgets/output_dock_widget.cpp
+        gui/widgets/terminal_widget.cpp
+        gui/core/platform_helper.cpp
     )
     target_include_directories(test_copilot_validate PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui

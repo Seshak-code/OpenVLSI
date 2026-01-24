@@ -11,6 +11,7 @@
 #include <QMenu>
 #include <QAction>
 #include <QDateTime>
+#include "../../gui/styling/theme_manager.h"
 
 // ============================================================================
 // WIRE COMPONENT
@@ -44,7 +45,10 @@ GridScene::GridScene(QObject* parent) : QGraphicsScene(parent) {
 
 
 void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
-    painter->fillRect(rect, QColor("#1e1e1e")); 
+    auto& tm = acutesim::gui::styling::ThemeManager::instance();
+    QColor bg = tm.getColor("schematic.background");
+    if (!bg.isValid()) bg = tm.getColor("ui.background"); // Fallback
+    painter->fillRect(rect, bg); 
 
     if (!gridVisible) return;
 
@@ -83,14 +87,14 @@ void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
             }
         }
         
-        QPen gridPen(QColor(60, 60, 60));
+        QPen gridPen(tm.getColor("schematic.grid"));
         gridPen.setWidth(0); // Cosmetic (1px device independent)
         painter->setPen(gridPen);
         painter->drawPoints(points.data(), points.size());
     }
 
     // Draw Axes (Origin)
-    QPen axisPen(QColor(100, 100, 100));
+    QPen axisPen(tm.getColor("ui.border"));
     axisPen.setWidth(0); // 1px cosmetic
     painter->setPen(axisPen);
     painter->drawLine(0, top, 0, bottom);
@@ -482,7 +486,7 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
     }
     
     painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor(30, 30, 30)); // Dark grey junction dots
+    painter->setBrush(acutesim::gui::styling::ThemeManager::instance().getColor("schematic.wire")); // Match wire color
     for (auto it = junctionCounts.begin(); it != junctionCounts.end(); ++it) {
         if (it.value() >= 3) {
             painter->drawEllipse(QPointF(it.key().first, it.key().second), 4, 4);

@@ -34,7 +34,9 @@ OutputDockWidget::OutputDockWidget(const QString& title, QWidget* parent)
     // Editor
     textEdit_ = new QPlainTextEdit(container);
     textEdit_->setReadOnly(true);
-    textEdit_->setStyleSheet("font-family: Consolas, monospace; border: none; font-size: 9pt;");
+    textEdit_->setStyleSheet(QString("font-family: Consolas, monospace; border: none; font-size: 9pt; background-color: %1; color: %2;")
+                             .arg(tm.getColor("ui.background").name())
+                             .arg(tm.getColor("ui.text").name()));
     layout->addWidget(textEdit_);
 
     setWidget(container);

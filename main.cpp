@@ -38,6 +38,11 @@ int main(int argc, char *argv[]) {
   }
 
   QApplication app(argc, argv);
+  
+  // Explicit Version Log
+  qDebug() << "==========================================";
+  qDebug() << "   AcuteSim WASM - Build ID: 22264 (Fixed)";
+  qDebug() << "==========================================";
 
   // Qt styling
   app.setStyle("Fusion");

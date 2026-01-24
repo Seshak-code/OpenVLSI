@@ -1,20 +1,21 @@
 #include "docking_manager.h"
-#include "docking_manager.h"
 #include "../widgets/output_dock_widget.h"
 #include "../widgets/waveform_widget.h"
-#include <QLabel> // For placeholder content if needed
+#include "../widgets/problems_panel.h"
+#include "../widgets/debug_suggestions_panel.h"
+#include <QLabel>
+#include <QSplitter>
+#include <QTreeWidget>
 
 DockingManager::DockingManager(QMainWindow* mainWindow) 
     : QObject(mainWindow), mainWindow_(mainWindow) 
 {
-    // NASA Principle: Fail early if parent is null
     Q_ASSERT(mainWindow_);
 }
 
 QDockWidget* DockingManager::createDock(const QString& id, const QString& title, QWidget* innerWidget, Qt::DockWidgetArea defaultArea) {
     QDockWidget* dock = new QDockWidget(title, mainWindow_);
     dock->setObjectName(id);
-    // User Requirement: Allow docking anywhere
     dock->setAllowedAreas(Qt::AllDockWidgetAreas);
     dock->setWidget(innerWidget);
     
@@ -24,20 +25,45 @@ QDockWidget* DockingManager::createDock(const QString& id, const QString& title,
 }
 
 void DockingManager::createCoreDocks() {
-    // 1. Terminal (The Command Center)
+    // === 1. Terminal (Command Center) ===
+    qDebug() << "[DM] Creating Terminal...";
     terminalWidget_ = new TerminalWidget(mainWindow_);
     createDock("terminal", "Terminal", terminalWidget_, Qt::BottomDockWidgetArea);
 
-    // 2. Output Panels
-    // OutputDockWidget handles its own scrolling/clear logic
-    createDock("output", "Output", new OutputDockWidget("Output", mainWindow_), Qt::BottomDockWidgetArea);
-    createDock("problems", "Problems", new OutputDockWidget("Problems", mainWindow_), Qt::BottomDockWidgetArea); // Temp using OutputDockWidget for problems placeholder
+    // === 2. Analysis Panel (Problems | AI Debug Hints) - Side by Side ===
+    qDebug() << "[DM] Creating Analysis Panel...";
+    problemsPanel_ = new ProblemsPanel(mainWindow_);
+    debugPanel_ = new DebugSuggestionsPanel(mainWindow_);
     
-    // 3. Waveforms (Phase 11.3)
+    QSplitter* analysisSplit = new QSplitter(Qt::Horizontal, mainWindow_);
+    analysisSplit->addWidget(problemsPanel_);
+    analysisSplit->addWidget(debugPanel_);
+    analysisSplit->setSizes({300, 300}); // Equal split
+    createDock("analysis", "Analysis", analysisSplit, Qt::BottomDockWidgetArea);
+
+    // === 3. Logs Panel (Results | Output) - Side by Side ===
+    qDebug() << "[DM] Creating Logs Panel...";
+    resultsTree_ = new QTreeWidget(mainWindow_);
+    resultsTree_->setHeaderLabels({"Node", "Value"});
+    resultsTree_->setColumnWidth(0, 150);
+    resultsTree_->setStyleSheet(
+        "QTreeWidget { background: #1e1e1e; color: #ccc; border: none; } "
+        "QHeaderView::section { background: #2d2d2d; color: #888; border: none; padding: 4px; }");
+    
+    outputWidget_ = new OutputDockWidget("Output", mainWindow_);
+    
+    QSplitter* logsSplit = new QSplitter(Qt::Horizontal, mainWindow_);
+    logsSplit->addWidget(resultsTree_);
+    logsSplit->addWidget(outputWidget_);
+    logsSplit->setSizes({300, 300});
+    createDock("logs", "Logs", logsSplit, Qt::BottomDockWidgetArea);
+    
+    // === 4. Waveforms ===
+    qDebug() << "[DM] Creating Waveforms...";
     waveformWidget_ = new WaveformWidget(mainWindow_);
     createDock("waveforms", "Waveforms", waveformWidget_, Qt::BottomDockWidgetArea);
     
-    // Connect Signals
+    // Connect Waveform Signals
     connect(waveformWidget_, &WaveformWidget::promoteToTabRequested, this, [this](){
         onPromoteToTab(waveformWidget_, "Waveforms");
     });
@@ -45,22 +71,22 @@ void DockingManager::createCoreDocks() {
         onReturnToDock(waveformWidget_, "waveforms");
     });
     
+    qDebug() << "[DM] Setting up Bottom Panel...";
     setupBottomPanel();
 }
 
 void DockingManager::setupBottomPanel() {
-    // Terminal | Output | Problems | Waveforms
+    // Tabify: Terminal | Logs | Analysis | Waveforms
     QDockWidget* term = docks_.value("terminal");
-    QDockWidget* out = docks_.value("output");
-    QDockWidget* prob = docks_.value("problems");
+    QDockWidget* logs = docks_.value("logs");
+    QDockWidget* analysis = docks_.value("analysis");
     QDockWidget* wave = docks_.value("waveforms");
     
-    if (term && out && prob && wave) {
-        mainWindow_->tabifyDockWidget(term, out);
-        mainWindow_->tabifyDockWidget(out, prob);
-        mainWindow_->tabifyDockWidget(prob, wave);
-        // Default to Problems or Terminal? Terminal for power users.
-        term->raise();
+    if (term && logs && analysis && wave) {
+        mainWindow_->tabifyDockWidget(term, logs);
+        mainWindow_->tabifyDockWidget(logs, analysis);
+        mainWindow_->tabifyDockWidget(analysis, wave);
+        term->raise(); // Default to Terminal
     }
 }
 

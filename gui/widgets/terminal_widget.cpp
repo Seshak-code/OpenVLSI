@@ -11,14 +11,21 @@ TerminalWidget::TerminalWidget(QWidget* parent) : QWidget(parent) {
     // Output Area
     outputArea_ = new QPlainTextEdit(this);
     outputArea_->setReadOnly(true);
+    outputArea_->setReadOnly(true);
     // Style handled by ThemeManager generally, but we enforce monospace here
-    outputArea_->setStyleSheet("font-family: Consolas, 'Courier New', monospace; font-size: 10pt; border: none;");
+    auto& tm = acutesim::gui::styling::ThemeManager::instance();
+    outputArea_->setStyleSheet(QString("font-family: Consolas, 'Courier New', monospace; font-size: 10pt; border: none; background-color: %1; color: %2;")
+                               .arg(tm.getColor("ui.background").name())
+                               .arg(tm.getColor("ui.text").name()));
     layout->addWidget(outputArea_);
 
     // Input Line
     inputBox_ = new QLineEdit(this);
     inputBox_->setPlaceholderText("Type command or ask Copilot (e.g., 'sync -to-hdl', 'run script.py')...");
-    inputBox_->setStyleSheet("border-top: 1px solid #3e3e42; padding: 4px; border: none;");
+    inputBox_->setStyleSheet(QString("border-top: 1px solid %1; padding: 4px; background-color: %2; color: %3;")
+                             .arg(tm.getColor("ui.border").name())
+                             .arg(tm.getColor("input.background").name())
+                             .arg(tm.getColor("input.text").name()));
     layout->addWidget(inputBox_);
 
     connect(inputBox_, &QLineEdit::returnPressed, this, &TerminalWidget::onReturnPressed);

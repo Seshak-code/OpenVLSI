@@ -16,7 +16,7 @@
 #include <QFileSystemModel>
 #include <QTreeView>
 #include "schematic_editor.h"
-#include "ai_assistant.h"
+#include "../panels/ai_assistant_panel.h"
 #include "component_library.h"
 #include "simulation_workspace.h"
 #include "system_inspector.h"
@@ -34,7 +34,7 @@
 class HDLEditor;
 class WelcomeWidget;
 class DockingManager;
-
+namespace acutesim { namespace gui { namespace core { class ActivityBar; } } }
 
 // ============================================================================
 // MAIN WINDOW
@@ -91,7 +91,7 @@ private:
     SystemInspector* systemInspector; // For System Mode
     
     QDockWidget* aiDock;
-    AiAssistantPanel* aiPanel;
+    acutesim::gui::panels::AiAssistantPanel* aiPanel;
 
     QDockWidget* messagesDock;
     ProblemsPanel* problemsPanel;
@@ -165,6 +165,10 @@ private:
     void onModeToggle();
     void syncSchematicToVerilog();
     void syncVerilogToSchematic();
+    
+    // VS Code Style
+    acutesim::gui::core::ActivityBar* activityBar_;
+    void setupActivityBar(); // Phase 13
 
 private slots:
     void updateProperties(VisualComponent* item);

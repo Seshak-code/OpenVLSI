@@ -46,6 +46,15 @@ enum class ComponentType {
 QString componentTypeToString(ComponentType t);
 ComponentType stringToComponentType(const QString& s);
 
+// Phase 11.6: Ghosting System
+enum class GhostState {
+    None,       // Normal component
+    Preview,    // AI speculative (50% opacity, dashed)
+    Focused,    // Hovered/Selected (Highlight + Tooltip)
+    Accepted,   // Transition to Normal (Fade to solid)
+    Rejected    // Fade out
+};
+
 // ============================================================================
 // VISUAL WIRE
 // ============================================================================
@@ -163,8 +172,27 @@ public:
         update();
     }
 
+    // Phase 11.6: Ghosting Support
+    GhostState ghostState = GhostState::None;
+    QString ghostWhy;     // Rationale for "Why?" tooltip
+    float ghostConfidence = 1.0f; // 0.0 to 1.0
+
+    bool isGhost() const { return ghostState != GhostState::None; }
+    void setGhostState(GhostState s) {
+        ghostState = s;
+        update();
+    }
+    
+    // Explicit exclusions for simulation
+    bool isNetlistMember() const {
+        return !isGhost();
+    }
+
 protected:
     // Hover events for quick preview tooltip
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
+    
+    // Tab/Esc handling for Ghost acceptance
+    void keyPressEvent(QKeyEvent* event) override;
 };

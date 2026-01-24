@@ -2,6 +2,8 @@
 #include "schematic_editor.h" 
 #include <cmath>
 #include <QGraphicsSceneHoverEvent>
+#include <QKeyEvent>
+#include "../../gui/styling/theme_manager.h"
 
 QString componentTypeToString(ComponentType t) {
     switch(t) {
@@ -130,13 +132,13 @@ QVariant ProbeTip::itemChange(GraphicsItemChange change, const QVariant &value) 
 // ============================================================================
 VisualWire::VisualWire(QLineF line) : QGraphicsObject() {
     m_line = line;
-    setPen(QPen(Qt::lightGray, 2));
+    setPen(QPen(acutesim::gui::styling::ThemeManager::instance().getColor("schematic.wire"), 2));
     setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
     setZValue(1); // Wires below components 
     
     // Initialize label
     labelItem = new QGraphicsTextItem(this);
-    labelItem->setDefaultTextColor(Qt::yellow);
+    labelItem->setDefaultTextColor(acutesim::gui::styling::ThemeManager::instance().getColor("ui.text"));
     QFont f = labelItem->font();
     f.setPointSize(10);
     labelItem->setFont(f);
@@ -188,7 +190,7 @@ void VisualWire::paint(QPainter* painter, const QStyleOptionGraphicsItem* option
     
     painter->setPen(pen());
     if (isSelected()) {
-        painter->setPen(QPen(Qt::green, 2, Qt::DashLine));
+        painter->setPen(QPen(acutesim::gui::styling::ThemeManager::instance().getColor("schematic.selection"), 2, Qt::DashLine));
     }
     painter->drawLine(m_line);
 }
@@ -478,8 +480,57 @@ QVariant VisualComponent::itemChange(GraphicsItemChange change, const QVariant &
 }
 
 void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
-    painter->setPen(QPen(Qt::white, 2));
-    painter->setBrush(QColor("#1e1e1e")); 
+    auto& tm = acutesim::gui::styling::ThemeManager::instance();
+    
+    // Phase 11.6: Ghost Rendering Logic
+    if (ghostState == GhostState::Preview || ghostState == GhostState::Focused) {
+        // High confidence = more opaque
+        int alpha = static_cast<int>(128 * ghostConfidence);
+        
+        QColor ghostColor = tm.getColor("schematic.ghost");
+        if (!ghostColor.isValid()) ghostColor = QColor(0, 200, 255); // Fallback Cyan
+        
+        QColor ghostFill = ghostColor;
+        ghostFill.setAlpha(alpha / 4); // Very faint fill
+        
+        QColor ghostPen = ghostColor;
+        ghostPen.setAlpha(alpha);
+        
+        // Dashed lines for preview
+        QPen p(ghostPen, 2, Qt::DashLine);
+        painter->setPen(p);
+        painter->setBrush(ghostFill);
+        
+        // Render "Why?" Tooltip if Focused
+        if (ghostState == GhostState::Focused && !ghostWhy.isEmpty()) {
+            painter->save();
+            // Draw floating tooltip above component
+            QRectF tipRect = boundingRect();
+            tipRect.moveTop(tipRect.top() - 30);
+            tipRect.setHeight(25);
+            
+            painter->setBrush(QColor(40, 40, 40, 220));
+            painter->setPen(QPen(ghostColor, 1));
+            painter->drawRoundedRect(tipRect, 4, 4);
+            
+            painter->setPen(Qt::white);
+            painter->drawText(tipRect, Qt::AlignCenter, "Why: " + ghostWhy); // Simple for now
+            
+            // "Tab to Accept" Badge
+            QRectF badgeRect = boundingRect();
+            badgeRect.moveBottom(badgeRect.bottom() + 30);
+            badgeRect.setHeight(20);
+            painter->setBrush(QColor(30, 100, 30, 220));
+            painter->drawRoundedRect(badgeRect, 4, 4);
+            painter->drawText(badgeRect, Qt::AlignCenter, "TAB to Accept");
+            
+            painter->restore();
+        }
+    } else {
+        // Normal Rendering
+        painter->setPen(QPen(tm.getColor("ui.text"), 2));
+        painter->setBrush(tm.getColor("schematic.background")); 
+    }
     
     // Draw Components (Grid Aligned)
     switch(type) {
@@ -974,4 +1025,26 @@ void VisualComponent::hoverLeaveEvent(QGraphicsSceneHoverEvent* event) {
     unsetCursor();
     
     QGraphicsItem::hoverLeaveEvent(event);
+}
+
+void VisualComponent::keyPressEvent(QKeyEvent* event) {
+    if (ghostState != GhostState::None) {
+        if (event->key() == Qt::Key_Tab) {
+            // Accept Ghost
+            setGhostState(GhostState::Accepted);
+            // In real flow, this would trigger signals to commit to netlist
+            // For now, we just visually transition
+            setGhostState(GhostState::None); 
+            event->accept();
+            return;
+        } else if (event->key() == Qt::Key_Escape) {
+            // Reject Ghost
+            setGhostState(GhostState::Rejected);
+            // Scene would typically remove it (managed by controller)
+            setVisible(false);
+            event->accept();
+            return;
+        }
+    }
+    QGraphicsItem::keyPressEvent(event);
 }

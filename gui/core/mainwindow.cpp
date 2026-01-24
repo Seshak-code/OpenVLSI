@@ -2,6 +2,7 @@
 #include "welcome_widget.h"
 #include "layout_manager.h"
 #include "docking_manager.h"
+#include "activity_bar.h"
 #include <QApplication>
 #include <QHeaderView>
 #include <QStatusBar>
@@ -36,6 +37,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     qDebug() << "[MW INIT] setupDocks...";
     // 2. Setup Docks (Project, Properties, Messages)
     setupDocks();
+
+    qDebug() << "[MW INIT] setupActivityBar...";
+    setupActivityBar();
 
     qDebug() << "[MW INIT] setupMenus...";
     // 3. Setup Menus and Toolbar
@@ -226,6 +230,11 @@ void MainWindow::setupCentralWidget() {
                     debugSuggestionsPanel->setEditor(newEditor);
                     debugSuggestionsPanel->refreshSuggestions();
                 }
+
+                // [Fix] Update AI Context
+                if (aiPanel) {
+                    aiPanel->setEditor(newEditor);
+                }
                 
             }
             
@@ -246,11 +255,16 @@ void MainWindow::setupDocks() {
     // --- Project Browser (Left) ---
     createProjectDock();
     addDockWidget(Qt::LeftDockWidgetArea, projectDock);
+    projectDock->hide(); // Start hidden, controlled by Activity Bar
+    projectDock->setTitleBarWidget(new QWidget()); // No Title Bar
 
-    // --- Component Library (Left, Tabbed or Below) ---
+    // --- Component Library (Left) ---
     createLibraryDock();
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
-    tabifyDockWidget(projectDock, libraryDock);
+    libraryDock->hide();
+    libraryDock->setTitleBarWidget(new QWidget()); // No Title Bar
+    
+    // NOTE: Do NOT tabify. We want exclusive single dock.
     
     // Initial Sync: Component Library starts in the same mode as the initial schematic
     if (libraryPanel && schematicEditor) {
@@ -275,49 +289,69 @@ void MainWindow::setupDocks() {
 
     // --- Message Console, Output, Terminal (Bottom) ---
     // Delegated to DockingManager
+    qDebug() << "[MW] Creating Core Docks via DockingManager...";
     dockingManager->createCoreDocks();
     
-    // Phase 11.3: Wire Tab Promotion Signals
+    // Wire signals
     connect(dockingManager, &DockingManager::tabPromotionRequested, this, &MainWindow::addCentralTab);
     connect(dockingManager, &DockingManager::dockRestorationRequested, this, &MainWindow::removeCentralTab);
     
-    // Wire Terminal Commands
     TerminalWidget* term = dockingManager->terminal();
     if (term) {
         connect(term, &TerminalWidget::commandRequested, this, [this](const QString& cmd){
             if (cmd.startsWith("sync -to-hdl")) syncSchematicToVerilog();
             else if (cmd.startsWith("sync -from-hdl")) syncVerilogToSchematic();
             else if (cmd == "layout -reset") acutesim::gui::core::LayoutManager::instance().resetToFactory();
-            // TODO: 'run script' logic
         });
     }
 
-    // Retrieve docks for legacy member access (if needed) or refactor members to be unused
-    // For valid layout restoration, objectNames must match what LayoutManager expects.
-    // DockingManager sets them to "terminal", "output", "problems".
-    
+    qDebug() << "[MW] Retrieving Docks...";
     messagesDock = dockingManager->getDock("problems");
     outputDock_ = dockingManager->getDock("output");
+    waveformDock_ = dockingManager->getDock("waveforms");
     
-    // [New] Debug Suggestions (Split with Problems)
+    qDebug() << "[MW] Creating Legacy Docks...";
+    createStreamingDock();
+    addDockWidget(Qt::BottomDockWidgetArea, streamingDock_);
+    
+    createResultsDock();
+    addDockWidget(Qt::BottomDockWidgetArea, resultsDock_);
+    
+    if (waveformDock_) {
+        // Safe tabify
+        if (streamingDock_) tabifyDockWidget(waveformDock_, streamingDock_);
+        if (resultsDock_ && streamingDock_) tabifyDockWidget(streamingDock_, resultsDock_);
+    }
+    
+    qDebug() << "[MW] Creating Debug Suggestions Dock...";
     createDebugSuggestionsDock();
     addDockWidget(Qt::BottomDockWidgetArea, debugSuggestionsDock);
-    if (messagesDock) splitDockWidget(messagesDock, debugSuggestionsDock, Qt::Horizontal);
     
-    // Verify creation
-    Q_ASSERT(messagesDock && "Problems dock creation failed");
-    Q_ASSERT(outputDock_ && "Output dock creation failed");
+    if (messagesDock && debugSuggestionsDock) {
+        qDebug() << "[MW] Splitting Problems/Debug Docks...";
+        splitDockWidget(messagesDock, debugSuggestionsDock, Qt::Horizontal);
+    } else {
+        qWarning() << "[MW WARNING] skipped splitDockWidget: messagesDock=" << messagesDock << " debugSuggestionsDock=" << debugSuggestionsDock;
+    }
+    
+    // Verify creation (Non-fatal)
+    if (!messagesDock) qWarning() << "Problems dock creation failed";
+    if (!outputDock_) qWarning() << "Output dock creation failed";
+    
+    qDebug() << "[MW] setupDocks Complete.";
 }
 
 void MainWindow::createAiDock() {
     aiDock = new QDockWidget("Copilot Assistant", this);
     aiDock->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
     
-    aiPanel = new AiAssistantPanel(schematicEditor, this);
+    aiPanel = new acutesim::gui::panels::AiAssistantPanel(this);
+    if (schematicEditor) aiPanel->setEditor(schematicEditor);
+    
     aiDock->setWidget(aiPanel);
     
     // Connect AI simulation requests to the simulation workspace
-    connect(aiPanel, &AiAssistantPanel::simulationRequested, this, &MainWindow::onAiSimulationRequested);
+    connect(aiPanel, &acutesim::gui::panels::AiAssistantPanel::simulationRequested, this, &MainWindow::onAiSimulationRequested);
 }
 
 void MainWindow::createProjectDock() {
@@ -604,6 +638,24 @@ void MainWindow::createWaveformDock() {
 void MainWindow::onSimulationResults(const QJsonObject& results) {
     QString type = results["type"].toString();
     
+    // --- 1. Update Waveform Widget (Phase 11.3) ---
+    if (dockingManager) {
+        if (WaveformWidget* wf = dockingManager->waveform()) {
+            if (type == "TransientPoint") {
+                double t = results["time"].toDouble();
+                QJsonArray volts = results["voltages"].toArray();
+                if (!volts.isEmpty()) {
+                    wf->appendDataPoint(t, volts[0].toDouble());
+                }
+            } else if (type == "DC") {
+                if (results.contains("corner") && results["corner"].toString() == "Nominal") {
+                    wf->clear();
+                }
+            }
+        }
+    }
+
+    // --- 2. Update Legacy Logs (Phase 7) ---
     if (type == "DC") {
         if (resultsTree_) {
             resultsTree_->clear();
@@ -614,7 +666,6 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
                 item->setText(1, QString("%1 V").arg(voltages[i].toDouble(), 0, 'f', 6));
             }
         }
-        // Phase 7: Auto-show results dock
         if (resultsDock_) {
             resultsDock_->show();
             resultsDock_->raise();
@@ -625,7 +676,7 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
             double time = results["time"].toDouble();
             QJsonArray voltages = results["voltages"].toArray();
             QString line = QString("t=%1u: ").arg(time * 1e6, 0, 'f', 2);
-            for (int i = 0; i < qMin(voltages.size(), 4); ++i) { // Show first 4 nodes
+            for (int i = 0; i < qMin(voltages.size(), 4); ++i) { 
                 line += QString("V(%1)=%2 ").arg(i+1).arg(voltages[i].toDouble(), 0, 'f', 2);
             }
             if (voltages.size() > 4) line += "...";
@@ -718,7 +769,27 @@ void MainWindow::runSimulation() {
 }
 
 void MainWindow::openSchematicTab(const QString& title, const QJsonObject& content) {
-    // ... existing implementation or placeholder ...
+    SchematicEditor* newEditor = new SchematicEditor(this);
+    
+    // Auto-detect mode from content logic or default to Bench
+    newEditor->setMode(AppMode::BENCH_TEST); 
+    
+    // Load content
+    newEditor->loadState(content);
+    
+    // Add tab
+    rtlPageTabs->addTab(newEditor, title);
+    rtlPageTabs->setCurrentWidget(newEditor);
+    
+    // Update active editor
+    schematicEditor = newEditor;
+    if (libraryPanel) libraryPanel->setMode(AppMode::BENCH_TEST);
+    if (aiPanel) aiPanel->setEditor(newEditor);
+    
+    connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+    connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+    
+    statusBar()->showMessage(QString("Opened %1").arg(title), 4000);
 }
 
 void MainWindow::addCentralTab(QWidget* widget, const QString& title) {
@@ -938,30 +1009,7 @@ void MainWindow::setMode(AppMode mode) {
     }
 }
 
-void MainWindow::openSchematicTab(const QString& title, const QJsonObject& content) {
-    SchematicEditor* newEditor = new SchematicEditor(this);
-    
-    // Auto-detect mode from content logic or default to Bench (Harness is usually Bench-like)
-    // For auto-harness, it uses Bench Mode components (Sources, Probes).
-    newEditor->setMode(AppMode::BENCH_TEST); 
-    
-    // Load content
-    newEditor->loadState(content);
-    
-    // Add tab
-    rtlPageTabs->addTab(newEditor, title);
-    rtlPageTabs->setCurrentWidget(newEditor);
-    
-    // Update active editor
-    schematicEditor = newEditor;
-    if (libraryPanel) libraryPanel->setMode(AppMode::BENCH_TEST);
-    if (aiPanel) aiPanel->setEditor(newEditor);
-    
-    connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
-    connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
-    
-    statusBar()->showMessage(QString("Opened %1").arg(title), 4000);
-}
+
 
 void MainWindow::createWorkerDock() {
     workerDock = new QDockWidget("Worker Status", this);
@@ -1022,28 +1070,46 @@ void MainWindow::onAiSimulationRequested(const QString& analysisType) {
 }
 
 // Slot to handle simulation results (Waveforms, etc.)
-void MainWindow::onSimulationResults(const QJsonObject& results) {
-    if (!dockingManager) return;
+
+void MainWindow::setupActivityBar() {
+    using namespace acutesim::gui::core;
     
-    WaveformWidget* wf = dockingManager->waveform();
-    if (!wf) return;
+    activityBar_ = new ActivityBar(this);
+    addToolBar(Qt::LeftToolBarArea, activityBar_);
     
-    // Check type
-    QString type = results["type"].toString();
-    if (type == "TransientPoint") {
-        double t = results["time"].toDouble();
-        QJsonArray volts = results["voltages"].toArray();
-        if (!volts.isEmpty()) {
-            // Plot first node for MVP
-            // TODO: In Phase 3, handle multi-trace selection
-            wf->appendDataPoint(t, volts[0].toDouble());
+    // Add Activities
+    // 1. Explorer (Project)
+    activityBar_->addActivity("explorer", QIcon::fromTheme("folder"), "Project Explorer");
+    
+    // 2. Components (Library) - Use chip/component icon
+    activityBar_->addActivity("components", QIcon::fromTheme("application-x-executable"), "Components");
+    
+    // 3. Search (Placeholder)
+    activityBar_->addActivity("search", QIcon::fromTheme("edit-find"), "Search");
+    
+    // 4. Copilot (AI) - Currently on Right, maybe move to Left?
+    // User requested VS Code style. Copilot is usually a Chat view in Secondary Sidebar or Panel.
+    // Let's keep it Right for now or add a trigger here if we move it.
+    
+    // Connect Logic
+    connect(activityBar_, &ActivityBar::activityChanged, this, [this](const QString& id){
+        // Exclusive Logic: Hide all left docks first
+        if (projectDock) projectDock->hide();
+        if (libraryDock) libraryDock->hide();
+        
+        // Show target
+        if (id == "explorer" && projectDock) {
+            projectDock->show();
+        } 
+        else if (id == "components" && libraryDock) {
+            libraryDock->show();
         }
-    } else if (type == "DC") {
-        // DC results are typically just a single point or array, Waveform might not be best view.
-        // Maybe plot corner vs voltage?
-        // For now, ignore or clear.
-        if (results.contains("corner") && results["corner"].toString() == "Nominal") {
-             wf->clear();
+        else if (id == "search") {
+             // TODO: Search Dock
         }
-    }
+    });
+    
+    // Set Default Active
+    activityBar_->setActive("explorer");
+    if (projectDock) projectDock->show();
 }
