@@ -48,38 +48,51 @@ void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
 
     if (!gridVisible) return;
 
-    // Adaptive Grid Density (LOD)
-    double scale = painter->transform().m11();
-    int gridSize = GRID_STEP;
+    // Phase 11.4: DPI-Aware & Cosmetic Rendering
+    // Performance Budget: < 2ms @ 4K
     
-    // If zoomed out too far, thin out the grid
-    if (scale < 0.5) gridSize *= 2;
-    if (scale < 0.25) gridSize *= 4;
+    const int gridSize = GRID_STEP;
+    const qreal left = rect.left();
+    const qreal right = rect.right();
+    const qreal top = rect.top();
+    const qreal bottom = rect.bottom();
     
-    // If zoomed in very far, maybe add sub-grid? 
-    // (Keeping it simple for now)
+    // Calculate start/end indices aligned to grid
+    const int startX = static_cast<int>(std::floor(left / gridSize)) * gridSize;
+    const int endX = static_cast<int>(std::ceil(right / gridSize)) * gridSize;
+    const int startY = static_cast<int>(std::floor(top / gridSize)) * gridSize;
+    const int endY = static_cast<int>(std::ceil(bottom / gridSize)) * gridSize;
 
-    int left = static_cast<int>(std::floor(rect.left()));
-    int top = static_cast<int>(std::floor(rect.top()));
-    int right = static_cast<int>(std::ceil(rect.right()));
-    int bottom = static_cast<int>(std::ceil(rect.bottom()));
-
-    left -= (left % gridSize);
-    top -= (top % gridSize);
-
-    QPen gridPen(QColor(60, 60, 60));
-    gridPen.setCosmetic(true);
-    painter->setPen(gridPen);
-
-    for (int x = left; x <= right; x += gridSize) {
-        painter->drawLine(x, top, x, bottom);
+    // LOD Calculation via Transform
+    const double scale = painter->transform().m11();
+    
+    // Draw Dots (Grid points)
+    if (scale > 0.2) {
+        // Use Cosmetic Pen width 0 (1 physical pixel)
+        // Optimization: Batch point drawing
+        QVarLengthArray<QPointF, 4096> points;
+        
+        // Adaptive density
+        int step = gridSize;
+        if (scale < 0.5) step *= 2;
+        if (scale < 0.25) step *= 4;
+        
+        for (int x = startX; x <= endX; x += step) {
+            for (int y = startY; y <= endY; y += step) {
+                points.append(QPointF(x, y));
+            }
+        }
+        
+        QPen gridPen(QColor(60, 60, 60));
+        gridPen.setWidth(0); // Cosmetic (1px device independent)
+        painter->setPen(gridPen);
+        painter->drawPoints(points.data(), points.size());
     }
-    for (int y = top; y <= bottom; y += gridSize) {
-        painter->drawLine(left, y, right, y);
-    }
-    
-    // Axes
-    painter->setPen(QPen(QColor(100, 100, 100), 1));
+
+    // Draw Axes (Origin)
+    QPen axisPen(QColor(100, 100, 100));
+    axisPen.setWidth(0); // 1px cosmetic
+    painter->setPen(axisPen);
     painter->drawLine(0, top, 0, bottom);
     painter->drawLine(left, 0, right, 0);
 }

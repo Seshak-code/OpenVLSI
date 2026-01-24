@@ -1,4 +1,5 @@
 #include "simulation_workspace.h"
+#include "../../gui/styling/theme_manager.h"
 #include "monte_carlo_setup_dialog.h"
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -56,24 +57,14 @@ void SimulationWorkspace::setupUI() {
     // Main content splitter
     mainSplitter_ = new QSplitter(Qt::Horizontal, this);
     
-    // Left: Schematic file selector
-    QWidget* leftPanel = new QWidget(this);
-    QVBoxLayout* leftLayout = new QVBoxLayout(leftPanel);
-    leftLayout->setContentsMargins(8, 8, 8, 8);
+    // Left: Simulation Explorer (VS Code Style)
+    explorer_ = new SimulationExplorer(this);
+    // Explorer styling is internal, but we can style the container if needed
+    mainSplitter_->addWidget(explorer_);
     
-    QLabel* fileLabel = new QLabel("Schematic:", leftPanel);
-    fileLabel->setStyleSheet("color: #ccc; font-weight: bold;");
-    leftLayout->addWidget(fileLabel);
-    
-    schematicCombo_ = new QComboBox(leftPanel);
-    schematicCombo_->setStyleSheet("background: #333; color: #ccc; padding: 4px;");
-    leftLayout->addWidget(schematicCombo_);
-    
-    leftLayout->addStretch();
-    leftPanel->setMinimumWidth(180);
-    leftPanel->setMaximumWidth(250);
-    leftPanel->setStyleSheet("background: #252526;");
-    mainSplitter_->addWidget(leftPanel);
+    // Connect selection signal
+    connect(explorer_, &SimulationExplorer::profileSelected, this, &SimulationWorkspace::onProfileSelected);
+    connect(explorer_, &SimulationExplorer::runRequested, this, &SimulationWorkspace::onRunRequested);
     
     // Right: Profile Editor + Help Panel (no output tabs)
     QWidget* rightPanel = new QWidget(this);
@@ -101,7 +92,11 @@ void SimulationWorkspace::setupUI() {
 void SimulationWorkspace::setupToolbar() {
     toolbar_ = new QWidget(this);
     toolbar_->setFixedHeight(40);
-    toolbar_->setStyleSheet("background-color: #333; border-bottom: 1px solid #444;");
+    // Theme Manager
+    auto& tm = acutesim::gui::styling::ThemeManager::instance();
+    toolbar_->setStyleSheet(QString("background-color: %1; border-bottom: 1px solid %2;")
+        .arg(tm.getColor("ui.header").name())
+        .arg(tm.getColor("ui.border").name()));
     
     QHBoxLayout* layout = new QHBoxLayout(toolbar_);
     layout->setContentsMargins(8, 4, 8, 4);
@@ -349,20 +344,19 @@ void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
         currentProfileId_ = "quick_dc";
     }
     
+    // Populate Explorer
+    if (explorer_) {
+        // explorer_->clear(); // TODO: Implement clear
+        for (const auto& p : profiles_) {
+            explorer_->addProfile(p);
+        }
+    }
+    
     // Connect topology changes
     connect(editor, &SchematicEditor::topologyChanged, this, &SimulationWorkspace::onTopologyChanged);
     
     // Connect mode changes
     connect(editor, &SchematicEditor::modeChanged, this, &SimulationWorkspace::onModeChanged);
-    
-    // Connect ERC violations - now handled in MainWindow bottom dock
-    // connect(editor, &SchematicEditor::violationsChanged, problemsPanel_, &ProblemsPanel::setViolations);
-    
-    // Phase 7: Populate schematic combo with current editor
-    if (schematicCombo_) {
-        schematicCombo_->clear();
-        schematicCombo_->addItem("Current Schematic");
-    }
     
     // Initial sync
     onModeChanged(editor->getMode());

@@ -4,6 +4,7 @@
 #include "stress_test.h"
 #include <iostream>
 #include <string>
+#include "gui/styling/theme_manager.h"
 
 #include <QApplication>
 #include <QScreen>
@@ -40,6 +41,9 @@ int main(int argc, char *argv[]) {
 
   // Qt styling
   app.setStyle("Fusion");
+  // Initialize ThemeManager with Dark Theme and apply
+  acutesim::gui::styling::ThemeManager::instance().loadTheme("Dark");
+  app.setStyleSheet(acutesim::gui::styling::ThemeManager::instance().getStyleSheet());
 
   MainWindow w;
 

@@ -101,6 +101,13 @@ add_executable(${PROJECT_NAME}
     main.cpp
     gui/core/mainwindow.cpp
     gui/core/mainwindow.h
+    gui/core/layout_manager.cpp
+    gui/core/layout_manager.h
+    gui/core/docking_manager.cpp
+    gui/core/docking_manager.cpp
+    gui/core/docking_manager.h
+    gui/core/platform_helper.cpp
+    gui/core/platform_helper.h
     gui/editors/schematic_editor.cpp
     gui/editors/schematic_editor_sync.cpp
     gui/editors/schematic_editor.h
@@ -176,6 +183,14 @@ add_executable(${PROJECT_NAME}
     gui/analysis/corner_setup_widget.h
     gui/widgets/trust_badge_widget.cpp
     gui/widgets/trust_badge_widget.h
+    gui/widgets/terminal_widget.cpp
+    gui/widgets/terminal_widget.h
+    gui/widgets/output_dock_widget.cpp
+    gui/widgets/output_dock_widget.h
+    gui/widgets/waveform_widget.cpp
+    gui/widgets/waveform_widget.h
+    gui/styling/theme_manager.cpp
+    gui/styling/theme_manager.h
     components/circuit.h
 )
 
@@ -213,6 +228,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/styling
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/compute
     ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
@@ -625,7 +641,7 @@ add_test(NAME test_safe_io COMMAND test_safe_io)
 add_test(NAME test_ai_simulation_intelligence COMMAND test_ai_simulation_intelligence)
 
 # Phase 5 GUI Logic Test
-add_executable(test_gui_logic tests/test_gui_logic.cpp gui/components/visual_component.cpp)
+add_executable(test_gui_logic tests/test_gui_logic.cpp gui/components/visual_component.cpp gui/styling/theme_manager.cpp gui/core/platform_helper.cpp)
 target_include_directories(test_gui_logic PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
@@ -638,4 +654,15 @@ target_link_libraries(test_gui_logic PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6
 # visual_component.cpp needs these to link if it references SchemeEditor or similar? 
 # VisualComponent only depends on Qt Graphics, so simple link should work unless circular deps exist.
 add_test(NAME test_gui_logic COMMAND test_gui_logic)
+
+# Phase 11.2 Docking Interaction Test
+add_executable(test_docking_interaction tests/test_docking_interaction.cpp gui/core/layout_manager.cpp gui/widgets/terminal_widget.cpp gui/widgets/output_dock_widget.cpp gui/widgets/waveform_widget.cpp gui/styling/theme_manager.cpp gui/core/docking_manager.cpp)
+target_include_directories(test_docking_interaction PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/styling
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_docking_interaction PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME test_docking_interaction COMMAND test_docking_interaction)
 

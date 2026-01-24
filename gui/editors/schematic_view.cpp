@@ -1,5 +1,8 @@
 #include "schematic_view.h"
 #include <QApplication>
+#include <QWheelEvent>
+#include <QNativeGestureEvent>
+#include <QDebug>
 
 SchematicView::SchematicView(QGraphicsScene* scene, QWidget* parent) 
     : QGraphicsView(scene, parent) {
@@ -12,12 +15,14 @@ SchematicView::SchematicView(QGraphicsScene* scene, QWidget* parent)
 
 void SchematicView::wheelEvent(QWheelEvent* event) {
     // Zooming with modifier key
-    // macOS: Ctrl, Windows: Alt
-#ifdef Q_OS_MAC
-    bool zoomModifier = event->modifiers() & Qt::ControlModifier;
-#else
-    bool zoomModifier = event->modifiers() & Qt::AltModifier;
-#endif
+    // OLD: macOS: Ctrl, Windows: Alt
+    // NEW Phase 11.3: Alt for ALL platforms (User Request)
+    
+    // Check for Alt modifier primarily, fall back to Ctrl for legacy if needed/desired
+    bool zoomModifier = event->modifiers() & Qt::AltModifier; 
+    
+    // Also support Ctrl for existing muscle memory if user wants, but Alt is the target
+    if (!zoomModifier) zoomModifier = event->modifiers() & Qt::ControlModifier;
 
     if (zoomModifier) {
         double scaleFactor = 1.15;
@@ -35,4 +40,31 @@ void SchematicView::wheelEvent(QWheelEvent* event) {
     } else {
         QGraphicsView::wheelEvent(event);
     }
+}
+
+bool SchematicView::viewportEvent(QEvent* event) {
+    switch (event->type()) {
+        case QEvent::NativeGesture: {
+            QNativeGestureEvent* nge = static_cast<QNativeGestureEvent*>(event);
+            if (nge->gestureType() == Qt::ZoomNativeGesture) {
+                // Determine scale factor from gesture value
+                // Value is typically a small delta like +/- 0.05
+                double scaleFactor = nge->value(); 
+                const double reference = 1.0;
+                const double sensitivity = 1.5;
+                
+                double s = reference + (scaleFactor * sensitivity);
+                
+                // Safety clamp
+                if (s < 0.1) s = 0.1;
+
+                scale(s, s);
+                return true;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    return QGraphicsView::viewportEvent(event);
 }

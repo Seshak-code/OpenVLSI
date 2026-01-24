@@ -84,8 +84,11 @@ private:
     // Layout
     QSplitter* mainSplitter_;
     
-    // Left panel - Schematic selector
-    QComboBox* schematicCombo_;
+    // Left panel - Explorer (VS Code style)
+    SimulationExplorer* explorer_;
+    
+    /* Removed old primitive selector */
+    // QComboBox* schematicCombo_;
     
     // Center panel
     QWidget* profileEditor_;

@@ -33,6 +33,7 @@
 
 class HDLEditor;
 class WelcomeWidget;
+class DockingManager;
 
 
 // ============================================================================
@@ -51,6 +52,10 @@ public:
 
     // AI/API Access
     void openSchematicTab(const QString& title, const QJsonObject& content);
+
+    // Phase 11.3: Central Tab Management
+    void addCentralTab(QWidget* widget, const QString& title);
+    void removeCentralTab(QWidget* widget);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -107,6 +112,9 @@ private:
     // Phase 12.3: Worker Orchestration
     QDockWidget* workerDock;
     acutesim::gui::orchestration::WorkerStatusPanel* workerPanel;
+
+    // Phase 11.2: Docking Manager
+    DockingManager* dockingManager;
 
     // Phase 1.7: Simulation Dock (VS Code-style sidebar)
     QDockWidget* simulationDock_;

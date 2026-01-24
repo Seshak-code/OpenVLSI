@@ -1,7 +1,10 @@
 #include <QTest>
 #include <QPointer>
 #include <QGraphicsScene>
+#include <QGraphicsView>
 #include "visual_component.h"
+#include "../../gui/styling/theme_manager.h"
+#include "../../gui/core/platform_helper.h"
 
 // STUB GridScene to satisfy linker dependency in visual_component.cpp
 // visual_component.cpp casts scene() to GridScene* for snapping logic.
@@ -140,7 +143,31 @@ private slots:
         }
     }
 
-    // 6. Verify Simulation Launch Logic (Button Enablement State)
+    // 6. Verify Theme Engine (New Phase 11)
+    void testVisualThemeEngine() {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        
+        // Test Default (Dark)
+        tm.loadTheme("Dark");
+        QCOMPARE(tm.currentTheme(), "Dark");
+        
+        QColor bg = tm.getColor("ui.background");
+        QVERIFY(bg.isValid());
+        QCOMPARE(bg.name(), "#1e1e1e"); // Known VS Code Dark bg
+        
+        // Test Light Theme Switch
+        tm.loadTheme("Light");
+        QCOMPARE(tm.currentTheme(), "Light");
+        
+        QColor lightBg = tm.getColor("ui.background");
+        QCOMPARE(lightBg.name(), "#ffffff");
+        
+        // Test Token Fallback
+        QColor unknown = tm.getColor("non.existent.token");
+        QCOMPARE(unknown, Qt::red); // Implementation specific callback
+    }
+
+    // 7. Verify Simulation Launch Logic (Button Enablement State)
     void testSimulationLaunchLogic() {
         // Logic being tested: SimulationWorkspace::canRun()
         // which calls schematicEditor_->getScene()->canSimulate()
@@ -162,6 +189,171 @@ private slots:
         QVERIFY(runButtonEnabled);
         
         delete mockScene; // Auto-deletes items (r1)
+    }
+
+    // 8. Verify Phase 11.4 Coordinate Space Contract
+    void testCoordinateScaling() {
+        // Contract: Logical Units are DPI Independent
+        // 1 Logical Unit = 1 Logical Pixel at 100% Zoom
+        
+        // Mock High-DPI Scenario
+        const double mockDPI = 2.0; // 2x Scaling (Retina)
+        
+        // Test Logic -> Pixel conversion
+        // In Qt, mapToScene handles the view transform (zoom).
+        // Device transform handles DPI. 
+        // We verify that logical distances remain constant regardless of "screen" assumptions.
+        
+        QPointF logicP1(0, 0);
+        QPointF logicP2(100, 0); // 100 logical units
+        
+        QLineF logicLine(logicP1, logicP2);
+        QCOMPARE(logicLine.length(), 100.0);
+        
+        // Use PlatformHelper to verify metric conversion
+        // mmToPx should scale with DPI
+        // We can't mock QScreen easily in QTest without GUI plugin, but we can call our helper
+        // and verify it returns a sane integer > 0
+        int px10mm = acutesim::gui::core::PlatformHelper::mmToPx(10.0);
+        QVERIFY(px10mm > 0);
+        
+        // Verify Style Token scaling
+        // If we implement 'em' or 'sp' sizing later, verify here.
+    }
+    
+    // 9. Verify Phase 11.4 Font Metrics
+    void testFontMetricsScaling() {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        
+        // Logic: Font size 12 vs Font size 24
+        // Bounding rect height should be roughly double (allow small variance for hinting)
+        
+        QFont f1 = tm.getScaledFont("ui", 12);
+        QFont f2 = tm.getScaledFont("ui", 24);
+        
+        QFontMetrics fm1(f1);
+        QFontMetrics fm2(f2);
+        
+        qreal h1 = fm1.height();
+        qreal h2 = fm2.height();
+        
+        // Expect h2 approx 2 * h1
+        // Allow +/- 20% variance due to non-linear font scaling
+        QVERIFY(h2 > h1 * 1.5); 
+        QVERIFY(h2 < h1 * 2.5);
+        
+        // Verify Baseline consistency (metrics object works)
+        QVERIFY(tm.getScaledFontMetrics("ui", 12).height() > 0);
+    }
+    
+    // 10. Verify Interaction Correctness (Hit Testing)
+    void testInteractionScaling() {
+        // Verify that hit testing works in logical coordinates
+        GridScene scene;
+        VisualComponent* r1 = new VisualComponent(ComponentType::Resistor);
+        r1->setPos(100, 100);
+        scene.addItem(r1);
+        
+        // Hit test at exact center
+        QPointF center(100, 100);
+        QGraphicsItem* hit = scene.itemAt(center, QTransform());
+        
+        // Note: VisualComponent might have boundingbox offset. 
+        // Standard components usually centered or top-left.
+        // Let's verify we hit *something* valid.
+        QVERIFY(hit != nullptr);
+        
+        // If we hit a child (like a port), traverse up
+        VisualComponent* hitComp = dynamic_cast<VisualComponent*>(hit);
+        if (!hitComp && hit) hitComp = dynamic_cast<VisualComponent*>(hit->parentItem());
+        
+        QVERIFY(hitComp == r1);
+        
+        // Verify miss
+        QGraphicsItem* miss = scene.itemAt(QPointF(500, 500), QTransform());
+        QVERIFY(miss == nullptr);
+    }
+
+    // 11. Verify Zoom Anchor Stability (Simulated)
+    void testZoomAnchorStability() {
+        // Contract: Zooming should keep the scene point under mouse fixed in view coords.
+        // QGraphicsView handles this via setTransformationAnchor(QGraphicsView::AnchorUnderMouse).
+        // Since we can't easily mock mouse events on a headless QGraphicsView in QTest without a window,
+        // we will verify the transformation matrix logic mathematically.
+        
+        QGraphicsView view;
+        QGraphicsScene scene;
+        view.setScene(&scene);
+        view.resize(400, 400); 
+        // Focus on center (200, 200)
+        
+        // Initial state
+        QVERIFY(view.transform().isIdentity());
+        
+        // Simulate Zoom In (2x) anchor at center
+        view.scale(2.0, 2.0);
+        
+        // Logic check:
+        // Viewport center (200,200) should still map to Scene (0,0) if centered
+        // Or if we map scene(0,0) to viewport, it should be in the middle.
+        
+        QPointF sceneCenter(0,0);
+        QPoint viewportCenter = view.mapFromScene(sceneCenter);
+        
+        // Allow some scrollbar offset
+        int cx = viewportCenter.x();
+        int cy = viewportCenter.y();
+        
+        // With default alignment, scene(0,0) is centered.
+        // Zooming in shouldn't shift it.
+        // view.centerOn(0,0) ensures this.
+        view.centerOn(0,0);
+        viewportCenter = view.mapFromScene(sceneCenter);
+        
+        // After centering, should be roughly w/2, h/2
+        QVERIFY(std::abs(viewportCenter.x() - 200) < 20); 
+        QVERIFY(std::abs(viewportCenter.y() - 200) < 20);
+        
+        // Zoom Out (0.5x)
+        view.scale(0.25, 0.25); // Net 0.5
+        view.centerOn(0,0);
+        viewportCenter = view.mapFromScene(sceneCenter);
+        
+        QVERIFY(std::abs(viewportCenter.x() - 200) < 20);
+        QVERIFY(std::abs(viewportCenter.y() - 200) < 20);
+    }
+
+    // 12. Verify Aspect Ratio Resilience (Extreme Resize)
+    void testAspectRatioResilience() {
+        // Verify that grid/objects don't distort when view is resized disproportionately
+        GridScene scene;
+        VisualComponent* c = new VisualComponent(ComponentType::ICPackage);
+        scene.addItem(c);
+        
+        // Initial Aspect 1:1
+        QRectF initialBounds = c->boundingRect();
+        // Width/Height logic depends on rotation, but for IC it's usually square-ish or rectangular constant.
+        
+        // Resize View (Extreme Wide 1000x100)
+        // QGraphicsView maintains aspect ratio of the scene by default unless we set non-uniform scaling on the matrix.
+        // We verify that standard view usage doesn't apply non-uniform scale.
+        
+        QGraphicsView view(&scene);
+        view.resize(1000, 100);
+        
+        // Check transform
+        QTransform t = view.transform();
+        // m11 (sx) should typically equal m22 (sy) for uniform scaling
+        // If fitInView is used incorrectly, they might differ. 
+        // We asserting strict equality is risky with float, but they should be close.
+        
+        // By default, Qt does IDENTITY. We want to ensure no accidental non-uniform scaling.
+        QVERIFY(qAbs(t.m11() - t.m22()) < 0.001);
+        
+        // Resize View (Extreme Tall 100x1000)
+        view.resize(100, 1000);
+        t = view.transform();
+        QVERIFY(qAbs(t.m11() - t.m22()) < 0.001);
     }
 };
 

@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "welcome_widget.h"
+#include "layout_manager.h"
+#include "docking_manager.h"
 #include <QApplication>
 #include <QHeaderView>
 #include <QStatusBar>
@@ -23,6 +25,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Initialize Design Flow Manager
     flowManager = new DesignFlowManager(this);
     connect(flowManager, &DesignFlowManager::stageChanged, this, &MainWindow::onStageChanged);
+
+    // Initialize Docking Manager (Phase 11.2)
+    dockingManager = new DockingManager(this);
     
     qDebug() << "[MW INIT] setupCentralWidget...";
     // 1. Setup Central Area (Stage-based Workspace)
@@ -41,6 +46,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     // 4. Status Bar
     statusBar()->showMessage("Ready - RTL Design Stage");
+    
+    // 5. Restore Layout (Phase 11.2 State Persistence)
+    // We delay this slightly or call after UI init
+    acutesim::gui::core::LayoutManager::instance().restoreWindowLayout("main_window", this);
+    
     qDebug() << "[MW INIT] Constructor complete";
 }
 
@@ -114,6 +124,10 @@ void MainWindow::setupCentralWidget() {
     stageTabs->addTab(verificationLabel, "Verification");
     
     // Simulator Panel (popup, not a tab - triggered from menu)
+    // DockingManager handles Terminal/Output/Problems panels now.
+    // simulationWorkspace remains a popup or right-dock? 
+    // Plan says "SimulationWorkspace with Docking System" - it's a central widget replacement or a complex dock.
+    // For now, let's keep it as is, but rely on DockingManager for the bottom panel.
     simulationWorkspace = new SimulationWorkspace(this);
     // Note: schematicEditor may be nullptr at this point - will be set when first schematic is created
     if (schematicEditor) {
@@ -259,52 +273,40 @@ void MainWindow::setupDocks() {
     // Start with AI dock visible by default
     aiDock->raise();
 
-    // --- Message Console (Bottom) ---
-    createMessagesDock();
-    addDockWidget(Qt::BottomDockWidgetArea, messagesDock);
+    // --- Message Console, Output, Terminal (Bottom) ---
+    // Delegated to DockingManager
+    dockingManager->createCoreDocks();
     
-    // --- Debug Panels (Bottom, Tabbed with Problems) ---
-    createOutputDock();
-    addDockWidget(Qt::BottomDockWidgetArea, outputDock_);
-    tabifyDockWidget(messagesDock, outputDock_);
+    // Phase 11.3: Wire Tab Promotion Signals
+    connect(dockingManager, &DockingManager::tabPromotionRequested, this, &MainWindow::addCentralTab);
+    connect(dockingManager, &DockingManager::dockRestorationRequested, this, &MainWindow::removeCentralTab);
     
-    createStreamingDock();
-    addDockWidget(Qt::BottomDockWidgetArea, streamingDock_);
-    tabifyDockWidget(outputDock_, streamingDock_);
-    
-    createResultsDock();
-    addDockWidget(Qt::BottomDockWidgetArea, resultsDock_);
-    tabifyDockWidget(streamingDock_, resultsDock_);
-    
-    createWaveformDock();
-    addDockWidget(Qt::BottomDockWidgetArea, waveformDock_);
-    tabifyDockWidget(resultsDock_, waveformDock_);
-    
-    // Phase 12.3: Worker Status (disabled in WASM - requires threading)
-#ifndef __EMSCRIPTEN__
-    createWorkerDock();
-    addDockWidget(Qt::BottomDockWidgetArea, workerDock);
-    tabifyDockWidget(waveformDock_, workerDock);
-#else
-    workerDock = nullptr;
-    workerPanel = nullptr;
-#endif
+    // Wire Terminal Commands
+    TerminalWidget* term = dockingManager->terminal();
+    if (term) {
+        connect(term, &TerminalWidget::commandRequested, this, [this](const QString& cmd){
+            if (cmd.startsWith("sync -to-hdl")) syncSchematicToVerilog();
+            else if (cmd.startsWith("sync -from-hdl")) syncVerilogToSchematic();
+            else if (cmd == "layout -reset") acutesim::gui::core::LayoutManager::instance().resetToFactory();
+            // TODO: 'run script' logic
+        });
+    }
 
+    // Retrieve docks for legacy member access (if needed) or refactor members to be unused
+    // For valid layout restoration, objectNames must match what LayoutManager expects.
+    // DockingManager sets them to "terminal", "output", "problems".
+    
+    messagesDock = dockingManager->getDock("problems");
+    outputDock_ = dockingManager->getDock("output");
+    
     // [New] Debug Suggestions (Split with Problems)
     createDebugSuggestionsDock();
     addDockWidget(Qt::BottomDockWidgetArea, debugSuggestionsDock);
-    splitDockWidget(messagesDock, debugSuggestionsDock, Qt::Horizontal);
+    if (messagesDock) splitDockWidget(messagesDock, debugSuggestionsDock, Qt::Horizontal);
     
-    // NASA Principle: Verify all bottom docks created successfully
-    // This catches initialization failures early rather than crashing later
+    // Verify creation
     Q_ASSERT(messagesDock && "Problems dock creation failed");
     Q_ASSERT(outputDock_ && "Output dock creation failed");
-    Q_ASSERT(streamingDock_ && "Streaming dock creation failed");
-    Q_ASSERT(resultsDock_ && "Results dock creation failed");
-    Q_ASSERT(waveformDock_ && "Waveforms dock creation failed");
-    
-    // Make Problems tab active by default
-    messagesDock->raise();
 }
 
 void MainWindow::createAiDock() {
@@ -715,8 +717,27 @@ void MainWindow::runSimulation() {
     }
 }
 
+void MainWindow::openSchematicTab(const QString& title, const QJsonObject& content) {
+    // ... existing implementation or placeholder ...
+}
+
+void MainWindow::addCentralTab(QWidget* widget, const QString& title) {
+    if (!stageTabs || !widget) return;
+    stageTabs->addTab(widget, title);
+    stageTabs->setCurrentWidget(widget);
+}
+
+void MainWindow::removeCentralTab(QWidget* widget) {
+    if (!stageTabs || !widget) return;
+    int idx = stageTabs->indexOf(widget);
+    if (idx >= 0) {
+        stageTabs->removeTab(idx);
+    }
+}
+
 void MainWindow::closeEvent(QCloseEvent *event) {
-    // Save layout state here
+    // Save layout state (Phase 11.2)
+    acutesim::gui::core::LayoutManager::instance().saveWindowLayout("main_window", this);
     QMainWindow::closeEvent(event);
 }
 
@@ -998,4 +1019,31 @@ void MainWindow::onAiSimulationRequested(const QString& analysisType) {
     }
     
     statusBar()->showMessage(QString("AI-requested %1 simulation started").arg(analysisType), 4000);
+}
+
+// Slot to handle simulation results (Waveforms, etc.)
+void MainWindow::onSimulationResults(const QJsonObject& results) {
+    if (!dockingManager) return;
+    
+    WaveformWidget* wf = dockingManager->waveform();
+    if (!wf) return;
+    
+    // Check type
+    QString type = results["type"].toString();
+    if (type == "TransientPoint") {
+        double t = results["time"].toDouble();
+        QJsonArray volts = results["voltages"].toArray();
+        if (!volts.isEmpty()) {
+            // Plot first node for MVP
+            // TODO: In Phase 3, handle multi-trace selection
+            wf->appendDataPoint(t, volts[0].toDouble());
+        }
+    } else if (type == "DC") {
+        // DC results are typically just a single point or array, Waveform might not be best view.
+        // Maybe plot corner vs voltage?
+        // For now, ignore or clear.
+        if (results.contains("corner") && results["corner"].toString() == "Nominal") {
+             wf->clear();
+        }
+    }
 }
