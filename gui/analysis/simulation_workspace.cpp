@@ -671,10 +671,16 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
             
             if (result.stats.converged) {
                  appendStreamLog(QString("   Converged in %1 iter").arg(result.stats.iterations));
-                 // Emit results per corner (tagged)
+                 // Emit results per corner (tagged) with mode context
                  QJsonObject jsonRes;
                  jsonRes["type"] = "DC";
                  jsonRes["corner"] = corner.name;
+                 // Include mode for AI context awareness
+                 if (schematicEditor_) {
+                     AppMode mode = schematicEditor_->getMode();
+                     jsonRes["mode"] = mode == AppMode::BENCH_TEST ? "BENCH" :
+                                       mode == AppMode::BLOCK_SUBSYSTEM ? "BLOCK" : "SYSTEM";
+                 }
                  QJsonArray voltages;
                  for(double v : result.nodeVoltages) voltages.append(v);
                  jsonRes["voltages"] = voltages;
@@ -739,10 +745,16 @@ void SimulationWorkspace::stepSimulation() {
         currentTime_ += timeStep_;
         currentRun_.iterations++;
         
-        // Emit waveform data
+        // Emit waveform data with mode context
         QJsonObject point;
         point["type"] = "TransientPoint";
         point["time"] = currentTime_;
+        // Include mode for AI context awareness
+        if (schematicEditor_) {
+            AppMode mode = schematicEditor_->getMode();
+            point["mode"] = mode == AppMode::BENCH_TEST ? "BENCH" :
+                            mode == AppMode::BLOCK_SUBSYSTEM ? "BLOCK" : "SYSTEM";
+        }
         QJsonArray voltages;
         for(double v : result.nodeVoltages) voltages.append(v);
         point["voltages"] = voltages;

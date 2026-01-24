@@ -9,7 +9,8 @@
 #include "../widgets/waveform_widget.h"
 // Forward Decls
 class ProblemsPanel;
-class DebugSuggestionsPanel;
+namespace acutesim { namespace gui { namespace widgets { class DebugSuggestionsPanel; } } }
+using acutesim::gui::widgets::DebugSuggestionsPanel;
 class QTreeWidget;
 
 class DockingManager : public QObject {

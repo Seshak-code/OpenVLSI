@@ -1,6 +1,7 @@
 #include "ai_assistant_panel.h"
 #include "../../gui/styling/theme_manager.h"
 #include "schematic_editor.h"
+#include "../../gui/core/gui_types.h" // For AppMode
 
 // AI API Includes (Assuming these exist based on old file)
 #include "../../ai_api/context/context_engine.h"
@@ -125,10 +126,26 @@ AiAssistantPanel::AiAssistantPanel(QWidget *parent)
 
 void AiAssistantPanel::setEditor(SchematicEditor* editor) {
     editorContext_ = editor;
-    // Update context label if needed
+    // Update context label to show mode
     if (contextBar_->layout()->count() > 0) {
         if (QLabel* lbl = qobject_cast<QLabel*>(contextBar_->layout()->itemAt(0)->widget())) {
-            lbl->setText(editor ? "[Active: R1 Schematic]" : "[No Editor Active]");
+            if (editor) {
+                QString modeStr;
+                switch (editor->getMode()) {
+                    case AppMode::BENCH_TEST:
+                        modeStr = "BENCH";
+                        break;
+                    case AppMode::BLOCK_SUBSYSTEM:
+                        modeStr = "BLOCK";
+                        break;
+                    case AppMode::SYSTEM_INTEGRATION:
+                        modeStr = "SYSTEM";
+                        break;
+                }
+                lbl->setText(QString("[Mode: %1] Active Editor").arg(modeStr));
+            } else {
+                lbl->setText("[No Editor Active]");
+            }
         }
     }
 }
@@ -220,11 +237,45 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
         return;
     }
 
+    // Get current mode for context-aware processing
+    AppMode currentMode = editorContext_->getMode();
+    QString modeContext;
+    switch (currentMode) {
+        case AppMode::BENCH_TEST:
+            modeContext = "Bench Test mode - all sources and ideal components allowed";
+            break;
+        case AppMode::BLOCK_SUBSYSTEM:
+            modeContext = "Block Subsystem mode - no independent sources at interface, PowerPorts only";
+            break;
+        case AppMode::SYSTEM_INTEGRATION:
+            modeContext = "System Integration mode - RailDrivers only, explicit VDD/VSS required";
+            break;
+    }
+
     // Reuse Parser Logic (Simulated for brevity, using simple matching)
-    // In production, call AIAPI::NLParser
+    // In production, call AIAPI::NLParser with mode context
     AIAPI::ParsedIntent intent = AIAPI::NLParser::parseIntent(text);
     pendingIntent_ = text;
     pendingConfidence_ = intent.confidence;
+
+    // Mode-aware validation: Check if requested action is valid for current mode
+    QString compType = intent.params["type"].toString().toLower();
+    if (currentMode == AppMode::SYSTEM_INTEGRATION) {
+        // In System mode, reject independent voltage/current sources (must use RailDriver)
+        if (compType == "voltagesource" || compType == "voltage source" ||
+            compType == "currentsource" || compType == "current source") {
+            appendAiMessage(QString("⚠️ Cannot add '%1' in System Integration mode. Use a RailDriver for power injection instead. (%2)")
+                .arg(compType).arg(modeContext));
+            return;
+        }
+    }
+    if (currentMode == AppMode::BLOCK_SUBSYSTEM) {
+        // In Block mode, warn about sources at interface
+        if (compType == "voltagesource" || compType == "voltage source") {
+            appendAiMessage(QString("⚠️ Voltage sources should only be used internally in Block mode. Consider using PowerPort for interface. (%1)")
+                .arg(modeContext));
+        }
+    }
 
     if (intent.confidence < 0.6) {
         appendAiMessage("I didn't understand. Try 'add resistor' or 'run simulation'.");
@@ -232,7 +283,11 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
     }
 
     SchematicChangeRequest req;
-    req.description = QString("%1: %2").arg(intent.action).arg(intent.params["type"].toString());
+    req.description = QString("[%1] %2: %3")
+        .arg(currentMode == AppMode::BENCH_TEST ? "BENCH" :
+             currentMode == AppMode::BLOCK_SUBSYSTEM ? "BLOCK" : "SYSTEM")
+        .arg(intent.action)
+        .arg(intent.params["type"].toString());
     
     // Construct Action Object
     QJsonObject action;

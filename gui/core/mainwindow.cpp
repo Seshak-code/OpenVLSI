@@ -12,6 +12,8 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QInputDialog>
+#include <QToolButton>
+#include <QMenu>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     qDebug() << "[MW INIT] Constructor start";
@@ -139,12 +141,17 @@ void MainWindow::setupCentralWidget() {
     }
     // Note: NOT added to stageTabs - accessed via "Set Simulation" menu
     
-    // Connect simulation logs to bottom panels
+    // Connect simulation logs to bottom panels (using DockingManager widgets)
     connect(simulationWorkspace, &SimulationWorkspace::logMessage, this, [this](const QString& msg) {
-        if (outputLog_) outputLog_->appendPlainText(msg);
+        if (dockingManager && dockingManager->output()) {
+            dockingManager->output()->appendText(msg);
+        }
     });
     connect(simulationWorkspace, &SimulationWorkspace::streamMessage, this, [this](const QString& msg) {
-        if (streamingLog_) streamingLog_->appendPlainText(msg);
+        // Use output dock for streaming messages too
+        if (dockingManager && dockingManager->output()) {
+            dockingManager->output()->appendText("[STREAM] " + msg);
+        }
     });
     connect(simulationWorkspace, &SimulationWorkspace::resultsReady, this, &MainWindow::onSimulationResults);
 
@@ -177,17 +184,18 @@ void MainWindow::setupCentralWidget() {
     });
     
     connect(simulationWorkspace, &SimulationWorkspace::simulationStarted, this, [this](const QString&) {
-        // Clear panels before simulation run
-        if (outputLog_) outputLog_->clear();
-        if (streamingLog_) streamingLog_->clear();
+        // Clear panels before simulation run (using DockingManager widgets)
+        if (dockingManager) {
+            if (dockingManager->output()) dockingManager->output()->clear();
+            if (dockingManager->waveform()) dockingManager->waveform()->clear();
+        }
         if (problemsPanel) problemsPanel->clear();
         if (resultsTree_) resultsTree_->clear();
-        if (waveformLog_) waveformLog_->clear();
-        
-        // Auto-focus Streaming tab for visibility
-        if (streamingDock_) {
-            streamingDock_->raise();
-            streamingDock_->show();
+
+        // Auto-focus output dock for visibility
+        if (outputDock_) {
+            outputDock_->raise();
+            outputDock_->show();
         }
     });
     
@@ -305,23 +313,19 @@ void MainWindow::setupDocks() {
         });
     }
 
-    qDebug() << "[MW] Retrieving Docks...";
-    messagesDock = dockingManager->getDock("problems");
-    outputDock_ = dockingManager->getDock("output");
+    qDebug() << "[MW] Retrieving Docks from DockingManager...";
+    messagesDock = dockingManager->getDock("analysis"); // Contains Problems + Debug panels
+    outputDock_ = dockingManager->getDock("logs");      // Contains Results + Output
     waveformDock_ = dockingManager->getDock("waveforms");
-    
-    qDebug() << "[MW] Creating Legacy Docks...";
-    createStreamingDock();
-    addDockWidget(Qt::BottomDockWidgetArea, streamingDock_);
-    
-    createResultsDock();
-    addDockWidget(Qt::BottomDockWidgetArea, resultsDock_);
-    
-    if (waveformDock_) {
-        // Safe tabify
-        if (streamingDock_) tabifyDockWidget(waveformDock_, streamingDock_);
-        if (resultsDock_ && streamingDock_) tabifyDockWidget(streamingDock_, resultsDock_);
-    }
+
+    // Get widgets from DockingManager (no longer creating legacy docks)
+    problemsPanel = dockingManager->problems();
+    resultsTree_ = dockingManager->results();
+
+    // Note: streamingDock_ and resultsDock_ are now obsolete
+    // DockingManager handles all bottom panel docks
+    streamingDock_ = nullptr;
+    resultsDock_ = nullptr;
     
     qDebug() << "[MW] Creating Debug Suggestions Dock...";
     createDebugSuggestionsDock();
@@ -344,12 +348,16 @@ void MainWindow::setupDocks() {
 void MainWindow::createAiDock() {
     aiDock = new QDockWidget("Copilot Assistant", this);
     aiDock->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
-    
+
+    // VS Code style: Hide native title bar
+    aiDock->setTitleBarWidget(new QWidget());
+    aiDock->setFeatures(QDockWidget::NoDockWidgetFeatures); // Disable floating/closing
+
     aiPanel = new acutesim::gui::panels::AiAssistantPanel(this);
     if (schematicEditor) aiPanel->setEditor(schematicEditor);
-    
+
     aiDock->setWidget(aiPanel);
-    
+
     // Connect AI simulation requests to the simulation workspace
     connect(aiPanel, &acutesim::gui::panels::AiAssistantPanel::simulationRequested, this, &MainWindow::onAiSimulationRequested);
 }
@@ -357,7 +365,11 @@ void MainWindow::createAiDock() {
 void MainWindow::createProjectDock() {
     projectDock = new QDockWidget("Project Browser", this);
     projectDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-    
+
+    // VS Code style: Hide native title bar
+    projectDock->setTitleBarWidget(new QWidget());
+    projectDock->setFeatures(QDockWidget::NoDockWidgetFeatures); // Disable floating/closing
+
     // File Model
     fileModel = new QFileSystemModel(this);
     fileModel->setRootPath(QDir::currentPath());
@@ -388,7 +400,11 @@ void MainWindow::createProjectDock() {
 void MainWindow::createLibraryDock() {
     libraryDock = new QDockWidget("Component Library", this);
     libraryDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-    
+
+    // VS Code style: Hide native title bar
+    libraryDock->setTitleBarWidget(new QWidget());
+    libraryDock->setFeatures(QDockWidget::NoDockWidgetFeatures); // Disable floating/closing
+
     libraryPanel = new ComponentLibrary(this);
     
     // Connect Selection
@@ -638,14 +654,19 @@ void MainWindow::createWaveformDock() {
 void MainWindow::onSimulationResults(const QJsonObject& results) {
     QString type = results["type"].toString();
     
-    // --- 1. Update Waveform Widget (Phase 11.3) ---
+    // --- 1. Update Waveform Widget (Phase 11.3 - Multi-trace support) ---
     if (dockingManager) {
         if (WaveformWidget* wf = dockingManager->waveform()) {
             if (type == "TransientPoint") {
                 double t = results["time"].toDouble();
                 QJsonArray volts = results["voltages"].toArray();
                 if (!volts.isEmpty()) {
-                    wf->appendDataPoint(t, volts[0].toDouble());
+                    // Pass all voltages as separate traces (one per node)
+                    QVector<double> values;
+                    for (int i = 0; i < volts.size(); ++i) {
+                        values.append(volts[i].toDouble());
+                    }
+                    wf->appendDataPoints(t, values);
                 }
             } else if (type == "DC") {
                 if (results.contains("corner") && results["corner"].toString() == "Nominal") {
@@ -666,21 +687,18 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
                 item->setText(1, QString("%1 V").arg(voltages[i].toDouble(), 0, 'f', 6));
             }
         }
-        if (resultsDock_) {
-            resultsDock_->show();
-            resultsDock_->raise();
+        // Show output dock with results
+        if (outputDock_) {
+            outputDock_->show();
+            outputDock_->raise();
         }
-    } 
+    }
     else if (type == "TransientPoint") {
-        if (waveformLog_) {
-            double time = results["time"].toDouble();
-            QJsonArray voltages = results["voltages"].toArray();
-            QString line = QString("t=%1u: ").arg(time * 1e6, 0, 'f', 2);
-            for (int i = 0; i < qMin(voltages.size(), 4); ++i) { 
-                line += QString("V(%1)=%2 ").arg(i+1).arg(voltages[i].toDouble(), 0, 'f', 2);
-            }
-            if (voltages.size() > 4) line += "...";
-            waveformLog_->appendPlainText(line);
+        // Note: Waveform data is now displayed via WaveformWidget (handled above)
+        // Show waveform dock during transient analysis
+        if (waveformDock_) {
+            waveformDock_->show();
+            waveformDock_->raise();
         }
     }
 }
@@ -846,17 +864,25 @@ void MainWindow::setupStageToolbar() {
     modeToolbar->setMovable(false);
     
     // Stage Selector removed - tabs serve as navigation
-    
-    // Sync Buttons (Phase 14.2)
-    QAction* genVerilog = new QAction("Sch -> HDL", this);
+
+    // Sync Button with Dropdown Menu (Phase 14.2 - VS Code style)
+    QToolButton* syncButton = new QToolButton(this);
+    syncButton->setText("Sync");
+    syncButton->setToolTip("Synchronize Schematic and HDL");
+    syncButton->setPopupMode(QToolButton::InstantPopup);
+
+    QMenu* syncMenu = new QMenu(syncButton);
+
+    QAction* genVerilog = syncMenu->addAction("Schematic → HDL");
     genVerilog->setToolTip("Generate Verilog-AMS from Schematic");
     connect(genVerilog, &QAction::triggered, this, &MainWindow::syncSchematicToVerilog);
-    modeToolbar->addAction(genVerilog);
-    
-    QAction* parseVerilog = new QAction("HDL -> Sch", this);
+
+    QAction* parseVerilog = syncMenu->addAction("HDL → Schematic");
     parseVerilog->setToolTip("Update Schematic from Verilog-AMS (Ghost Placement)");
     connect(parseVerilog, &QAction::triggered, this, &MainWindow::syncVerilogToSchematic);
-    modeToolbar->addAction(parseVerilog);
+
+    syncButton->setMenu(syncMenu);
+    modeToolbar->addWidget(syncButton);
 }
 
 void MainWindow::syncSchematicToVerilog() {
@@ -955,8 +981,17 @@ void MainWindow::createSchematicFromWelcome(AppMode mode) {
 void MainWindow::onRtlTabChanged(int index) {
     // Phase 4: Dynamic Debug Logging
     // Disconnect previous editor triggers
-    if (schematicEditor && problemsPanel) {
-        disconnect(schematicEditor, &SchematicEditor::violationsChanged, problemsPanel, &ProblemsPanel::setViolations);
+    if (schematicEditor) {
+        if (problemsPanel) {
+            disconnect(schematicEditor, &SchematicEditor::violationsChanged, problemsPanel, &ProblemsPanel::setViolations);
+        }
+        // Disconnect topology change handler
+        disconnect(schematicEditor, &SchematicEditor::topologyChanged, this, nullptr);
+    }
+
+    // Clear waveform when switching tabs (different circuit = stale data)
+    if (dockingManager && dockingManager->waveform()) {
+        dockingManager->waveform()->clear();
     }
 
     QWidget* current = rtlPageTabs->widget(index);
@@ -965,7 +1000,7 @@ void MainWindow::onRtlTabChanged(int index) {
         if (libraryPanel) libraryPanel->setMode(editor->getMode());
         if (aiPanel) aiPanel->setEditor(editor);
         if (simulationWorkspace) simulationWorkspace->setSchematicEditor(editor);
-        
+
         // Connect new editor to problems panel
         if (problemsPanel) {
             connect(schematicEditor, &SchematicEditor::violationsChanged, problemsPanel, &ProblemsPanel::setViolations);
@@ -974,7 +1009,14 @@ void MainWindow::onRtlTabChanged(int index) {
                 problemsPanel->setViolations(editor->getScene()->getViolations());
             }
         }
-        
+
+        // Connect topology changes to clear waveform (invalidate stale results)
+        connect(schematicEditor, &SchematicEditor::topologyChanged, this, [this](size_t) {
+            if (dockingManager && dockingManager->waveform()) {
+                dockingManager->waveform()->clear();
+            }
+        });
+
         statusBar()->showMessage(QString("Active: %1").arg(rtlPageTabs->tabText(index)));
     } else {
         // Welcome widget or placeholder - no active editor
@@ -1091,25 +1133,39 @@ void MainWindow::setupActivityBar() {
     // User requested VS Code style. Copilot is usually a Chat view in Secondary Sidebar or Panel.
     // Let's keep it Right for now or add a trigger here if we move it.
     
-    // Connect Logic
+    // Track current sidebar state
+    static QString currentSidebarId;
+
+    // Connect Logic - VS Code style toggle behavior
     connect(activityBar_, &ActivityBar::activityChanged, this, [this](const QString& id){
-        // Exclusive Logic: Hide all left docks first
+        // Empty ID means "toggle off" - hide all sidebars
+        if (id.isEmpty()) {
+            if (projectDock) projectDock->hide();
+            if (libraryDock) libraryDock->hide();
+            currentSidebarId.clear();
+            return;
+        }
+
+        // Hide all left docks first (exclusive sidebar)
         if (projectDock) projectDock->hide();
         if (libraryDock) libraryDock->hide();
-        
-        // Show target
+
+        // Show the selected sidebar
         if (id == "explorer" && projectDock) {
             projectDock->show();
-        } 
+        }
         else if (id == "components" && libraryDock) {
             libraryDock->show();
         }
         else if (id == "search") {
-             // TODO: Search Dock
+            // TODO: Search Dock
         }
+
+        currentSidebarId = id;
     });
-    
+
     // Set Default Active
     activityBar_->setActive("explorer");
+    currentSidebarId = "explorer";
     if (projectDock) projectDock->show();
 }

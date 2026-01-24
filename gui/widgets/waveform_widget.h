@@ -20,11 +20,13 @@ public:
     bool isFloatingTab() const { return isFloatingTab_; }
 
     // State Management (Preserve during reparenting)
-    void appendDataPoint(double time, double value); // Streaming test hook
+    void appendDataPoint(double time, double value, int traceIndex = 0); // Multi-trace support
+    void appendDataPoints(double time, const QVector<double>& values);    // Batch add all traces
     void clear();
 
     // Accessors for testing
     int dataPointCount() const;
+    int traceCount() const { return traceData_.size(); }
 
 signals:
     void promoteToTabRequested();
@@ -39,10 +41,9 @@ private:
     QAction* toggleModeAction_;
     bool isFloatingTab_ = false; // False = Docked, True = Central Tab
     
-    // Minimal internal state for this phase
-    // In a real app this would likely be a pointer to a shared SimulationRun object
-    // to avoid copying massive data. Here we store simple points for verification.
-    QVector<QPointF> traceData_; 
+    // Multi-trace data storage
+    // Key = trace index (node number), Value = time-value pairs
+    QMap<int, QVector<QPointF>> traceData_;
 };
 
 // Specialized View for Graphics/Gestures
@@ -50,7 +51,9 @@ class WaveformView : public QGraphicsView {
     Q_OBJECT
 public:
     explicit WaveformView(QWidget* parent = nullptr);
-    void setData(const QVector<QPointF>& data);
+    void setData(const QVector<QPointF>& data, int traceIndex = 0);
+    void setMultiTraceData(const QMap<int, QVector<QPointF>>& traces);
+    void clearAll();
 
 signals:
     void zoomChanged(double newScale);
@@ -62,8 +65,9 @@ protected:
 
 private:
     QGraphicsScene* scene_;
-    // Basic rendering item placeholder (in real app, use WebGPU/OpenGL widget)
-    QGraphicsPathItem* curveItem_; 
-    
+    // Multi-trace support: one curve item per trace, different colors
+    QMap<int, QGraphicsPathItem*> curveItems_;
+
+    QColor getTraceColor(int traceIndex) const;
     void handlePinch(class QNativeGestureEvent* event);
 };

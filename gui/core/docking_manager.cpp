@@ -7,6 +7,9 @@
 #include <QSplitter>
 #include <QTreeWidget>
 
+// Use the namespaced class
+using acutesim::gui::widgets::DebugSuggestionsPanel;
+
 DockingManager::DockingManager(QMainWindow* mainWindow) 
     : QObject(mainWindow), mainWindow_(mainWindow) 
 {

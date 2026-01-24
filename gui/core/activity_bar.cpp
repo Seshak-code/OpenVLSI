@@ -56,22 +56,27 @@ void ActivityBar::setActive(const QString& id) {
 }
 
 void ActivityBar::onActionTriggered(QAction* action) {
-    // Toggle logic: If clicking already active, logic might be to hide sidebar?
-    // VS Code logic: Click active -> Toggle Sidebar visibility.
-    // Click inactive -> Switch content.
-    
+    // VS Code-style toggle logic:
+    // - Click active -> Hide sidebar (toggle off)
+    // - Click inactive -> Switch content (show that sidebar)
+
     QString id = actionIds_[action];
-    
-    // NOTE: QButtonGroup with Exclusive=true enforces one always checked.
-    // To support "Toggle Off", we might need logic in MainWindow or here.
-    // For now, let's just emit the change. MainWindow can decide to hide dock 
-    // if it receives the same ID again or if we handle toggle here.
-    
-    // Actually, typical QToolBar/Action behavior with exclusive group:
-    // User clicks A (checked). User clicks A again -> stays checked.
-    // To allow uncheck, we need custom handling or setExclusive(false) temporarily.
-    
-    emit activityChanged(id);
+
+    if (action == activeAction_) {
+        // Clicking already active item - toggle OFF (hide sidebar)
+        // Temporarily disable exclusive mode to allow unchecking
+        group_->setExclusive(false);
+        action->setChecked(false);
+        group_->setExclusive(true);
+        activeAction_ = nullptr;
+
+        // Emit empty ID to signal "hide sidebar"
+        emit activityChanged(QString());
+    } else {
+        // Clicking different item - switch content
+        activeAction_ = action;
+        emit activityChanged(id);
+    }
 }
 
 void ActivityBar::updateStyle() {
