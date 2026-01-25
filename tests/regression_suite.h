@@ -42,7 +42,8 @@ public:
                 SolverStep result = t.testFunc();
                 
                 if (updateGolden) {
-                    db.update(t.name, result.nodeVoltages, result.stats.residual, result.stats.iterations, result.stats.converged, result.topologyHash);
+                    auto meta = RegressionDB::getSystemMetadata();
+                    db.update(t.name, result.nodeVoltages, result.stats.residual, result.stats.iterations, result.stats.converged, result.topologyHash, meta);
                     std::cout << "[UPDATED] (conv=" << (result.stats.converged ? "Y" : "N") 
                               << ", iter=" << result.stats.iterations 
                               << ", res=" << result.stats.residual << ", hash=" << result.topologyHash << ")\n";

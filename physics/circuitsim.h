@@ -847,7 +847,8 @@ public:
                auto safe_exp = [&](Dual<double> v, Dual<double> vt) { 
                     Dual<double> arg = v / vt;
                     if (arg.val > 40.0) arg = Dual<double>(40.0, 0.0);
-                    return std::exp(arg); // Use std::exp which should have overload for Dual in dual.h
+                    using std::exp;
+                    return exp(arg); // Use ADL for Dual
                };
 
                Dual<double> i_f = Is * (safe_exp(v_be_d, Vt) - 1.0);

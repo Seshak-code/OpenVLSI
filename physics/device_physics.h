@@ -57,7 +57,8 @@ template <typename T, typename P>
 inline T diode_current(T vd, const DiodeParams<P>& p) 
 {
     // Note: Implicit type promotion via operator overloads in dual.h
-    return p.Is * (std::exp(vd / (p.N * p.Vt)) - 1.0);
+    using std::exp;
+    return p.Is * (exp(vd / (p.N * p.Vt)) - 1.0);
 }
 
 /**
@@ -76,7 +77,8 @@ inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 3
     if (arg > max_arg) {
         // I(max) = Is * (exp(max) - 1)
         // G(max) = (Is / n_vt) * exp(max)
-        double exp_max = std::exp(max_arg);
+        using std::exp;
+    double exp_max = exp(max_arg);
         auto i_max = p.Is * (exp_max - 1.0);
         auto g_max = (p.Is / n_vt) * exp_max;
         
@@ -84,7 +86,8 @@ inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 3
         return i_max + delta * g_max;
     }
     
-    return p.Is * (std::exp(arg) - 1.0);
+    using std::exp;
+    return p.Is * (exp(arg) - 1.0);
 }
 
 /**
@@ -276,7 +279,8 @@ inline BJTCurrents bjt_ebers_moll(double v_c, double v_b, double v_e, bool isNPN
         double arg = v_j / p.Vt;
         double arg_clamped = std::min(arg, 30.0);  // Branchless clamp
         
-        double exp_val = std::exp(arg_clamped);
+        using std::exp;
+        double exp_val = exp(arg_clamped);
         double i_base = p.Is * (exp_val - 1.0);
         double g_base = (p.Is / p.Vt) * exp_val;
         

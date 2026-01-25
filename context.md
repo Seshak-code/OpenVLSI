@@ -10,28 +10,38 @@
 - **Schematic Editor**: Custom `QGraphicsScene` for circuit design with sub-pixel snapping and real-time ERC (Engineering Rule Checks).
 - **AI Assistant Panel**: Direct interface for the Copilot, supporting "Visual Diffs" of suggested circuit changes.
 - **Mode Selection**: Context-aware stages (Bench, Block, System Integration).
+- **Interconnections**:
+    - Consumes `compute/orchestration` for simulation control.
+    - Uses `compute/infrastructure/simtrace.h` for visualizing results (`WaveformViewer`).
+    - *Never* talks directly to `physics/` or `compute/math/`.
 
 ### 2. Compute / Physics Engine (`compute/`, `physics/`)
-- **MNA Tensor Backend**: Custom Modified Nodal Analysis using **SoA (Structure of Arrays)** for GPU/SIMD optimization.
-- **Dual Kernel Strategy**: Every device (BJT, Diode) has an `exact` model for KCL auditing and a `clamped` model for Newton-Raphson stability.
-- **Hybrid Solver**: Automatically selects between **LU Decomposition** (robustness for active circuits) and **PCG** (speed for large passive grids).
-- **Regression DB**: [regression_golden.db](file:///Users/seshak/Desktop/CuteApp/regression_golden.db) stores bit-exact reference results across x86, ARM, and WASM.
+- **MNA Tensor Backend**: Custom Modified Nodal Analysis using **SoA (Structure of Arrays)** (`compute/tensors/`) for GPU/SIMD optimization.
+- **Dual Kernel Strategy** (`physics/`): Every device (BJT, Diode) has an `exact` model for KCL auditing and a `clamped` model for Newton-Raphson stability.
+- **Hybrid Solver** (`compute/solvers/`): Automatically selects between **LU Decomposition** (robustness) and **PCG** (speed).
+- **Infrastructure** (`compute/infrastructure/`):
+    - `tensorscheduler.h`: Batches jobs by **Topology Hash**.
+    - `safe_utils.h`: Enforces bounds checking and NaN scrubbing.
+    - `simtrace.h`: Records execution metadata (iterations, solver method) alongside results.
 
-### 3. AI Cognitive Layer (`ai_api/`)
-- **Speculative Runner**: Forks a headless simulation "clone" to test AI hypotheses without affecting the user's workbench.
-- **Simulation Trace**: Structured JSON knowledge objects (not just text logs) that ground the AI in physical reality.
+### 3. Verification & Regression (`tests/`)
+- **Regression DB**: `regression_golden.db` stores "Golden" reference results.
+- **Interconnections**:
+    - `regression_db.h` loads/saves the golden DB.
+    - `regression_suite.h` runs simulations via `CircuitSim` and compares against the DB.
+    - **CI Flow**: `.github/workflows/ci.yml` runs these tests on Windows, MacOS, Linux, and WASM.
+
+### 4. AI Cognitive Layer (`ai_api/`)
+- **Speculative Runner**: Forks a headless simulation "clone" to test AI hypotheses.
+- **Simulation Trace**: Structured JSON knowledge objects that ground the AI in physical reality.
 - **Failure Taxonomy**: Automated classifier that labels crashes (e.g., `FLOATING_NODE`) for better AI reasoning.
-- **Topology Analyzer**: Pattern matching to identify functional blocks like "Darlington Pair" or "Current Mirror".
 
-### 4. Orchestration & ASIC Flow (`compute/orchestration/`)
-- **Driver Model**: Translation of design intent into tool-specific scripts (Yosys, OpenROAD, Klayout).
-- **gRPC Infrastructure**: Connects the local app to containerized workers or cloud compute.
-
-## 📁 Key Documentation Path
-- **Foundational Guide**: `AI_copilot_complete_guide.txt` (Thesis on numerical hardening and AI grounding).
-- **Vision/Roadmap**: `Roadmap.md` (Strategic direction and shipment gates).
-- **Architecture**: `context.md` (Module-level structure).
-- **Workflows**: `agentic_flow.md` (The standard procedure for developing this project).
+## 🔗 Critical Interconnections (The "Flow")
+1.  **User Edit**: `gui/` -> `SchematicModel` -> `components/circuit.h` (`TensorNetlist`).
+2.  **Simulation Request**: `gui/` -> `compute/orchestration/` -> `compute/solvers/`.
+3.  **Data Transformation**: `TensorNetlist` (AoS) -> `compute/tensors/physics_tensors.h` (SoA).
+4.  **Execution**: `compute/solvers/` -> `physics/circuitsim.h` -> `physics/device_physics.h` (Kernels).
+5.  **Verification**: Result -> `compute/infrastructure/simtrace.h` -> `gui/` (Waveforms).
 
 ## 🧩 Standard Agentic Development Workflow
 The project enforces a strict "Context-First" development loop via `/Users/seshak/.agent/workflows/agentic_flow.md`:

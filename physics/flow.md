@@ -117,4 +117,5 @@ The `physics/` directory contains the core numerical engine of CuteApp. It is de
 ## Development Rules
 1.  **Stateless Physics**: Never introduce state variables (like `history`) into `device_physics.h` kernels.
 2.  **Explicit Clamping**: All exponentials MUST have a `_clamped` variant.
-3.  **KCL is King**: Steps are rejected if `calculatePhysicalResiduals` > 1pA, even if the linear solver converged.
+3.  **Generic Math (ADL)**: Do NOT use `std::exp` or `std::sin` directly in device kernels. Use unqualified `exp()` to allow Argument Dependent Lookup (ADL) to find `acutesim::exp(Dual)` or defaults.
+4.  **KCL is King**: Steps are rejected if `calculatePhysicalResiduals` > 1pA, even if the linear solver converged.

@@ -111,7 +111,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AcuteSim-Linux
-          path: out/build/linux/AcuteSim
+          path: |
+            out/build/linux/AcuteSim
+            regression_golden.db
           if-no-files-found: warn
 
   build-wasm:

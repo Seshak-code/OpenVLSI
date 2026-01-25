@@ -749,3 +749,26 @@ target_include_directories(test_docking_interaction PRIVATE
 target_link_libraries(test_docking_interaction PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
 add_test(NAME test_docking_interaction COMMAND test_docking_interaction)
 
+
+# BJT Stability Test
+add_executable(test_bjt_stability 
+    tests/test_bjt_stability.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_bjt_stability PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_bjt_stability PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_bjt_stability PUBLIC cxx_std_17)
+
+add_test(NAME test_bjt_stability COMMAND test_bjt_stability)

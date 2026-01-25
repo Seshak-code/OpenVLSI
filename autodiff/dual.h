@@ -146,7 +146,6 @@ constexpr Dual<T> operator-(Dual<T> x) { return { -x.val, -x.grad }; }
 // Important: Place in std namespace or allow ADL? Usually ADL is better for T.
 // But since Dual is our type, we define overloads in the same namespace or global.
 
-namespace std {
     template <typename T>
     inline Dual<T> exp(const Dual<T>& x) {
         // d/dx exp(u) = exp(u) * u'
@@ -200,10 +199,10 @@ namespace std {
     // Scalar min/max
     template <typename T>
     inline Dual<T> min(const Dual<T>& a, T b) {
-         return (a.val < b) ? a : Dual<T>(b);
+        return (a.val < b) ? a : Dual<T>(b);
     }
     
     // Overloads for min/max to support mixed scalar/dual
     // Note: The derivative of min(x, C) is 1 if x < C, else 0. 
     // This is correctly handled by returning the full object 'a' or 'b' (which is constant).
-}
+
