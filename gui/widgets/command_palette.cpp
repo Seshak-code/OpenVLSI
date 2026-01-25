@@ -239,10 +239,16 @@ void CommandPalette::executeCommand(const QString& commandId) {
     const Command& cmd = commands_[commandId];
     addToRecent(commandId);
 
-    if (cmd.action && cmd.action->isEnabled()) {
-        cmd.action->trigger();
-    } else if (cmd.callback) {
-        cmd.callback();
+    try {
+        if (cmd.action && cmd.action->isEnabled()) {
+            cmd.action->trigger();
+        } else if (cmd.callback) {
+            cmd.callback();
+        }
+    } catch (const std::exception& e) {
+        qWarning() << "Command execution failed:" << commandId << "-" << e.what();
+    } catch (...) {
+        qWarning() << "Command execution failed:" << commandId << "- unknown error";
     }
 
     emit commandExecuted(commandId);

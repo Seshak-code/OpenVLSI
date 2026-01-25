@@ -5,9 +5,11 @@ It implements the logic to convert the user-facing "Array of Structures" (AoS) (
 
 ## Philosophy: Data-Oriented Design (DoD)
 
-AcuteSim distinguishes between a component's **Identity** (Component ID, Name, Metadata) and its **Physics** (Conductanace, Current, Voltage).
-*   **Identity** lives in `components/`. It's object-oriented, easy to edit, and inefficient to compute.
-*   **Physics** lives in `compute/tensors/`. It's data-oriented, harder to edit, but optimal for SIMD (Single Instruction, Multiple Data) and GPU compute.
+AcuteSim distinguishes between three pillars of a component:
+1.  **Identity** (`components/`): The User's view (Name, Metadata). OO, easy to edit.
+2.  **Definition** (`tensors/`): The Solver's view of *immutable* parameters (R, L, W, L). SoA, optimized for SIMD.
+3.  **State** (`instanceStates` in `components/circuit.h`): The Solver's view of *mutable* history (Voltages, Currents, Convergence).
+
 
 ## Key Files & Structures
 

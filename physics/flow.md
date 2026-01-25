@@ -106,11 +106,12 @@ The `physics/` directory contains the core numerical engine of CuteApp. It is de
     ```
 
 ## Data Flow
-1.  **Input**: `TensorNetlist` (Flat, index-based representation of the circuit).
+1.  **Input**: `TensorNetlist` (State + Definition). `BlockState` initialized per instance.
 2.  **Loop**:
     -   `CircuitSim::stepTransient` calls `IntegratorArbiter`.
-    -   If stable, `matrixBuilder` assembles Jacobian via `stamps.h`.
+    -   If stable, `matrixBuilder` assembles Jacobian via `stamps.h` (Parallel/Batch).
     -   Solver computes $\Delta V$.
+    -   **State Update**: `BlockState` histories (inductors/capacitors) updated.
     -   `calculatePhysicalResiduals` validates the result against physics.
 3.  **Output**: `SimulationTrace` containing time-series voltages.
 

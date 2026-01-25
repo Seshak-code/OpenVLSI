@@ -123,14 +123,17 @@ public:
 
       // 2. Capacitor Branch Voltages (Internal State)
       // Checks stability of charge storage elements
-      for (const auto &c : netlist.globalBlock.capacitors) {
-          if (c.voltage_history.size() < 2) continue;
+      for (size_t i = 0; i < netlist.globalBlock.capacitors.size(); ++i) {
+          const auto &c = netlist.globalBlock.capacitors[i];
+          const auto &hist = netlist.globalState.capacitorState[i];
+          if (hist.v.size() < 2) continue;
+          
           double v1 = (c.nodePlate1 > 0) ? current_voltages[c.nodePlate1-1] : 0.0;
           double v2 = (c.nodePlate2 > 0) ? current_voltages[c.nodePlate2-1] : 0.0;
           double v_branch = v1 - v2;
           
-          double v_prev = c.voltage_history[0];
-          double v_prev2 = (c.voltage_history.size() > 1) ? c.voltage_history[1] : v_prev;
+          double v_prev = hist.v[0];
+          double v_prev2 = (hist.v.size() > 1) ? hist.v[1] : v_prev;
           
           double v_pred = v_prev + (v_prev - v_prev2) * (dt / prev_dt);
           double err = std::abs(v_branch - v_pred) * c_factor; // Predictor error
@@ -140,6 +143,7 @@ public:
           max_err = std::max(max_err, w_err);
           count++;
       }
+
 
       // 3. MOSFET Gate Drive (Vgs) - Critical for Switching
       for (const auto &m : netlist.globalBlock.mosfets) {
@@ -582,26 +586,29 @@ public:
     // 4. Capacitors (Transient Only)
     // If h > 0, we are in transient and must audit the displacement current
     if (h > 1e-15 && integrator) {
-      for (const auto &c : netlist.globalBlock.capacitors) {
+      for (size_t i = 0; i < netlist.globalBlock.capacitors.size(); ++i) {
+        const auto &c = netlist.globalBlock.capacitors[i];
+        const auto &hist = netlist.globalState.capacitorState[i];
+          
         double v_curr = getV(c.nodePlate1) - getV(c.nodePlate2);
         double i_c = 0.0;
         IntegrationType type = integrator->getType();
 
-        if (c.voltage_history.empty())
+        if (hist.v.empty())
           continue;
 
         if (type == IntegrationType::TRAPEZOIDAL) {
           double g_eq = (2.0 * c.capacitance_farads) / h;
-          i_c = g_eq * (v_curr - c.voltage_history[0]) - c.current_history[0];
+          i_c = g_eq * (v_curr - hist.v[0]) - hist.i[0];
         } else if (type == IntegrationType::GEAR_1_EULER) {
-          i_c = (c.capacitance_farads / h) * (v_curr - c.voltage_history[0]);
+          i_c = (c.capacitance_farads / h) * (v_curr - hist.v[0]);
         } else if (type == IntegrationType::GEAR_2) {
-          if (c.voltage_history.size() >= 2) {
+          if (hist.v.size() >= 2) {
             i_c = (c.capacitance_farads / h) *
-                  (1.5 * v_curr - 2.0 * c.voltage_history[0] +
-                   0.5 * c.voltage_history[1]);
+                  (1.5 * v_curr - 2.0 * hist.v[0] +
+                   0.5 * hist.v[1]);
           } else {
-            i_c = (c.capacitance_farads / h) * (v_curr - c.voltage_history[0]);
+            i_c = (c.capacitance_farads / h) * (v_curr - hist.v[0]);
           }
         }
         addRes(c.nodePlate1, -i_c);
@@ -609,28 +616,33 @@ public:
       }
       
       // 4.5. Inductors (Transient Only)
-      for (const auto &l : netlist.globalBlock.inductors) {
+      // 4.5. Inductors (Transient Only)
+      for (size_t i = 0; i < netlist.globalBlock.inductors.size(); ++i) {
+        const auto &l = netlist.globalBlock.inductors[i];
+        const auto &hist = netlist.globalState.inductorState[i];
+        
         double v_curr = getV(l.nodeCoil1) - getV(l.nodeCoil2);
         double i_l = 0.0;
         IntegrationType type = integrator->getType();
 
-        if (l.current_history.empty())
+        if (hist.i.empty())
           continue;
 
         if (type == IntegrationType::TRAPEZOIDAL) {
           double g_eq = h / (2.0 * l.inductance_henries);
-          i_l = l.current_history[0] + g_eq * (v_curr + l.voltage_history[0]);
+          i_l = hist.i[0] + g_eq * (v_curr + hist.v[0]);
         } else if (type == IntegrationType::GEAR_1_EULER) {
-          i_l = l.current_history[0] + (h / l.inductance_henries) * v_curr;
+          i_l = hist.i[0] + (h / l.inductance_henries) * v_curr;
         } else if (type == IntegrationType::GEAR_2) {
-          if (l.current_history.size() >= 2) {
+          if (hist.i.size() >= 2) {
             double coeff = h / l.inductance_henries;
-            i_l = (4.0/3.0)*l.current_history[0] - (1.0/3.0)*l.current_history[1] 
+            i_l = (4.0/3.0)*hist.i[0] - (1.0/3.0)*hist.i[1] 
                   + (2.0/3.0)*coeff*v_curr;
           } else {
-            i_l = l.current_history[0] + (h / l.inductance_henries) * v_curr;
+            i_l = hist.i[0] + (h / l.inductance_henries) * v_curr;
           }
         }
+
         addRes(l.nodeCoil1, -i_l);
         addRes(l.nodeCoil2, i_l);
       }
@@ -680,35 +692,40 @@ public:
 
         // Capacitors (Transient)
         if (h > 1e-15 && integrator) {
-          for (const auto &c : block.capacitors) {
+          const auto &instState = netlist.instanceStates[instanceIdx];
+          for (size_t c_idx = 0; c_idx < block.capacitors.size(); ++c_idx) {
+            const auto &c = block.capacitors[c_idx];
+            const auto &hist = instState.capacitorState[c_idx];
+
             double v_curr =
                 getV(mapNode(c.nodePlate1)) - getV(mapNode(c.nodePlate2));
             double i_c = 0.0;
             IntegrationType type = integrator->getType();
-            if (c.voltage_history.empty())
+            if (hist.v.empty())
               continue;
 
             if (type == IntegrationType::TRAPEZOIDAL) {
               double g_eq = (2.0 * c.capacitance_farads) / h;
               i_c =
-                  g_eq * (v_curr - c.voltage_history[0]) - c.current_history[0];
+                  g_eq * (v_curr - hist.v[0]) - hist.i[0];
             } else if (type == IntegrationType::GEAR_1_EULER) {
               i_c =
-                  (c.capacitance_farads / h) * (v_curr - c.voltage_history[0]);
+                  (c.capacitance_farads / h) * (v_curr - hist.v[0]);
             } else if (type == IntegrationType::GEAR_2) {
-              if (c.voltage_history.size() >= 2) {
+              if (hist.v.size() >= 2) {
                 i_c = (c.capacitance_farads / h) *
-                      (1.5 * v_curr - 2.0 * c.voltage_history[0] +
-                       0.5 * c.voltage_history[1]);
+                      (1.5 * v_curr - 2.0 * hist.v[0] +
+                       0.5 * hist.v[1]);
               } else {
                 i_c = (c.capacitance_farads / h) *
-                      (v_curr - c.voltage_history[0]);
+                      (v_curr - hist.v[0]);
               }
             }
             addResAtomic(mapNode(c.nodePlate1), -i_c);
             addResAtomic(mapNode(c.nodePlate2), i_c);
           }
         }
+
       }
     }
 
@@ -917,9 +934,10 @@ public:
    * Stamps linear elements (Resistors, Sources, Capacitors) for a specific
    * block instance.
    */
-  void stampBlockLinear(const TensorBlock &block,
+  void stampBlockLinear(const TensorBlock &block, const BlockState &state,
                         const std::function<int(int)> &mapNode, double h, double time,
                         double voltageScale = 1.0, int mcSeed = 0) {
+
     // 1. Resistors
     for (const auto &r : block.resistors) {
       // MC Perturbation
@@ -939,13 +957,15 @@ public:
                                  matrixBuilder, rhsVector);
     }
     // 2.5 Power Rails (System Source)
-    for (const auto &rail : block.powerRails) {
+    for (size_t i = 0; i < block.powerRails.size(); ++i) {
+        const auto &rail = block.powerRails[i];
+        const auto &hist = state.powerRailState[i];
         // Retrieve history (dc/transient)
         double v_prev = 0.0;
         double i_prev_cap = 0.0;
-        if (!rail.voltage_history.empty()) {
-            v_prev = rail.voltage_history[0];
-            i_prev_cap = rail.current_history[0]; // Stores capacitor current
+        if (!hist.v.empty()) {
+            v_prev = hist.v[0];
+            i_prev_cap = hist.i[0]; // Stores capacitor current
         }
         
         stampPowerRail(mapNode(rail.nodeRail), rail.nominal_V * voltageScale, rail.ripple_Vpp, rail.frequency_Hz,
@@ -953,6 +973,7 @@ public:
                        v_prev, i_prev_cap,
                        matrixBuilder, rhsVector);
     }
+
     // 3. Current Sources
     for (const auto &i : block.currentSources) {
       int nP = mapNode(i.nodePositive);
@@ -964,25 +985,31 @@ public:
     }
     // 4. Capacitors (Transient)
     if (h > 1e-15 && integrator) {
-      for (const auto &c : block.capacitors) {
+      for (size_t i = 0; i < block.capacitors.size(); ++i) {
+        const auto &c = block.capacitors[i];
+        const auto &hist = state.capacitorState[i];
         double C = getPerturbedValue(c.capacitance_farads, c.tolerance_percent, c.name, mcSeed);
         
         integrator->stampCapacitor(mapNode(c.nodePlate1), mapNode(c.nodePlate2),
-                                   C, h, c.voltage_history,
-                                   c.current_history, matrixBuilder, rhsVector);
+                                   C, h, hist.v,
+                                   hist.i, matrixBuilder, rhsVector);
       }
     }
+
     // 5. Inductors (Transient)
     if (h > 1e-15 && integrator) {
-      for (const auto &ind : block.inductors) {
+      for (size_t i = 0; i < block.inductors.size(); ++i) {
+          const auto &ind = block.inductors[i];
+          const auto &hist = state.inductorState[i];
           int n1 = mapNode(ind.nodeCoil1);
           int n2 = mapNode(ind.nodeCoil2);
           double L = getPerturbedValue(ind.inductance_henries, ind.tolerance_percent, ind.name, mcSeed);
           
-          if (ind.current_history.empty() || ind.voltage_history.empty()) continue;
+          if (hist.i.empty() || hist.v.empty()) continue;
           
-          double i_prev = ind.current_history[0];
-          double v_prev = ind.voltage_history[0];
+          double i_prev = hist.i[0];
+          double v_prev = hist.v[0];
+
           
           double g_eq = 0.0;
           double i_source = 0.0;
@@ -1062,8 +1089,12 @@ public:
           if (n2b != 0 && n1b != 0) matrixBuilder.add(n2b-1, n1b-1, -g12);
           
           // History terms for cross-coupling
-          double i1_prev = L1_ind.current_history.empty() ? 0.0 : L1_ind.current_history[0];
-          double i2_prev = L2_ind.current_history.empty() ? 0.0 : L2_ind.current_history[0];
+          // History terms for cross-coupling
+          const auto &hist1 = state.inductorState[mut.inductor1_index];
+          const auto &hist2 = state.inductorState[mut.inductor2_index];
+          double i1_prev = hist1.i.empty() ? 0.0 : hist1.i[0];
+          double i2_prev = hist2.i.empty() ? 0.0 : hist2.i[0];
+
           
           // The history contribution is complex for coupled inductors
           // Simplified: assume the single-inductor section handles self history,
@@ -1102,50 +1133,182 @@ public:
     // 2. Batch Stamp (Iterate over contiguous arrays)
     
     // Diodes
+    // Diodes
     size_t nD = block.diodes.size();
-    for (size_t i = 0; i < nD; ++i) {
-        stampDiode(block.diodes.anodes[i], block.diodes.cathodes[i],
-                   block.diodes.g_d[i], block.diodes.i_d[i], block.diodes.v_d[i],
-                   matrixBuilder, rhsVector);
+    if (nD > 0) {
+        std::vector<int> rows, cols;
+        std::vector<double> vals;
+        rows.reserve(nD * 4);
+        cols.reserve(nD * 4);
+        vals.reserve(nD * 4);
+        
+        for (size_t i = 0; i < nD; ++i) {
+            int nA = block.diodes.anodes[i];
+            int nC = block.diodes.cathodes[i];
+            double g = block.diodes.g_d[i];
+            double i_eq = block.diodes.i_d[i] - g * block.diodes.v_d[i];
+            
+            // Matrix Stamping (G)
+            if (nA != 0 && nC != 0) {
+                // Diagonal
+                rows.push_back(nA-1); cols.push_back(nA-1); vals.push_back(g);
+                rows.push_back(nC-1); cols.push_back(nC-1); vals.push_back(g);
+                // Off-Diagonal
+                rows.push_back(nA-1); cols.push_back(nC-1); vals.push_back(-g);
+                rows.push_back(nC-1); cols.push_back(nA-1); vals.push_back(-g);
+            } else if (nA != 0) {
+                rows.push_back(nA-1); cols.push_back(nA-1); vals.push_back(g);
+            } else if (nC != 0) {
+                rows.push_back(nC-1); cols.push_back(nC-1); vals.push_back(g);
+            }
+            
+            // RHS Stamping
+            if (nA != 0) rhsVector[nA-1] -= i_eq;
+            if (nC != 0) rhsVector[nC-1] += i_eq;
+        }
+        matrixBuilder.addBatch(rows, cols, vals);
+        
+        // GPU Hook (Future Integration)
+        /*
+        if (activeBackend == Backend::WEBGPU || activeBackend == Backend::CUDA) {
+            // Upload Tensors to GPU Storage Buffer
+            gpuAssembler.upload(block.diodes.g_d_buffer, block.diodes.g_d); 
+            // Dispatch Assembly Shader (Scatter-Add)
+            gpuAssembler.dispatchStamping("diode_stamp_kernel");
+        }
+        */
     }
+
+
     
     // MOSFETs
+    // MOSFETs
     size_t nM = block.mosfets.size();
-    for (size_t i = 0; i < nM; ++i) {
-        stampMosfet(block.mosfets.drains[i], block.mosfets.gates[i], 
-                    block.mosfets.sources[i], block.mosfets.bodies[i],
-                    block.mosfets.gm[i], block.mosfets.gds[i],
-                    matrixBuilder);
+    if (nM > 0) {
+        std::vector<int> rows, cols;
+        std::vector<double> vals;
+        // Estimate size: 4 nodes * 3 connections approx? 
+        // gm: ID vs VGS -> (D,G), (S,G)
+        // gds: ID vs VDS -> (D,D), (D,S), (S,D), (S,S)
+        rows.reserve(nM * 12);
+        cols.reserve(nM * 12);
+        vals.reserve(nM * 12);
         
-        // RHS Current Correction: I_eq = I_ds - (gm*vgs + gds*vds)
-        // Check `stampMosfet` logic: it assumes linear model. 
-        // We need to stamp the equivalent current source for the linearization point.
-        double ids = block.mosfets.ids[i];
-        double gm = block.mosfets.gm[i];
-        double gds = block.mosfets.gds[i];
-        double vgs = block.mosfets.vgs[i];
-        double vds = block.mosfets.vds[i];
-        double i_eq = ids - (gm * vgs + gds * vds);
-        
-        int d = block.mosfets.drains[i];
-        int s = block.mosfets.sources[i];
-        if (d != 0) rhsVector[d-1] -= i_eq;
-        if (s != 0) rhsVector[s-1] += i_eq;
+        for (size_t i=0; i<nM; ++i) {
+             int d = block.mosfets.drains[i];
+             int g = block.mosfets.gates[i];
+             int s = block.mosfets.sources[i];
+             // int b = block.mosfets.bodies[i]; // Ignored in simple level 1 for now or absorbed
+             
+             double gm = block.mosfets.gm[i];
+             double gds = block.mosfets.gds[i];
+             double ids = block.mosfets.ids[i];
+             double vgs = block.mosfets.vgs[i];
+             double vds = block.mosfets.vds[i];
+             double i_eq = ids - (gm * vgs + gds * vds);
+             
+             // Stamping Gds (Conductance between Drain and Source)
+             //  [+Gds  -Gds]
+             //  [-Gds  +Gds]
+             if (d!=0 && s!=0) {
+                 rows.push_back(d-1); cols.push_back(d-1); vals.push_back(gds);
+                 rows.push_back(s-1); cols.push_back(s-1); vals.push_back(gds);
+                 rows.push_back(d-1); cols.push_back(s-1); vals.push_back(-gds);
+                 rows.push_back(s-1); cols.push_back(d-1); vals.push_back(-gds);
+             } else if (d!=0) {
+                 rows.push_back(d-1); cols.push_back(d-1); vals.push_back(gds);
+             } else if (s!=0) {
+                 rows.push_back(s-1); cols.push_back(s-1); vals.push_back(gds);
+             }
+             
+             // Stamping Gm (Transconductance from Gate-Source to Drain-Source)
+             // I_ds += gm * Vgs = gm * (Vg - Vs)
+             // Drain Row: +gm*Vg - gm*Vs
+             // Source Row: -gm*Vg + gm*Vs
+             
+             // Drain Row
+             if (d!=0) {
+                 if (g!=0) { rows.push_back(d-1); cols.push_back(g-1); vals.push_back(gm); }
+                 if (s!=0) { rows.push_back(d-1); cols.push_back(s-1); vals.push_back(-gm); }
+             }
+             // Source Row
+             if (s!=0) {
+                 if (g!=0) { rows.push_back(s-1); cols.push_back(g-1); vals.push_back(-gm); }
+                 if (s!=0) { rows.push_back(s-1); cols.push_back(s-1); vals.push_back(gm); }
+             }
+             
+             // RHS
+             // I_d_total = I_eq + ...
+             // KCL DrainNode: Isum = 0 -> ... + I_d_leaving = 0 -> ... + I_eq = 0 -> RHS = -I_eq
+             // I_d leaving drain
+             if (d!=0) rhsVector[d-1] -= i_eq;
+             if (s!=0) rhsVector[s-1] += i_eq;
+        }
+        matrixBuilder.addBatch(rows, cols, vals);
+
+        // GPU Hook (Future Integration)
+        /*
+        if (activeBackend == Backend::WEBGPU) {
+             gpuAssembler.upload(block.mosfets.gds_buffer, block.mosfets.gds);
+             gpuAssembler.dispatchStamping("mosfet_stamp_kernel");
+        }
+        */
     }
+
+
     
     // BJTs
+    // BJTs
     size_t nQ = block.bjts.size();
-    for (size_t i = 0; i < nQ; ++i) {
-        stampBJT(block.bjts.collectors[i], block.bjts.bases[i], block.bjts.emitters[i],
-                 block.bjts.g_cc[i], block.bjts.g_cb[i], block.bjts.g_ce[i],
-                 block.bjts.g_bc[i], block.bjts.g_bb[i], block.bjts.g_be[i],
-                 block.bjts.g_ec[i], block.bjts.g_eb[i], block.bjts.g_ee[i],
-                 block.bjts.Ic[i], block.bjts.Ib[i], block.bjts.Ie[i],
-                 (block.bjts.collectors[i]>0 ? v_guess[block.bjts.collectors[i]-1] : 0.0),
-                 (block.bjts.bases[i]>0 ? v_guess[block.bjts.bases[i]-1] : 0.0),
-                 (block.bjts.emitters[i]>0 ? v_guess[block.bjts.emitters[i]-1] : 0.0),
-                 matrixBuilder, rhsVector);
+    if (nQ > 0) {
+        std::vector<int> rows, cols;
+        std::vector<double> vals;
+        rows.reserve(nQ * 9);
+        cols.reserve(nQ * 9);
+        vals.reserve(nQ * 9);
+        
+        for (size_t i = 0; i < nQ; ++i) {
+            int nC = block.bjts.collectors[i];
+            int nB = block.bjts.bases[i];
+            int nE = block.bjts.emitters[i];
+            
+            double g_cc = block.bjts.g_cc[i]; double g_cb = block.bjts.g_cb[i]; double g_ce = block.bjts.g_ce[i];
+            double g_bc = block.bjts.g_bc[i]; double g_bb = block.bjts.g_bb[i]; double g_be = block.bjts.g_be[i];
+            double g_ec = block.bjts.g_ec[i]; double g_eb = block.bjts.g_eb[i]; double g_ee = block.bjts.g_ee[i];
+            
+            // Helper to push triplet
+            auto addG = [&](int r, int c, double v) { 
+                if(r!=0 && c!=0) { rows.push_back(r-1); cols.push_back(c-1); vals.push_back(v); }
+            };
+            
+            addG(nC, nC, g_cc); addG(nC, nB, g_cb); addG(nC, nE, g_ce);
+            addG(nB, nC, g_bc); addG(nB, nB, g_bb); addG(nB, nE, g_be);
+            addG(nE, nC, g_ec); addG(nE, nB, g_eb); addG(nE, nE, g_ee);
+            
+            // RHS
+             double v_c = (nC>0 ? v_guess[nC-1] : 0.0);
+             double v_b = (nB>0 ? v_guess[nB-1] : 0.0);
+             double v_e = (nE>0 ? v_guess[nE-1] : 0.0);
+             
+             double Iceq = block.bjts.Ic[i] - (g_cc*v_c + g_cb*v_b + g_ce*v_e);
+             double Ibeq = block.bjts.Ib[i] - (g_bc*v_c + g_bb*v_b + g_be*v_e);
+             double Ieeq = block.bjts.Ie[i] - (g_ec*v_c + g_eb*v_b + g_ee*v_e);
+             
+             if (nC != 0) rhsVector[nC-1] -= Iceq;
+             if (nB != 0) rhsVector[nB-1] -= Ibeq;
+             if (nE != 0) rhsVector[nE-1] -= Ieeq;
+        }
+        matrixBuilder.addBatch(rows, cols, vals);
+
+        // GPU Hook (Future Integration)
+        /*
+        if (activeBackend == Backend::WEBGPU) {
+             gpuAssembler.dispatchStamping("bjt_stamp_kernel");
+        }
+        */
     }
+
+
   }
 
   void stampBlockNonLinear(const TensorBlock &block,
@@ -1379,7 +1542,7 @@ public:
                         const std::vector<double> &v_guess, double time) {
     // A. Global Block
     auto identityMap = [](int n) { return n; };
-    stampBlockLinear(netlist.globalBlock, identityMap, h, time, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
+    stampBlockLinear(netlist.globalBlock, netlist.globalState, identityMap, h, time, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
     // stampBlockNonLinear(netlist.globalBlock, identityMap, v_guess); 
     stampSoABlock(soaBlock, v_guess); // SoA for Global Block - TODO: Pass PVT to SoA
 
@@ -1388,13 +1551,15 @@ public:
       const TensorBlock &block = *job.blockTmpl;
       for (int instanceIdx : job.instanceIds) {
         const auto &instance = netlist.instances[instanceIdx];
+        const auto &instState = netlist.instanceStates[instanceIdx];
         auto mapNode = [&](int localNode) {
           return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
         };
-        stampBlockLinear(block, mapNode, h, time, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
+        stampBlockLinear(block, instState, mapNode, h, time, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
         stampBlockNonLinear(block, mapNode, v_guess, netlist.environment.ambient_temp_K);
       }
     }
+
   }
 
 

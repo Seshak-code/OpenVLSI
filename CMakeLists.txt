@@ -828,3 +828,26 @@ target_compile_features(test_kernel_dispatch PUBLIC cxx_std_17)
 add_test(NAME test_kernel_dispatch COMMAND test_kernel_dispatch)
 
 
+
+# Verification Harness (Benchmarks, Alignment, Dense Batch)
+add_executable(test_verification_harness 
+    tests/verification_main.cpp
+    physics/quick_analysis.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_verification_harness PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_features(test_verification_harness PUBLIC cxx_std_17)
+target_link_libraries(test_verification_harness PRIVATE Qt6::Core)

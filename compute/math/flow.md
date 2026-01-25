@@ -12,9 +12,11 @@ It is designed to be:
 ### 1. `linalg.h`: The Linear Algebra Engines
 Implements the matrix storage and solvers for `Ax = b`.
 *   **Storage**: `Csr_matrix` (Compressed Sparse Row) and `MatrixConstructor` (Triplet-based assembly).
+*   **Lock-Free Assembly**: Uses **Thread-Local Storage (TLS)** buffers to allow multiple threads to stamp simultaneously without mutex contention.
+*   **Batch Interface**: `addBatch` allows efficiently stamping vector results from physics kernels directly.
 *   **Iterative Solver**: `solvePCG` (Preconditioned Conjugate Gradient). Best for large, symmetric, diagonally dominant matrices (e.g., pure resistor/mesh grids). uses Jacobi Preconditioning.
 *   **Direct Solver**: `solveLU_Pivoted` (Dense LU with Partial Pivoting). The fallback for "nasty" matrices (non-symmetric, active components, singular diagonals).
-*   **Parallelism**: Uses `#pragma omp parallel for` on SpMV and vector adds.
+*   **Parallelism**: Uses `#pragma omp parallel for` on SpMV, vector adds, and matrix assembly merging.
 
 ### 2. `integration_method.h`: The Time-Stepping Strategy
 Defines *how* differential equations (C dv/dt = I) are discretized into algebraic equations.
@@ -37,22 +39,27 @@ Ensures cross-platform identical results by locking down the Floating Point Unit
 ## Core Logic & Snippets
 
 ### Matrix Assembly (`linalg.h`)
-Circuit stamps are collected as "Triplets" (row, col, value) and then compressed. This handles the collision of multiple values summing into the same node (KCL superposition) automatically.
+Circuit stamps are collected into thread-local buffers (arrays of Triplets). `createCsr` merges these buffers in parallel to form the final compressed matrix.
 
 ```cpp
 Csr_matrix createCsr() {
-    // 1. Sort Triplets by Row, then Column
-    std::sort(triplets.begin(), triplets.end(), sortFn);
-    
-    // 2. Sum duplicates (KCL Superposition)
-    for (auto& t : triplets) {
-        if (isSamePos) values.back() += t.value;
-        else pushNew(t);
+    // 1. Parallel Merge of Thread Buffers
+    // Calculate offsets and copy to a single large buffer
+    #pragma omp parallel for
+    for (int t = 0; t < num_threads; ++t) {
+        std::copy(thread_buffers[t].begin(), thread_buffers[t].end(), 
+                  merged.begin() + offset[t]);
     }
     
-    // 3. Generate Row Pointers (Prefix Sum)
-    for (int i = 0; i < numRows; ++i)
-        matrix.row_pointer[i+1] += matrix.row_pointer[i];
+    // 2. Sort Triplets
+    // 3. Deduplicate (Sum KCL)
+    // 4. Generate Row Pointers
+}
+
+// Lock-Free Stamping
+void add(int row, int col, double value) {
+    int tid = omp_get_thread_num();
+    thread_buffers[tid].push_back({row, col, value});
 }
 ```
 

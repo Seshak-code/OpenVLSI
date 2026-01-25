@@ -9,10 +9,11 @@ It serves as the bridge between:
 
 ## Key Files & Responsibilities
 
-### 1. `circuit.h`: The Structural Core (`TensorBlock`)
-Defines the `TensorBlock`, which is the container for a netlist. It holds arrays of devices (Resistors, Capacitors, MOSFETs, etc.).
-*   **Hierarchy**: Supports subcircuits via `TensorBlock` nesting (though often flattened for simulation).
-*   **State**: Holds *parameters* (R, C, W, L), not *simulation state* (Voltages are in `CircuitSim`).
+### 1. `circuit.h`: The Structural Core (`TensorBlock` & `BlockState`)
+Defines the `TensorBlock`, which is the container for a netlist.
+*   **TensorBlock**: Holds *immutable definition* (Resistors, Capacitors, Model Params). Can be reused across multiple instances.
+*   **BlockState**: Holds *mutable simulation state* (History buffers, Operating points). Unique per instance.
+*   **TensorNetlist**: The root object. Manages `globalBlock` + `globalState` and a list of `instances` + `instanceStates`.
 
 ### 2. `graph_canonical.h`: The Identity Engine
 Implements **Orientation-Invariant Graph Hashing**.

@@ -56,9 +56,8 @@ struct Capacitor {
     int nodePlate2;               // Negative plate (node index)
     double capacitance_farads;    // Capacitance in Farads [F]
     
-    // Generic History Buffer (Index 0 = t_n-1, Index 1 = t_n-2, etc.)
-    std::vector<double> voltage_history; 
-    std::vector<double> current_history;
+    // Generic History Buffer REMOVED (moved to BlockState)
+
     
     double tolerance_percent = 0.0;
 };
@@ -77,9 +76,8 @@ struct Inductor {
     int nodeCoil2;                // Second coil terminal (node index)
     double inductance_henries;    // Inductance in Henries [H]
     
-    // Generic History Buffer
-    std::vector<double> current_history;
-    std::vector<double> voltage_history;
+    // Generic History Buffer REMOVED (moved to BlockState)
+
     
     double tolerance_percent = 0.0;
 };
@@ -198,9 +196,8 @@ struct PowerRail {
     double tolerance_percent;      // ±5% for typical regulators
     double temp_coefficient;       // Voltage drift with temperature [V/K]
     
-    // Transient History (for L and C)
-    std::vector<double> voltage_history;
-    std::vector<double> current_history;
+    // Transient History REMOVED (moved to BlockState)
+
 };
 
 /*
@@ -246,13 +243,7 @@ struct BusProbe {
     double v_th_low = 0.8;        // Below 0.8V = 0
     double v_th_high = 2.0;       // Above 2.0V = 1
     
-    // History
-    struct DigitalSample {
-        double time;
-        uint64_t value;           // For up to 64-bit bus
-        std::vector<LogicState> bitStates; // Detailed X/Z state
-    };
-    std::vector<DigitalSample> history;
+    // History REMOVED (moved to BlockState)
 };
 
 /*
@@ -399,8 +390,8 @@ struct Mosfet {
     
     double temperature_K = 300.15;
     
-    // Operating Point (Updated each Newton iteration)
-    double V_GS = 0.0, V_DS = 0.0, V_BS = 0.0;
+    // Operating Point REMOVED (moved to BlockState)
+
 };
 
 // ...
@@ -587,9 +578,8 @@ struct TensorBlock {
         assert(C > 0 && "Capacitance must be positive");
         if (isFrozen) return;
         Capacitor cap = {name, n1, n2, C};
-        // Initialize history with 3 slots (enough for Gear 3)
-        cap.voltage_history.assign(3, 0.0);
-        cap.current_history.assign(3, 0.0);
+        // History initialized in BlockState
+
         capacitors.push_back(cap);
         updateNodeCount(n1); updateNodeCount(n2);
     }
@@ -602,8 +592,8 @@ struct TensorBlock {
         assert(L > 0 && "Inductance must be positive");
         if (isFrozen) return;
         Inductor ind = {name, n1, n2, L};
-        ind.current_history.assign(3, 0.0);
-        ind.voltage_history.assign(3, 0.0);
+        // History initialized in BlockState
+
         inductors.push_back(ind);
         updateNodeCount(n1); updateNodeCount(n2);
     }
@@ -639,8 +629,8 @@ struct TensorBlock {
         rail.tolerance_percent = 5.0;
         rail.temp_coefficient = 0.0;
         
-        rail.voltage_history.assign(3, 0.0);
-        rail.current_history.assign(3, 0.0);
+        // History initialized in BlockState
+
         
         powerRails.push_back(rail);
         updateNodeCount(node);
@@ -810,19 +800,58 @@ struct BlockInstance {
     std::map<std::string, double> parameters; // Instance-specific parameters (e.g. "W", "L")
 };
 
+// BlockState - Dynamic state for a block instance (Solving the Shared History Bug)
+struct BlockState {
+    struct History {
+        std::vector<double> v; // [t-1, t-2, ...]
+        std::vector<double> i; // [t-1, t-2, ...]
+        void resize(size_t n) { v.resize(n, 0.0); i.resize(n, 0.0); }
+    };
+
+    struct MosfetOP { double vgs=0, vds=0, vbs=0; };
+
+    std::vector<History> capacitorState;
+    std::vector<History> inductorState;
+    std::vector<History> powerRailState;
+    std::vector<MosfetOP> mosfetState;
+    // Future: BJT OP, etc.
+
+    // Initialize state based on block definition
+    void initialize(const TensorBlock& block) {
+        capacitorState.resize(block.capacitors.size());
+        for(auto& h : capacitorState) h.resize(3); // default 3 slots
+
+        inductorState.resize(block.inductors.size());
+        for(auto& h : inductorState) h.resize(3);
+
+        powerRailState.resize(block.powerRails.size());
+        for(auto& h : powerRailState) h.resize(3);
+
+        mosfetState.resize(block.mosfets.size());
+    }
+};
+
 // TensorNetlist - The top-level hierarchical circuit container.
 
 class TensorNetlist {
 public:
     std::map<std::string, TensorBlock> blockDefinitions; // Library of blocks
     TensorBlock globalBlock;                             // Top-level components
+    
+    // State Storage (Per-instance)
+    BlockState globalState;
+    std::vector<BlockState> instanceStates;              // Index matches instances vector
+
     std::vector<BlockInstance> instances;                // Placed block instances
     int numGlobalNodes = 0;
     
     // Global Simulation Context (Phase 2.9)
     SimulationEnvironment environment;
 
-    TensorNetlist() { globalBlock.name = "GLOBAL"; }
+    TensorNetlist() { 
+        globalBlock.name = "GLOBAL"; 
+        globalState.initialize(globalBlock); // Init empty global state
+    }
 
     void defineBlock(TensorBlock block) {
         block.freeze();
@@ -831,6 +860,16 @@ public:
     
     void addInstance(const std::string& blockName, const std::vector<int>& nodeMap) {
         instances.push_back({blockName, nodeMap});
+        
+        // Initialize state for new instance
+        BlockState newState;
+        auto it = blockDefinitions.find(blockName);
+        if (it != blockDefinitions.end()) {
+             newState.initialize(it->second);
+        }
+        instanceStates.push_back(newState);
+
+
         for (int n : nodeMap) if (n > numGlobalNodes) numGlobalNodes = n;
     }
     
@@ -842,11 +881,18 @@ public:
     }
     void addCapacitor(int n1, int n2, double C) {
         globalBlock.addCapacitor(n1, n2, C);
+        // Sync global state
+        globalState.capacitorState.emplace_back();
+        globalState.capacitorState.back().resize(3);
+
         if (n1 > numGlobalNodes) numGlobalNodes = n1;
         if (n2 > numGlobalNodes) numGlobalNodes = n2;
     }
     void addInductor(int n1, int n2, double L) {
         globalBlock.addInductor(n1, n2, L);
+        globalState.inductorState.emplace_back();
+        globalState.inductorState.back().resize(3);
+
         if (n1 > numGlobalNodes) numGlobalNodes = n1;
         if (n2 > numGlobalNodes) numGlobalNodes = n2;
     }
@@ -862,6 +908,9 @@ public:
     }
     void addPowerRail(const std::string& name, int node, double V, double ripple = 0.0) {
         globalBlock.addPowerRail(name, node, V, ripple);
+        globalState.powerRailState.emplace_back();
+        globalState.powerRailState.back().resize(3);
+
         if (node > numGlobalNodes) numGlobalNodes = node;
     }
     void addSignalSource(const std::string& name, int nPos, int nNeg, 
@@ -885,6 +934,7 @@ public:
     void addMosfet(const std::string& name, int D, int G, int S, int B,
                    const std::string& model, double W, double L) {
         globalBlock.addMosfet(name, D, G, S, B, model, W, L);
+        globalState.mosfetState.emplace_back();
         numGlobalNodes = std::max({numGlobalNodes, D, G, S, B});
     }
     void addBJT(const std::string& name, int C, int B, int E, 

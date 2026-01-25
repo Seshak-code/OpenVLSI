@@ -21,6 +21,7 @@
 #include <QToolButton>
 #include <QMenu>
 #include <QShortcut>
+#include <QFileDialog>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     qDebug() << "[MW INIT] Constructor start";
@@ -819,11 +820,19 @@ void MainWindow::setupMenus() {
 }
 
 void MainWindow::newProject() {
-    statusBar()->showMessage("New Project created.");
+    // Create new schematic tab with default mode (Bench Test for ideal component testing)
+    createSchematicFromWelcome(AppMode::BENCH_TEST);
+    statusBar()->showMessage("New schematic created", 3000);
 }
 
 void MainWindow::openProject() {
-    statusBar()->showMessage("Open Project dialog...");
+    QString filePath = QFileDialog::getOpenFileName(this,
+        "Open Project", QString(),
+        "AcuteSim Projects (*.acu);;Schematic Files (*.sch);;All Files (*)");
+    if (!filePath.isEmpty()) {
+        // TODO: Implement full project loading
+        statusBar()->showMessage("Project loading not yet implemented: " + filePath, 3000);
+    }
 }
 
 void MainWindow::runSimulation() {
@@ -1327,7 +1336,11 @@ void MainWindow::setupCommandPalette() {
     cmd.category = "Simulation";
     cmd.shortcut = "";
     cmd.callback = [this]() {
-        if (simulationWorkspace) simulationWorkspace->runQuickDC();
+        if (!simulationWorkspace) {
+            statusBar()->showMessage("Simulation workspace not available", 3000);
+            return;
+        }
+        simulationWorkspace->runQuickDC();
     };
     commandPalette_->registerCommand(cmd);
 
@@ -1336,7 +1349,11 @@ void MainWindow::setupCommandPalette() {
     cmd.category = "Simulation";
     cmd.shortcut = "Shift+F5";
     cmd.callback = [this]() {
-        if (simulationWorkspace) simulationWorkspace->stopSimulation();
+        if (!simulationWorkspace) {
+            statusBar()->showMessage("Simulation workspace not available", 3000);
+            return;
+        }
+        simulationWorkspace->stopSimulation();
     };
     commandPalette_->registerCommand(cmd);
 
@@ -1345,7 +1362,11 @@ void MainWindow::setupCommandPalette() {
     cmd.category = "Simulation";
     cmd.shortcut = "";
     cmd.callback = [this]() {
-        if (simulationWorkspace) simulationWorkspace->configureCorners();
+        if (!simulationWorkspace) {
+            statusBar()->showMessage("Simulation workspace not available", 3000);
+            return;
+        }
+        simulationWorkspace->configureCorners();
     };
     commandPalette_->registerCommand(cmd);
 
@@ -1355,7 +1376,11 @@ void MainWindow::setupCommandPalette() {
     cmd.category = "Schematic";
     cmd.shortcut = "";
     cmd.callback = [this]() {
-        if (schematicEditor) schematicEditor->runERC();
+        if (!schematicEditor) {
+            statusBar()->showMessage("No schematic open - please create or open a schematic first", 3000);
+            return;
+        }
+        schematicEditor->runERC();
     };
     commandPalette_->registerCommand(cmd);
 
@@ -1364,14 +1389,34 @@ void MainWindow::setupCommandPalette() {
     cmd.label = "Schematic to HDL";
     cmd.category = "Sync";
     cmd.shortcut = "";
-    cmd.callback = [this]() { syncSchematicToVerilog(); };
+    cmd.callback = [this]() {
+        if (!schematicEditor) {
+            statusBar()->showMessage("No schematic open - please create or open a schematic first", 3000);
+            return;
+        }
+        if (!hdlEditor) {
+            statusBar()->showMessage("HDL editor not available", 3000);
+            return;
+        }
+        syncSchematicToVerilog();
+    };
     commandPalette_->registerCommand(cmd);
 
     cmd.id = "sync.fromHDL";
     cmd.label = "HDL to Schematic";
     cmd.category = "Sync";
     cmd.shortcut = "";
-    cmd.callback = [this]() { syncVerilogToSchematic(); };
+    cmd.callback = [this]() {
+        if (!schematicEditor) {
+            statusBar()->showMessage("No schematic open - please create or open a schematic first", 3000);
+            return;
+        }
+        if (!hdlEditor) {
+            statusBar()->showMessage("HDL editor not available", 3000);
+            return;
+        }
+        syncVerilogToSchematic();
+    };
     commandPalette_->registerCommand(cmd);
 
     // Layout commands

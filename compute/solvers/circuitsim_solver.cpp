@@ -390,7 +390,10 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
     }
 
     if (simulationConverged) {
-        for (auto &cap : netlist.globalBlock.capacitors) {
+        for (size_t i = 0; i < netlist.globalBlock.capacitors.size(); ++i) {
+             const auto &cap = netlist.globalBlock.capacitors[i];
+             auto &hist = netlist.globalState.capacitorState[i];
+
              double v_curr = 0.0;
              if (cap.nodePlate1 > 0 && cap.nodePlate1 <= (int)finalVoltages.size()) v_curr += finalVoltages[cap.nodePlate1-1];
              if (cap.nodePlate2 > 0 && cap.nodePlate2 <= (int)finalVoltages.size()) v_curr -= finalVoltages[cap.nodePlate2-1];
@@ -399,22 +402,32 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
              double C = cap.capacitance_farads;
              IntegrationType type = integrator->getType();
              
+             if (hist.v.empty()) { // Auto-init if empty (should be done in addCapacitor but safety check)
+                  hist.resize(3);
+             }
+
              if (type == IntegrationType::TRAPEZOIDAL) {
-                 i_curr = (2.0*C/actualTimeStep)*(v_curr - cap.voltage_history[0]) - cap.current_history[0];
+                 i_curr = (2.0*C/actualTimeStep)*(v_curr - hist.v[0]) - hist.i[0];
              } else if (type == IntegrationType::GEAR_1_EULER) {
-                 i_curr = (C/actualTimeStep)*(v_curr - cap.voltage_history[0]);
+                 i_curr = (C/actualTimeStep)*(v_curr - hist.v[0]);
              } else if (type == IntegrationType::GEAR_2) {
-                 if (cap.voltage_history[1] == 0.0 && currentTime > actualTimeStep) {
-                     i_curr = (C/actualTimeStep)*(v_curr - cap.voltage_history[0]);
+                 if (hist.v.size() > 1 && hist.v[1] == 0.0 && currentTime > actualTimeStep) { // Heuristic check
+                     i_curr = (C/actualTimeStep)*(v_curr - hist.v[0]);
+                 } else if (hist.v.size() > 1) {
+                     i_curr = (C/actualTimeStep)*(1.5*v_curr - 2.0*hist.v[0] + 0.5*hist.v[1]);
                  } else {
-                     i_curr = (C/actualTimeStep)*(1.5*v_curr - 2.0*cap.voltage_history[0] + 0.5*cap.voltage_history[1]);
+                     i_curr = (C/actualTimeStep)*(v_curr - hist.v[0]);
                  }
              }
-             integrator->updateHistory(cap.voltage_history, cap.current_history, v_curr, i_curr);
+             integrator->updateHistory(hist.v, hist.i, v_curr, i_curr);
         }
+
         
         // Update Power Rail History (Local Decap)
-        for (auto &rail : netlist.globalBlock.powerRails) {
+        for (size_t i = 0; i < netlist.globalBlock.powerRails.size(); ++i) {
+             const auto &rail = netlist.globalBlock.powerRails[i];
+             auto &hist = netlist.globalState.powerRailState[i];
+             
              double v_curr = 0.0;
              if (rail.nodeRail > 0 && rail.nodeRail <= (int)finalVoltages.size()) 
                  v_curr = finalVoltages[rail.nodeRail - 1];
@@ -423,42 +436,60 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
              double C = rail.capacitance_F;
              IntegrationType type = integrator->getType();
              
+             if (hist.v.empty()) hist.resize(3);
+
              // I_cap = C * dv/dt (Trapezoidal integration)
              if (type == IntegrationType::TRAPEZOIDAL) {
-                 if (!rail.voltage_history.empty())
-                     i_curr = (2.0*C/actualTimeStep)*(v_curr - rail.voltage_history[0]) - rail.current_history[0];
+                 if (!hist.v.empty())
+                     i_curr = (2.0*C/actualTimeStep)*(v_curr - hist.v[0]) - hist.i[0];
              } else if (type == IntegrationType::GEAR_1_EULER) {
-                 if (!rail.voltage_history.empty())
-                    i_curr = (C/actualTimeStep)*(v_curr - rail.voltage_history[0]);
+                 if (!hist.v.empty())
+                    i_curr = (C/actualTimeStep)*(v_curr - hist.v[0]);
              } 
-             // Simplified GEAR2 fallback to GEAR1 for rails for now (or implement full logic)
              
-             integrator->updateHistory(rail.voltage_history, rail.current_history, v_curr, i_curr);
+             integrator->updateHistory(hist.v, hist.i, v_curr, i_curr);
         }
 
-         for (auto &inst : netlist.instances) {
+
+         // Update Hierarchical Instances History
+         for (size_t idx = 0; idx < netlist.instances.size(); ++idx) {
+            const auto &inst = netlist.instances[idx];
+            auto &instState = netlist.instanceStates[idx];
+            
             auto it = netlist.blockDefinitions.find(inst.blockName);
             if (it != netlist.blockDefinitions.end()) {
                  const auto &block = it->second;
                  auto mapNode = [&](int local) { return local==0?0:inst.nodeMapping[local-1]; };
-                 for(const auto &c : block.capacitors) {
-                     // Simplified history update for instances - assume stable or handle separately
-                     // Ideally recursively call update logic.
-                     // Since updateHistory updates the capacitor object directly, and 'c' is const ref from iterating definition...
-                     // Wait, 'block' is non-const? 'it->second' is non-const?
-                     // 'const auto &block' makes it const.
-                     // So we cannot update history on 'const' capacitor.
-                     // The history should be stored in the 'Instance' state, not the 'Block' definition.
-                     // But history buffers are currently in 'Capacitor' struct which is in 'BlockDefinition'.
-                     // This is a flaw in the current architecture for hierarchical instances (shared definition, shared history??).
-                     // If history is in 'Capacitor' struct, then all instances share history. That is WRONG.
-                     // History must be separate per instance.
-                     // Currently 'TensorNetlist' has 'instances'.
-                     // For now, I will comment out instance history update to avoid const error and highlight this as a future fix (Phase 1 Refactor limitation).
-                     // The 'globalBlock' capacitors work fine.
+                 auto getV = [&](int n) { return (n>0 && n<=(int)finalVoltages.size()) ? finalVoltages[n-1] : 0.0; };
+                 
+                 for (size_t c_idx = 0; c_idx < block.capacitors.size(); ++c_idx) {
+                     const auto &c = block.capacitors[c_idx];
+                     auto &hist = instState.capacitorState[c_idx];
+
+                     double v_curr = getV(mapNode(c.nodePlate1)) - getV(mapNode(c.nodePlate2));
+                     double i_curr = 0.0;
+                     double C = c.capacitance_farads;
+                     IntegrationType type = integrator->getType();
+                     
+                     if (hist.v.empty()) hist.resize(3);
+
+                     if (type == IntegrationType::TRAPEZOIDAL) {
+                         i_curr = (2.0*C/actualTimeStep)*(v_curr - hist.v[0]) - hist.i[0];
+                     } else if (type == IntegrationType::GEAR_1_EULER) {
+                         i_curr = (C/actualTimeStep)*(v_curr - hist.v[0]);
+                     } else if (type == IntegrationType::GEAR_2) {
+                        if (hist.v.size() > 1)
+                             i_curr = (C/actualTimeStep)*(1.5*v_curr - 2.0*hist.v[0] + 0.5*hist.v[1]);
+                        else
+                             i_curr = (C/actualTimeStep)*(v_curr - hist.v[0]);
+                     }
+                     integrator->updateHistory(hist.v, hist.i, v_curr, i_curr);
                  }
+                 
+                 // TODO: Also update Inductors, PowerRails for instances
             }
          }
+
     }
 
     if (!simulationConverged)

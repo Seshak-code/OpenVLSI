@@ -24,6 +24,7 @@ When `CircuitSim::solveDC()` is called, the following sequence occurs:
 1.  **Preparation (AoS -> SoA)**
     *   **Source**: `components/circuit.h` (`TensorNetlist`).
     *   **Action**: `physics_tensors.cpp` convert the friendly object graph into a `TensorizedBlock` (Structure-of-Arrays).
+    *   **State Init**: `BlockState` objects are initialized for the global block and every hierarchical instance (`instanceStates`), decoupling definition from history.
     *   **Optimization**: `tensorscheduler.h` groups hierarchical instances by `topologyHash` into `SolverJob` batches.
 
 2.  **The Solver Loop (`solvers/circuitsim_solver.cpp`)**
@@ -31,12 +32,13 @@ When `CircuitSim::solveDC()` is called, the following sequence occurs:
     *   **Newton-Raphson**: The main `while(residual > tol)` loop.
     *   **Stamping (`physics/circuitsim.h`)**:
         *   `stampAllElements()` is the entry point.
-        *   It calls `stampBlockLinear()` for passive R/L/C/V/I elements.
-        *   It calls `stampSoABlock()` which uses `KernelDispatcher` to route vectorized kernels (`batchDiodePhysics`) to AVX-512/Neon implementations.
-        *   **Parallelism**: Iterates `scheduler.jobs` using OpenMP (`#pragma omp parallel for`) and atomic updates for massive throughput.
+        *   It calls `stampBlockLinear()` for passive R/L/C/V/I elements (using `BlockState` for history).
+        *   It calls `stampSoABlock()` which calculates physics via `KernelDispatcher` (AVX-512/Neon).
+        *   **Batch Stamping**: Diodes, MOSFETs, and BJTs now use `matrixBuilder.addBatch(...)` to commit stamps in efficient chunks.
+        *   **Parallelism**: Lock-free assembly using `omp_get_thread_num` and thread-local buffers in `MatrixConstructor`.
 
 3.  **Matrix Solution (`math/linalg.h`)**
-    *   **Assembly**: `MatrixConstructor` sums overlapping stamps (KCL Superposition) and compresses to `Csr_matrix`.
+    *   **Assembly**: `MatrixConstructor` merges thread-local buffers in parallel (`createCsr`) to form the system matrix.
     *   **Solve**: The engine selects `solvePCG` (Iterative, O(N)) for large passive grids or `solveLU_Pivoted` (Direct, O(N³)) for active/small circuits.
     *   **Hardware**: (Experimental) `solvers/webgpu_solver.h` offloads this entire step to WGSL compute shaders.
 
