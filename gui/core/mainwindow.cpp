@@ -778,10 +778,10 @@ void MainWindow::setupMenus() {
     viewMenu->addAction(messagesDock->toggleViewAction());
     
     // Bottom Panel Docks - allow restoring closed/split panels
-    viewMenu->addAction(outputDock_->toggleViewAction());
-    viewMenu->addAction(streamingDock_->toggleViewAction());
-    viewMenu->addAction(resultsDock_->toggleViewAction());
-    viewMenu->addAction(waveformDock_->toggleViewAction());
+    if (outputDock_) viewMenu->addAction(outputDock_->toggleViewAction());
+    if (streamingDock_) viewMenu->addAction(streamingDock_->toggleViewAction());
+    if (resultsDock_) viewMenu->addAction(resultsDock_->toggleViewAction());
+    if (waveformDock_) viewMenu->addAction(waveformDock_->toggleViewAction());
     if (debugSuggestionsDock) viewMenu->addAction(debugSuggestionsDock->toggleViewAction());
     viewMenu->addSeparator();
     
