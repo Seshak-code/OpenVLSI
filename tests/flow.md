@@ -9,6 +9,7 @@ The `tests/` directory contains the **Verification Framework**. It enforces the 
 -   **`test_sensitivity.cpp`**: Checks AutoDiff gradients against finite differences.
 -   **`regression_golden.db`**: XML/Pipe-delimited database storing "Golden" results with Metadata (OS, Compiler) for cross-platform regression.
 -   **`test_bjt_stability.cpp`**: Focused verification of BJT thermal sweeping (-55 to 125°C) and Is parameter clamping.
+-   **`test_emulated_f64.cpp`**: Verifies compatibility of device physics templates with Emulated F64 (GPU double-double) types.
 
 ### 2. UI Integration
 -   **`test_gui_logic.cpp`**: Headless testing of `SchematicEditor` interactions (Add, Move, Undo).

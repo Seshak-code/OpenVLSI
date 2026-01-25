@@ -23,6 +23,11 @@ Defines *how* differential equations (C dv/dt = I) are discretized into algebrai
 *   **Gear-1 (Backward Euler)**: Maximum stability, introduces artificial damping. Used for initial convergence.
 *   **Gear-2 (BDF2)**: Good compromise between accuracy and stability for transient simulations.
 
+### 3. `emulated_f64.h`: Precision Verification
+Defines `struct EmulatedF64` (float pair) to mock GPU double-double arithmetic.
+*   **Purpose**: Validates that physics kernels are strictly templated and ADL-compliant.
+*   **Usage**: Used in `test_emulated_f64` and `test_bjt_stability` to prove architecture independence.
+
 ## Core Logic & Snippets
 
 ### Matrix Assembly (`linalg.h`)

@@ -73,7 +73,7 @@ constexpr double VNTOL = 1e-6; // Volts
 constexpr double ABSTOL = 1e-12; // Amperes
 
 /** KCL residual tolerance */
-constexpr double KCL_TOL = 1e-6; // Amperes
+constexpr double KCL_TOL = 1e-12; // Amperes
 
 /** PCG solver tolerance */
 constexpr double PCG_TOL = 1e-10;

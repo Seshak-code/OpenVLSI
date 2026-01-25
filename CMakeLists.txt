@@ -772,3 +772,16 @@ target_link_libraries(test_bjt_stability PRIVATE Qt6::Core Qt6::Test)
 target_compile_features(test_bjt_stability PUBLIC cxx_std_17)
 
 add_test(NAME test_bjt_stability COMMAND test_bjt_stability)
+
+
+# Emulated F64 Verification
+add_executable(test_emulated_f64
+    tests/test_emulated_f64.cpp
+)
+target_include_directories(test_emulated_f64 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_link_libraries(test_emulated_f64 PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME test_emulated_f64 COMMAND test_emulated_f64)
+

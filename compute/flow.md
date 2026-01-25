@@ -14,7 +14,7 @@ Dependencies flow **downwards**. A layer may only import from layers below it.
 | **5. Control** | `orchestration/` | External Tool Management | `WorkerClient` |
 | **4. Strategy** | `solvers/` | Physics Orchestration | `CircuitSim::solveDC` |
 | **3. Reliability** | `infrastructure/` | Safety & Tracing | `SafeUtils`, `SolverTrace` |
-| **2. Operations** | `math/` | Numerical Kernels | `solvePCG`, `solveLU` |
+| **2. Operations** | `math/` | Numerical Kernels | `solvePCG`, `solveLU`, `EmulatedF64` |
 | **1. Data** | `tensors/` | Memory Layout | `TensorizedBlock` (SoA) |
 
 ## The Simulation Pipeline (Ground Truth)

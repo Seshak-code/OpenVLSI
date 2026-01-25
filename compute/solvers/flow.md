@@ -62,7 +62,7 @@ if (hasActiveDevices || numNodes < 20) {
 
 ## Development Rules
 
-1.  **Convergence is Physical**: Never trust `delta_v < tolerance` alone. Always check `KCL Residual < tolerance`. A solver can "converge" to a non-physical state if the matrix is ill-conditioned.
+1.  **Convergence is Physical**: Never trust `delta_v < tolerance` alone. Always check `KCL Residual < 1e-12` (1pA). A solver can "converge" to a non-physical state if the matrix is ill-conditioned.
 2.  **GMIN is Mandatory**: All non-linear DC solves must rely on GMIN stepping as a fallback. Cold-starting a BJT feedback loop without it is mathematically impossible often.
 3.  **State Hygiene**: The solver must be stateless between calls (except for `prev_voltage` in transient). Do not store "solver state" in the `TensorNetlist`.
 4.  **GPU Abstraction**: If modifying the solver loop, ensure `webgpu_solver.h` logic is updated or at least not broken, even if it's experimental.

@@ -232,7 +232,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
 
     // During GMIN stepping, we relax the KCL check because GMIN itself adds residual.
     // We only enforce strict KCL at the final (nominal GMIN) step.
-    double effective_kcl_tol = (gmin_step == GMIN_STEPS - 1) ? 1e-6 : 1.0;
+    double effective_kcl_tol = (gmin_step == GMIN_STEPS - 1) ? PhysicsConstants::KCL_TOL : 1.0;
 
     if (checkConvergence(v_new, voltageEstimate, kcl_error, effective_kcl_tol)) {
         voltageEstimate = v_new;
@@ -350,7 +350,7 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
              std::vector<double> v_new = lastResult.solution;
              
              double kcl_error = calculatePhysicalResiduals(netlist, v_new, actualTimeStep);
-             if (checkConvergence(v_new, nrEstimate, kcl_error, 1e-6)) {
+             if (checkConvergence(v_new, nrEstimate, kcl_error, PhysicsConstants::KCL_TOL)) {
                  nrEstimate = v_new;
                  nrConverged = true;
                  break;

@@ -43,7 +43,9 @@ struct DiodeParams
         // Simplified relations used in SPICE:
         // Is(T) = Is * (T/Tnom)^(Xti/N) * exp(...) 
         // Note: Xti usually 3.0.
-        return Is * std::pow(ratio, Xti / N) * std::exp((Eg / (0.02585)) * (1.0 - Tnom/Temp)); // using Vt_nom approx
+        using std::pow;
+        using std::exp;
+        return Is * pow(ratio, Xti / N) * exp((Eg / (0.02585)) * (1.0 - Tnom/Temp)); // using Vt_nom approx
     }
 };
 
@@ -107,36 +109,39 @@ inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 3
  * @param vcrit Critical voltage (pre-computed for efficiency)
  * @return      Limited junction voltage
  */
-inline double pnjlim(double vnew, double vold, double vt, double vcrit) {
-    double vlim = vnew;
+template <typename T>
+inline T pnjlim(T vnew, T vold, T vt, T vcrit) {
+    T vlim = vnew;
     
     // Bypass limiting if we are in the linear continuation region (defined as > 30*Vt in physics)
-    // In this region, the device behaves as a linear resistor, so Newton-Raphson is stable/exact.
-    if (vold > 30.0 * vt && vnew > 30.0 * vt) {
+    if (vold > T(30.0) * vt && vnew > T(30.0) * vt) {
         return vnew;
     }
     
     // Bypass limiting in deep reverse bias (constant current region)
-    if (vold < -5.0 * vt && vnew < -5.0 * vt) {
+    if (vold < T(-5.0) * vt && vnew < T(-5.0) * vt) {
         return vnew;
     }
 
-    if (vnew > vcrit && std::abs(vnew - vold) > 2.0 * vt) {
+    using std::abs;
+    if (vnew > vcrit && abs(vnew - vold) > T(2.0) * vt) {
         // Large forward step - apply limiting
-        if (vold > 0.0) {
-            double arg = 1.0 + (vnew - vold) / vt;
-            if (arg > 0.0) {
-                vlim = vold + vt * std::log(arg);
+        if (vold > T(0.0)) {
+            T arg = T(1.0) + (vnew - vold) / vt;
+            if (arg > T(0.0)) {
+                using std::log;
+                vlim = vold + vt * log(arg);
             } else {
                 vlim = vcrit;
             }
         } else {
-            vlim = vt * std::log(vnew / vt);
+            using std::log;
+            vlim = vt * log(vnew / vt);
         }
-    } else if (vnew < -5.0 * vt) {
+    } else if (vnew < T(-5.0) * vt) {
         // Deep reverse bias - limit negative swing
-        // Prevent excessive negative voltages that could cause numerical issues
-        vlim = std::max(vnew, vold - 5.0 * vt);
+        using std::max;
+        vlim = max(vnew, vold - T(5.0) * vt);
     }
     
     return vlim;
@@ -146,8 +151,11 @@ inline double pnjlim(double vnew, double vold, double vt, double vcrit) {
  * compute_vcrit - Compute critical voltage for pnjlim
  * vcrit = Vt * ln(Vt / (sqrt(2) * Is))
  */
-inline double compute_vcrit(double vt, double Is) {
-    return vt * std::log(vt / (std::sqrt(2.0) * Is));
+template <typename T>
+inline T compute_vcrit(T vt, T Is) {
+    using std::log;
+    using std::sqrt;
+    return vt * log(vt / (sqrt(T(2.0)) * Is));
 }
 
 // NOTE: Manual derivative functions (conductance) removed.
@@ -236,60 +244,51 @@ struct BJTParams
     T Xti;    // IS temperature exponent
 };
 
+template <typename T>
 struct BJTCurrents {
-    double Ic; // Collector Current
-    double Ib; // Base Current
-    double Ie; // Emitter Current
+    T Ic; // Collector Current
+    T Ib; // Base Current
+    T Ie; // Emitter Current
     
-    // Gradients for linearization (g_ij = dI_i / dV_j)
-    // Indexes: C=0, B=1, E=2
-    double g_cc, g_cb, g_ce; 
-    double g_bc, g_bb, g_be;
-    double g_ec, g_eb, g_ee;
+    // Gradients
+    T g_cc, g_cb, g_ce; 
+    T g_bc, g_bb, g_be;
+    T g_ec, g_eb, g_ee;
 };
 
 /**
  * bjt_ebers_moll
  * Computes currents and conductance matrix for a BJT.
- * This function returns a struct with values (for RHS) and gradients (for Matrix).
- * Currently implemented using Scalar Double arithmetic for optimal performance 
- * (manual derivative derivation), but can be templated if needed.
+ * templated for Dual/EmulatedF64 support.
  */
-inline BJTCurrents bjt_ebers_moll(double v_c, double v_b, double v_e, bool isNPN, const BJTParams<double>& p)
+template <typename T, typename P>
+inline BJTCurrents<T> bjt_ebers_moll(T v_c, T v_b, T v_e, bool isNPN, const BJTParams<P>& p)
 {
     // 1. Determine local voltages relative to Base (Vbc, Vbe)
-    // NPN: Vbe = Vb - Ve, Vbc = Vb - Vc
-    // PNP: Vbe = Ve - Vb, Vbc = Vc - Vb
-    
-    double v_be, v_bc;
-    double sign = isNPN ? 1.0 : -1.0;
+    T v_be, v_bc;
+    T sign = isNPN ? T(1.0) : T(-1.0);
 
     v_be = sign * (v_b - v_e);
     v_bc = sign * (v_b - v_c);
 
-    // 2. Compute Diode Currents with Linear Continuation (Branchless, GPU-Ready)
-    // For Vj > Vcrit: I = I(Vcrit) + G(Vcrit) * (Vj - Vcrit)
-    // This avoids exponential overflow and provides smooth derivatives.
+    // 2. Compute Diode Currents
+    T Vcrit = T(30.0) * p.Vt;
+    T GMIN = T(1e-12);
     
-    const double Vcrit = 30.0 * p.Vt;  // Critical voltage for linear region (Reduced from 40.0 for robustness)
-    const double GMIN = 1e-12;         // Minimum conductance for cutoff
-    
-    // Branchless clamping using std::min/std::max (GPU-friendly)
-    auto linear_continuation_diode = [&](double v_j) -> std::pair<double, double> {
-        double arg = v_j / p.Vt;
-        double arg_clamped = std::min(arg, 30.0);  // Branchless clamp
+    auto linear_continuation_diode = [&](T v_j) -> std::pair<T, T> {
+        T arg = v_j / p.Vt;
+        T arg_clamped = (arg < T(30.0)) ? arg : T(30.0); // Simple clamp for generic T
         
         using std::exp;
-        double exp_val = exp(arg_clamped);
-        double i_base = p.Is * (exp_val - 1.0);
-        double g_base = (p.Is / p.Vt) * exp_val;
+        T exp_val = exp(arg_clamped);
+        T i_base = p.Is * (exp_val - T(1.0));
+        T g_base = (p.Is / p.Vt) * exp_val;
         
-        // Linear continuation for v_j > Vcrit
-        double delta = std::max(0.0, v_j - Vcrit);  // Branchless
-        double i_ext = g_base * delta;
+        T delta = (v_j > Vcrit) ? (v_j - Vcrit) : T(0.0);
+        T i_ext = g_base * delta;
         
-        double i_total = i_base + i_ext;
-        double g_total = std::max(GMIN, g_base);  // Ensure minimum conductance
+        T i_total = i_base + i_ext;
+        T g_total = (g_base > GMIN) ? g_base : GMIN;
         
         return {i_total, g_total};
     };
@@ -298,74 +297,42 @@ inline BJTCurrents bjt_ebers_moll(double v_c, double v_b, double v_e, bool isNPN
     auto [i_r, g_r] = linear_continuation_diode(v_bc);
 
     // 3. Terminal Currents (Ebers-Moll)
-    // I_C = I_F - I_R/alpha_R  =>  I_F - I_R * (1 + 1/BetaR)
-    // I_E = - (I_F/alpha_F - I_R) => - (I_F * (1 + 1/BetaF) - I_R)
-    // I_B = (I_F/beta_F) + (I_R/beta_R)
+    T invBetaF = T(1.0) / p.BetaF;
+    T invBetaR = T(1.0) / p.BetaR;
     
-    // Using common form:
-    // I_CT = I_F - I_R (Transport Current)
-    // I_C = I_CT - I_R/BetaR
-    // I_B = I_F/BetaF + I_R/BetaR
-    // I_E = -I_C - I_B
-    
-    double invBetaF = 1.0 / p.BetaF;
-    double invBetaR = 1.0 / p.BetaR;
-    
-    double i_ct = i_f - i_r;
-    double i_base_component_f = i_f * invBetaF;
-    double i_base_component_r = i_r * invBetaR;
+    T i_ct = i_f - i_r;
+    T i_base_component_f = i_f * invBetaF;
+    T i_base_component_r = i_r * invBetaR;
 
-    double ic_local = i_ct - i_base_component_r;
-    double ib_local = i_base_component_f + i_base_component_r;
-    double ie_local = -ic_local - ib_local;
+    T ic_local = i_ct - i_base_component_r;
+    T ib_local = i_base_component_f + i_base_component_r;
+    T ie_local = -ic_local - ib_local;
     
     // 4. Derivatives (Conductances)
-    // We need dIx / dV_C, dIx / dV_B, dIx / dV_E
-    // Chain rule: dI/dV_x = (dI/dVbe * dVbe/dVx) + (dI/dVbc * dVbc/dVx)
+    T dIf_dVbe = g_f;
+    T dIr_dVbc = g_r;
     
-    // NPN partials:
-    // dVbe/dVb = 1, dVbe/dVe = -1, dVbe/dVc = 0
-    // dVbc/dVb = 1, dVbc/dVe = 0,  dVbc/dVc = -1
+    T dIct_dVbe = dIf_dVbe;
+    T dIct_dVbc = -dIr_dVbc;
     
-    double dIf_dVbe = g_f;
-    double dIr_dVbc = g_r;
+    T dIbf_dVbe = dIf_dVbe * invBetaF;
+    T dIbr_dVbc = dIr_dVbc * invBetaR;
     
-    double dIct_dVbe = dIf_dVbe;
-    double dIct_dVbc = -dIr_dVbc;
+    T dIc_dVbe = dIct_dVbe;       
+    T dIc_dVbc = dIct_dVbc - dIbr_dVbc; 
     
-    double dIbf_dVbe = dIf_dVbe * invBetaF; // Base current fwd component
-    double dIbr_dVbc = dIr_dVbc * invBetaR; // Base current rev component
+    T dIb_dVbe = dIbf_dVbe;      
+    T dIb_dVbc = dIbr_dVbc;      
     
-    // Local derivatives (w.r.t internal Vbe, Vbc)
-    // Ic = Ict - Ir/BetaR
-    double dIc_dVbe = dIct_dVbe;       // = g_f
-    double dIc_dVbc = dIct_dVbc - dIbr_dVbc; // = -g_r - g_r/BetaR = -g_r(1+1/Br)
+    T dIe_dVbe = -(dIc_dVbe + dIb_dVbe);
+    T dIe_dVbc = -(dIc_dVbc + dIb_dVbc);
     
-    // Ib = If/BetaF + Ir/BetaR
-    double dIb_dVbe = dIbf_dVbe;       // = g_f/BetaF
-    double dIb_dVbc = dIbr_dVbc;       // = g_r/BetaR
-    
-    // Ie = -Ic - Ib
-    double dIe_dVbe = -(dIc_dVbe + dIb_dVbe);
-    double dIe_dVbc = -(dIc_dVbc + dIb_dVbc);
-    
-    // Map to Terminal Voltages (NPN specific first)
-    // dIdx / dVc = dIdx/dVbc * dVbc/dVc = dIdx/dVbc * (-1)
-    // dIdx / dVe = dIdx/dVbe * dVbe/dVe = dIdx/dVbe * (-1)
-    // dIdx / dVb = dIdx/dVbe * 1 + dIdx/dVbc * 1
-    
-    BJTCurrents res;
+    BJTCurrents<T> res;
     res.Ic = sign * ic_local;
     res.Ib = sign * ib_local;
     res.Ie = sign * ie_local;
 
-    // The sign factor handles NPN/PNP current direction, but conductance is always positive for passive-ish/stable regions? 
-    // Wait, conductance is just slope.
-    
-    // Terminal Conductances (Common for NPN and PNP due to sign cancellation)
-    // dIdx / dVc = dIdx/dVbc * dVbc/dVc (NPN: -1, PNP: 1 but Ic is -1)
-    // dIdx / dVe = dIdx/dVbe * dVbe/dVe (NPN: -1, PNP: 1 but Ie is -1)
-    
+    // Conductances
     res.g_cc = -dIc_dVbc; 
     res.g_cb = dIc_dVbe + dIc_dVbc;
     res.g_ce = -dIc_dVbe;
