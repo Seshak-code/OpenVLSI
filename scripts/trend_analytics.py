@@ -1,27 +1,32 @@
 import sys
 import os
 
+import json
+
 def parse_db(file_path):
-    data = {}
     with open(file_path, 'r') as f:
-        for line in f:
-            if line.startswith('#') or not line.strip():
-                continue
-            parts = line.split('|')
-            if len(parts) < 4: continue
+        doc = json.load(f)
+    
+    # Adapt JSON structure to the internal format expected by generate_html
+    # Internal format: {'name': {'kcl': [], 'iter': []}} (list implied for historical compatibility logic)
+    
+    data = {}
+    
+    # Verify schema parts exist
+    if 'results' not in doc:
+        return data
+        
+    metrics = doc['results'].get('_metrics', {})
+    
+    for name, m in metrics.items():
+        if name not in data:
+            data[name] = {'kcl': [], 'iter': []}
+        
+        # We handle single point snapshot in the DB, so we append the one value
+        # In a real historical DB, there might be arrays.
+        data[name]['kcl'].append(m.get('kcl', 0.0))
+        data[name]['iter'].append(m.get('iter', 0))
             
-            name = parts[0]
-            try:
-                kcl = float(parts[3])
-                iter_count = int(parts[2])
-                
-                if name not in data:
-                    data[name] = {'kcl': [], 'iter': []}
-                
-                data[name]['kcl'].append(kcl)
-                data[name]['iter'].append(iter_count)
-            except ValueError:
-                continue
     return data
 
 def generate_html(data, output_dir):
