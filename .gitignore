@@ -146,3 +146,8 @@ dyld_log.txt
 AI_copilot_complete_guide.txt
 test_subcircuit
 test_flow
+
+# ============================================
+# Local Frameworks (Workarounds)
+# ============================================
+libs/Frameworks/

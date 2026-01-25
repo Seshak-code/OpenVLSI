@@ -5,6 +5,10 @@
 #include "activity_bar.h"
 #include "keybinding_manager.h"
 #include "keybindings_dialog.h"
+#include "icon_provider.h"
+#include "../widgets/project_explorer.h"
+#include "../widgets/project_model.h"
+#include "../styling/theme_manager.h"
 #include <QApplication>
 #include <QHeaderView>
 #include <QStatusBar>
@@ -71,7 +75,10 @@ void MainWindow::setupCentralWidget() {
     stageTabs = new QTabWidget(this);
     stageTabs->setTabPosition(QTabWidget::North);
     stageTabs->setDocumentMode(true); // VS Code style flat tabs
-    
+
+    // Apply modern VS Code-style tab styling
+    applyModernTabStyle(stageTabs);
+
     // --- Stage 1: RTL Design (Multi-Page Schematics) ---
     QWidget* rtlContainer = new QWidget();
     QVBoxLayout* rtlLayout = new QVBoxLayout(rtlContainer);
@@ -84,6 +91,7 @@ void MainWindow::setupCentralWidget() {
     rtlPageTabs = new QTabWidget();
     rtlPageTabs->setTabsClosable(true);
     rtlPageTabs->setMovable(true);
+    applyModernTabStyle(rtlPageTabs);
     
     // Welcome Widget (shown when no schematics are open)
     welcomeWidget = new WelcomeWidget(this);
@@ -369,6 +377,8 @@ void MainWindow::createAiDock() {
 }
 
 void MainWindow::createProjectDock() {
+    using namespace acutesim::gui::widgets;
+
     projectDock = new QDockWidget("Project Browser", this);
     projectDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
@@ -376,52 +386,37 @@ void MainWindow::createProjectDock() {
     projectDock->setTitleBarWidget(new QWidget());
     projectDock->setFeatures(QDockWidget::NoDockWidgetFeatures); // Disable floating/closing
 
-    // File Model
-    fileModel = new QFileSystemModel(this);
-    fileModel->setRootPath(QDir::currentPath());
-    fileModel->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot);
-    
-    // View
-    projectView = new QTreeView(projectDock);
-    projectView->setModel(fileModel);
-    projectView->setRootIndex(fileModel->index(QDir::currentPath()));
-    projectView->setSortingEnabled(true);
-    projectView->setColumnHidden(1, true); // Hide Size
-    projectView->setColumnHidden(2, true); // Hide Type
-    projectView->setColumnHidden(3, true); // Hide Date
-    projectView->setAlternatingRowColors(true);
-    
-    // High-density style for project explorer
-    projectView->setStyleSheet(R"(
-        QTreeView {
-            font-size: 11px;
-            background: transparent;
-            border: none;
-            outline: none;
-        }
-        QTreeView::item {
-            padding: 2px 4px;
-            border: none;
-        }
-        QTreeView::item:hover { background: #2a2d2e; }
-        QTreeView::item:selected { background: #094771; }
-        QTreeView::branch { border: none; }
-        QHeaderView::section {
-            background: #252526;
-            color: #888;
-            border: none;
-            padding: 4px;
-            font-size: 10px;
-        }
-    )");
-    
-    // Connect double click to open (Action placeholder)
-    connect(projectView, &QTreeView::doubleClicked, this, [this](const QModelIndex& index){
-        QString path = fileModel->filePath(index);
-        statusBar()->showMessage("Selected file: " + path);
+    // Create the virtual project explorer
+    projectExplorer_ = new ProjectExplorer(projectDock);
+
+    // Connect signals for file operations
+    connect(projectExplorer_, &ProjectExplorer::fileOpenRequested,
+            this, [this](const QString& category, const QString& fileName, const QString& filePath) {
+        Q_UNUSED(filePath);
+        statusBar()->showMessage(QString("Opening %1 from %2").arg(fileName, category));
+        // TODO: Actually open the file in appropriate editor based on category
     });
-    
-    projectDock->setWidget(projectView);
+
+    connect(projectExplorer_, &ProjectExplorer::newFileRequested,
+            this, [this](const QString& category) {
+        // Placeholder: In future, show a dialog to create new file
+        statusBar()->showMessage(QString("New file in %1...").arg(category));
+    });
+
+    connect(projectExplorer_, &ProjectExplorer::deleteFileRequested,
+            this, [this](const QString& category, const QString& fileName) {
+        statusBar()->showMessage(QString("Delete %1 from %2").arg(fileName, category));
+    });
+
+    // Add some demo files to show the structure
+    ProjectModel* model = projectExplorer_->model();
+    model->setProjectName("AcuteSim Project");
+    model->addFile("Schematics", "top_level.sch");
+    model->addFile("HDL", "counter.v");
+    model->addFile("HDL", "alu.sv");
+    model->addFile("Scripts", "run_synth.tcl");
+
+    projectDock->setWidget(projectExplorer_);
 }
 
 void MainWindow::createLibraryDock() {
@@ -1173,17 +1168,24 @@ void MainWindow::setupActivityBar() {
     
     // Add Activities
     // 1. Explorer (Project)
-    activityBar_->addActivity("explorer", QIcon::fromTheme("folder"), "Project Explorer");
-    
+    activityBar_->addActivity("explorer", IconProvider::icon("explorer"), "Project Explorer");
+
     // 2. Components (Library) - Use chip/component icon
-    activityBar_->addActivity("components", QIcon::fromTheme("application-x-executable"), "Components");
-    
+    activityBar_->addActivity("components", IconProvider::icon("components"), "Components");
+
     // 3. Search (Placeholder)
-    activityBar_->addActivity("search", QIcon::fromTheme("edit-find"), "Search");
+    activityBar_->addActivity("search", IconProvider::icon("search"), "Search");
     
-    // 4. Copilot (AI) - Currently on Right, maybe move to Left?
-    // User requested VS Code style. Copilot is usually a Chat view in Secondary Sidebar or Panel.
-    // Let's keep it Right for now or add a trigger here if we move it.
+    // Spacer to push Settings to bottom
+    QWidget* spacer = new QWidget();
+    spacer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    activityBar_->addWidget(spacer);
+
+    // 4. Settings (Bottom)
+    // Note: We use addAction directly so it's not part of the exclusive sidebar group
+    QAction* settingsAction = activityBar_->addAction(IconProvider::icon("settings"), "Settings");
+    settingsAction->setToolTip("Settings");
+    connect(settingsAction, &QAction::triggered, this, &MainWindow::showKeybindingsDialog);
     
     // Track current sidebar state
     static QString currentSidebarId;
@@ -1624,4 +1626,64 @@ void MainWindow::showCommandPalette() {
 void MainWindow::showKeybindingsDialog() {
     acutesim::gui::widgets::KeybindingsDialog dialog(this);
     dialog.exec();
+}
+
+void MainWindow::applyModernTabStyle(QTabWidget* tabWidget) {
+    if (!tabWidget) return;
+
+    // Get theme colors
+    using namespace acutesim::gui::styling;
+    auto& tm = ThemeManager::instance();
+
+    QString tabBg = tm.getColor("tab.background").name();
+    QString tabActiveBg = tm.getColor("tab.activeBackground").name();
+    QString tabHoverBg = tm.getColor("tab.hoverBackground").name();
+    QString tabBorder = tm.getColor("tab.border").name();
+    QString tabAccent = tm.getColor("tab.activeBorderTop").name();
+    QString textColor = tm.getColor("ui.text").name();
+    QString textDim = tm.getColor("ui.textDim").name();
+
+    // Modern VS Code-style tab styling with rounded corners
+    tabWidget->setStyleSheet(QString(R"(
+        QTabWidget::pane {
+            background-color: %2;
+            border: none;
+            border-top: 1px solid %4;
+        }
+        QTabWidget::tab-bar {
+            left: 0px;
+        }
+        QTabBar {
+            background-color: %1;
+            border: none;
+        }
+        QTabBar::tab {
+            background-color: %1;
+            color: %6;
+            border: none;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            padding: 8px 16px;
+            margin-right: 2px;
+            min-width: 80px;
+        }
+        QTabBar::tab:hover {
+            background-color: %3;
+            color: %5;
+        }
+        QTabBar::tab:selected {
+            background-color: %2;
+            color: %5;
+            border-top: 2px solid %7;
+        }
+        QTabBar::close-button {
+            image: none;
+            subcontrol-position: right;
+            padding: 2px;
+        }
+        QTabBar::close-button:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+    )").arg(tabBg, tabActiveBg, tabHoverBg, tabBorder, textColor, textDim, tabAccent));
 }

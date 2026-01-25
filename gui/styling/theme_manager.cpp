@@ -34,10 +34,20 @@ void ThemeManager::initTokenRegistry() {
     // UI Chrome
     reg("ui.background", QColor("#1e1e1e"), true, "Global background");
     reg("ui.text", QColor("#cccccc"), true, "Primary text color");
+    reg("ui.textDim", QColor("#888888"), true, "Dimmed/secondary text");
     reg("ui.header", QColor("#252526"), true, "Sidebar/Dock headers");
     reg("ui.border", QColor("#3e3e42"), true, "Dividers and borders");
     reg("ui.accent", QColor("#007acc"), true, "Focus/Selection");
     reg("ui.error", QColor("#f48771"), true, "Error states");
+    reg("ui.sidebar", QColor("#252526"), false, "Sidebar background");
+    reg("ui.hoverBackground", QColor("#2a2d2e"), false, "Hover state background");
+
+    // Tab Styling (VS Code-style modern tabs)
+    reg("tab.background", QColor("#2d2d30"), false, "Inactive tab background");
+    reg("tab.activeBackground", QColor("#1e1e1e"), false, "Active tab background");
+    reg("tab.hoverBackground", QColor("#2a2d2e"), false, "Tab hover background");
+    reg("tab.border", QColor("#3e3e42"), false, "Tab border color");
+    reg("tab.activeBorderTop", QColor("#007acc"), false, "Active tab top accent");
     
     // Inputs
     reg("input.background", QColor("#3c3c3c"), true, "Text fields");

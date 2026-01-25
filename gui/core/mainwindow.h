@@ -36,6 +36,7 @@ class HDLEditor;
 class WelcomeWidget;
 class DockingManager;
 namespace acutesim { namespace gui { namespace core { class ActivityBar; } } }
+namespace acutesim { namespace gui { namespace widgets { class ProjectExplorer; } } }
 
 // ============================================================================
 // MAIN WINDOW
@@ -80,8 +81,7 @@ private:
     
     // Docks
     QDockWidget* projectDock;
-    QTreeView* projectView;
-    QFileSystemModel* fileModel;
+    acutesim::gui::widgets::ProjectExplorer* projectExplorer_;
 
     QDockWidget* libraryDock;
     ComponentLibrary* libraryPanel;
@@ -175,6 +175,7 @@ private:
     void setupKeybindings();
     void showCommandPalette();
     void showKeybindingsDialog();
+    void applyModernTabStyle(QTabWidget* tabWidget);
 
 private slots:
     void updateProperties(VisualComponent* item);

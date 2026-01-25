@@ -9,9 +9,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT DEFINED Qt6_DIR)
     if(NOT DEFINED CMAKE_PREFIX_PATH)
         if(APPLE)
-            # EXTREMELY IMPORTANT: Prioritize qtbase to avoid mixing with "qt" full package
-            # Homebrew's "qt" and "qtbase" often have version mismatches that cause segfaults
-            set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qtbase/lib/cmake")
+            # EXTREMELY IMPORTANT: Use the full "qt" package to ensure all modules (Svg, etc.)
+            # have matching versions. Mixing qtbase (6.9.3) with qt (6.9.0) causes segfaults.
+            set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt/lib/cmake")
             message(STATUS "Mac-specific CMAKE_PREFIX_PATH set to: ${CMAKE_PREFIX_PATH}")
         elseif(WIN32)
             # On Windows, try to detect a Qt installation under C:/Qt and append likely cmake folders.
@@ -72,12 +72,23 @@ endif()
 # Global include directory (Project Root)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-# Find Qt6 (required)
+if(APPLE AND NOT EMSCRIPTEN)
+    # Pre-define WrapOpenGL::WrapOpenGL to force TBD linking.
+    if(NOT TARGET WrapOpenGL::WrapOpenGL)
+        add_library(WrapOpenGL::WrapOpenGL INTERFACE IMPORTED)
+        # Link to the TBD stub in CommandLineTools SDK which is valid on this system
+        target_link_libraries(WrapOpenGL::WrapOpenGL INTERFACE "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AGL.framework/Versions/Current/AGL.tbd")
+        message(STATUS "Pre-defined WrapOpenGL::WrapOpenGL to link: AGL.tbd")
+    endif()
+endif()
+
 # Find Qt6 (required)
 if(EMSCRIPTEN)
     find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
+    find_package(Qt6 COMPONENTS Svg QUIET)
 else()
     find_package(Qt6 COMPONENTS Core Gui Widgets Test Concurrent REQUIRED)
+    find_package(Qt6 COMPONENTS Svg QUIET)
 endif()
 
 # Find OpenMP (Optional, for physics engine performance)
@@ -112,6 +123,9 @@ add_executable(${PROJECT_NAME}
     gui/core/activity_bar.h
     gui/core/keybinding_manager.cpp
     gui/core/keybinding_manager.h
+    gui/core/icon_provider.cpp
+    gui/core/icon_provider.h
+    resources/icons.qrc
     gui/editors/schematic_editor.cpp
     gui/editors/schematic_editor_sync.cpp
     gui/editors/schematic_editor.h
@@ -182,6 +196,10 @@ add_executable(${PROJECT_NAME}
     compute/orchestration/grpc_worker_client.cpp
     compute/orchestration/drivers/yosys_task.cpp
     compute/orchestration/drivers/yosys_task.h
+    compute/orchestration/drivers/openroad_task.cpp
+    compute/orchestration/drivers/openroad_task.h
+    compute/orchestration/drivers/klayout_task.cpp
+    compute/orchestration/drivers/klayout_task.h
     gui/orchestration/worker_manager.cpp
     gui/orchestration/worker_manager.h
     gui/orchestration/worker_status_panel.cpp
@@ -208,6 +226,10 @@ add_executable(${PROJECT_NAME}
     gui/widgets/toast_manager.h
     gui/widgets/keybindings_dialog.cpp
     gui/widgets/keybindings_dialog.h
+    gui/widgets/project_model.cpp
+    gui/widgets/project_model.h
+    gui/widgets/project_explorer.cpp
+    gui/widgets/project_explorer.h
     components/circuit.h
 )
 
@@ -270,11 +292,17 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 # Link Qt libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE 
-    Qt6::Core 
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    Qt6::Core
     Qt6::Gui
     Qt6::Widgets
 )
+
+# Optional: Link Qt6::Svg if available
+if(Qt6Svg_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Svg)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ACUTESIM_HAS_SVG)
+endif()
 
 if(NOT EMSCRIPTEN)
     target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Concurrent)
@@ -310,31 +338,9 @@ endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
 
 # macOS specific: Ensure system frameworks like AGL are found
+# macOS specific: Ensure system frameworks like AGL are found
 if(APPLE)
-    # Search for the AGL stub specifically to satisfy legacy Qt requirements
-    find_file(AGL_TBD NAMES AGL.tbd PATHS 
-        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/AGL.framework"
-        "/Library/Developer/CommandLineTools/SDKs/MacOSX14.4.sdk/System/Library/Frameworks/AGL.framework"
-        "/Library/Developer/CommandLineTools/SDKs/MacOSX13.3.sdk/System/Library/Frameworks/AGL.framework"
-        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/AGL.framework"
-    )
-    
-    if(AGL_TBD)
-        message(STATUS "Found AGL stub: ${AGL_TBD}")
-        # Get the directory containing AGL.framework
-        get_filename_component(AGL_FRAMEWORK_DIR "${AGL_TBD}" DIRECTORY)
-        get_filename_component(AGL_SDK_FRAMEWORKS_PATH "${AGL_FRAMEWORK_DIR}" DIRECTORY)
-        
-        # Link the stub and add the search path for the framework
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${AGL_TBD})
-        target_link_options(${PROJECT_NAME} PRIVATE "-F${AGL_SDK_FRAMEWORKS_PATH}")
-    else()
-        # Fallback to searching as framework if stub is not found
-        find_library(AGL_LIBRARY AGL)
-        if(AGL_LIBRARY)
-            target_link_libraries(${PROJECT_NAME} PRIVATE ${AGL_LIBRARY})
-        endif()
-    endif()
+    # AGL workaround is handled via WrapOpenGL pre-definition above
 endif()
 
 # Install rule
@@ -469,6 +475,9 @@ if(NOT EMSCRIPTEN)
         gui/core/platform_helper.cpp
         gui/core/activity_bar.cpp
         gui/core/activity_bar.h
+        gui/core/icon_provider.cpp
+        gui/core/icon_provider.h
+        resources/icons.qrc
         gui/widgets/command_palette.cpp
         gui/widgets/command_palette.h
         gui/widgets/ghost_diff_viewer.cpp
@@ -554,6 +563,9 @@ if(NOT EMSCRIPTEN)
         gui/core/platform_helper.cpp
         gui/core/activity_bar.cpp
         gui/core/activity_bar.h
+        gui/core/icon_provider.cpp
+        gui/core/icon_provider.h
+        resources/icons.qrc
         gui/widgets/command_palette.cpp
         gui/widgets/command_palette.h
         gui/widgets/ghost_diff_viewer.cpp
