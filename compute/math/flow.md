@@ -28,6 +28,12 @@ Defines `struct EmulatedF64` (float pair) to mock GPU double-double arithmetic.
 *   **Purpose**: Validates that physics kernels are strictly templated and ADL-compliant.
 *   **Usage**: Used in `test_emulated_f64` and `test_bjt_stability` to prove architecture independence.
 
+### 4. `fpu_control.h`: Determinism Enforcer
+Ensures cross-platform identical results by locking down the Floating Point Unit.
+*   **Rounding**: Enforces `FE_TONEAREST` (Round to Nearest Even).
+*   **Denormals**: Disables "Flush to Zero" (DAZ/FTZ) to preserve subnormal precision (~1e-308).
+*   **Safety**: Prevents x87 precision changes or "Fast Math" optimizations from breaking reproducibility.
+
 ## Core Logic & Snippets
 
 ### Matrix Assembly (`linalg.h`)

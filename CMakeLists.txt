@@ -3,7 +3,12 @@ project(AcuteSim VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# Phase 0.2.1: Floating-Point Determinism
+if(MSVC)
+    add_compile_options(/fp:strict)
+else()
+    add_compile_options(-ffloat-store -fno-fast-math -frounding-math)
+endif()
 
 # Platform-aware default Qt prefix hints (can be overridden by CMAKE_PREFIX_PATH or Qt6_DIR)
 if(NOT DEFINED Qt6_DIR)
@@ -190,6 +195,8 @@ add_executable(${PROJECT_NAME}
     ai_api/simulation/auto_harness.cpp
     ai_api/simulation/auto_harness.h
     compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
     compute/solvers/webgpu_solver.cpp
@@ -353,6 +360,8 @@ install(TARGETS ${PROJECT_NAME}
 add_executable(test_regression 
     tests/regression_main.cpp
     compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -675,6 +684,8 @@ add_executable(test_simulation
     tests/simulation_test_main.cpp
     physics/quick_analysis.cpp
     compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -792,5 +803,28 @@ target_include_directories(test_dual_emulated PRIVATE
 )
 target_link_libraries(test_dual_emulated PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME test_dual_emulated COMMAND test_dual_emulated)
+
+# Test FPU Determinism
+add_executable(test_fpu_determinism tests/test_fpu_determinism.cpp)
+target_include_directories(test_fpu_determinism PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+)
+target_link_libraries(test_fpu_determinism PRIVATE Qt6::Core)
+add_test(NAME test_fpu_determinism COMMAND test_fpu_determinism)
+
+# Test Kernel Dispatch
+add_executable(test_kernel_dispatch 
+    tests/test_kernel_dispatch.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+)
+target_include_directories(test_kernel_dispatch PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+)
+target_link_libraries(test_kernel_dispatch PRIVATE Qt6::Core)
+target_compile_features(test_kernel_dispatch PUBLIC cxx_std_17)
+add_test(NAME test_kernel_dispatch COMMAND test_kernel_dispatch)
 
 

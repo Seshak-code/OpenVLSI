@@ -637,7 +637,20 @@ public:
     }
 
     // 5. Hierarchical Instances (Phase 1: Structural Abstraction)
-    for (const auto &job : scheduler.jobs) {
+    // PARALLEL STAMPING: Process jobs concurrently.
+    // Use atomic updates for the residual vector to avoid race conditions on shared nodes.
+    
+    // Redefine addRes for thread-safety within the parallel region
+    auto addResAtomic = [&](int nodeIdx, double val) {
+        if (nodeIdx > 0 && nodeIdx <= n) {
+            #pragma omp atomic
+            node_residuals[nodeIdx - 1] += val;
+        }
+    };
+
+    #pragma omp parallel for
+    for (int i = 0; i < (int)scheduler.jobs.size(); ++i) {
+      const auto &job = scheduler.jobs[i];
       const TensorBlock &block = *job.blockTmpl;
       for (int instanceIdx : job.instanceIds) {
         const auto &instance = netlist.instances[instanceIdx];
@@ -650,8 +663,8 @@ public:
           double i_r = (getV(mapNode(r.nodeTerminal1)) -
                         getV(mapNode(r.nodeTerminal2))) /
                        r.resistance_ohms;
-          addRes(mapNode(r.nodeTerminal1), -i_r);
-          addRes(mapNode(r.nodeTerminal2), i_r);
+          addResAtomic(mapNode(r.nodeTerminal1), -i_r);
+          addResAtomic(mapNode(r.nodeTerminal2), i_r);
         }
 
         // Diodes
@@ -661,8 +674,8 @@ public:
                                 d.emissionCoefficient_N,
                                 d.thermalVoltage_V_T_V};
           double i_d = diode_current(v_d, params);
-          addRes(mapNode(d.anode), -i_d);
-          addRes(mapNode(d.cathode), i_d);
+          addResAtomic(mapNode(d.anode), -i_d);
+          addResAtomic(mapNode(d.cathode), i_d);
         }
 
         // Capacitors (Transient)
@@ -692,8 +705,8 @@ public:
                       (v_curr - c.voltage_history[0]);
               }
             }
-            addRes(mapNode(c.nodePlate1), -i_c);
-            addRes(mapNode(c.nodePlate2), i_c);
+            addResAtomic(mapNode(c.nodePlate1), -i_c);
+            addResAtomic(mapNode(c.nodePlate2), i_c);
           }
         }
       }

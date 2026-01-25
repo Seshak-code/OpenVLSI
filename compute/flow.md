@@ -32,8 +32,8 @@ When `CircuitSim::solveDC()` is called, the following sequence occurs:
     *   **Stamping (`physics/circuitsim.h`)**:
         *   `stampAllElements()` is the entry point.
         *   It calls `stampBlockLinear()` for passive R/L/C/V/I elements.
-        *   It calls `stampSoABlock()` to dispatch vectorized kernels (`batchDiodePhysics`) for active devices.
-        *   It iterates `scheduler.jobs` to stamp sub-circuits efficiently.
+        *   It calls `stampSoABlock()` which uses `KernelDispatcher` to route vectorized kernels (`batchDiodePhysics`) to AVX-512/Neon implementations.
+        *   **Parallelism**: Iterates `scheduler.jobs` using OpenMP (`#pragma omp parallel for`) and atomic updates for massive throughput.
 
 3.  **Matrix Solution (`math/linalg.h`)**
     *   **Assembly**: `MatrixConstructor` sums overlapping stamps (KCL Superposition) and compresses to `Csr_matrix`.

@@ -36,12 +36,31 @@
 - **Simulation Trace**: Structured JSON knowledge objects that ground the AI in physical reality.
 - **Failure Taxonomy**: Automated classifier that labels crashes (e.g., `FLOATING_NODE`) for better AI reasoning.
 
-## 🔗 Critical Interconnections (The "Flow")
-1.  **User Edit**: `gui/` -> `SchematicModel` -> `components/circuit.h` (`TensorNetlist`).
-2.  **Simulation Request**: `gui/` -> `compute/orchestration/` -> `compute/solvers/`.
-3.  **Data Transformation**: `TensorNetlist` (AoS) -> `compute/tensors/physics_tensors.h` (SoA).
-4.  **Execution**: `compute/solvers/` -> `physics/circuitsim.h` -> `physics/device_physics.h` (Kernels).
-5.  **Verification**: Result -> `compute/infrastructure/simtrace.h` -> `gui/` (Waveforms).
+## 🔬 Deep Architecture & Data Flow (The "Pipeline")
+The system follows a strict **Data-Oriented Design (DoD)** pipeline where dependencies flow downwards.
+
+### 1. Data Ingestion & Transformation (`components/` -> `compute/tensors/`)
+-   **Structure**: `components/circuit.h` (`TensorNetlist`) holds the user-facing "Array of Structures".
+-   **Transformation**: `physics_tensors.cpp` converts this into **SoA (Structure of Arrays)** (`TensorizedBlock`) for SIMD efficiency.
+-   **Batching**: `tensorscheduler.h` groups jobs by `topologyHash` to enable batch processing.
+
+### 2. The Solver Engine (`compute/solvers/` -> `physics/`)
+-   **Strategy**: `circuitsim_solver.cpp` manages the Newton-Raphson loop and selects the backend (`solveLU` vs `solvePCG`).
+-   **Stamping**:
+    -   `physics/circuitsim.h` orchestrates the stamping.
+    -   **Passive**: `stampBlockLinear()` handles R/L/C using direct matrix writes.
+    -   **Active**: `stampSoABlock()` dispatches **Vectorized Kernels** (`physics_tensors.h`) to compute device physics in batches.
+-   **Dual Kernel**: `physics/device_physics.h` provides both `exact` (truth) and `clamped` (stable) physics models.
+
+### 3. Numerical Kernel (`compute/math/`)
+-   **Linear Algebra**: `linalg.h` provides Sparse Matrix (CSR) storage and solvers (`solvePCG`, `solveLU_Pivoted`).
+-   **Integration**: `integration_method.h` abstracts time-stepping (Trapezoidal, Gear-2).
+-   **Validation**: `emulated_f64.h` mocks GPU precision for determining algorithm correctness.
+
+### 4. Verification & Output (`compute/infrastructure/` -> `gui/`)
+-   **Safety**: `SafeUtils` scrubs NaNs; `calculatePhysicalResiduals` enforces KCL conservation (< 1pA).
+-   **Tracing**: `simtrace.h` captures "Trust Surface" data (residuals, iteration counts) for the GUI.
+-   **Visualization**: The GUI (`WaveformViewer`) renders these traces, linking back to the `Roadmap.md` phase that generated them.
 
 ## 🧩 Standard Agentic Development Workflow
 The project enforces a strict "Context-First" development loop via `/Users/seshak/.agent/workflows/agentic_flow.md`:

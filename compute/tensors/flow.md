@@ -18,9 +18,19 @@ Defines the `TensorizedBlock` structure, which holds typed tensors for each devi
 *   **Design Rule Masks (`dr_validity`)**: GPU-compatible `uint8` flags (e.g., `DR_THERMAL_VIOLATION`) that allow validitation to happen in parallel with physics evaluation.
 
 ### 2. `physics_tensors.cpp`: The Kernel Launcher
-Implements the **AoS -> SoA Conversion** (`tensorizeBlock`) and the **Vectorized Physics Kernels**.
+Implements the **AoS -> SoA Conversion** (`tensorizeBlock`) and the **Global Physics Wrappers**.
 *   **Conversion**: Iterates once over the netlist to pack data into contiguous memory. Includes safety clamps (e.g., Min Resistor = 0.5 Ohm).
-*   **Batch Physics**: Functions like `batchDiodePhysics` update the entire tensor's `current` and `conductance` arrays in a tight loop, suitable for AVX-512 auto-vectorization.
+*   **Wrappers**: `batchDiodePhysics` etc. now delegate execution to the `KernelDispatcher`.
+
+### 3. `kernel_dispatch.h/cpp`: The Runtime Router
+Detects CPU features (AVX-512, regular AVX2, ARM Neon) at startup (`CPUID`) and binds function pointers to the optimal implementation.
+*   **Single dispatch**: Checks hardware ONCE at startup, not every loop iteration.
+*   **Fallback**: Defaults to "Generic" (Compiler Auto-Vectorized) kernels if no specialized hardware is found.
+
+### 4. `physics_kernels_avx512.cpp`: Optimized SIMD
+Contains hand-written intrinsics (`<immintrin.h>`) for AVX-512 enabled processors.
+*   **Guarded**: Only compiles if `__AVX512F__` is defined.
+*   **Performance**: Uses 512-bit registers (8 doubles per cycle) for massive throughput.
 
 ## Core Logic & Snippets
 

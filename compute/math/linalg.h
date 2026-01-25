@@ -77,6 +77,8 @@ struct Triplet {
  * compression.
  */
 
+#include <mutex>
+
 class MatrixConstructor {
 private:
   // Internal storage for raw coordinates
@@ -84,10 +86,14 @@ private:
   // initializes the count of rows and columns
   int numRows = 0;
   int numCols = 0;
+  
+  // GRANULAR LOCKING (Phase 0.2.1)
+  std::mutex m_mutex;
 
 public:
   // Resets the constructor for a new matrix assembly
   void clear() {
+    std::lock_guard<std::mutex> lock(m_mutex);
     triplets.clear();
     numRows = 0;
     numCols = 0;
@@ -95,6 +101,7 @@ public:
   
   // Explicitly set matrix dimensions (prevents auto-grow beyond expected bounds)
   void setDimensions(int rows, int cols) {
+    std::lock_guard<std::mutex> lock(m_mutex);
     numRows = rows;
     numCols = cols;
   }
@@ -104,6 +111,9 @@ public:
    * row: 0-indexed row position.
    * col: 0-indexed column position.
    * value: Numerical value to add to this cell.
+   * 
+   * THREAD-SAFETY: This method uses a mutex to allow multiple threads to Stamp
+   * physics blocks concurrently.
    */
 
   void add(int row, int col, double value) {
@@ -111,6 +121,8 @@ public:
     assert(row >= 0 && "Row index can't be negative");
     assert(col >= 0 && "Column index can't be negative");
     // value can be anything lol
+
+    std::lock_guard<std::mutex> lock(m_mutex);
 
     // Records new entry into the triplet array
     triplets.push_back({row, col, value});

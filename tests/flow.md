@@ -11,6 +11,8 @@ The `tests/` directory contains the **Verification Framework**. It enforces the 
 -   **`test_physics_kernels.cpp`**: Comprehensive verification of BJT, MOSFET, and Diode physics kernels (Double + EmulatedF64).
 -   **`test_emulated_f64.cpp`**: Verifies compatibility of device physics templates with Emulated F64 (GPU double-double) types.
 -   **`test_dual_emulated.cpp`**: Verifies that Automatic Differentiation (`Dual<T>`) functions correctly with `EmulatedF64`.
+-   **`test_fpu_determinism.cpp`**: Enforces strict IEEE-754 rounding (Nearest-Even) and subnormal handling across platforms.
+-   **`test_kernel_dispatch.cpp`**: Verifies that `KernelDispatcher` correctly binds and executes the optimal SIMD path (Neon/AVX/Generic).
 
 ### 2. UI Integration
 -   **`test_gui_logic.cpp`**: Headless testing of `SchematicEditor` interactions (Add, Move, Undo).
