@@ -2,6 +2,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QRegularExpression>
+#include <QDockWidget>
 
 namespace acutesim {
 namespace gui {
@@ -136,11 +137,10 @@ bool LayoutManager::loadLayout(const QString& layoutId, QMainWindow* window) {
         QString key = "main_window_" + layoutId;
         success = restoreWindowLayout(key, window);
 
-        // If no saved state for this preset, it will just use current layout
-        // This is intentional - user can customize built-in presets
+        // If no saved state for this preset, apply programmatic configuration
         if (!success) {
-            qDebug() << "[LayoutManager] No saved state for built-in preset:" << layoutId;
-            // Still consider it "loaded" - it just means use default
+            qDebug() << "[LayoutManager] No saved state for built-in preset:" << layoutId << "- applying programmatic config";
+            applyBuiltInPreset(layoutId, window);
             success = true;
         }
     } else {
@@ -167,6 +167,78 @@ bool LayoutManager::loadLayout(const QString& layoutId, QMainWindow* window) {
     }
 
     return success;
+}
+
+void LayoutManager::applyBuiltInPreset(const QString& presetId, QMainWindow* window) {
+    if (!window) return;
+
+    // Get all dock widgets
+    QList<QDockWidget*> docks = window->findChildren<QDockWidget*>();
+
+    if (presetId == "minimal") {
+        // Hide all docks for maximum canvas space
+        for (auto* dock : docks) {
+            dock->hide();
+        }
+        qDebug() << "[LayoutManager] Applied minimal preset - all docks hidden";
+    }
+    else if (presetId == "analog_debug") {
+        // Analog debugging: Show waveform prominently, hide project explorer
+        for (auto* dock : docks) {
+            QString name = dock->objectName().toLower();
+            if (name.contains("waveform") || name.contains("wave")) {
+                dock->show();
+                dock->raise();
+            } else if (name.contains("project") || name.contains("explorer")) {
+                dock->hide();
+            } else if (name.contains("properties") || name.contains("output") || name.contains("problems")) {
+                dock->show();
+            }
+        }
+        qDebug() << "[LayoutManager] Applied analog_debug preset";
+    }
+    else if (presetId == "rtl_synthesis") {
+        // RTL Synthesis: HDL editor prominent, terminal visible, waveform minimized
+        for (auto* dock : docks) {
+            QString name = dock->objectName().toLower();
+            if (name.contains("waveform") || name.contains("wave")) {
+                dock->hide();
+            } else if (name.contains("terminal") || name.contains("output")) {
+                dock->show();
+            } else if (name.contains("project") || name.contains("explorer")) {
+                dock->show();
+            }
+        }
+        qDebug() << "[LayoutManager] Applied rtl_synthesis preset";
+    }
+    else if (presetId == "simulation") {
+        // Simulation focus: All bottom panels visible, waveform prominent
+        for (auto* dock : docks) {
+            QString name = dock->objectName().toLower();
+            if (name.contains("waveform") || name.contains("wave") ||
+                name.contains("output") || name.contains("result") ||
+                name.contains("problems") || name.contains("terminal")) {
+                dock->show();
+                if (name.contains("waveform") || name.contains("wave")) {
+                    dock->raise();
+                }
+            }
+        }
+        qDebug() << "[LayoutManager] Applied simulation preset";
+    }
+    else if (presetId == "default") {
+        // Default: Show all standard docks in balanced configuration
+        for (auto* dock : docks) {
+            QString name = dock->objectName().toLower();
+            // Show core docks, hide specialized ones
+            if (name.contains("worker") || name.contains("debug_suggestion")) {
+                dock->hide();
+            } else {
+                dock->show();
+            }
+        }
+        qDebug() << "[LayoutManager] Applied default preset";
+    }
 }
 
 bool LayoutManager::deleteLayout(const QString& layoutId) {

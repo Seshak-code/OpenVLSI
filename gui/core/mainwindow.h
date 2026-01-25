@@ -177,6 +177,11 @@ private:
     void showKeybindingsDialog();
     void applyModernTabStyle(QTabWidget* tabWidget);
 
+    // Phase 11.2: Layout Management
+    QMenu* layoutMenu_ = nullptr;
+    void updateLayoutMenu();
+    void resetLayout();
+
 private slots:
     void updateProperties(VisualComponent* item);
     void updateWireProperties(VisualWire* wire);

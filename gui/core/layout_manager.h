@@ -62,6 +62,9 @@ public:
     // Global Reset
     void resetToFactory();
 
+    // Apply built-in preset configuration programmatically
+    void applyBuiltInPreset(const QString& presetId, QMainWindow* window);
+
     // Accessors for raw data (for testing)
     QByteArray getSavedState(const QString& key) const;
 

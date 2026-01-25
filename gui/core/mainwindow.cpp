@@ -803,6 +803,16 @@ void MainWindow::setupMenus() {
         }
     });
 
+    viewMenu->addSeparator();
+
+    // Phase 11.2: Layout submenu
+    layoutMenu_ = viewMenu->addMenu("Layouts");
+    updateLayoutMenu();
+
+    // Connect to LayoutManager for dynamic updates
+    connect(&acutesim::gui::core::LayoutManager::instance(), &acutesim::gui::core::LayoutManager::layoutChanged,
+            this, &MainWindow::updateLayoutMenu);
+
     // Simulation
     QMenu* simMenu = mb->addMenu("&Simulation");
     simMenu->addAction("Set Simulation", this, &MainWindow::runSimulation);
@@ -1459,6 +1469,42 @@ void MainWindow::setupCommandPalette() {
     };
     commandPalette_->registerCommand(cmd);
 
+    // Delete user layout
+    cmd.id = "layout.delete";
+    cmd.label = "Delete Layout...";
+    cmd.category = "Layout";
+    cmd.shortcut = "";
+    cmd.callback = [this]() {
+        auto layouts = acutesim::gui::core::LayoutManager::instance().availableLayouts();
+        QStringList userLayouts;
+        QStringList userLayoutIds;
+        for (const auto& l : layouts) {
+            if (!l.isBuiltIn) {
+                userLayouts << l.name;
+                userLayoutIds << l.id;
+            }
+        }
+        if (userLayouts.isEmpty()) {
+            statusBar()->showMessage("No user layouts to delete", 3000);
+            return;
+        }
+        bool ok;
+        QString name = QInputDialog::getItem(this, "Delete Layout",
+            "Select layout to delete:", userLayouts, 0, false, &ok);
+        if (ok && !name.isEmpty()) {
+            int idx = userLayouts.indexOf(name);
+            if (idx >= 0 && idx < userLayoutIds.size()) {
+                QString id = userLayoutIds.at(idx);
+                if (acutesim::gui::core::LayoutManager::instance().deleteLayout(id)) {
+                    statusBar()->showMessage("Layout deleted: " + name, 3000);
+                } else {
+                    statusBar()->showMessage("Failed to delete layout: " + name, 3000);
+                }
+            }
+        }
+    };
+    commandPalette_->registerCommand(cmd);
+
     // Register keybindings using the centralized KeybindingManager
     setupKeybindings();
 }
@@ -1686,4 +1732,68 @@ void MainWindow::applyModernTabStyle(QTabWidget* tabWidget) {
             border-radius: 3px;
         }
     )").arg(tabBg, tabActiveBg, tabHoverBg, tabBorder, textColor, textDim, tabAccent));
+}
+
+void MainWindow::updateLayoutMenu() {
+    if (!layoutMenu_) return;
+
+    layoutMenu_->clear();
+
+    auto& lm = acutesim::gui::core::LayoutManager::instance();
+    auto layouts = lm.availableLayouts();
+    QString currentId = lm.currentLayout();
+
+    // Built-in presets
+    bool hasBuiltIn = false;
+    for (const auto& preset : layouts) {
+        if (preset.isBuiltIn) {
+            hasBuiltIn = true;
+            QAction* action = layoutMenu_->addAction(preset.name);
+            action->setData(preset.id);
+            action->setCheckable(true);
+            action->setChecked(preset.id == currentId);
+            action->setToolTip(preset.description);
+            connect(action, &QAction::triggered, this, [this, id = preset.id]() {
+                acutesim::gui::core::LayoutManager::instance().loadLayout(id, this);
+            });
+        }
+    }
+
+    // User layouts section
+    bool hasUserLayouts = false;
+    for (const auto& preset : layouts) {
+        if (!preset.isBuiltIn) {
+            if (!hasUserLayouts) {
+                layoutMenu_->addSeparator();
+                hasUserLayouts = true;
+            }
+            QAction* action = layoutMenu_->addAction(preset.name);
+            action->setData(preset.id);
+            action->setCheckable(true);
+            action->setChecked(preset.id == currentId);
+            action->setToolTip(preset.description);
+            connect(action, &QAction::triggered, this, [this, id = preset.id]() {
+                acutesim::gui::core::LayoutManager::instance().loadLayout(id, this);
+            });
+        }
+    }
+
+    // Management actions
+    layoutMenu_->addSeparator();
+
+    layoutMenu_->addAction("Save Layout As...", this, [this]() {
+        QString name = QInputDialog::getText(this, "Save Layout",
+            "Enter layout name:", QLineEdit::Normal, "My Layout");
+        if (!name.isEmpty()) {
+            acutesim::gui::core::LayoutManager::instance().saveLayoutAs(name, this);
+            statusBar()->showMessage("Layout saved: " + name, 3000);
+        }
+    });
+
+    layoutMenu_->addAction("Reset to Default", this, &MainWindow::resetLayout);
+}
+
+void MainWindow::resetLayout() {
+    acutesim::gui::core::LayoutManager::instance().resetToFactory();
+    statusBar()->showMessage("Window layout reset to default", 3000);
 }
