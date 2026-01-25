@@ -149,14 +149,16 @@ constexpr Dual<T> operator-(Dual<T> x) { return { -x.val, -x.grad }; }
     template <typename T>
     inline Dual<T> exp(const Dual<T>& x) {
         // d/dx exp(u) = exp(u) * u'
-        T ex = std::exp(x.val);
+        using std::exp;
+        T ex = exp(x.val);
         return { ex, ex * x.grad };
     }
 
     template <typename T>
     inline Dual<T> log(const Dual<T>& x) {
         // d/dx log(u) = u'/u
-        return { std::log(x.val), x.grad / x.val };
+        using std::log;
+        return { log(x.val), x.grad / x.val };
     }
 
     template <typename T>

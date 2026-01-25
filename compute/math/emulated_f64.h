@@ -111,8 +111,17 @@ inline EmulatedF64 max(const EmulatedF64& a, const EmulatedF64& b) {
 }
 
 // Support for mixed arithmetic with double/float literals
-// (The compiler might handle implicit conversion to EmulatedF64 via constructor,
-// but specific overloads help resolve ambiguity if needed).
+inline EmulatedF64 operator+(double lhs, const EmulatedF64& rhs) { return EmulatedF64(lhs) + rhs; }
+inline EmulatedF64 operator+(const EmulatedF64& lhs, double rhs) { return lhs + EmulatedF64(rhs); }
+
+inline EmulatedF64 operator-(double lhs, const EmulatedF64& rhs) { return EmulatedF64(lhs) - rhs; }
+inline EmulatedF64 operator-(const EmulatedF64& lhs, double rhs) { return lhs - EmulatedF64(rhs); }
+
+inline EmulatedF64 operator*(double lhs, const EmulatedF64& rhs) { return EmulatedF64(lhs) * rhs; }
+inline EmulatedF64 operator*(const EmulatedF64& lhs, double rhs) { return lhs * EmulatedF64(rhs); }
+
+inline EmulatedF64 operator/(double lhs, const EmulatedF64& rhs) { return EmulatedF64(lhs) / rhs; }
+inline EmulatedF64 operator/(const EmulatedF64& lhs, double rhs) { return lhs / EmulatedF64(rhs); }
 
 // Stream output
 inline std::ostream& operator<<(std::ostream& os, const EmulatedF64& val) {

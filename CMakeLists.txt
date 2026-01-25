@@ -750,28 +750,23 @@ target_link_libraries(test_docking_interaction PRIVATE Qt6::Core Qt6::Gui Qt6::W
 add_test(NAME test_docking_interaction COMMAND test_docking_interaction)
 
 
-# BJT Stability Test
-add_executable(test_bjt_stability 
-    tests/test_bjt_stability.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
+# Physics Kernels Verification (BJT, MOSFET, Diode)
+add_executable(test_physics_kernels
+    tests/test_physics_kernels.cpp
 )
-target_include_directories(test_bjt_stability PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_link_libraries(test_bjt_stability PRIVATE Qt6::Core Qt6::Test)
-target_compile_features(test_bjt_stability PUBLIC cxx_std_17)
+# Note: Solver sources linked only if dependencies require, but kernels are header-only effectively.
+# Actually, device_physics.h is header only. We might not need solver cpp files if we don't link them.
+# Removing solver cpps to keep it a clean unit test of physics.
+target_sources(test_physics_kernels PRIVATE tests/test_physics_kernels.cpp)
 
-add_test(NAME test_bjt_stability COMMAND test_bjt_stability)
+target_include_directories(test_physics_kernels PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_link_libraries(test_physics_kernels PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_physics_kernels PUBLIC cxx_std_17)
+
+add_test(NAME test_physics_kernels COMMAND test_physics_kernels)
 
 
 # Emulated F64 Verification
@@ -784,4 +779,18 @@ target_include_directories(test_emulated_f64 PRIVATE
 )
 target_link_libraries(test_emulated_f64 PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME test_emulated_f64 COMMAND test_emulated_f64)
+
+
+# AutoDiff Dual<EmulatedF64> Verification
+add_executable(test_dual_emulated
+    tests/test_dual_emulated.cpp
+)
+target_include_directories(test_dual_emulated PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_link_libraries(test_dual_emulated PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME test_dual_emulated COMMAND test_dual_emulated)
+
 
