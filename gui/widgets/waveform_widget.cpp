@@ -143,19 +143,51 @@ void WaveformView::setData(const QVector<QPointF>& data, int traceIndex) {
         return;
     }
 
-    // Simple path construction
+    // Calculate data bounds for proper scaling
+    double xMin = data.first().x(), xMax = data.first().x();
+    double yMin = data.first().y(), yMax = data.first().y();
+    for (const auto& pt : data) {
+        if (pt.x() < xMin) xMin = pt.x();
+        if (pt.x() > xMax) xMax = pt.x();
+        if (pt.y() < yMin) yMin = pt.y();
+        if (pt.y() > yMax) yMax = pt.y();
+    }
+
+    // Normalize to scene coordinates (use viewport width/height as reference)
+    double xRange = (xMax - xMin);
+    double yRange = (yMax - yMin);
+    if (xRange < 1e-12) xRange = 1.0;
+    if (yRange < 1e-12) yRange = 1.0;
+
+    // Scale to fit in a reasonable scene area (e.g., 800x400)
+    double xScale = 800.0 / xRange;
+    double yScale = 300.0 / yRange;
+
+    // Build path with proper scaling
     QPainterPath path;
-    double xScale = 10.0;  // Scale time for better visibility
-    path.moveTo(data.first().x() * xScale, -data.first().y());
+    path.moveTo((data.first().x() - xMin) * xScale, -(data.first().y() - yMin) * yScale);
     for (int i = 1; i < data.size(); ++i) {
-        path.lineTo(data[i].x() * xScale, -data[i].y());
+        path.lineTo((data[i].x() - xMin) * xScale, -(data[i].y() - yMin) * yScale);
     }
     curveItem->setPath(path);
+
+    // Auto-fit view to scene bounds (only after sufficient data)
+    if (data.size() > 10) {
+        fitInView(scene_->itemsBoundingRect().adjusted(-20, -20, 20, 20), Qt::KeepAspectRatio);
+    }
 }
 
 void WaveformView::setMultiTraceData(const QMap<int, QVector<QPointF>>& traces) {
     for (auto it = traces.begin(); it != traces.end(); ++it) {
         setData(it.value(), it.key());
+    }
+
+    // Auto-fit view after updating all traces
+    if (!traces.isEmpty() && scene_->items().count() > 0) {
+        QRectF bounds = scene_->itemsBoundingRect();
+        if (bounds.isValid() && bounds.width() > 1 && bounds.height() > 1) {
+            fitInView(bounds.adjusted(-20, -20, 20, 20), Qt::KeepAspectRatio);
+        }
     }
 }
 

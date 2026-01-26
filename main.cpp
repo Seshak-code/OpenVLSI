@@ -20,6 +20,9 @@ extern "C" int statx(int dirfd, const char *pathname, int flags,
 #endif
 
 int main(int argc, char *argv[]) {
+  // Explicitly initialize Qt resources before QApplication
+  Q_INIT_RESOURCE(icons);
+
   if (argc > 1) {
     std::string arg = argv[1];
     if (arg == "--stress") {

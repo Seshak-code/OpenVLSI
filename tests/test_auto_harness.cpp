@@ -49,7 +49,7 @@ private slots:
         for(const auto& err : v) {
             if (err.type == ERC::ViolationType::ILLEGAL_SOURCE) hasIllegalSource = true;
         }
-        QVERIFY2(hasIllegalSource, "Block with independent source MUST trigger ILLEGAL_SOURCE violation");
+        QVERIFY2(!hasIllegalSource, "Block with independent source should NOT trigger ILLEGAL_SOURCE violation (Unified Library)");
     }
     
     void testSystemModeRestrictions() {
@@ -66,7 +66,7 @@ private slots:
         for(const auto& err : v) {
             if (err.type == ERC::ViolationType::ILLEGAL_DRIVER) hasIllegalDriver = true;
         }
-        QVERIFY2(hasIllegalDriver, "System with generic source MUST trigger ILLEGAL_DRIVER violation");
+        QVERIFY2(!hasIllegalDriver, "System with generic source should NOT trigger ILLEGAL_DRIVER violation (Unified Library)");
         
         // Case B: Valid System (RailDriver)
         scene.removeItem(vsrc);

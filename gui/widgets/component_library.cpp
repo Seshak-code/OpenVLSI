@@ -3,15 +3,36 @@
 ComponentLibrary::ComponentLibrary(QWidget* parent) : QWidget(parent) {
     setupUi();
     populateLists();
-    
-    // Default to Bench mode
-    setMode(AppMode::BENCH_TEST);
+
+    // Show all component tabs - unified library (no mode filtering)
+    // All tabs are visible by default after setupUi()
 }
 
 void ComponentLibrary::setupUi() {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
+
+    // Search box at top
+    searchEdit_ = new QLineEdit(this);
+    searchEdit_->setPlaceholderText("Filter components...");
+    searchEdit_->setClearButtonEnabled(true);
+    searchEdit_->setStyleSheet(R"(
+        QLineEdit {
+            background: #3c3c3c;
+            color: #ccc;
+            border: 1px solid #454545;
+            border-radius: 4px;
+            padding: 6px 8px;
+            margin: 4px;
+            font-size: 12px;
+        }
+        QLineEdit:focus {
+            border-color: #007ACC;
+        }
+    )");
+    connect(searchEdit_, &QLineEdit::textChanged, this, &ComponentLibrary::onSearchTextChanged);
+    layout->addWidget(searchEdit_);
 
     tabs = new QTabWidget(this);
     layout->addWidget(tabs);
@@ -160,34 +181,37 @@ void ComponentLibrary::setStage(DesignStage stage) {
 }
 
 void ComponentLibrary::setMode(AppMode mode) {
+    // DEPRECATED: Mode filtering removed - unified component library
+    // All tabs are now always visible regardless of mode
+    Q_UNUSED(mode);
+
+    // Ensure all tabs are visible (unified library)
     int srcIdx = tabs->indexOf(sourcesList);
     int intIdx = tabs->indexOf(interfacesList);
     int pdnIdx = tabs->indexOf(systemList);
     int icsIdx = tabs->indexOf(icsList);
-    
-    switch (mode) {
-        case AppMode::BENCH_TEST:
-            // Ideal sources, implicit ground, device testing
-            tabs->setTabVisible(srcIdx, true);
-            tabs->setTabVisible(intIdx, false);
-            tabs->setTabVisible(pdnIdx, false);
-            tabs->setTabVisible(icsIdx, false);
-            break;
-            
-        case AppMode::BLOCK_SUBSYSTEM:
-            // PowerPort interfaces, internal dependent sources
-            tabs->setTabVisible(srcIdx, false);
-            tabs->setTabVisible(intIdx, true);
-            tabs->setTabVisible(pdnIdx, false);
-            tabs->setTabVisible(icsIdx, false);
-            break;
-            
-        case AppMode::SYSTEM_INTEGRATION:
-            // RailDrivers only, explicit VSS/VDD symbols
-            tabs->setTabVisible(srcIdx, false);
-            tabs->setTabVisible(intIdx, false);
-            tabs->setTabVisible(pdnIdx, true);
-            tabs->setTabVisible(icsIdx, true);
-            break;
+
+    tabs->setTabVisible(srcIdx, true);
+    tabs->setTabVisible(intIdx, true);
+    tabs->setTabVisible(pdnIdx, true);
+    tabs->setTabVisible(icsIdx, true);
+}
+
+void ComponentLibrary::onSearchTextChanged(const QString& text) {
+    QString pattern = text.trimmed().toLower();
+    filterList(basicList, pattern);
+    filterList(activeList, pattern);
+    filterList(sourcesList, pattern);
+    filterList(interfacesList, pattern);
+    filterList(systemList, pattern);
+    filterList(icsList, pattern);
+}
+
+void ComponentLibrary::filterList(QListWidget* list, const QString& pattern) {
+    for (int i = 0; i < list->count(); ++i) {
+        QListWidgetItem* item = list->item(i);
+        bool matches = pattern.isEmpty() ||
+                       item->text().toLower().contains(pattern);
+        item->setHidden(!matches);
     }
 }

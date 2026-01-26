@@ -37,6 +37,7 @@ class WelcomeWidget;
 class DockingManager;
 namespace acutesim { namespace gui { namespace core { class ActivityBar; } } }
 namespace acutesim { namespace gui { namespace widgets { class ProjectExplorer; } } }
+namespace acutesim { namespace gui { namespace widgets { class SearchDock; } } }
 
 // ============================================================================
 // MAIN WINDOW
@@ -120,6 +121,10 @@ private:
     // Phase 1.7: Simulation Dock (VS Code-style sidebar)
     QDockWidget* simulationDock_;
 
+    // Search Dock
+    QDockWidget* searchDock_;
+    acutesim::gui::widgets::SearchDock* searchPanel_;
+
 
 private slots:
     void onSimulationResults(const QJsonObject& results);
@@ -143,8 +148,14 @@ private slots:
     void createWorkerDock();
     void createDebugSuggestionsDock();
     void createSimulationDock();
+    void createSearchDock();
 
-    
+    // File Operations
+    void openFileFromExplorer(const QString& category, const QString& fileName, const QString& filePath);
+    void openSchematicFile(const QString& filePath, const QString& fileName);
+    void openHDLFile(const QString& filePath, const QString& fileName);
+    AppMode detectModeFromSchematic(const QJsonObject& state);
+
     // Actions
     void newProject();
     void openProject();

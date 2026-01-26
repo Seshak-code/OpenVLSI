@@ -64,8 +64,11 @@ void IconProvider::registerIcon(const QString& name, const QString& resourcePath
 QIcon IconProvider::loadSvgIcon(const QString& path, const QColor& color) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "[IconProvider] FAILED to open icon:" << path;
         return QIcon();
     }
+
+    qDebug() << "[IconProvider] Loaded icon:" << path << "color:" << color.name();
 
     QString svgContent = file.readAll();
     file.close();
@@ -114,7 +117,14 @@ QIcon IconProvider::loadSvgIcon(const QString& path, const QColor& color) {
 
 QString IconProvider::getResourcePath(const QString& name) {
     if (customPaths_.contains(name)) return customPaths_[name];
-    return QString(":/icons/icons/%1.svg").arg(name);
+    QString path = QString(":/icons/icons/%1.svg").arg(name);
+
+    // Debug: Check if resource exists
+    if (!QFile::exists(path)) {
+        qWarning() << "[IconProvider] Resource not found:" << path;
+    }
+
+    return path;
 }
 
 } // namespace core

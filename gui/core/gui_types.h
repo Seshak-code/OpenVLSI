@@ -1,15 +1,20 @@
 #pragma once
 
 // ============================================================================
-// Three-Mode Simulation Architecture
+// Application Mode (DEPRECATED)
 // ============================================================================
-// A symbol is a VIEW of a device role, not the device itself.
-// Same electrical meaning, different semantic roles.
+// The three-mode architecture has been replaced with a unified component library.
+// All components are now available at all times.
+//
+// This enum is kept for backwards compatibility but mode filtering is no longer
+// enforced. All code paths now treat modes equivalently.
+//
+// DEPRECATED: Use of AppMode for filtering is no longer recommended.
 
-enum class AppMode { 
-    BENCH_TEST,         // Ideal sources, implicit ground, device testing
-    BLOCK_SUBSYSTEM,    // PowerPort interfaces, internal dependent sources
-    SYSTEM_INTEGRATION  // RailDrivers only, explicit VSS/VDD symbols
+enum class AppMode {
+    BENCH_TEST,         // (Deprecated) Was: Ideal sources, implicit ground
+    BLOCK_SUBSYSTEM,    // (Deprecated) Was: PowerPort interfaces
+    SYSTEM_INTEGRATION  // (Deprecated) Was: RailDrivers only
 };
 
 // Power Domain Metadata (for multi-rail ERC)

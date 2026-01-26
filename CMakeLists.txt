@@ -119,6 +119,8 @@ add_executable(${PROJECT_NAME}
     gui/core/mainwindow.h
     gui/core/layout_manager.cpp
     gui/core/layout_manager.h
+    gui/core/storage_manager.cpp
+    gui/core/storage_manager.h
     gui/core/docking_manager.cpp
     gui/core/docking_manager.cpp
     gui/core/docking_manager.h
@@ -237,6 +239,8 @@ add_executable(${PROJECT_NAME}
     gui/widgets/project_model.h
     gui/widgets/project_explorer.cpp
     gui/widgets/project_explorer.h
+    gui/widgets/search_dock.cpp
+    gui/widgets/search_dock.h
     components/circuit.h
 )
 
@@ -393,6 +397,8 @@ endif()
 add_executable(test_sensitivity 
     tests/test_sensitivity.cpp
     compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -415,6 +421,8 @@ target_compile_features(test_sensitivity PUBLIC cxx_std_17)
 add_executable(test_superposition 
     tests/test_superposition.cpp
     compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -461,6 +469,8 @@ if(NOT EMSCRIPTEN)
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
         compute/tensors/physics_tensors.cpp
+        compute/tensors/kernel_dispatch.cpp
+        compute/tensors/physics_kernels_avx512.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
@@ -477,6 +487,7 @@ if(NOT EMSCRIPTEN)
         gui/analysis/monte_carlo_setup_dialog.cpp
         gui/styling/theme_manager.cpp
         gui/core/layout_manager.cpp
+        gui/core/storage_manager.cpp
         gui/core/docking_manager.cpp
         gui/widgets/waveform_widget.cpp
         gui/widgets/output_dock_widget.cpp
@@ -497,6 +508,12 @@ if(NOT EMSCRIPTEN)
         gui/core/keybinding_manager.h
         gui/widgets/keybindings_dialog.cpp
         gui/widgets/keybindings_dialog.h
+        gui/widgets/search_dock.cpp
+        gui/widgets/search_dock.h
+        gui/widgets/project_model.cpp
+        gui/widgets/project_model.h
+        gui/widgets/project_explorer.cpp
+        gui/widgets/project_explorer.h
     )
     target_include_directories(test_auto_harness PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -549,6 +566,8 @@ if(NOT EMSCRIPTEN)
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
         compute/tensors/physics_tensors.cpp
+        compute/tensors/kernel_dispatch.cpp
+        compute/tensors/physics_kernels_avx512.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
@@ -565,6 +584,7 @@ if(NOT EMSCRIPTEN)
         gui/analysis/monte_carlo_setup_dialog.cpp
         gui/styling/theme_manager.cpp
         gui/core/layout_manager.cpp
+        gui/core/storage_manager.cpp
         gui/core/docking_manager.cpp
         gui/widgets/waveform_widget.cpp
         gui/widgets/output_dock_widget.cpp
@@ -585,6 +605,12 @@ if(NOT EMSCRIPTEN)
         gui/core/keybinding_manager.h
         gui/widgets/keybindings_dialog.cpp
         gui/widgets/keybindings_dialog.h
+        gui/widgets/search_dock.cpp
+        gui/widgets/search_dock.h
+        gui/widgets/project_model.cpp
+        gui/widgets/project_model.h
+        gui/widgets/project_explorer.cpp
+        gui/widgets/project_explorer.h
     )
     target_include_directories(test_copilot_validate PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -612,6 +638,8 @@ endif()
 add_executable(test_erc_rules 
     tests/test_erc_rules.cpp
     compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -653,7 +681,10 @@ if(NOT EMSCRIPTEN)
         ai_api/simulation/speculative_runner.cpp
         ai_api/analysis/failure_classifier.cpp
         compute/solvers/circuitsim_solver.cpp
+        compute/solvers/superposition.cpp
         compute/tensors/physics_tensors.cpp
+        compute/tensors/kernel_dispatch.cpp
+        compute/tensors/physics_kernels_avx512.cpp
     )
     target_include_directories(test_ai_simulation_intelligence PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}

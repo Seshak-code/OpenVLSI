@@ -6,8 +6,10 @@
 #include "keybinding_manager.h"
 #include "keybindings_dialog.h"
 #include "icon_provider.h"
+#include "storage_manager.h"
 #include "../widgets/project_explorer.h"
 #include "../widgets/project_model.h"
+#include "../widgets/search_dock.h"
 #include "../styling/theme_manager.h"
 #include <QApplication>
 #include <QHeaderView>
@@ -22,6 +24,11 @@
 #include <QMenu>
 #include <QShortcut>
 #include <QFileDialog>
+#include <QFileInfo>
+#include <QFile>
+#include <QTextStream>
+#include <QJsonDocument>
+#include <QJsonArray>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     qDebug() << "[MW INIT] Constructor start";
@@ -98,6 +105,14 @@ void MainWindow::setupCentralWidget() {
     welcomeWidget = new WelcomeWidget(this);
     rtlPageTabs->addTab(welcomeWidget, "Welcome");
     connect(welcomeWidget, &WelcomeWidget::newSchematicRequested, this, &MainWindow::createSchematicFromWelcome);
+
+    // Connect recent project opening
+    connect(welcomeWidget, &WelcomeWidget::openRecentProjectRequested,
+            this, [this](const QString& path) {
+        statusBar()->showMessage("Opening: " + path, 3000);
+        // TODO: Implement full project loading when ready
+        // For now, just show the path in status bar
+    });
     
     // Track active editor when tabs change
     connect(rtlPageTabs, &QTabWidget::currentChanged, this, &MainWindow::onRtlTabChanged);
@@ -261,10 +276,7 @@ void MainWindow::setupCentralWidget() {
                 
             }
             
-            // Update UI to match current page's mode
-            if (schematicEditor && libraryPanel) {
-                libraryPanel->setMode(schematicEditor->getMode());
-            }
+            // Mode sync removed - unified component library (all tabs always visible)
         }
     });
     
@@ -286,13 +298,15 @@ void MainWindow::setupDocks() {
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
     libraryDock->hide();
     libraryDock->setTitleBarWidget(new QWidget()); // No Title Bar
-    
+
+    // --- Search Dock (Left) ---
+    createSearchDock();
+    addDockWidget(Qt::LeftDockWidgetArea, searchDock_);
+    searchDock_->hide();
+
     // NOTE: Do NOT tabify. We want exclusive single dock.
-    
-    // Initial Sync: Component Library starts in the same mode as the initial schematic
-    if (libraryPanel && schematicEditor) {
-        libraryPanel->setMode(schematicEditor->getMode());
-    }
+
+    // Mode sync removed - unified component library (all tabs always visible)
 
     // --- Properties Inspector (Right) ---
     createPropertiesDock();
@@ -362,6 +376,7 @@ void MainWindow::setupDocks() {
 
 void MainWindow::createAiDock() {
     aiDock = new QDockWidget("Copilot Assistant", this);
+    aiDock->setObjectName("AiDock");
     aiDock->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
 
     // VS Code style: Hide native title bar
@@ -381,6 +396,7 @@ void MainWindow::createProjectDock() {
     using namespace acutesim::gui::widgets;
 
     projectDock = new QDockWidget("Project Browser", this);
+    projectDock->setObjectName("ProjectDock");
     projectDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
     // VS Code style: Hide native title bar
@@ -393,9 +409,7 @@ void MainWindow::createProjectDock() {
     // Connect signals for file operations
     connect(projectExplorer_, &ProjectExplorer::fileOpenRequested,
             this, [this](const QString& category, const QString& fileName, const QString& filePath) {
-        Q_UNUSED(filePath);
-        statusBar()->showMessage(QString("Opening %1 from %2").arg(fileName, category));
-        // TODO: Actually open the file in appropriate editor based on category
+        openFileFromExplorer(category, fileName, filePath);
     });
 
     connect(projectExplorer_, &ProjectExplorer::newFileRequested,
@@ -409,19 +423,75 @@ void MainWindow::createProjectDock() {
         statusBar()->showMessage(QString("Delete %1 from %2").arg(fileName, category));
     });
 
-    // Add some demo files to show the structure
+    // Initialize demo project with actual file paths via StorageManager
+    using namespace acutesim::gui::core;
+    auto& storage = StorageManager::instance();
+
+    const QString projectName = "Demo Project";
+    storage.setCurrentProject(projectName);
+
     ProjectModel* model = projectExplorer_->model();
-    model->setProjectName("AcuteSim Project");
-    model->addFile("Schematics", "top_level.sch");
-    model->addFile("HDL", "counter.v");
-    model->addFile("HDL", "alu.sv");
-    model->addFile("Scripts", "run_synth.tcl");
+    model->setProjectName(projectName);
+
+    // Create demo schematic file if it doesn't exist
+    if (!storage.fileExists(projectName, "schematics/inverter.sch")) {
+        QJsonObject demoSchematic;
+        demoSchematic["components"] = QJsonArray();
+        demoSchematic["wires"] = QJsonArray();
+        QJsonObject meta;
+        meta["version"] = 1;
+        meta["name"] = "Inverter Demo";
+        demoSchematic["metadata"] = meta;
+        storage.saveFile(projectName, "schematics/inverter.sch",
+                         QJsonDocument(demoSchematic).toJson());
+        qDebug() << "[MainWindow] Created demo schematic: schematics/inverter.sch";
+    }
+    model->addFile("Schematics", "inverter.sch", "schematics/inverter.sch");
+
+    // Create demo HDL file if it doesn't exist
+    if (!storage.fileExists(projectName, "hdl/counter.v")) {
+        QString verilog =
+            "// Demo Counter Module\n"
+            "module counter(\n"
+            "    input wire clk,\n"
+            "    input wire rst,\n"
+            "    output reg [7:0] count\n"
+            ");\n"
+            "\n"
+            "always @(posedge clk or posedge rst) begin\n"
+            "    if (rst)\n"
+            "        count <= 8'b0;\n"
+            "    else\n"
+            "        count <= count + 1;\n"
+            "end\n"
+            "\n"
+            "endmodule\n";
+        storage.saveFile(projectName, "hdl/counter.v", verilog.toUtf8());
+        qDebug() << "[MainWindow] Created demo HDL: hdl/counter.v";
+    }
+    model->addFile("HDL", "counter.v", "hdl/counter.v");
+
+    // Create demo script file if it doesn't exist
+    if (!storage.fileExists(projectName, "scripts/run_synth.tcl")) {
+        QString tcl =
+            "# Demo Synthesis Script\n"
+            "# Run with: source run_synth.tcl\n"
+            "\n"
+            "puts \"Starting synthesis...\"\n"
+            "# read_verilog counter.v\n"
+            "# synth -top counter\n"
+            "puts \"Synthesis complete.\"\n";
+        storage.saveFile(projectName, "scripts/run_synth.tcl", tcl.toUtf8());
+        qDebug() << "[MainWindow] Created demo script: scripts/run_synth.tcl";
+    }
+    model->addFile("Scripts", "run_synth.tcl", "scripts/run_synth.tcl");
 
     projectDock->setWidget(projectExplorer_);
 }
 
 void MainWindow::createLibraryDock() {
     libraryDock = new QDockWidget("Component Library", this);
+    libraryDock->setObjectName("LibraryDock");
     libraryDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
     // VS Code style: Hide native title bar
@@ -442,6 +512,7 @@ void MainWindow::createLibraryDock() {
 
 void MainWindow::createPropertiesDock() {
     propertiesDock = new QDockWidget("Properties", this);
+    propertiesDock->setObjectName("PropertiesDock");
     propertiesDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     
     // Stack for Multi-Mode Support
@@ -617,6 +688,7 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
 
 void MainWindow::createMessagesDock() {
     messagesDock = new QDockWidget("Problems", this);
+    messagesDock->setObjectName("MessagesDock");
     // NASA: Allow all areas for flexible splitting within bottom panel
     messagesDock->setAllowedAreas(Qt::AllDockWidgetAreas);
     
@@ -652,6 +724,7 @@ void MainWindow::createMessagesDock() {
 
 void MainWindow::createOutputDock() {
     outputDock_ = new QDockWidget("Output", this);
+    outputDock_->setObjectName("OutputDock");
     // NASA: Allow all areas for flexible splitting within bottom panel
     outputDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
     
@@ -663,6 +736,7 @@ void MainWindow::createOutputDock() {
 
 void MainWindow::createStreamingDock() {
     streamingDock_ = new QDockWidget("Streaming", this);
+    streamingDock_->setObjectName("StreamingDock");
     // NASA: Allow all areas for flexible splitting within bottom panel
     streamingDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
     
@@ -674,6 +748,7 @@ void MainWindow::createStreamingDock() {
 
 void MainWindow::createResultsDock() {
     resultsDock_ = new QDockWidget("Results", this);
+    resultsDock_->setObjectName("ResultsDock");
     // NASA: Allow all areas for flexible splitting within bottom panel
     resultsDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
     
@@ -687,6 +762,7 @@ void MainWindow::createResultsDock() {
 
 void MainWindow::createWaveformDock() {
     waveformDock_ = new QDockWidget("Waveforms", this);
+    waveformDock_->setObjectName("WaveformDock");
     // NASA: Allow all areas for flexible splitting within bottom panel
     waveformDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
     
@@ -699,7 +775,8 @@ void MainWindow::createWaveformDock() {
 
 void MainWindow::onSimulationResults(const QJsonObject& results) {
     QString type = results["type"].toString();
-    
+    qDebug() << "[MainWindow] onSimulationResults received, type:" << type;
+
     // --- 1. Update Waveform Widget (Phase 11.3 - Multi-trace support) ---
     if (dockingManager) {
         if (WaveformWidget* wf = dockingManager->waveform()) {
@@ -713,13 +790,18 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
                         values.append(volts[i].toDouble());
                     }
                     wf->appendDataPoints(t, values);
+                    qDebug() << "[MainWindow] WaveformWidget updated with" << values.size() << "traces at t=" << t;
                 }
             } else if (type == "DC") {
                 if (results.contains("corner") && results["corner"].toString() == "Nominal") {
                     wf->clear();
                 }
             }
+        } else {
+            qWarning() << "[MainWindow] WaveformWidget is NULL!";
         }
+    } else {
+        qWarning() << "[MainWindow] DockingManager is NULL!";
     }
 
     // --- 2. Update Legacy Logs (Phase 7) ---
@@ -727,6 +809,7 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
         if (resultsTree_) {
             resultsTree_->clear();
             QJsonArray voltages = results["voltages"].toArray();
+            qDebug() << "[MainWindow] Populating resultsTree with" << voltages.size() << "DC voltages";
             for (int i = 0; i < voltages.size(); ++i) {
                 QTreeWidgetItem* item = new QTreeWidgetItem(resultsTree_);
                 item->setText(0, QString("V(%1)").arg(i+1));
@@ -737,6 +820,7 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
         if (outputDock_) {
             outputDock_->show();
             outputDock_->raise();
+            qDebug() << "[MainWindow] Raised outputDock_ for DC results";
         }
     }
     else if (type == "TransientPoint") {
@@ -816,7 +900,37 @@ void MainWindow::setupMenus() {
 
     // Simulation
     QMenu* simMenu = mb->addMenu("&Simulation");
-    simMenu->addAction("Set Simulation", this, &MainWindow::runSimulation);
+    simMenu->addAction("Show Simulation Panel", this, &MainWindow::runSimulation);
+    simMenu->addSeparator();
+
+    QAction* runSimAction = simMenu->addAction("Run Simulation", this, [this]() {
+        if (simulationWorkspace && schematicEditor) {
+            simulationWorkspace->setSchematicEditor(schematicEditor);
+            simulationWorkspace->runCurrent();
+            // Show the simulation dock if hidden
+            if (simulationDock_ && !simulationDock_->isVisible()) {
+                simulationDock_->show();
+            }
+        } else {
+            statusBar()->showMessage("No schematic loaded for simulation", 3000);
+        }
+    });
+    runSimAction->setShortcut(QKeySequence(Qt::Key_F5));
+
+    QAction* stopSimAction = simMenu->addAction("Stop Simulation", this, [this]() {
+        if (simulationWorkspace) {
+            simulationWorkspace->stopSimulation();
+        }
+    });
+    stopSimAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F5));
+
+    simMenu->addSeparator();
+    simMenu->addAction("Run Quick DC", this, [this]() {
+        if (simulationWorkspace && schematicEditor) {
+            simulationWorkspace->setSchematicEditor(schematicEditor);
+            simulationWorkspace->runQuickDC();
+        }
+    });
 }
 
 void MainWindow::newProject() {
@@ -830,6 +944,10 @@ void MainWindow::openProject() {
         "Open Project", QString(),
         "AcuteSim Projects (*.acu);;Schematic Files (*.sch);;All Files (*)");
     if (!filePath.isEmpty()) {
+        // Add to recent projects
+        if (welcomeWidget) {
+            welcomeWidget->addRecentProject(filePath, QFileInfo(filePath).baseName());
+        }
         // TODO: Implement full project loading
         statusBar()->showMessage("Project loading not yet implemented: " + filePath, 3000);
     }
@@ -854,20 +972,19 @@ void MainWindow::runSimulation() {
 
 void MainWindow::openSchematicTab(const QString& title, const QJsonObject& content) {
     SchematicEditor* newEditor = new SchematicEditor(this);
-    
-    // Auto-detect mode from content logic or default to Bench
-    newEditor->setMode(AppMode::BENCH_TEST); 
-    
+
+    // Mode handling removed - unified component library
+
     // Load content
     newEditor->loadState(content);
-    
+
     // Add tab
     rtlPageTabs->addTab(newEditor, title);
     rtlPageTabs->setCurrentWidget(newEditor);
-    
+
     // Update active editor
     schematicEditor = newEditor;
-    if (libraryPanel) libraryPanel->setMode(AppMode::BENCH_TEST);
+    // libraryPanel->setMode() deprecated - all tabs always visible
     if (aiPanel) aiPanel->setEditor(newEditor);
     
     connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
@@ -888,6 +1005,273 @@ void MainWindow::removeCentralTab(QWidget* widget) {
     if (idx >= 0) {
         stageTabs->removeTab(idx);
     }
+}
+
+// ============================================================================
+// FILE OPENING FROM PROJECT EXPLORER
+// ============================================================================
+
+void MainWindow::openFileFromExplorer(const QString& category, const QString& fileName, const QString& filePath) {
+    qDebug() << "[MainWindow] Opening file:" << fileName << "from category:" << category << "path:" << filePath;
+
+    if (category == "Schematics") {
+        openSchematicFile(filePath, fileName);
+    } else if (category == "HDL") {
+        openHDLFile(filePath, fileName);
+    } else if (category == "Scripts") {
+        // TCL scripts - load into HDL editor for now (could have separate script editor)
+        openHDLFile(filePath, fileName);
+    } else if (category == "Verification") {
+        // VCD files - could open waveform viewer
+        statusBar()->showMessage(QString("VCD viewer not yet implemented: %1").arg(fileName), 3000);
+    } else {
+        statusBar()->showMessage(QString("Cannot open file type: %1").arg(fileName), 3000);
+    }
+}
+
+void MainWindow::openSchematicFile(const QString& filePath, const QString& fileName) {
+    using namespace acutesim::gui::core;
+    auto& storage = StorageManager::instance();
+
+    QJsonObject state;
+    QString currentProject = storage.currentProject();
+
+    // Try to load from StorageManager first (relative path within project)
+    if (!filePath.isEmpty() && !currentProject.isEmpty()) {
+        QByteArray data = storage.loadFile(currentProject, filePath);
+        if (!data.isEmpty()) {
+            QJsonParseError error;
+            QJsonDocument doc = QJsonDocument::fromJson(data, &error);
+            if (error.error == QJsonParseError::NoError && doc.isObject()) {
+                state = doc.object();
+                qDebug() << "[MainWindow] Loaded schematic from StorageManager:" << filePath;
+            } else {
+                qWarning() << "[MainWindow] Failed to parse schematic JSON:" << error.errorString();
+            }
+        }
+    }
+
+    // Fallback: Try absolute filesystem path
+    if (state.isEmpty() && !filePath.isEmpty() && QFile::exists(filePath)) {
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray data = file.readAll();
+            file.close();
+
+            QJsonParseError error;
+            QJsonDocument doc = QJsonDocument::fromJson(data, &error);
+            if (error.error == QJsonParseError::NoError && doc.isObject()) {
+                state = doc.object();
+                qDebug() << "[MainWindow] Loaded schematic from filesystem:" << filePath;
+            }
+        }
+    }
+
+    // Create new schematic editor (mode handling deprecated - unified library)
+    SchematicEditor* newEditor = new SchematicEditor(this);
+
+    // Load the state if we have content
+    if (!state.isEmpty()) {
+        newEditor->loadState(state);
+    }
+
+    // Add tab to RTL page tabs (no mode suffix in title - unified)
+    QString tabTitle = fileName.isEmpty() ? "Untitled" : fileName;
+    rtlPageTabs->addTab(newEditor, tabTitle);
+    rtlPageTabs->setCurrentWidget(newEditor);
+
+    // Update active editor reference
+    schematicEditor = newEditor;
+
+    // Update dependent panels (no mode propagation needed)
+    if (aiPanel) aiPanel->setEditor(newEditor);
+    if (simulationWorkspace) simulationWorkspace->setSchematicEditor(newEditor);
+
+    // Connect signals
+    connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+    connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+
+    // Switch to RTL Design stage if not already there
+    if (stageTabs) {
+        stageTabs->setCurrentIndex(0); // RTL Design is first tab
+    }
+
+    statusBar()->showMessage(QString("Opened schematic: %1").arg(tabTitle), 4000);
+}
+
+void MainWindow::openHDLFile(const QString& filePath, const QString& fileName) {
+    using namespace acutesim::gui::core;
+
+    if (!hdlEditor) {
+        statusBar()->showMessage("HDL Editor not available", 3000);
+        return;
+    }
+
+    QString content;
+    auto& storage = StorageManager::instance();
+    QString currentProject = storage.currentProject();
+
+    // Try to load from StorageManager first (relative path within project)
+    if (!filePath.isEmpty() && !currentProject.isEmpty()) {
+        QByteArray data = storage.loadFile(currentProject, filePath);
+        if (!data.isEmpty()) {
+            content = QString::fromUtf8(data);
+            qDebug() << "[MainWindow] Loaded HDL from StorageManager:" << filePath;
+        }
+    }
+
+    // Fallback: Try absolute filesystem path
+    if (content.isEmpty() && !filePath.isEmpty() && QFile::exists(filePath)) {
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&file);
+            content = in.readAll();
+            file.close();
+            qDebug() << "[MainWindow] Loaded HDL from filesystem:" << filePath;
+        }
+    }
+
+    // If no file content, create a template based on extension
+    if (content.isEmpty()) {
+        if (fileName.endsWith(".v") || fileName.endsWith(".sv")) {
+            content = QString(
+                "// %1\n"
+                "// Generated by AcuteSim\n"
+                "\n"
+                "module %2 (\n"
+                "    input  wire clk,\n"
+                "    input  wire rst_n,\n"
+                "    input  wire [7:0] data_in,\n"
+                "    output reg  [7:0] data_out\n"
+                ");\n"
+                "\n"
+                "    always @(posedge clk or negedge rst_n) begin\n"
+                "        if (!rst_n)\n"
+                "            data_out <= 8'b0;\n"
+                "        else\n"
+                "            data_out <= data_in;\n"
+                "    end\n"
+                "\n"
+                "endmodule\n"
+            ).arg(fileName).arg(fileName.section('.', 0, 0));
+        } else if (fileName.endsWith(".vhd")) {
+            content = QString(
+                "-- %1\n"
+                "-- Generated by AcuteSim\n"
+                "\n"
+                "library IEEE;\n"
+                "use IEEE.STD_LOGIC_1164.ALL;\n"
+                "\n"
+                "entity %2 is\n"
+                "    port (\n"
+                "        clk     : in  std_logic;\n"
+                "        rst_n   : in  std_logic;\n"
+                "        data_in : in  std_logic_vector(7 downto 0);\n"
+                "        data_out: out std_logic_vector(7 downto 0)\n"
+                "    );\n"
+                "end %2;\n"
+                "\n"
+                "architecture Behavioral of %2 is\n"
+                "begin\n"
+                "    process(clk, rst_n)\n"
+                "    begin\n"
+                "        if rst_n = '0' then\n"
+                "            data_out <= (others => '0');\n"
+                "        elsif rising_edge(clk) then\n"
+                "            data_out <= data_in;\n"
+                "        end if;\n"
+                "    end process;\n"
+                "end Behavioral;\n"
+            ).arg(fileName).arg(fileName.section('.', 0, 0));
+        } else if (fileName.endsWith(".tcl")) {
+            content = QString(
+                "# %1\n"
+                "# TCL Script for AcuteSim\n"
+                "\n"
+                "# Add your synthesis commands here\n"
+                "puts \"Running script: %1\"\n"
+            ).arg(fileName);
+        } else {
+            content = QString("// %1\n// Empty file\n").arg(fileName);
+        }
+    }
+
+    // Set the content in the HDL editor
+    hdlEditor->setPlainText(content);
+
+    // Set language based on extension
+    if (fileName.endsWith(".vhd")) {
+        hdlEditor->setLanguage(HDLSyntaxHighlighter::VHDL);
+    } else {
+        hdlEditor->setLanguage(HDLSyntaxHighlighter::VERILOG);
+    }
+
+    // Switch to RTL Design stage to show HDL editor
+    if (stageTabs) {
+        stageTabs->setCurrentIndex(0); // RTL Design is first tab
+    }
+
+    statusBar()->showMessage(QString("Opened HDL file: %1").arg(fileName), 4000);
+}
+
+AppMode MainWindow::detectModeFromSchematic(const QJsonObject& state) {
+    // Default mode
+    AppMode mode = AppMode::BENCH_TEST;
+
+    if (state.isEmpty()) {
+        return mode;
+    }
+
+    // Check metadata for explicit mode
+    if (state.contains("metadata")) {
+        QJsonObject meta = state["metadata"].toObject();
+        if (meta.contains("mode")) {
+            QString modeStr = meta["mode"].toString();
+            if (modeStr == "BLOCK" || modeStr == "BLOCK_SUBSYSTEM") {
+                return AppMode::BLOCK_SUBSYSTEM;
+            } else if (modeStr == "SYSTEM" || modeStr == "SYSTEM_INTEGRATION") {
+                return AppMode::SYSTEM_INTEGRATION;
+            }
+            return AppMode::BENCH_TEST;
+        }
+    }
+
+    // Heuristic detection based on component types
+    QJsonArray components = state["components"].toArray();
+    bool hasPowerPort = false;
+    bool hasRailDriver = false;
+    bool hasIdealSource = false;
+
+    for (const auto& val : components) {
+        QJsonObject comp = val.toObject();
+        QString type = comp["type"].toString().toLower();
+
+        if (type.contains("powerport") || type.contains("power_port")) {
+            hasPowerPort = true;
+        }
+        if (type.contains("raildriver") || type.contains("rail_driver")) {
+            hasRailDriver = true;
+        }
+        if (type.contains("voltage source") || type.contains("current source") ||
+            type == "vsource" || type == "isource") {
+            hasIdealSource = true;
+        }
+    }
+
+    // Determine mode from components
+    if (hasRailDriver) {
+        mode = AppMode::SYSTEM_INTEGRATION;
+    } else if (hasPowerPort) {
+        mode = AppMode::BLOCK_SUBSYSTEM;
+    } else if (hasIdealSource) {
+        mode = AppMode::BENCH_TEST;
+    }
+
+    qDebug() << "[MainWindow] Detected mode:" << static_cast<int>(mode)
+             << "(PowerPort:" << hasPowerPort << "RailDriver:" << hasRailDriver
+             << "IdealSource:" << hasIdealSource << ")";
+
+    return mode;
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -990,58 +1374,49 @@ void MainWindow::onStageChanged(DesignStage stage) {
 }
 
 void MainWindow::addRtlPage() {
-    QStringList modes = {"Bench Test (Ideal)", "Block Subsystem", "System Integration"};
-    bool ok;
-    QString selection = QInputDialog::getItem(this, "New Schematic", 
-                                             "Select simulation mode:", 
-                                             modes, 0, false, &ok);
-    if (!ok) return;
+    // Mode selection removed - unified component library
+    static int pageCount = 0;
+    QString pageName = QString("schematic_%1.sch").arg(++pageCount);
 
-    static int pageCount = 0; 
-    QString pageName = QString("module_%1.sch").arg(++pageCount);
-    
-    AppMode mode = AppMode::BENCH_TEST;
-    if (selection == modes[1]) mode = AppMode::BLOCK_SUBSYSTEM;
-    else if (selection == modes[2]) mode = AppMode::SYSTEM_INTEGRATION;
-    
     SchematicEditor* newEditor = new SchematicEditor(this);
-    newEditor->setMode(mode);
+    // Mode is no longer set - unified component library
 
-    // Add tab with mode label
-    QString tabTitle = QString("%1 [%2]").arg(pageName, modeLabel(mode));
-    rtlPageTabs->addTab(newEditor, tabTitle);
+    // Add tab (no mode label - unified)
+    rtlPageTabs->addTab(newEditor, pageName);
     rtlPageTabs->setCurrentWidget(newEditor);
-    
-    // Update active editor and sync library
+
+    // Update active editor
     schematicEditor = newEditor;
-    if (libraryPanel) libraryPanel->setMode(mode);
-    
+    // libraryPanel->setMode() deprecated - all tabs always visible
+
     connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
     connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
-    
-    statusBar()->showMessage(QString("Added %1 schematic: %2").arg(selection, pageName), 3000);
+
+    statusBar()->showMessage(QString("Added new schematic: %1").arg(pageName), 3000);
 }
 
 void MainWindow::createSchematicFromWelcome(AppMode mode) {
+    // DEPRECATED: mode parameter ignored - unified component library
+    Q_UNUSED(mode);
+
     static int pageCount = 0;
-    QString pageName = QString("module_%1.sch").arg(++pageCount);
-    
+    QString pageName = QString("schematic_%1.sch").arg(++pageCount);
+
     SchematicEditor* newEditor = new SchematicEditor(this);
-    newEditor->setMode(mode);
-    
-    // Add tab with mode label
-    QString tabTitle = QString("%1 [%2]").arg(pageName, modeLabel(mode));
-    rtlPageTabs->addTab(newEditor, tabTitle);
+    // Mode is no longer set - unified component library
+
+    // Add tab (no mode label - unified)
+    rtlPageTabs->addTab(newEditor, pageName);
     rtlPageTabs->setCurrentWidget(newEditor);
-    
-    // Update active editor and sync library
+
+    // Update active editor
     schematicEditor = newEditor;
-    if (libraryPanel) libraryPanel->setMode(mode);
-    
+    // libraryPanel->setMode() deprecated - all tabs always visible
+
     connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
     connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
-    
-    statusBar()->showMessage(QString("Created %1 schematic: %2").arg(modeLabel(mode), pageName), 3000);
+
+    statusBar()->showMessage(QString("Created new schematic: %1").arg(pageName), 3000);
 }
 
 void MainWindow::onRtlTabChanged(int index) {
@@ -1063,7 +1438,7 @@ void MainWindow::onRtlTabChanged(int index) {
     QWidget* current = rtlPageTabs->widget(index);
     if (auto* editor = qobject_cast<SchematicEditor*>(current)) {
         schematicEditor = editor;
-        if (libraryPanel) libraryPanel->setMode(editor->getMode());
+        // libraryPanel->setMode() deprecated - unified component library (all tabs visible)
         if (aiPanel) aiPanel->setEditor(editor);
         if (simulationWorkspace) simulationWorkspace->setSchematicEditor(editor);
 
@@ -1103,24 +1478,25 @@ QString MainWindow::modeLabel(AppMode mode) {
 }
 
 AppMode MainWindow::getMode() const {
-    return schematicEditor ? schematicEditor->getMode() : AppMode::SYSTEM_INTEGRATION;
+    // DEPRECATED: Mode system removed - unified component library
+    // Returns BENCH_TEST for backwards compatibility
+    return AppMode::BENCH_TEST;
 }
 
 void MainWindow::setMode(AppMode mode) {
-    if (schematicEditor) {
-        schematicEditor->setMode(mode);
-    }
-    
-    // Update Component Library filter
-    if (libraryPanel) {
-        libraryPanel->setMode(mode);
-    }
+    // DEPRECATED: Mode system removed - unified component library
+    // This method is kept for API compatibility but is now a no-op
+    Q_UNUSED(mode);
+
+    // Mode propagation to editor and library removed
+    // All components are now available regardless of mode
 }
 
 
 
 void MainWindow::createWorkerDock() {
     workerDock = new QDockWidget("Worker Status", this);
+    workerDock->setObjectName("WorkerDock");
     workerDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::RightDockWidgetArea);
     workerPanel = new acutesim::gui::orchestration::WorkerStatusPanel(workerDock);
     workerDock->setWidget(workerPanel);
@@ -1128,6 +1504,7 @@ void MainWindow::createWorkerDock() {
 
 void MainWindow::createDebugSuggestionsDock() {
     debugSuggestionsDock = new QDockWidget("AI Debug Hints", this);
+    debugSuggestionsDock->setObjectName("DebugSuggestionsDock");
     debugSuggestionsDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::RightDockWidgetArea);
     
     debugSuggestionsPanel = new acutesim::gui::widgets::DebugSuggestionsPanel(debugSuggestionsDock);
@@ -1138,14 +1515,43 @@ void MainWindow::createDebugSuggestionsDock() {
 
 void MainWindow::createSimulationDock() {
     simulationDock_ = new QDockWidget("Simulation", this);
+    simulationDock_->setObjectName("SimulationDock");
     simulationDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
     simulationDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    
+
     // simulationWorkspace is already created in setupCentralWidget
     simulationDock_->setWidget(simulationWorkspace);
-    
-    // Start hidden - toggled via menu
+
+    // Note: addDockWidget is called by the caller after this function
+    // Start hidden - toggled via menu or shown when running simulation
     simulationDock_->hide();
+
+    qDebug() << "[MainWindow] Simulation dock created";
+}
+
+void MainWindow::createSearchDock() {
+    using namespace acutesim::gui::widgets;
+
+    searchDock_ = new QDockWidget("Search", this);
+    searchDock_->setObjectName("SearchDock");
+    searchDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+
+    // VS Code style: Hide native title bar
+    searchDock_->setTitleBarWidget(new QWidget());
+    searchDock_->setFeatures(QDockWidget::NoDockWidgetFeatures);
+
+    searchPanel_ = new SearchDock(searchDock_);
+
+    // Connect navigation signals
+    connect(searchPanel_, &SearchDock::navigateToComponent, this, [this](const QString& name) {
+        statusBar()->showMessage(QString("Navigated to component: %1").arg(name), 3000);
+    });
+
+    connect(searchPanel_, &SearchDock::navigateToNet, this, [this](const QString& name) {
+        statusBar()->showMessage(QString("Navigated to net: %1").arg(name), 3000);
+    });
+
+    searchDock_->setWidget(searchPanel_);
 }
 
 void MainWindow::onAiSimulationRequested(const QString& analysisType) {
@@ -1215,6 +1621,7 @@ void MainWindow::setupActivityBar() {
         if (id.isEmpty()) {
             if (projectDock) projectDock->hide();
             if (libraryDock) libraryDock->hide();
+            if (searchDock_) searchDock_->hide();
             currentSidebarId.clear();
             return;
         }
@@ -1222,6 +1629,7 @@ void MainWindow::setupActivityBar() {
         // Hide all left docks first (exclusive sidebar)
         if (projectDock) projectDock->hide();
         if (libraryDock) libraryDock->hide();
+        if (searchDock_) searchDock_->hide();
 
         // Show the selected sidebar
         if (id == "explorer" && projectDock) {
@@ -1230,8 +1638,11 @@ void MainWindow::setupActivityBar() {
         else if (id == "components" && libraryDock) {
             libraryDock->show();
         }
-        else if (id == "search") {
-            // TODO: Search Dock
+        else if (id == "search" && searchDock_) {
+            searchDock_->show();
+            if (searchPanel_ && schematicEditor) {
+                searchPanel_->setSchematicEditor(schematicEditor);
+            }
         }
 
         currentSidebarId = id;

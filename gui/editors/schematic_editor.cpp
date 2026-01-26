@@ -1426,26 +1426,20 @@ void SchematicEditor::onSnappingToggled(bool checked) {
 }
 
 void SchematicEditor::setMode(AppMode mode) {
-    currentMode = mode;
-    QString modeStr = "Mode: Bench Test";
-    QString color = "#2D8A2D"; // Greenish
-    
-    if (mode == AppMode::BLOCK_SUBSYSTEM) {
-        modeStr = "Mode: Block Subsystem";
-        color = "#8A8A2D"; // Yellowish
-    } else if (mode == AppMode::SYSTEM_INTEGRATION) {
-        modeStr = "Mode: System Integration";
-        color = "#007ACC"; // Blue
-    }
-    
-    statusLabel->setText(modeStr);
-    statusLabel->setStyleSheet(QString("background: %1; color: white; padding: 4px; font-weight: bold;").arg(color));
-    
-    if (scene) {
-        scene->setMode(mode);
-    }
-    
-    emit modeChanged(mode);
+    // DEPRECATED: Mode system removed - unified component library
+    // This method is kept for API compatibility but mode no longer affects behavior
+    Q_UNUSED(mode);
+    currentMode = AppMode::BENCH_TEST;  // Default value for compatibility
+
+    // Status label now shows generic "Ready" message (no mode display)
+    statusLabel->setText("Ready");
+    statusLabel->setStyleSheet("background: #007ACC; color: white; padding: 4px; font-weight: bold;");
+
+    // Scene mode setting deprecated
+    // if (scene) scene->setMode(mode); // Removed
+
+    // modeChanged signal still emitted for any listeners
+    emit modeChanged(currentMode);
 }
 
 void SchematicEditor::setTool(ComponentType t) {
@@ -1459,19 +1453,21 @@ void SchematicEditor::setWireName(VisualWire* wire, const QString& name) {
 }
 
 QStringList SchematicEditor::getAvailableComponents() {
-    if (getMode() == AppMode::SYSTEM_INTEGRATION) {
-        return {
-            "Resistor", "Decoupling Cap", "Ferrite Bead", 
-            "Chassis Ground", "Power Rail", 
-            "Diode", "N-MOSFET", "NPN BJT"
-        };
-    } else {
-        return {
-            "Resistor", "Capacitor", "Inductor", 
-            "Ground", "Voltage Source", "Current Source",
-            "Diode", "N-MOSFET", "NPN BJT"
-        };
-    }
+    // Return all available components - unified library (no mode filtering)
+    return {
+        // Passives
+        "Resistor", "Capacitor", "Inductor", "Ferrite Bead",
+        // Sources
+        "Voltage Source", "Current Source", "VCVS", "CCVS", "VCCS", "CCCS",
+        // Semiconductors
+        "Diode", "Schottky Diode", "N-MOSFET", "NPN BJT", "N-JFET", "P-JFET",
+        // Power
+        "Ground", "Vdd/Vcc", "Vss/GND", "Battery", "LDO Regulator", "Waveform Gen",
+        // Interfaces
+        "PowerPort",
+        // ICs
+        "ULN2003A", "ULN2803A", "LM7805", "NE555"
+    };
 }
 
 void SchematicEditor::placeWirePath(const QVector<QPointF>& points) {

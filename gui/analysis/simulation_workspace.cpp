@@ -523,65 +523,44 @@ void SimulationWorkspace::onModeChanged(AppMode mode) {
 
 void SimulationWorkspace::updateAnalysisVisibility() {
     if (!analysisCombo_) return;
-    
+
     QStandardItemModel* model = qobject_cast<QStandardItemModel*>(analysisCombo_->model());
     if (!model) {
         appendLog("[ERROR] analysisCombo model is not QStandardItemModel");
         return;
     }
-    
-    appendLog(QString("[DEBUG] Updating visibility for mode: %1").arg(static_cast<int>(currentMode_)));
-    
-    // Rules:
-    // BENCH: All allowed
-    // BLOCK: DC, TRANSIENT only (No AC/Noise/Sensitivity)
-    // SYSTEM: TRANSIENT only
-    
+
+    // Mode-based filtering removed - unified component library
+    // All analysis types are now available regardless of mode
+
     for (int i = 0; i < analysisCombo_->count(); ++i) {
-        Simulation::AnalysisType type = static_cast<Simulation::AnalysisType>(analysisCombo_->itemData(i).toInt());
-        bool allowed = true;
-        
-        if (currentMode_ == AppMode::BLOCK_SUBSYSTEM) {
-            if (type == Simulation::AnalysisType::AC || type == Simulation::AnalysisType::NOISE) {
-                allowed = false;
-            }
-        } else if (currentMode_ == AppMode::SYSTEM_INTEGRATION) {
-            if (type != Simulation::AnalysisType::TRANSIENT) {
-                allowed = false;
-            }
-        }
-        
         QStandardItem* item = model->item(i);
         if (item) {
-            item->setEnabled(allowed); 
-            
-            // Visual indication (grey out text)
-            if (!allowed) item->setForeground(QBrush(Qt::gray));
-            else item->setForeground(QBrush(Qt::white));
-            
-            if (!allowed && i == analysisCombo_->currentIndex()) {
-                // Determine fallback
-                if (currentMode_ == AppMode::SYSTEM_INTEGRATION) {
-                    analysisCombo_->setCurrentIndex(analysisCombo_->findData(static_cast<int>(Simulation::AnalysisType::TRANSIENT)));
-                } else {
-                    analysisCombo_->setCurrentIndex(analysisCombo_->findData(static_cast<int>(Simulation::AnalysisType::TRANSIENT)));
-                }
-            }
+            item->setEnabled(true);
+            item->setForeground(QBrush(Qt::white));
         }
     }
 }
 
 bool SimulationWorkspace::canRun() const {
-    if (!schematicEditor_) return false;
-    
-    auto* scene = schematicEditor_->getScene();
-    if (!scene) return false;
-    
-    // Check ERC
-    if (!scene->canSimulate()) {
+    if (!schematicEditor_) {
+        qWarning() << "[SimWorkspace] canRun: schematicEditor_ is NULL";
         return false;
     }
-    
+
+    auto* scene = schematicEditor_->getScene();
+    if (!scene) {
+        qWarning() << "[SimWorkspace] canRun: scene is NULL";
+        return false;
+    }
+
+    // Check ERC
+    if (!scene->canSimulate()) {
+        qWarning() << "[SimWorkspace] canRun: ERC check failed (canSimulate=false)";
+        return false;
+    }
+
+    qDebug() << "[SimWorkspace] canRun: all checks passed";
     return true;
 }
 
@@ -599,19 +578,27 @@ void SimulationWorkspace::onProfileSelected(const QString& profileId) {
 }
 
 void SimulationWorkspace::onRunRequested(const QString& profileId) {
+    qDebug() << "[SimWorkspace] onRunRequested called with profileId:" << profileId;
+    qDebug() << "[SimWorkspace] schematicEditor_:" << (schematicEditor_ ? "valid" : "NULL");
+
     if (!canRun()) {
         QString error = "Cannot run simulation.\nPossible causes:\n1. ERC Violations (Fix errors in schematic)\n2. No schematic loaded\n3. Missing Ground reference";
+        qWarning() << "[SimWorkspace] canRun() returned false:" << error;
         appendLog("[ERROR] " + error.replace("\n", " "));
-        
+
         // WASM-SAFE: Do NOT use blocking QMessageBox here as it may crash the browser context if invoked from async path.
         // The error is already logged to the output panel.
-        // QMessageBox::warning(this, "Simulation Failed", error); 
-        
+        // QMessageBox::warning(this, "Simulation Failed", error);
+
         // Flash status bar red
-        findChild<QLabel*>("statusLabel")->setText("Failed: ERC / Checks");
-        findChild<QLabel*>("statusLabel")->setStyleSheet("color: #f44747;");
+        if (auto* label = findChild<QLabel*>("statusLabel")) {
+            label->setText("Failed: ERC / Checks");
+            label->setStyleSheet("color: #f44747;");
+        }
         return;
     }
+
+    qDebug() << "[SimWorkspace] canRun() passed, proceeding with simulation";
     
     // Get netlist
     netlist_ = schematicEditor_->toNetlist();
@@ -684,6 +671,7 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
                  QJsonArray voltages;
                  for(double v : result.nodeVoltages) voltages.append(v);
                  jsonRes["voltages"] = voltages;
+                 qDebug() << "[SimWorkspace] Emitting DC results for corner:" << corner.name << "voltages:" << voltages.size();
                  emit resultsReady(jsonRes);
             } else {
                  appendStreamLog("   FAILED");
@@ -758,6 +746,9 @@ void SimulationWorkspace::stepSimulation() {
         QJsonArray voltages;
         for(double v : result.nodeVoltages) voltages.append(v);
         point["voltages"] = voltages;
+        if (static_cast<int>(currentTime_ / timeStep_) % 100 == 0) {
+            qDebug() << "[SimWorkspace] Emitting TransientPoint t=" << currentTime_ << "voltages:" << voltages.size();
+        }
         emit resultsReady(point);
         
         if (!result.stats.converged) {

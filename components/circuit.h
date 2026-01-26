@@ -243,7 +243,12 @@ struct BusProbe {
     double v_th_low = 0.8;        // Below 0.8V = 0
     double v_th_high = 2.0;       // Above 2.0V = 1
     
-    // History REMOVED (moved to BlockState)
+    struct DigitalSample {
+        double time;
+        uint64_t value;
+    };
+    
+    // History moved to BlockState
 };
 
 /*
@@ -814,6 +819,7 @@ struct BlockState {
     std::vector<History> inductorState;
     std::vector<History> powerRailState;
     std::vector<MosfetOP> mosfetState;
+    std::vector<std::vector<BusProbe::DigitalSample>> busProbeState; 
     // Future: BJT OP, etc.
 
     // Initialize state based on block definition
@@ -828,6 +834,7 @@ struct BlockState {
         for(auto& h : powerRailState) h.resize(3);
 
         mosfetState.resize(block.mosfets.size());
+        busProbeState.resize(block.busProbes.size());
     }
 };
 

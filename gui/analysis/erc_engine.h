@@ -36,13 +36,14 @@ enum class ViolationType {
     MULTIPLE_DRIVERS,    // Multiple voltage sources on same net
     NEAR_MISS,           // Terminal almost connected (within 1-2 grid)
     OPEN_DRAIN,          // Output without load path
-    
-    // Mode Violations
-    ILLEGAL_SOURCE,      // Source component used in Block mode
-    MISSING_PORTS,       // Block mode requires ports
-    ILLEGAL_DRIVER,      // System mode requires RailDrivers
-    MIXED_MODES,         // Components from wrong mode
-    
+
+    // DEPRECATED: Mode violations removed - unified component library
+    // Kept for backwards compatibility but no longer generated
+    ILLEGAL_SOURCE,      // (Deprecated) Was: Source component used in Block mode
+    MISSING_PORTS,       // (Deprecated) Was: Block mode requires ports
+    ILLEGAL_DRIVER,      // (Deprecated) Was: System mode requires RailDrivers
+    MIXED_MODES,         // (Deprecated) Was: Components from wrong mode
+
     // Solver Violations (Dynamic)
     SOLVER_SINGULAR_MATRIX,  // LU decomposition failed (rank deficiency)
     SOLVER_DIVERGENCE,       // Newton-Raphson failed to converge
@@ -60,14 +61,15 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::NO_GROUND:
         case ViolationType::SHORT_CIRCUIT:
         case ViolationType::FLOATING_GATE:
-        case ViolationType::ILLEGAL_SOURCE:
-        case ViolationType::ILLEGAL_DRIVER:
         case ViolationType::SOLVER_SINGULAR_MATRIX:
         case ViolationType::SOLVER_DIVERGENCE:
              return Severity::ERROR;
+        // Deprecated mode violations - kept for compatibility but treated as warnings
+        case ViolationType::ILLEGAL_SOURCE:
         case ViolationType::MISSING_PORTS:
+        case ViolationType::ILLEGAL_DRIVER:
         case ViolationType::MIXED_MODES:
-             return Severity::ERROR;
+             return Severity::WARNING;  // Downgraded from ERROR
         case ViolationType::FLOATING_NODE:
         case ViolationType::MULTIPLE_DRIVERS:
         case ViolationType::OPEN_DRAIN:
@@ -130,34 +132,34 @@ public:
     /**
      * Run full ERC analysis on the scene
      * Returns list of all violations found
+     *
+     * NOTE: Mode-specific checks have been removed (unified component library).
+     * All standard electrical checks (floating nodes, shorts, etc.) still apply.
      */
     QList<Violation> runFullCheck(QGraphicsScene* scene) {
         violations_.clear();
-        
+
         // Build connectivity map
         buildConnectivityMap(scene);
-        
-        // Mode-Independent Checks
+
+        // Universal electrical checks (always run regardless of mode)
+        checkGroundExists(scene);  // Always check for ground reference
         checkFloatingNodes(scene);
         checkFloatingGates(scene);
         checkShortCircuits(scene);
         checkNearMisses(scene);
         checkMultipleDrivers(scene);
 
-        // Mode-Specific Checks
-        if (currentMode_ == AppMode::BENCH_TEST) {
-             checkGroundExists(scene); // Bench requires implicit or explicit ground
-        } else if (currentMode_ == AppMode::BLOCK_SUBSYSTEM) {
-             checkBlockModeRules(scene);
-        } else if (currentMode_ == AppMode::SYSTEM_INTEGRATION) {
-             checkSystemModeRules(scene);
-        }
-        
+        // Mode-specific checks removed - unified component library
+        // checkBlockModeRules() and checkSystemModeRules() are deprecated
+
         return violations_;
     }
 
+    // DEPRECATED: Mode-specific checks removed. Kept for API compatibility.
     void setMode(AppMode mode) {
-        currentMode_ = mode;
+        Q_UNUSED(mode);
+        // currentMode_ no longer affects ERC behavior
     }
     
     /**
@@ -500,69 +502,23 @@ private:
         }
     }
     
+    // DEPRECATED: Mode-specific rules removed - unified component library
+    // These methods are kept for backwards compatibility but are no-ops
     void checkBlockModeRules(QGraphicsScene* scene) {
-        bool hasPorts = false;
-        
-        for (QGraphicsItem* item : scene->items()) {
-            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
-                // RULE 1: No independent sources allowed in Block Mode
-                if (comp->type == ComponentType::VoltageSource || 
-                    comp->type == ComponentType::CurrentSource) {
-                    violations_.append(Violation(
-                        ViolationType::ILLEGAL_SOURCE,
-                        "Independent sources are forbidden in Block simulations. Use Ports.",
-                        comp->scenePos().toPoint() // Use absolute scene coordinates
-                    ));
-                }
-                
-                if (comp->type == ComponentType::PowerPort) {
-                    hasPorts = true;
-                }
-            }
-        }
-        
-        // RULE 2: Must have at least one port (signal or power)
-        if (!hasPorts) {
-            violations_.append(Violation(
-                ViolationType::MISSING_PORTS,
-                "Block subsystem requires at least one Input/Output Port.",
-                QPoint(-9999, -9999) // Global error
-            ));
-        }
+        Q_UNUSED(scene);
+        // Block mode rules removed - all component types now allowed
     }
-    
+
+    // DEPRECATED: Mode-specific rules removed - unified component library
     void checkSystemModeRules(QGraphicsScene* scene) {
-        bool hasRailDriver = false;
-        
-        for (QGraphicsItem* item : scene->items()) {
-            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
-                // RULE 1: Power must come from RailDrivers (Battery/LDO)
-                if (comp->type == ComponentType::RailDriver) {
-                    hasRailDriver = true;
-                }
-                
-                // RULE 2: No generic sources
-                if (comp->type == ComponentType::VoltageSource) {
-                     violations_.append(Violation(
-                        ViolationType::ILLEGAL_DRIVER,
-                        "Generic Voltage Sources forbidden in System Integration. Use RailDriver.",
-                        comp->scenePos().toPoint() 
-                    ));
-                }
-            }
-        }
-        
-        if (!hasRailDriver) {
-             violations_.append(Violation(
-                ViolationType::ILLEGAL_DRIVER,
-                "System needs a Rail Driver (Battery/Regulator) to power the circuit.",
-                QPoint(-9999, -9999) 
-            ));
-        }
+        Q_UNUSED(scene);
+        // System mode rules removed - all component types now allowed
     }
 
 private:
-    AppMode currentMode_ = AppMode::BENCH_TEST;
+    // DEPRECATED: Mode is no longer used for ERC checks
+    AppMode currentMode_ = AppMode::BENCH_TEST;  // Kept for API compatibility
 };
+
 
 } // namespace ERC
