@@ -46,3 +46,12 @@ When a user asks the AI to modify the circuit, the data flows through the layers
 1.  **No Logic in Widgets**: Widgets should be "dumb" renderers. Business logic belongs in `core` managers or `analysis` engines.
 2.  **Strict Threading**: The GUI thread (Main) must never block. Heavy compute (Simulation, AI) happens in background threads managed by `orchestration`.
 3.  **Ground Truth**: The C++ headers in each specific folder are the ultimate source of truth for API signatures.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `gui/`)*
+
+- [ ] **No Direct Physics**: Are you calculating voltages or verifying connectivity in a widget? (Forbidden: Use `gui/analysis` or `compute/orchestration`).
+- [ ] **Thread Safety**: Does this action trigger a long-running task (Sim/AI) on the main thread? (Forbidden: Use `WorkerManager`).
+- [ ] **View/Logic Separation**: accessible via `AiAssistantPanel`? Logic belongs in `core/` or `analysis/`, visual representation in `widgets/` or `components/`.
+- [ ] **Signal/Slots**: Are you manually passing pointers between deeply nested widgets? (Use Signals/Slots or `DockingManager`).
+- [ ] **Mode Awareness**: Does the widget respect the current `AppMode` (Bench/Block/System)?

@@ -882,3 +882,4 @@ target_include_directories(test_verification_harness PRIVATE
 )
 target_compile_features(test_verification_harness PUBLIC cxx_std_17)
 target_link_libraries(test_verification_harness PRIVATE Qt6::Core)
+add_executable(test_linalg_improvements tests/test_linalg_improvements.cpp)

@@ -22,6 +22,15 @@ The `tests/` directory contains the **Verification Framework**. It enforces the 
 -   **`test_ai_simulation_intelligence.cpp`**: Validates `SpeculativeRunner` and `FailureTaxonomy`.
 -   **`test_copilot_validate.cpp`**: End-to-end flow from "Prompt" to "Circuit Change".
 
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `tests/`)*
+
+- [ ] **Golden Data**: Are you hardcoding result values? (Forbidden: Use `regression_golden.db` unless writing a micro-unit test).
+- [ ] **Determinism**: Does the test enforce `FPUControl::enforceDeterminism()`?
+- [ ] **Cross-Platform**: Does the test rely on specific file paths (e.g. `C:\` or `/home`)? (Forbidden: Use relative paths/CMake definitions).
+- [ ] **Coverage**: Does the new test cover the specific `flow.md` constraint of the module tested?
+- [ ] **Performance**: Does the test execute in <100ms? (If not, move to `benchmark_suite.h`).
+
 ## Running Tests
 Tests are registered with `CTest`.
 ```bash

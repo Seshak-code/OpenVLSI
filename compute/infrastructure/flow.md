@@ -78,3 +78,11 @@ inline T& safe_at(std::vector<T>& vec, size_t index, const char* context = "") {
 2.  **Trust but Verify**: Every simulation result must be wrapped in a `SolverStep` with full metadata (method, iteration count). A result without metadata is untrusted.
 3.  **Topology is Identity**: The Scheduler groups by `topologyHash`. If you modify `components/graph_canonical.h`, verify `tensorscheduler.h` still groups correctly.
 4.  **Hardware Agnosticism**: The Scheduler asks `IHardwareDetector` what to do. Do not hardcode `#ifdef` for hardware selection inside the solver logic itself; inject the strategy.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `compute/infrastructure/`)*
+
+- [ ] **Bounds Safety**: Are you using `safe_at` or `safe_idx` for all vector accesses in the loop? (Forbidden: `vec[i]` without asserts).
+- [ ] **Provenance**: Does the new simulation step record valid `topologyHash` and `integrationMethod` metadata?
+- [ ] **NaN Scrubbing**: Are inputs from `physics/` passed through `SafeUtils::sanitize`?
+- [ ] **Topology Hash**: If you modified grouping logic, did you verify that isomorphic subcircuits still hash identically?

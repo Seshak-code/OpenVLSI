@@ -99,4 +99,12 @@ std::vector<double> getDiagonalInverse(const Csr_matrix &matrix) {
 1.  **Thread Safety**: Any function in `linalg.h` marked with OMP must operate on disjoint data or use reductions.
 2.  **Singularity Checks**: Solvers must return `result.converged = false` rather than crashing on singular matrices (floating nodes).
 3.  **Dense Fallback**: Always maintain `convertCsrToDense` and `solveLU_Pivoted` as a gold-standard reference, even if PCG is preferred.
-4.  **No Allocations in Loop**: `MatrixConstructor` should `reserve()` space if possible to avoid reallocations during stamping.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `compute/math/`)*
+
+- [ ] **Zero Allocations**: Are you allocating memory (std::vector, new) inside a loop? (Forbidden: Use `reserve()` or pre-allocated buffers).
+- [ ] **Thread Safety**: Is any shared state modified inside an OMP region without efficient locking or reduction?
+- [ ] **Precision**: Did you respect `emulated_f64` rules? (No fast-math assumptions).
+- [ ] **Singularity Safety**: Does the solver code handle singular matrices/NaNs gracefully via return status (not crash)?
+- [ ] **Dense Fallback**: If modifying iterative solvers, did you ensure `solveLU` remains the gold-standard fallback?

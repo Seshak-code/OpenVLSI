@@ -79,3 +79,12 @@ TensorizedBlock tensorizeBlock(const TensorBlock& block) {
 2.  **Align Data**: Keep frequently accessed "Hot" data (Voltage, Current, Conductance) in separate arrays from "Cold" data (Temperature, Names) if possible to maximize cache line utilization.
 3.  **Branchless Math**: Within batch functions, avoid `if(v > 0)` logic. Use `std::max(0.0, v)` or bitwise masks to maintain SIMD lanes.
 4.  **GPU Compat**: The structures in `physics_tensors.h` must map 1:1 to the Storage Buffers defined in `solvers/webgpu_solver.h`. If you add a field here, update the shader binding there.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `compute/tensors/`)*
+
+- [ ] **SoA Parity**: If you added a field to a Tensor, did you update `tensorizeBlock` in `physics_tensors.cpp`?
+- [ ] **Alignment**: Is the new field placed in a hot/cold section appropriate for its access frequency?
+- [ ] **Branchless Math**: Does the batch kernel avoid data-dependent branching (`if (v > 0)`)?
+- [ ] **GPU Mirror**: If this tensor is uploaded to GPU, did you update the corresponding WebGPU/CUDA struct?
+- [ ] **Canonicalization**: Does the new field need to be included in variable ordering/hashing?

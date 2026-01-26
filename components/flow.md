@@ -116,3 +116,11 @@ inline bool saveComponent(const std::string& filepath, const LibraryComponent& c
 2.  **Semantic over Syntactic**: When implementing diff logic, care about *physics* changes, not *metadata* changes. A description change should not trigger a solve.
 3.  **Ground Zero**: Always assume Node 0 is global ground for canonicalization purposes.
 4.  **AI-First Persistence**: When saving components, always preserve fields that help the AI (descriptions, logic summaries). Don't strip "unknown" fields if possible.
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `components/`)*
+
+- [ ] **Hashing**: If you modified `TensorBlock` or `CircuitNode`, did you update `graph_canonical.h` to include the new field in the hash?
+- [ ] **Semantic Diff**: Did you update `netlist_diff.h` to detect changes in this new field?
+- [ ] **Persistence**: Did you update `component_library.h` JSON serialization/deserialization?
+- [ ] **AI Metadata**: Is `aiDescription` and `tags` preserved during all transformations?
+- [ ] **Ground Zero**: Does the new component respect Node 0 as global ground?

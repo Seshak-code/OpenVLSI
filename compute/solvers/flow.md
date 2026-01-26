@@ -66,3 +66,11 @@ if (hasActiveDevices || numNodes < 20) {
 2.  **GMIN is Mandatory**: All non-linear DC solves must rely on GMIN stepping as a fallback. Cold-starting a BJT feedback loop without it is mathematically impossible often.
 3.  **State Hygiene**: The solver must be stateless between calls (except for `prev_voltage` in transient). Do not store "solver state" in the `TensorNetlist`.
 4.  **GPU Abstraction**: If modifying the solver loop, ensure `webgpu_solver.h` logic is updated or at least not broken, even if it's experimental.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `compute/solvers/`)*
+
+- [ ] **Physical Convergence**: Are you checking `KCL Residuals` (Amps) and not just `Delta V`?
+- [ ] **Robustness Fallback**: If using PCG/Iterative methods, is there a `GMIN` or `LU` fallback path?
+- [ ] **Statelessness**: Are you storing simulation state (e.g. `prev_voltage`) inside the Solver class instead of the `BlockState`? (Forbidden).
+- [ ] **GPU Parity**: If you changed the solver algorithm, did you update/verify `webgpu_solver.h`?

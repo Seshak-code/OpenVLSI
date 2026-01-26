@@ -65,7 +65,7 @@ The system follows a strict **Data-Oriented Design (DoD)** pipeline where depend
 ## 🧩 Standard Agentic Development Workflow
 The project enforces a strict "Context-First" development loop via `/Users/seshak/.agent/workflows/agentic_flow.md`:
 1. **Analyze Roadmap**: Ground every task in an M1-M15 milestone or strategy.
-2. **Flow Grounding**: Read the `flow.md` for *every* folder touched. If it doesn't exist, create it.
+2. **Flow Grounding**: Read the `flow.md` for *every* folder touched. If it creates/modifies files, you **MUST** consult the "🤖 SME Validation Checklist" in that `flow.md` before proceeding. If the `flow.md` doesn't exist, create it.
 3. **Structured Planning**: Refer explicitly to constraints in `flow.md` (e.g., "Dual Kernel separation").
 4. **Approval Loop**: Human-in-the-loop validation of `implementation_plan.md`.
 5. **Trust Surface Verification**: Validate against physical conservation and residuals.

@@ -78,3 +78,12 @@ When a user says "Fix the crash":
 1.  **Hierarchy**: Dependencies flow DOWN. `core` can use `analysis`, but `analysis` acts on raw data and shouldn't depend on `core`.
 2.  **Grounding**: All layers must ultimately reference `introspection_api.h` or `geometry_api.h` (physics/schema).
 3.  **Flow Compliance**: Every sub-folder MUST have a `flow.md` that links back to this master architecture.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `ai_api/`)*
+
+- [ ] **Evidence-First**: Does the AI citation mechanism link back to specific simulator log lines or introspection data?
+- [ ] **Speculative Safety**: Are structural changes tested via `speculative_runner` before being proposed to the user?
+- [ ] **Layer Hierarchy**: Does `analysis/` import `core/`? (Forbidden: Upward dependency).
+- [ ] **Introspection Truth**: Are we checking `CircuitState` for ground truth instead of parsing raw text logs?
+- [ ] **Structured Output**: Is the Action output strictly typed (JSON/Proto) vs free text?

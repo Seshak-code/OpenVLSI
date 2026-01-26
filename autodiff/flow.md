@@ -60,4 +60,12 @@ constexpr bool operator<(const Dual<T>& lhs, const Dual<T>& rhs) {
 ## Development Rules
 1.  **No Exceptions**: Derivatives must be safe. `std::sqrt` handles derivatives, but callers must ensure inputs are valid (handled by `physics` clamping).
 2.  **Generic Kernels**: Code in `device_physics` must never explicitly cast to `double` if it breaks `Dual` propagation. Use simple literals (`1.0`, not `(double)1.0`) or `T(1.0)`.
-3.  **Strict Primal Ordering**: Never use `.grad` to decide a control flow branch. Derivatives do not determine the path; the state does.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `autodiff/`)*
+
+- [ ] **Dependency Check**: Does this change introduce any dependency on `physics/`? (Forbidden: Autodiff is a foundational dependency).
+- [ ] **Dual Propagation**: Does the change strictly maintain the chain rule (`.grad` propagation)?
+- [ ] **Control Flow**: Did you ensure that all `if/else` logic depends **only** on `.val` and never on `.grad`?
+- [ ] **Std Namespace**: If specializing a new math function, is it inside `namespace std` to allow Argument-Dependent Lookup (ADL)?
+- [ ] **Test Coverage**: Does `test_dual.cpp` cover the new operator/function?

@@ -119,4 +119,12 @@ The `physics/` directory contains the core numerical engine of CuteApp. It is de
 1.  **Stateless Physics**: Never introduce state variables (like `history`) into `device_physics.h` kernels.
 2.  **Explicit Clamping**: All exponentials MUST have a `_clamped` variant.
 3.  **Generic Math (ADL)**: Do NOT use `std::exp` or `std::sin` directly in device kernels. Use unqualified `exp()` to allow Argument Dependent Lookup (ADL) to find `acutesim::exp(Dual)` or defaults.
-4.  **KCL is King**: Steps are rejected if `calculatePhysicalResiduals` > 1pA, even if the linear solver converged.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `physics/`)*
+
+- [ ] **Stateless Physics**: Did you introduce any state variables into `device_physics.h`? (Forbidden: Must remains pure functional).
+- [ ] **Explicit Clamping**: Do all new exponentials/logarithms have a `_clamped` variant or safety guard?
+- [ ] **ADL Compatibility**: Are you using `std::exp` instead of `exp` in templated kernels? (Forbidden: Breaks Dual number support).
+- [ ] **Conservation of Charge**: Have you verified that `calculatePhysicalResiduals` accounts for the new physics terms?
+- [ ] **Tensor Parity**: If you modified `TensorBlock` (AoS), did you also update `TensorizedBlock` (SoA) in `physics_tensors.h`?

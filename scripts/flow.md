@@ -12,3 +12,11 @@ The `scripts/` directory contains **DevOps and Developer Utilities**. These are 
 
 1.  **Setting Up**: `source scripts/setup_dependencies.sh`
 2.  **Web Testing**: `python3 scripts/serve.py` -> Open `localhost:8000`
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `scripts/`)*
+
+- [ ] **Portability**: Does the script work on macOS (BSD utils) and Linux (GNU utils)? Prefer Python for complex logic.
+- [ ] **Paths**: Are you using relative paths from the project root? (Forbidden: `cd /Users/seshak/...`).
+- [ ] **Idempotency**: can the script be run twice without error?
+- [ ] **Shell Injection**: Are user inputs properly quoted?

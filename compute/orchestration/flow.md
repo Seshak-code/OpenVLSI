@@ -69,3 +69,11 @@ while (reader->Read(&log)) {
 1.  **Separation of Concerns**: `WorkerClient` should never know *syntactic* details of Yosys (that belongs in `drivers/`). It just knows how to shovel bytes.
 2.  **PIMPL Isolation**: The `WorkerClient` uses PIMPL to hide `grpc` headers from the rest of AcuteSim.
 3.  **Conditional Building**: Entire orchestration layer is guarded by `#ifdef ACUTESIM_ENABLE_ORCHESTRATION` to allow WASM builds (which lack gRPC) to compile dummy clients.
+
+## 🤖 SME Validation Checklist
+*(Consult this list before modifying `compute/orchestration/`)*
+
+- [ ] **WASM Safety**: Is new gRPC code guarded by `#ifdef ACUTESIM_ENABLE_ORCHESTRATION`?
+- [ ] **Logic Separation**: Does `WorkerClient` contain tool-specific syntax (TCL/Verilog)? (Forbidden: Move to `drivers/`).
+- [ ] **Header Hygiene**: Are Protobuf/gRPC headers leaking into public `.h` files? (Forbidden: Use PIMPL).
+- [ ] **Async UI**: Does the status callback guarantee thread safety (invoking on GUI thread)?

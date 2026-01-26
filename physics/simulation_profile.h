@@ -4,7 +4,7 @@
 #include <QVariantMap>
 #include <QStringList>
 #include <QDateTime>
-#include "../gui/core/gui_types.h"  // For AppMode enum
+// #include "../gui/core/gui_types.h"  // AppMode Deprecated
 #include "corner_config.h"          // For CornerConfig and RunMode
 
 // Forward declaration - full definition in simulation_intent.h
@@ -55,7 +55,8 @@ struct SimulationProfile {
     QString profileId;           // Unique ID: "ac_gain_nominal"
     QString name;                // Display name: "AC Gain Analysis"
     AnalysisType analysis = AnalysisType::DC;
-    AppMode mode = AppMode::BENCH_TEST;
+    // AppMode deprecated in favor of unified GUI
+    // AppMode mode = AppMode::BENCH_TEST;
     
     // Topology binding
     size_t topologyHash = 0;     // Links to TensorBlock::topologyHash
