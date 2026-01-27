@@ -13,6 +13,7 @@ public:
 
     // API for Copilot / External Agents
     Q_SLOT void executeCommand(const QString& fullCommand);
+    void appendOutput(const QString& text, bool isError = false);
 
 signals:
     // Emitted when a command is finalized (User Enter or Copilot)
@@ -27,6 +28,5 @@ private:
     QStringList history_;
     int historyIndex_ = 0;
 
-    void appendOutput(const QString& text, bool isError = false);
     void processInternalCommands(const QString& cmd); // e.g. clear, help
 };

@@ -89,6 +89,7 @@ test_erc_rules
 test_safe_io
 accuracy_test
 transient_test
+test_tcl_bridge
 
 # ============================================
 # Qt Auto-Generated Files

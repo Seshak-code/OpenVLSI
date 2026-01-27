@@ -6,10 +6,16 @@
 #include <QAction>
 #include <QMenu>
 #include <QPointer>
+#include <QNativeGestureEvent>
+#include "../../components/design_db.h"
+
+namespace acutesim {
+namespace gui {
+namespace widgets {
 
 class WaveformView; // Forward decl
 
-class WaveformWidget : public QWidget {
+class WaveformWidget : public QWidget, public acutesim::components::DesignDbObserver {
     Q_OBJECT
 public:
     explicit WaveformWidget(QWidget* parent = nullptr);
@@ -22,7 +28,17 @@ public:
     // State Management (Preserve during reparenting)
     void appendDataPoint(double time, double value, int traceIndex = 0); // Multi-trace support
     void appendDataPoints(double time, const QVector<double>& values);    // Batch add all traces
+
     void clear();
+    
+    // Trace Registration (Crucial for Tcl Sync Optimization)
+    void registerTrace(int traceIndex, acutesim::components::NetUUID netId, const QString& name);
+    
+    // Trace Management
+    void setTraceName(int traceIndex, const QString& name);
+    
+    // DesignDbObserver Interface
+    void onNetRenamed(acutesim::components::NetUUID id, const std::string& oldName, const std::string& newName) override;
 
     // Accessors for testing
     int dataPointCount() const;
@@ -44,6 +60,11 @@ private:
     // Multi-trace data storage
     // Key = trace index (node number), Value = time-value pairs
     QMap<int, QVector<QPointF>> traceData_;
+    
+    // Mapping for Renaming
+    // We need to map NetUUID -> traceIndex to know which trace to rename.
+    QMap<acutesim::components::NetUUID, int> netTraceMap_; // Optimized Lookup
+    QMap<int, QString> traceNames_; // Store names for legend/tooltip
 };
 
 // Specialized View for Graphics/Gestures
@@ -71,3 +92,7 @@ private:
     QColor getTraceColor(int traceIndex) const;
     void handlePinch(class QNativeGestureEvent* event);
 };
+
+} // namespace widgets
+} // namespace gui
+} // namespace acutesim

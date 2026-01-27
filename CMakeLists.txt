@@ -12,32 +12,27 @@ endif()
 
 # Platform-aware default Qt prefix hints (can be overridden by CMAKE_PREFIX_PATH or Qt6_DIR)
 if(NOT DEFINED Qt6_DIR)
-    if(NOT DEFINED CMAKE_PREFIX_PATH)
-        if(APPLE)
-            # EXTREMELY IMPORTANT: Use the full "qt" package to ensure all modules (Svg, etc.)
-            # have matching versions. Mixing qtbase (6.9.3) with qt (6.9.0) causes segfaults.
-            set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt/lib/cmake")
-            # set(CMAKE_PREFIX_PATH "/opt/homebrew/Cellar/qtbase/6.9.3_1/lib/cmake")
-            message(STATUS "Mac-specific CMAKE_PREFIX_PATH set to: ${CMAKE_PREFIX_PATH}")
-        elseif(WIN32)
-            # On Windows, try to detect a Qt installation under C:/Qt and append likely cmake folders.
-            set(_qt_root "C:/Qt")
-            if(EXISTS "${_qt_root}")
-                file(GLOB QT_ROOT_DIRS LIST_DIRECTORIES true "${_qt_root}/*")
-                foreach(_d IN LISTS QT_ROOT_DIRS)
-                    if(IS_DIRECTORY "${_d}")
-                        foreach(_sub IN ITEMS "" "/msvc2019_64" "/msvc2022_64" "/msvc2017_64" "/mingw81_64" "/mingw64")
-                            set(_cmake_dir "${_d}${_sub}/lib/cmake")
-                            if(EXISTS "${_cmake_dir}")
-                                list(APPEND CMAKE_PREFIX_PATH "${_cmake_dir}")
-                                message(STATUS "Appending Qt candidate to CMAKE_PREFIX_PATH: ${_cmake_dir}")
-                            endif()
-                        endforeach()
-                    endif()
-                endforeach()
-            else()
-                message(STATUS "Qt root ${_qt_root} not found; please set Qt6_DIR or CMAKE_PREFIX_PATH to your Qt installation.")
-            endif()
+    if(APPLE)
+        set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt/lib/cmake")
+        message(STATUS "Mac-specific CMAKE_PREFIX_PATH forced to: ${CMAKE_PREFIX_PATH}")
+    elseif(WIN32 AND NOT DEFINED CMAKE_PREFIX_PATH)
+        # On Windows, try to detect a Qt installation under C:/Qt and append likely cmake folders.
+        set(_qt_root "C:/Qt")
+        if(EXISTS "${_qt_root}")
+            file(GLOB QT_ROOT_DIRS LIST_DIRECTORIES true "${_qt_root}/*")
+            foreach(_d IN LISTS QT_ROOT_DIRS)
+                if(IS_DIRECTORY "${_d}")
+                    foreach(_sub IN ITEMS "" "/msvc2019_64" "/msvc2022_64" "/msvc2017_64" "/mingw81_64" "/mingw64")
+                        set(_cmake_dir "${_d}${_sub}/lib/cmake")
+                        if(EXISTS "${_cmake_dir}")
+                            list(APPEND CMAKE_PREFIX_PATH "${_cmake_dir}")
+                            message(STATUS "Appending Qt candidate to CMAKE_PREFIX_PATH: ${_cmake_dir}")
+                        endif()
+                    endforeach()
+                endif()
+            endforeach()
+        else()
+            message(STATUS "Qt root ${_qt_root} not found; please set Qt6_DIR or CMAKE_PREFIX_PATH to your Qt installation.")
         endif()
     endif()
 endif()
@@ -249,6 +244,9 @@ add_executable(${PROJECT_NAME}
     gui/widgets/search_dock.cpp
     gui/widgets/search_dock.h
     components/circuit.h
+    components/design_db.cpp
+    gui/scripting/tcl_bridge.cpp
+    gui/scripting/tcl_bridge.h
 )
 
 # Phase 12: Orchestration Library (gRPC Worker Client)
@@ -309,11 +307,15 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+find_package(TCL REQUIRED)
+target_include_directories(${PROJECT_NAME} PRIVATE ${TCL_INCLUDE_PATH})
+
 # Link Qt libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    ${TCL_LIBRARY}
 )
 
 # Optional: Link Qt6::Svg if available

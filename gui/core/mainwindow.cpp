@@ -11,6 +11,7 @@
 #include "../widgets/project_model.h"
 #include "../widgets/search_dock.h"
 #include "../styling/theme_manager.h"
+#include "../scripting/tcl_bridge.h"
 #include <QApplication>
 #include <QHeaderView>
 #include <QStatusBar>
@@ -263,6 +264,15 @@ void MainWindow::setupCentralWidget() {
                     simulationWorkspace->setSchematicEditor(newEditor);
                 }
                 
+                // Connect Waveform Viewer to DesignDb (Phase 6.2)
+                if (dockingManager && dockingManager->waveform() && newEditor && newEditor->getScene()) {
+                    auto* scene = qobject_cast<GridScene*>(newEditor->getScene());
+                    if (scene) {
+                        acutesim::gui::widgets::WaveformWidget* wf = dockingManager->waveform();
+                        scene->getDesignDb().addObserver(wf);
+                    }
+                }
+                
                 // Update Debug Suggestions Context
                 if (debugSuggestionsPanel) {
                     debugSuggestionsPanel->setEditor(newEditor);
@@ -329,16 +339,32 @@ void MainWindow::setupDocks() {
     qDebug() << "[MW] Creating Core Docks via DockingManager...";
     dockingManager->createCoreDocks();
     
+    // Initialize Tcl Bridge (Phase 6.2)
+    acutesim::gui::scripting::TclBridge::instance().init();
+
     // Wire signals
     connect(dockingManager, &DockingManager::tabPromotionRequested, this, &MainWindow::addCentralTab);
     connect(dockingManager, &DockingManager::dockRestorationRequested, this, &MainWindow::removeCentralTab);
     
     TerminalWidget* term = dockingManager->terminal();
     if (term) {
-        connect(term, &TerminalWidget::commandRequested, this, [this](const QString& cmd){
+        connect(term, &TerminalWidget::commandRequested, this, [this, term](const QString& cmd){
             if (cmd.startsWith("sync -to-hdl")) syncSchematicToVerilog();
             else if (cmd.startsWith("sync -from-hdl")) syncVerilogToSchematic();
             else if (cmd == "layout -reset") acutesim::gui::core::LayoutManager::instance().resetToFactory();
+            else if (cmd.startsWith("db_")) {
+                // Route to TclBridge
+                // Ensure we have the current DesignDb
+                auto* editor = dynamic_cast<SchematicEditor*>(rtlPageTabs->currentWidget());
+                if (editor && editor->getScene()) {
+                    // Phase 6.2: Ensure DesignDb is synced with latest spatial state
+                    editor->getScene()->generateNetlist();
+                    acutesim::gui::scripting::TclBridge::instance().setDesignDb(&(editor->getScene()->getDesignDb()));
+                }
+                
+                std::string result = acutesim::gui::scripting::TclBridge::instance().execute(cmd.toStdString());
+                term->appendOutput(QString::fromStdString(result));
+            }
         });
     }
 
@@ -1258,7 +1284,10 @@ void MainWindow::updateWireProperties(VisualWire* wire) {
     
     // 0: Name (Editable)
     propertiesTable->setItem(0, 0, new QTableWidgetItem("Name"));
-    propertiesTable->setItem(0, 1, new QTableWidgetItem(wire->getName()));
+    QTableWidgetItem* valItem = new QTableWidgetItem(wire->getName());
+    valItem->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEditable | Qt::ItemIsEnabled);
+    valItem->setToolTip("Double-click to rename net");
+    propertiesTable->setItem(0, 1, valItem);
     
     // 1: Length (Read Only)
     propertiesTable->setItem(1, 0, new QTableWidgetItem("Length"));

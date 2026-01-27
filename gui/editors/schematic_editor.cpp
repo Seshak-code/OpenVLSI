@@ -726,6 +726,14 @@ TensorNetlist GridScene::generateNetlist() {
     // 1. Populate/Update DesignDb from Spatial State (Migration Strategy)
     // 2. Snapshot DesignDb to TensorBlock
     
+    // Clear DB to ensure perfect sync (Spatial is Truth)
+    designDb.clear();
+    for (auto* item : items()) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            c->dbId = acutesim::components::InstUUID(); // Reset ID
+        }
+    }
+
     // --- Step 1: Connectivity Analysis (Spatial Approach) ---
     QMap<QPair<int,int>, int> pointToNetID;
     int nextNetID = 1; 
@@ -799,12 +807,27 @@ TensorNetlist GridScene::generateNetlist() {
     
     // 2.1 Map Spatial Nets to DB Nets
     QMap<int, NetUUID> spatialToDbNet;
+    QMap<int, QString> spatialToName;
+    
+    // Predetermine names from labels
+    for (auto* item : allItems) {
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            if (!w->isVisible()) continue;
+            int rootID = findSet(getNetID(w->line().p1()));
+            if (!w->getName().isEmpty()) {
+                 emit messageLogged(QString("DEBUG: Wire ID %1 has label '%2'").arg(rootID).arg(w->getName()));
+                 spatialToName[rootID] = w->getName();
+            }
+        }
+    }
     
     auto getDbNet = [&](QPointF p) -> NetUUID {
         int rawID = getNetID(p);
         int rootID = findSet(rawID);
         if (!spatialToDbNet.contains(rootID)) {
-             spatialToDbNet[rootID] = designDb.createNet("N" + std::to_string(rootID));
+             QString name = spatialToName.value(rootID, "n" + QString::number(rootID));
+             emit messageLogged(QString("DEBUG: Creating Net %1 (Root %2)").arg(name).arg(rootID));
+             spatialToDbNet[rootID] = designDb.createNet(name.toStdString());
         }
         return spatialToDbNet[rootID];
     };
@@ -817,11 +840,18 @@ TensorNetlist GridScene::generateNetlist() {
                 int rootID = findSet(getNetID(termPos));
                 if (!spatialToDbNet.contains(rootID)) {
                      // Create explicit GND net
-                     // Note: We need a way to set name to "GND" if we want deterministic ground
-                     // For now createNet("GND") works but unique ID matters.
                      spatialToDbNet[rootID] = designDb.createNet("GND");
                 }
             }
+        }
+    }
+
+    // Force creation of all labeled nets (even if floating)
+    for (auto it = spatialToName.begin(); it != spatialToName.end(); ++it) {
+        int rootID = it.key();
+        if (!spatialToDbNet.contains(rootID)) {
+             emit messageLogged(QString("DEBUG: Materializing floating labeled net %1 (Root %2)").arg(it.value()).arg(rootID));
+             spatialToDbNet[rootID] = designDb.createNet(it.value().toStdString());
         }
     }
 
@@ -1527,6 +1557,23 @@ void GridScene::onInstanceMoved(const acutesim::components::Instance& inst) {
 }
 
 void GridScene::onTopologyInvalidated() {
+    // For now we don't do full re-placement, just update.
     emit messageLogged("Db Sync: Topology invalidated. Re-generating netlist...");
     // Potentially trigger re-scan or invalidation visual
+}
+
+void GridScene::onNetRenamed(acutesim::components::NetUUID id, const std::string& oldName, const std::string& newName) {
+    Q_UNUSED(id);
+    QString qOld = QString::fromStdString(oldName);
+    QString qNew = QString::fromStdString(newName);
+    
+    // Find wires with this name and update them
+    for (auto* item : items()) {
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            if (w->getName() == qOld) {
+                w->setName(qNew);
+            }
+        }
+    }
+    update();
 }

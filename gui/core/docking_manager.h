@@ -11,6 +11,7 @@
 class ProblemsPanel;
 namespace acutesim { namespace gui { namespace widgets { class DebugSuggestionsPanel; } } }
 using acutesim::gui::widgets::DebugSuggestionsPanel;
+using acutesim::gui::widgets::WaveformWidget;
 class QTreeWidget;
 
 class DockingManager : public QObject {

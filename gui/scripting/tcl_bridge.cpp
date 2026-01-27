@@ -1,6 +1,10 @@
 #include "tcl_bridge.h"
 #include <iostream>
-#include <tcl.h> // Assumes system Tcl is available. If not, we might need a stub.
+#ifdef TEST_MODE
+#include "../../tests/mock_tcl.h"
+#else
+#include <tcl.h> // Assumes system Tcl is available.
+#endif
 
 namespace acutesim {
 namespace gui {
@@ -12,10 +16,33 @@ TclBridge& TclBridge::instance() {
 }
 
 void TclBridge::init(Tcl_Interp* interp) {
-    Tcl_CreateCommand(interp, "db_create_net", cmd_create_net, (ClientData)this, NULL);
-    Tcl_CreateCommand(interp, "db_create_inst", cmd_create_inst, (ClientData)this, NULL);
-    Tcl_CreateCommand(interp, "db_connect_pin", cmd_connect_pin, (ClientData)this, NULL);
-    Tcl_CreateCommand(interp, "db_set_param", cmd_set_param, (ClientData)this, NULL);
+    if (interp) {
+        interp_ = interp;
+    } else if (!interp_) {
+        interp_ = Tcl_CreateInterp();
+    }
+    
+    if (!interp_) return;
+
+    Tcl_CreateCommand(interp_, "db_create_net", cmd_create_net, (ClientData)this, NULL);
+    Tcl_CreateCommand(interp_, "db_rename_net", cmd_rename_net, (ClientData)this, NULL);
+    Tcl_CreateCommand(interp_, "db_list_nets", cmd_list_nets, (ClientData)this, NULL);
+    Tcl_CreateCommand(interp_, "db_connect_pin", cmd_connect_pin, (ClientData)this, NULL);
+    Tcl_CreateCommand(interp_, "db_set_param", cmd_set_param, (ClientData)this, NULL);
+    Tcl_CreateCommand(interp_, "db_undo", cmd_undo, (ClientData)this, NULL);
+    Tcl_CreateCommand(interp_, "db_redo", cmd_redo, (ClientData)this, NULL);
+}
+
+std::string TclBridge::execute(const std::string& cmd) {
+    if (!interp_) return "Error: Tcl Interpreter not initialized";
+    
+    int code = Tcl_Eval(interp_, cmd.c_str());
+    const char* result = Tcl_GetStringResult(interp_);
+    
+    if (code != TCL_OK) {
+        return "Error: " + std::string(result);
+    }
+    return result;
 }
 
 // db_create_net <name>
@@ -35,6 +62,63 @@ int TclBridge::cmd_create_net(void* clientData, Tcl_Interp* interp, int argc, co
     
     std::string result = id.toString();
     Tcl_SetResult(interp, (char*)result.c_str(), TCL_VOLATILE);
+    return TCL_OK;
+}
+
+// db_rename_net <old_name> <new_name>
+int TclBridge::cmd_rename_net(void* clientData, Tcl_Interp* interp, int argc, const char** argv) {
+    TclBridge* self = (TclBridge*)clientData;
+    if (!self->db_) return TCL_ERROR;
+    if (argc != 3) {
+        Tcl_SetResult(interp, (char*)"Usage: db_rename_net <old_name> <new_name>", TCL_STATIC);
+        return TCL_ERROR;
+    }
+    
+    std::string oldName = argv[1];
+    std::string newName = argv[2];
+    
+    auto result = self->db_->renameNet(oldName, newName);
+    
+    using namespace acutesim::components;
+    
+    if (result == MutationResult::Success) {
+        Tcl_SetResult(interp, (char*)"1", TCL_STATIC);
+        return TCL_OK;
+    } else if (result == MutationResult::NameCollision) {
+        Tcl_SetResult(interp, (char*)"Error: Name collision", TCL_STATIC);
+        return TCL_ERROR;
+    } else {
+        Tcl_SetResult(interp, (char*)"Error: Net not found", TCL_STATIC);
+        return TCL_ERROR;
+    }
+}
+
+int TclBridge::cmd_list_nets(void* clientData, Tcl_Interp* interp, int argc, const char** argv) {
+    TclBridge* self = (TclBridge*)clientData;
+    if (!self->db_) return TCL_ERROR;
+
+    std::string result;
+    const auto& nets = self->db_->getAllNets();
+    for (const auto& pair : nets) {
+        if (!result.empty()) result += " ";
+        result += pair.second.name;
+    }
+    
+    Tcl_SetResult(interp, (char*)result.c_str(), TCL_VOLATILE);
+    return TCL_OK;
+}
+
+// db_undo
+int TclBridge::cmd_undo(void* clientData, Tcl_Interp* interp, int argc, const char** argv) {
+    // Stub implementation
+    Tcl_SetResult(interp, (char*)"Undo not yet implemented.", TCL_STATIC);
+    return TCL_OK;
+}
+
+// db_redo
+int TclBridge::cmd_redo(void* clientData, Tcl_Interp* interp, int argc, const char** argv) {
+    // Stub implementation
+    Tcl_SetResult(interp, (char*)"Redo not yet implemented.", TCL_STATIC);
     return TCL_OK;
 }
 

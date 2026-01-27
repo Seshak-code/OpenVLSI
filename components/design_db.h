@@ -152,6 +152,35 @@ struct Instance {
 // UNIFIED DESIGNDB (The Substrate)
 // ============================================================================
 
+/**
+ * @brief Mutation Result Status
+ * Use this instead of bool to provide actionable feedback to Tcl/GUI.
+ */
+enum class MutationResult {
+    Success,
+    NotFound,
+    NameCollision,
+    InvalidName,
+    NoChange
+};
+
+/*
+ * POLICY DOCUMENTATION: Identity vs. Labels
+ * =========================================
+ * 1. IDENTITY: UUIDs (NetUUID, InstUUID) are the ONLY immutable identity.
+ *    - They persist across sessions and renames.
+ *    - Simulation results are keyed by UUID (internally mapped to Solver Indices).
+ * 
+ * 2. LABELS: "Names" (strings) are mutable human-readable labels.
+ *    - Renaming a Net does NOT invalidate simulation state (topology is same).
+ *    - Renaming is a cosmetic metadata update.
+ * 
+ * 3. HIERARCHY: (Future)
+ *    - Names may be hierarchical (e.g. "u_cpu/clk").
+ *    - DesignDb implementation treats names as flat keys for now, but 
+ *      renaming logic should respect scope in future iterations.
+ */
+
 class DesignDbObserver {
 public:
     virtual ~DesignDbObserver() = default;
@@ -164,12 +193,15 @@ public:
     
     // Bulk Signals
     virtual void onTopologyInvalidated() {} // Requires full re-stamp
+    virtual void onNetRenamed(NetUUID id, const std::string& oldName, const std::string& newName) {}
 };
 
 class DesignDb {
 public:
     // Core CRUD
     NetUUID createNet(const std::string& name);
+    MutationResult renameNet(NetUUID id, const std::string& newName);
+    MutationResult renameNet(const std::string& oldName, const std::string& newName); // Helper
     InstUUID createInstance(const std::string& master, const std::string& name);
     
     // Connectivity
@@ -180,9 +212,11 @@ public:
     void setParam(InstUUID inst, const std::string& key, double value);
     void setStringParam(InstUUID inst, const std::string& key, const std::string& value);
     void clearPins(InstUUID inst);
+    void clear();
     
     // Queries
     const Net* getNet(NetUUID id) const;
+    const std::map<NetUUID, Net>& getAllNets() const { return nets_; }
     // ...
     // Mutable Access (Paradigm Bridge - careful!)
     Instance* getInstanceMutable(InstUUID id);

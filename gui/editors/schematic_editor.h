@@ -79,6 +79,7 @@ public:
     void ofInstancePlaced(const acutesim::components::Instance& inst) override;
     void onInstanceMoved(const acutesim::components::Instance& inst) override;
     void onTopologyInvalidated() override;
+    void onNetRenamed(acutesim::components::NetUUID id, const std::string& oldName, const std::string& newName) override;
 
 protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override;

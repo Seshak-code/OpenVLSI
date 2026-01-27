@@ -12,6 +12,10 @@
 // ============================================================================
 // Waveform Widget (Container)
 // ============================================================================
+namespace acutesim {
+namespace gui {
+namespace widgets {
+
 WaveformWidget::WaveformWidget(QWidget* parent) : QWidget(parent) {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -92,8 +96,29 @@ int WaveformWidget::dataPointCount() const {
 }
 
 // ============================================================================
-// Waveform View (Graphics & Gestures)
+// Trace Management & Observer
 // ============================================================================
+
+void WaveformWidget::setTraceName(int traceIndex, const QString& name) {
+    traceNames_[traceIndex] = name;
+    // In future: Update Legend or Tooltip on the view
+    // if (view_) view_->updateLegend(traceIndex, name);
+    qDebug() << "[WaveformWidget] Trace " << traceIndex << " renamed to " << name;
+}
+
+void WaveformWidget::registerTrace(int traceIndex, acutesim::components::NetUUID netId, const QString& name) {
+    netTraceMap_[netId] = traceIndex;
+    traceNames_[traceIndex] = name;
+}
+
+void WaveformWidget::onNetRenamed(acutesim::components::NetUUID id, const std::string& oldName, const std::string& newName) {
+    Q_UNUSED(oldName);
+    // O(1) Lookup - User Feedback Addressed!
+    if (netTraceMap_.contains(id)) {
+        int traceIndex = netTraceMap_[id];
+        setTraceName(traceIndex, QString::fromStdString(newName));
+    }
+}
 WaveformView::WaveformView(QWidget* parent) : QGraphicsView(parent) {
     scene_ = new QGraphicsScene(this);
     setScene(scene_);
@@ -255,3 +280,7 @@ void WaveformView::handlePinch(QNativeGestureEvent* event) {
     scale(s, s);
     emit zoomChanged(transform().m11());
 }
+
+} // namespace widgets
+} // namespace gui
+} // namespace acutesim

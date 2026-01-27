@@ -262,3 +262,42 @@ TensorBlock DesignDb::snapshot() const {
 
 } // namespace components
 } // namespace acutesim
+
+acutesim::components::MutationResult acutesim::components::DesignDb::renameNet(NetUUID id, const std::string& newName) {
+    if (nets_.find(id) == nets_.end()) return MutationResult::NotFound;
+    
+    // Check uniqueness (optional, but good practice)
+    for (const auto& pair : nets_) {
+        if (pair.second.name == newName && pair.first != id) {
+            return MutationResult::NameCollision; // Name collision
+        }
+    }
+    
+    std::string oldName = nets_[id].name;
+    if (oldName == newName) return MutationResult::NoChange;
+
+    nets_[id].name = newName;
+    
+    // Notify observers
+    for (auto* obs : observers_) {
+        obs->onNetRenamed(id, oldName, newName);
+    }
+    return MutationResult::Success;
+}
+
+void acutesim::components::DesignDb::clear() {
+    nets_.clear();
+    instances_.clear();
+    pins_.clear();
+    // Keep observers? Yes.
+}
+
+acutesim::components::MutationResult acutesim::components::DesignDb::renameNet(const std::string& oldName, const std::string& newName) {
+    // Linear search for now (not optimized for huge netlists, but fine for GUI interaction)
+    for (const auto& pair : nets_) {
+        if (pair.second.name == oldName) {
+            return renameNet(pair.first, newName);
+        }
+    }
+    return MutationResult::NotFound;
+}
