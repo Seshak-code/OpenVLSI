@@ -131,6 +131,26 @@ QString SchematicEditor::generateVerilogSnippet() {
                 .arg(comp.nodeCoil1)
                 .arg(comp.nodeCoil2);
     }
+    
+    // Hierarchical Block Instances (including PDK Standard Cells)
+    for (size_t i = 0; i < netlist.instances.size(); ++i) {
+        const auto& inst = netlist.instances[i];
+        QString name = "U" + QString::number(i);
+        QString type = QString::fromStdString(inst.blockName);
+        
+        code += QString("  %1 %2 (").arg(type).arg(name);
+        
+        // Map pins to global nodes
+        // In our StandardCellLibrary, pin nodes are typically 1..pinCount
+        // These are the first N elements in nodeMapping.
+        
+        const auto& nodes = inst.nodeMapping;
+        for (size_t j = 0; j < nodes.size(); ++j) {
+            code += QString(".p%1(n%2)").arg(j+1).arg(nodes[j]);
+            if (j < nodes.size() - 1) code += ", ";
+        }
+        code += ");\n";
+    }
 
     code += "\nendmodule\n";
     return code;

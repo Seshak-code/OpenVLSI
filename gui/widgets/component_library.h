@@ -17,14 +17,11 @@ class ComponentLibrary : public QWidget {
 public:
     explicit ComponentLibrary(QWidget* parent = nullptr);
 
-    void setStage(DesignStage stage);
-
-    // DEPRECATED: Mode filtering removed - all tabs now always visible
-    // Kept for API compatibility but is now a no-op
-    void setMode(AppMode mode);
-
+    // Unified library - no modes
+    
 signals:
     void componentSelected(ComponentType type);
+    void componentSelected(ComponentType type, const QString& name);
 
 private slots:
     void onSearchTextChanged(const QString& text);
@@ -32,12 +29,8 @@ private slots:
 private:
     QLineEdit* searchEdit_;
     QTabWidget* tabs;
-    QListWidget* basicList;
-    QListWidget* activeList;
-    QListWidget* sourcesList;       // Bench: ideal + dependent sources
-    QListWidget* interfacesList;    // Block: PowerPort pins
-    QListWidget* systemList;        // System: PDN, RailDrivers
-    QListWidget* icsList;           // System: IC Packages
+    QListWidget* basicList; // Primitives
+    QListWidget* pdkList;   // Standard Cells / PDK
 
     void setupUi();
     void populateLists();

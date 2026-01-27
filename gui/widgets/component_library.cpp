@@ -1,4 +1,5 @@
 #include "component_library.h"
+#include "../../components/standard_cells.h"
 
 ComponentLibrary::ComponentLibrary(QWidget* parent) : QWidget(parent) {
     setupUi();
@@ -66,145 +67,90 @@ void ComponentLibrary::setupUi() {
     )";
 
     basicList = new QListWidget();
-    activeList = new QListWidget();
-    sourcesList = new QListWidget();
-    interfacesList = new QListWidget();
-    systemList = new QListWidget();
-    icsList = new QListWidget();
+    pdkList = new QListWidget();
 
     // Apply compact styling to all lists
     basicList->setStyleSheet(listStyle);
-    activeList->setStyleSheet(listStyle);
-    sourcesList->setStyleSheet(listStyle);
-    interfacesList->setStyleSheet(listStyle);
-    systemList->setStyleSheet(listStyle);
-    icsList->setStyleSheet(listStyle);
+    pdkList->setStyleSheet(listStyle);
 
     // Set uniform item heights for density
     basicList->setUniformItemSizes(true);
-    activeList->setUniformItemSizes(true);
-    sourcesList->setUniformItemSizes(true);
-    interfacesList->setUniformItemSizes(true);
-    systemList->setUniformItemSizes(true);
-    icsList->setUniformItemSizes(true);
+    pdkList->setUniformItemSizes(true);
 
-    tabs->addTab(basicList, "Basic");
-    tabs->addTab(activeList, "Active");
-    tabs->addTab(sourcesList, "Sources");      // Bench: ideal V/I, dependent
-    tabs->addTab(interfacesList, "Interfaces"); // Block: PowerPort pins
-    tabs->addTab(systemList, "PDN");           // System: RailDrivers, Vdd/Vss
-    tabs->addTab(icsList, "ICs");              // System: IC packages
+    tabs->addTab(basicList, "Primitives");
+    tabs->addTab(pdkList, "Standard Cells");
     
     // Connect Signals
     auto setupConnection = [this](QListWidget* list) {
         connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem* item){
             ComponentType type = (ComponentType)item->data(Qt::UserRole).toInt();
-            emit componentSelected(type);
+            QString subName = item->data(Qt::UserRole + 1).toString();
+            emit componentSelected(type); // Legacy
+            emit componentSelected(type, subName); // New
         });
     };
     
     setupConnection(basicList);
-    setupConnection(activeList);
-    setupConnection(sourcesList);
-    setupConnection(interfacesList);
-    setupConnection(systemList);
-    setupConnection(icsList);
+    setupConnection(pdkList);
 }
 
 void ComponentLibrary::populateLists() {
     // =========================================================================
     // BASIC - Available in all modes
     // =========================================================================
+
     addComponentItem(basicList, "Resistor", "resistor.png", ComponentType::Resistor);
     addComponentItem(basicList, "Capacitor", "capacitor.png", ComponentType::Capacitor);
     addComponentItem(basicList, "Inductor", "inductor.png", ComponentType::Inductor);
-    // Ground omitted: implicit in Bench, pin in Block, Vss in System
+    addComponentItem(basicList, "Ground", "ground.png", ComponentType::Ground);
 
     // =========================================================================
-    // ACTIVE - Available in all modes
+    // PDK / STANDARD CELLS - Sourced from StandardCellLibrary
     // =========================================================================
-    addComponentItem(activeList, "Diode", "diode.png", ComponentType::Diode);
-    addComponentItem(activeList, "N-MOSFET", "nmos.png", ComponentType::Mosfet);
-    addComponentItem(activeList, "NPN BJT", "bjt.png", ComponentType::Bjt);
-    addComponentItem(activeList, "N-JFET", "njfet.png", ComponentType::JFET_N);
-    addComponentItem(activeList, "P-JFET", "pjfet.png", ComponentType::JFET_P);
-    addComponentItem(activeList, "Schottky Diode", "schottky.png", ComponentType::SchottkyDiode);
+    auto cellNames = StandardCells::StandardCellLibrary::instance().getNames();
+    for (const auto& name : cellNames) {
+        ComponentType type = ComponentType::SubCircuit;
+        QString icon = "chip.png";
+        
+        // Map known types to icons/enums if possible
+        if (name == "PDK_NFET") { type = ComponentType::PDK_NFET; icon = "nfet.png"; }
+        else if (name == "PDK_PFET") { type = ComponentType::PDK_PFET; icon = "pfet.png"; }
+        else if (name == "PDK_Resistor_Poly") { type = ComponentType::PDK_Resistor; icon = "res.png"; }
+        else if (name == "PDK_Capacitor_MIM") { type = ComponentType::PDK_Capacitor; icon = "cap.png"; }
+        else if (name.find("Inverter") != std::string::npos) { icon = "inverter.png"; }
+        
+        addComponentItem(pdkList, QString::fromStdString(name), icon, type);
+    }
 
-    // =========================================================================
-    // SOURCES - Bench mode only (ideal + dependent)
-    // =========================================================================
-    addComponentItem(sourcesList, "Voltage Source", "vsource.png", ComponentType::VoltageSource);
-    addComponentItem(sourcesList, "Current Source", "isource.png", ComponentType::CurrentSource);
-    addComponentItem(sourcesList, "VCVS", "vcvs.png", ComponentType::VCVS);
-    addComponentItem(sourcesList, "CCVS", "ccvs.png", ComponentType::CCVS);
-    addComponentItem(sourcesList, "VCCS", "vccs.png", ComponentType::VCCS);
-    addComponentItem(sourcesList, "CCCS", "cccs.png", ComponentType::CCCS);
 
-    // =========================================================================
-    // INTERFACES - Block mode only (PowerPort never stamps MNA)
-    // =========================================================================
-    addComponentItem(interfacesList, "Vin", "pin.png", ComponentType::PowerPort);
-    addComponentItem(interfacesList, "Vout", "pin.png", ComponentType::PowerPort);
-    addComponentItem(interfacesList, "GND Pin", "gnd_pin.png", ComponentType::PowerPort);
-    addComponentItem(interfacesList, "VDD Pin", "vdd_pin.png", ComponentType::PowerPort);
-
-    // =========================================================================
-    // PDN - System mode only (RailDrivers inject net power)
-    // =========================================================================
-    addComponentItem(systemList, "Vdd/Vcc", "vdd.png", ComponentType::PowerVdd);
-    addComponentItem(systemList, "Vss/GND", "vss.png", ComponentType::PowerVss);
-    addComponentItem(systemList, "Battery", "battery.png", ComponentType::RailDriver);
-    addComponentItem(systemList, "LDO Regulator", "ldo.png", ComponentType::RailDriver);
-    addComponentItem(systemList, "Waveform Gen", "waveform.png", ComponentType::WaveformGen);
-    addComponentItem(systemList, "Decoupling Cap", "decap.png", ComponentType::Capacitor);
-
-    // =========================================================================
-    // ICs - System mode only
-    // =========================================================================
-    addComponentItem(icsList, "ULN2003A", "uln2003a.png", ComponentType::ICPackage);
-    addComponentItem(icsList, "ULN2803A", "uln2803a.png", ComponentType::ICPackage);
-    addComponentItem(icsList, "LM7805", "lm7805.png", ComponentType::ICPackage);
-    addComponentItem(icsList, "NE555", "ne555.png", ComponentType::ICPackage);
 }
 
 void ComponentLibrary::addComponentItem(QListWidget* list, const QString& name, const QString& iconName, ComponentType type) {
     QListWidgetItem* item = new QListWidgetItem(name, list);
-    // TODO: Add icons
+    // TODO: Add actual icons
     // item->setIcon(QIcon(":/icons/" + iconName));
     item->setData(Qt::UserRole, (int)type);
+    
+    // If it is a SubCircuit or PDK component, store the name as subCircuit identifier
+    // For simplicity, we store 'name' as identifier for SubCircuits and PDK types sourced from lib
+    if (type == ComponentType::SubCircuit || 
+        type == ComponentType::PDK_NFET || 
+        type == ComponentType::PDK_PFET ||
+        type == ComponentType::PDK_Resistor ||
+        type == ComponentType::PDK_Capacitor) {
+        item->setData(Qt::UserRole + 1, name);
+    }
 }
 
-void ComponentLibrary::setStage(DesignStage stage) {
-    // Stage affects PDN visibility within System mode
-    // Keeping for backwards compatibility
-    (void)stage;
-}
+// setStage() removed - unified library
+// setMode() removed - unified component library
 
-void ComponentLibrary::setMode(AppMode mode) {
-    // DEPRECATED: Mode filtering removed - unified component library
-    // All tabs are now always visible regardless of mode
-    Q_UNUSED(mode);
-
-    // Ensure all tabs are visible (unified library)
-    int srcIdx = tabs->indexOf(sourcesList);
-    int intIdx = tabs->indexOf(interfacesList);
-    int pdnIdx = tabs->indexOf(systemList);
-    int icsIdx = tabs->indexOf(icsList);
-
-    tabs->setTabVisible(srcIdx, true);
-    tabs->setTabVisible(intIdx, true);
-    tabs->setTabVisible(pdnIdx, true);
-    tabs->setTabVisible(icsIdx, true);
-}
+// setMode() removed - unified component library (all tabs always visible)
 
 void ComponentLibrary::onSearchTextChanged(const QString& text) {
     QString pattern = text.trimmed().toLower();
     filterList(basicList, pattern);
-    filterList(activeList, pattern);
-    filterList(sourcesList, pattern);
-    filterList(interfacesList, pattern);
-    filterList(systemList, pattern);
-    filterList(icsList, pattern);
+    filterList(pdkList, pattern);
 }
 
 void ComponentLibrary::filterList(QListWidget* list, const QString& pattern) {

@@ -30,10 +30,18 @@ Implements **Semantic Diffing**.
     *   `CONNECTIVITY_CHANGED`: Same component, different wiring.
 *   **Impact Analysis**: Returns a `SimImpact` score. Changing a label is `NONE`. Changing a Resistor is `MEDIUM`. Changing Connectivity is `HIGH` (Full Re-solve).
 
-### 4. `component_library.h`: Persistence & AI Interface
-Handles JSON serialization/deserialization.
+### 4. `standard_cells.h`: The Standard Library
+Defines the **PDK-compliant** hardcoded components (e.g., Darlington Pairs, OpAmps).
+*   **Source of Truth**: These are C++ definitions, not JSON. They ensure rigorous physics matching (e.g., `verify_bjt_thermal` constants).
+*   **Abstractions**:
+    * `SubCircuitDefinition`: A template `TensorBlock` with exposed pins.
+    * **Hierarchical Mapping**: `addInstance` automates the allocation of internal nodes to global equations during netlist assembly.
+    * **Standard PDK Cells**: `PDK_AND2`, `PDK_OR2`, `PDK_XOR2`, `PDK_XNOR2`, `PDK_MUX2`, `PDK_Buffer`, `PDK_DFF`.
+
+### 5. `component_library.h`: Persistence & AI Interface
+Handles JSON serialization/deserialization for *User-Defined* components.
 *   **Format**: `.comp` files (JSON).
-*   **AI Metadata**: Stores "Description", "Tags", and "LogicSummary" to help the AI understand what the component *does* (e.g., "Projects clean 3.3V from 5V rail").
+*   **AI Metadata**: Stores "Description", "Tags", and "LogicSummary" to help the AI understand what the component *does*.
 
 ## Core Logic & Snippets
 

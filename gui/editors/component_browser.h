@@ -67,11 +67,6 @@ private:
     // File system watcher for auto-refresh
     QFileSystemWatcher* fsWatcher;
     
-    // Mode category items
-    QTreeWidgetItem* benchCategory;
-    QTreeWidgetItem* blockCategory;
-    QTreeWidgetItem* systemCategory;
-    
     // Cached component list
     std::vector<ComponentEntry> componentCache;
 };
@@ -126,27 +121,13 @@ inline void ComponentBrowser::setupUI() {
     // Tree widget
     treeWidget = new QTreeWidget();
     treeWidget->setHeaderLabel(tr("Components"));
-    treeWidget->setRootIsDecorated(true);
+    treeWidget->setRootIsDecorated(false);
     treeWidget->setSelectionMode(QAbstractItemView::SingleSelection);
     connect(treeWidget, &QTreeWidget::itemSelectionChanged,
             this, &ComponentBrowser::onItemSelectionChanged);
     connect(treeWidget, &QTreeWidget::itemDoubleClicked,
             this, &ComponentBrowser::onInsertClicked);
     
-    // Create mode categories
-    benchCategory = new QTreeWidgetItem(treeWidget);
-    benchCategory->setText(0, tr("🧪 Bench (Test)"));
-    benchCategory->setFlags(benchCategory->flags() & ~Qt::ItemIsSelectable);
-    
-    blockCategory = new QTreeWidgetItem(treeWidget);
-    blockCategory->setText(0, tr("📦 Block (Subsystem)"));
-    blockCategory->setFlags(blockCategory->flags() & ~Qt::ItemIsSelectable);
-    
-    systemCategory = new QTreeWidgetItem(treeWidget);
-    systemCategory->setText(0, tr("🔌 System (Integration)"));
-    systemCategory->setFlags(systemCategory->flags() & ~Qt::ItemIsSelectable);
-    
-    treeWidget->expandAll();
     splitter->addWidget(treeWidget);
     
     // Preview panel
@@ -185,13 +166,7 @@ inline void ComponentBrowser::refreshLibrary() {
 }
 
 inline void ComponentBrowser::populateTree() {
-    // Clear existing items (keep categories)
-    while (benchCategory->childCount() > 0)
-        benchCategory->removeChild(benchCategory->child(0));
-    while (blockCategory->childCount() > 0)
-        blockCategory->removeChild(blockCategory->child(0));
-    while (systemCategory->childCount() > 0)
-        systemCategory->removeChild(systemCategory->child(0));
+    treeWidget->clear();
     
     QString filter = searchBox->text().toLower();
     
@@ -202,25 +177,11 @@ inline void ComponentBrowser::populateTree() {
         if (!filter.isEmpty() && !name.toLower().contains(filter))
             continue;
         
-        auto* item = new QTreeWidgetItem();
+        auto* item = new QTreeWidgetItem(treeWidget);
         item->setText(0, name);
         item->setData(0, Qt::UserRole, QString::fromStdString(comp.filepath));
-        
-        // Add to appropriate category
-        switch (comp.mode) {
-            case DesignMode::BENCH:
-                benchCategory->addChild(item);
-                break;
-            case DesignMode::BLOCK:
-                blockCategory->addChild(item);
-                break;
-            case DesignMode::SYSTEM:
-                systemCategory->addChild(item);
-                break;
-        }
+        item->setIcon(0, QIcon::fromTheme("package-x-generic"));
     }
-    
-    treeWidget->expandAll();
 }
 
 inline void ComponentBrowser::onSearchTextChanged(const QString& /*text*/) {

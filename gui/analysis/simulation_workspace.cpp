@@ -143,7 +143,7 @@ void SimulationWorkspace::setupToolbar() {
     cornerCombo_ = new QComboBox(toolbar_);
     int i = 0;
     for (const auto& c : acutesim::physics::CornerConfig::standard5()) {
-        cornerCombo_->addItem(c.name, QVariant::fromValue(c));
+        cornerCombo_->addItem(QString::fromStdString(c.name), QVariant::fromValue(c));
         cornerCombo_->setItemData(i, QString("%1C, Vdd x%2").arg(c.temperatureC).arg(c.voltageScale), Qt::ToolTipRole);
         i++;
     }
@@ -223,24 +223,8 @@ void SimulationWorkspace::setupProfileEditor() {
     connect(analysisCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         if (idx < 0) return;
         auto type = static_cast<Simulation::AnalysisType>(analysisCombo_->itemData(idx).toInt());
-        
-        // Enforce mode restrictions (redundant safety for UI)
-        bool allowed = true;
-        if (currentMode_ == AppMode::BLOCK_SUBSYSTEM) {
-            if (type == Simulation::AnalysisType::AC || type == Simulation::AnalysisType::NOISE) allowed = false;
-        } else if (currentMode_ == AppMode::SYSTEM_INTEGRATION) {
-            if (type != Simulation::AnalysisType::TRANSIENT) allowed = false;
-        }
 
-        if (!allowed) {
-            // Revert to a safe default (Transient is always safe in restricted modes)
-            int safeIdx = analysisCombo_->findData(static_cast<int>(Simulation::AnalysisType::TRANSIENT));
-            if (safeIdx >= 0 && safeIdx != idx) {
-                analysisCombo_->setCurrentIndex(safeIdx);
-            }
-            return;
-        }
-
+        // Mode restrictions removed - all analysis types now available
         updateParametersForAnalysis(type);
         
         // Update help text for the selected analysis
@@ -354,12 +338,8 @@ void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
     
     // Connect topology changes
     connect(editor, &SchematicEditor::topologyChanged, this, &SimulationWorkspace::onTopologyChanged);
-    
-    // Connect mode changes
-    connect(editor, &SchematicEditor::modeChanged, this, &SimulationWorkspace::onModeChanged);
-    
-    // Initial sync
-    onModeChanged(editor->getMode());
+
+    // Mode connections removed - unified component library
     updateProfileEditor();
 }
 
@@ -511,15 +491,7 @@ void SimulationWorkspace::onTopologyChanged(size_t newHash) {
     }
 }
 
-void SimulationWorkspace::onModeChanged(AppMode mode) {
-    currentMode_ = mode;
-    updateAnalysisVisibility();
-    
-    // Force parameter update if analysis type changed or needs filtering
-    if (currentProfile()) {
-        updateProfileEditor(); 
-    }
-}
+// onModeChanged() removed - unified component library
 
 void SimulationWorkspace::updateAnalysisVisibility() {
     if (!analysisCombo_) return;
@@ -661,16 +633,21 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
                  // Emit results per corner (tagged) with mode context
                  QJsonObject jsonRes;
                  jsonRes["type"] = "DC";
-                 jsonRes["corner"] = corner.name;
-                 // Include mode for AI context awareness
-                 if (schematicEditor_) {
-                     AppMode mode = schematicEditor_->getMode();
-                     jsonRes["mode"] = mode == AppMode::BENCH_TEST ? "BENCH" :
-                                       mode == AppMode::BLOCK_SUBSYSTEM ? "BLOCK" : "SYSTEM";
-                 }
+                 jsonRes["corner"] = QString::fromStdString(corner.name);
+                 // Mode field removed - unified component library
                  QJsonArray voltages;
                  for(double v : result.nodeVoltages) voltages.append(v);
                  jsonRes["voltages"] = voltages;
+                 
+                 // Compute Probes
+                 QJsonObject probeVals;
+                 for (const auto& probe : netlist_.globalBlock.probes) {
+                     double v_pos = (probe.nodePositive > 0 && probe.nodePositive <= result.nodeVoltages.size()) ? result.nodeVoltages[probe.nodePositive-1] : 0.0;
+                     double v_neg = (probe.nodeNegative > 0 && probe.nodeNegative <= result.nodeVoltages.size()) ? result.nodeVoltages[probe.nodeNegative-1] : 0.0;
+                     probeVals[QString::fromStdString(probe.name)] = v_pos - v_neg;
+                 }
+                 jsonRes["probes"] = probeVals;
+
                  qDebug() << "[SimWorkspace] Emitting DC results for corner:" << corner.name << "voltages:" << voltages.size();
                  emit resultsReady(jsonRes);
             } else {
@@ -737,15 +714,20 @@ void SimulationWorkspace::stepSimulation() {
         QJsonObject point;
         point["type"] = "TransientPoint";
         point["time"] = currentTime_;
-        // Include mode for AI context awareness
-        if (schematicEditor_) {
-            AppMode mode = schematicEditor_->getMode();
-            point["mode"] = mode == AppMode::BENCH_TEST ? "BENCH" :
-                            mode == AppMode::BLOCK_SUBSYSTEM ? "BLOCK" : "SYSTEM";
-        }
+        // Mode field removed - unified component library
         QJsonArray voltages;
         for(double v : result.nodeVoltages) voltages.append(v);
         point["voltages"] = voltages;
+        
+        // Compute Probes
+        QJsonObject probeVals;
+        for (const auto& probe : netlist_.globalBlock.probes) {
+             double v_pos = (probe.nodePositive > 0 && probe.nodePositive <= result.nodeVoltages.size()) ? result.nodeVoltages[probe.nodePositive-1] : 0.0;
+             double v_neg = (probe.nodeNegative > 0 && probe.nodeNegative <= result.nodeVoltages.size()) ? result.nodeVoltages[probe.nodeNegative-1] : 0.0;
+             probeVals[QString::fromStdString(probe.name)] = v_pos - v_neg;
+        }
+        point["probes"] = probeVals;
+
         if (static_cast<int>(currentTime_ / timeStep_) % 100 == 0) {
             qDebug() << "[SimWorkspace] Emitting TransientPoint t=" << currentTime_ << "voltages:" << voltages.size();
         }

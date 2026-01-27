@@ -214,13 +214,10 @@ QJsonObject getSimulationContext() {
     if (editor) {
         // Topology hash
         ctx["topologyHash"] = QString::number(editor->getTopologyHash(), 16);
-        
-        // Current mode
-        AppMode mode = editor->getMode();
-        ctx["currentMode"] = mode == AppMode::BENCH_TEST ? "BENCH_TEST" :
-                             mode == AppMode::BLOCK_SUBSYSTEM ? "BLOCK_SUBSYSTEM" : 
-                             "SYSTEM_INTEGRATION";
-        
+
+        // Mode context removed - unified component library
+        ctx["currentMode"] = "UNIFIED";
+
         // ERC violations
         QJsonArray violations;
         if (editor->getScene()) {
@@ -244,7 +241,7 @@ QJsonObject getSimulationContext() {
                                          [](const QJsonValue& v){ return v["severity"] == "ERROR"; });
     } else {
         ctx["topologyHash"] = "0";
-        ctx["currentMode"] = "NONE";
+        ctx["currentMode"] = "UNIFIED";
         ctx["ercViolations"] = QJsonArray();
         ctx["canSimulate"] = false;
     }

@@ -23,6 +23,7 @@ Defines the `TensorizedBlock` structure, which holds typed tensors for each devi
 Implements the **AoS -> SoA Conversion** (`tensorizeBlock`) and the **Global Physics Wrappers**.
 *   **Conversion**: Iterates once over the netlist to pack data into contiguous memory. Includes safety clamps (e.g., Min Resistor = 0.5 Ohm).
 *   **Wrappers**: `batchDiodePhysics` etc. now delegate execution to the `KernelDispatcher`.
+*   **Limitation**: Currently, `tensorizeBlock` and SoA paths are primarily used for the `globalBlock`. Hierarchical instances (e.g., standard cells) rely on scalar iteration in `circuitsim.h` (see `stampBlockLinear`).
 
 ### 3. `kernel_dispatch.h/cpp`: The Runtime Router
 Detects CPU features (AVX-512, regular AVX2, ARM Neon) at startup (`CPUID`) and binds function pointers to the optimal implementation.

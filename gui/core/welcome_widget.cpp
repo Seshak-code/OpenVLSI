@@ -36,8 +36,7 @@ WelcomeWidget::WelcomeWidget(QWidget* parent) : QWidget(parent) {
         "QPushButton:hover { background: #0099CC; }"
     );
     connect(newSchematicBtn, &QPushButton::clicked, this, [this]() {
-        // Mode parameter is deprecated - always emit BENCH_TEST for compatibility
-        emit newSchematicRequested(AppMode::BENCH_TEST);
+        emit newSchematicRequested();
     });
     mainLayout->addWidget(newSchematicBtn, 0, Qt::AlignCenter);
 

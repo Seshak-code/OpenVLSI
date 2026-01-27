@@ -39,6 +39,14 @@ struct Resistor {
     int nodeTerminal1;            // First terminal (node index)
     int nodeTerminal2;            // Second terminal (node index)
     double resistance_ohms;       // Resistance in Ohms [Ω]
+    
+    // Generic PDK Support
+    std::string model_name;       // e.g., "poly_res"
+    double width_m = 0.0;
+    double length_m = 0.0;
+    double tc1 = 0.0;
+    double tc2 = 0.0;
+
     double tolerance_percent = 0.0; // Monte Carlo Tolerance (e.g. 1.0 = 1%)
 };
 
@@ -55,6 +63,12 @@ struct Capacitor {
     int nodePlate1;               // Positive plate (node index)
     int nodePlate2;               // Negative plate (node index)
     double capacitance_farads;    // Capacitance in Farads [F]
+    
+    // Generic PDK Support
+    std::string model_name;       // e.g., "mim_cap"
+    double width_m = 0.0;
+    double length_m = 0.0;
+    double m = 1.0;               // Multiplier
     
     // Generic History Buffer REMOVED (moved to BlockState)
 
@@ -80,6 +94,14 @@ struct Inductor {
 
     
     double tolerance_percent = 0.0;
+
+    // Generic PDK Support
+    std::string model_name;       // e.g., "spiral_ind"
+    double width_m = 0.0;         // Trace width
+    double length_m = 0.0;        // Total path length
+    double area_m2 = 0.0;         // Spiral area
+    int turns = 0;                // Number of turns
+
 };
 
 /*
@@ -105,10 +127,31 @@ struct MutualInductor {
  * Adds an auxiliary branch current to MNA.
  */
 struct VoltageSource {
-    int nodePositive;             // Positive terminal (+)
-    int nodeNegative;             // Negative terminal (-)
-    double voltage_V;             // DC Voltage [V]
-    std::string type = "";        // "RailDriver", "Generic", etc.
+    int nodePositive;
+    int nodeNegative;
+    double voltage_V;        // DC/Offset Voltage
+    std::string type = "";   // "PULSE", "SINE", "DC", etc.
+
+    // Waveform Parameters (SPICE-like)
+    double ac_mag = 0.0;     // AC Magnitude (Small Signal)
+    double ac_phase = 0.0;   // AC Phase
+    
+    // PULSE(v1 v2 td tr tf pw per)
+    double pulse_v1 = 0.0;   // Initial value
+    double pulse_v2 = 0.0;   // Pulsed value
+    double pulse_td = 0.0;   // Delay time
+    double pulse_tr = 0.0;   // Rise time
+    double pulse_tf = 0.0;   // Fall time
+    double pulse_pw = 0.0;   // Pulse width
+    double pulse_per = 0.0;  // Period
+    
+    // SINE(vo va freq td theta)
+    double sine_vo = 0.0;    // Offset (same as voltage_V for DC)
+    double sine_va = 0.0;    // Amplitude
+    double sine_freq = 0.0;  // Frequency [Hz]
+    double sine_td = 0.0;    // Delay
+    double sine_theta = 0.0; // Damping factor
+    double sine_phase = 0.0; // Phase [deg] (Extension)
 };
 
 /*
@@ -117,9 +160,29 @@ struct VoltageSource {
  * Stamps directly into RHS vector.
  */
 struct CurrentSource {
-    int nodePositive;             // Current enters (+)
-    int nodeNegative;             // Current exits (-)
-    double current_A;             // DC Current [A]
+    int nodePositive;
+    int nodeNegative;
+    double current_A;        // DC Current
+    std::string type = "";   // "PULSE", "SINE", "DC"
+
+    // Waveform Parameters (Mirror of VoltageSource)
+    double ac_mag = 0.0;
+    double ac_phase = 0.0;
+
+    double pulse_v1 = 0.0;
+    double pulse_v2 = 0.0;
+    double pulse_td = 0.0;
+    double pulse_tr = 0.0;
+    double pulse_tf = 0.0;
+    double pulse_pw = 0.0;
+    double pulse_per = 0.0;
+
+    double sine_vo = 0.0;
+    double sine_va = 0.0;
+    double sine_freq = 0.0;
+    double sine_td = 0.0;
+    double sine_theta = 0.0;
+    double sine_phase = 0.0;
 };
 
 // ============================================================================
@@ -132,44 +195,30 @@ struct CurrentSource {
  * MNA: Adds branch equation with controlled coefficient.
  */
 struct VCVS {
-    int nodeOutPos, nodeOutNeg;   // Output terminals
-    int nodeCtrlPos, nodeCtrlNeg; // Control terminals
-    double gain;                  // Voltage gain (dimensionless)
-    std::string role;             // For AI/debug: "bias", "feedback", etc.
-};
-
-/*
- * CCVS - Current-Controlled Voltage Source
- * Vout = transresistance * Icontrol
- * Requires a controlling branch (voltage source index).
- */
-struct CCVS {
-    int nodeOutPos, nodeOutNeg;
-    int ctrlBranchIdx;            // Index of controlling branch current
-    double transresistance;       // Ohms
+    int outPos, outNeg;
+    int ctrlPos, ctrlNeg;
+    double gain;
     std::string role;
 };
 
-/*
- * VCCS - Voltage-Controlled Current Source
- * Iout = transconductance * Vcontrol
- * Stamps directly into conductance matrix.
- */
 struct VCCS {
-    int nodeOutPos, nodeOutNeg;
-    int nodeCtrlPos, nodeCtrlNeg;
-    double transconductance;      // Siemens
+    int outPos, outNeg;
+    int ctrlPos, ctrlNeg;
+    double gm;
     std::string role;
 };
 
-/*
- * CCCS - Current-Controlled Current Source
- * Iout = currentGain * Icontrol
- */
+struct CCVS {
+    int outPos, outNeg;
+    int ctrlPos, ctrlNeg;
+    double rm;
+    std::string role;
+};
+
 struct CCCS {
-    int nodeOutPos, nodeOutNeg;
-    int ctrlBranchIdx;
-    double currentGain;           // Dimensionless
+    int outPos, outNeg;
+    int ctrlPos, ctrlNeg;
+    double alpha;
     std::string role;
 };
 
@@ -274,53 +323,8 @@ struct SimulationEnvironment {
 // CONTROLLED SOURCES (Linear Dependent Sources)
 // ============================================================================
 
-/*
- * Voltage-Controlled Voltage Source (VCVS / E-element)
- * v_out = voltageGain * v_control
- * Used for ideal op-amp models.
- */
-struct VoltageControl_Voltage_Source
-{
-    int nodeOutputPos, nodeOutputNeg;     // Output port
-    int nodeControlPos, nodeControlNeg;   // Sensing port
-    double voltageGain;                   // Av (dimensionless)
-};
+// Redundant long-named structs removed. Using VCVS, VCCS, CCVS, CCCS.
 
-/*
- * Voltage-Controlled Current Source (VCCS / G-element)
- * i_out = transconductance_siemens * v_control
- * Used for MOSFET small-signal models (gm).
- */
-struct VoltageControl_Current_Source 
-{
-    int nodeOutputPos, nodeOutputNeg;     // Output port (current flows + to -)
-    int nodeControlPos, nodeControlNeg;   // Sensing port
-    double transconductance_siemens;      // gm [S or A/V]
-};
-
-/*
- * Current-Controlled Voltage Source (CCVS / H-element)
- * v_out = transresistance_ohms * i_control
- * Requires sensing current through a zero-volt source.
- */
-struct CurrentControl_Voltage_Source 
-{
-    int nodeOutputPos, nodeOutputNeg;
-    int sensingVoltageSourceIndex;        // Index of V-source used to sense current
-    double transresistance_ohms;          // rm [Ω or V/A]
-};
-
-/*
- * Current-Controlled Current Source (CCCS / F-element)
- * i_out = currentGain * i_control
- * Used for BJT current mirror models (Beta).
- */
-struct CurrentControl_Current_Source 
-{
-    int nodeOutputPos, nodeOutputNeg;
-    int sensingVoltageSourceIndex;
-    double currentGain;                   // Beta (dimensionless)
-};
 
 // ============================================================================
 // NON-LINEAR SEMICONDUCTOR DEVICES
@@ -347,7 +351,14 @@ struct Diode {
     double thermalVoltage_V_T_V;          // V_T [V]
     
     // Thermal (Optional, default 300.15K)
+    // Thermal (Optional, default 300.15K)
     double temperature_K = 300.15;
+
+    // Generic PDK Support
+    std::string modelName = "diode_generic"; 
+    double area_m2 = 1e-12;       // Junction Area
+    double perimeter_m = 4e-6;    // Junction Perimeter
+
 };
 
 /*
@@ -383,20 +394,65 @@ struct SchottkyDiode {
 
 // ...
 
+/*
+ * Zener Diode (D) - Breakdown Diode
+ * Operates in reverse breakdown region to regulate voltage.
+ * Model:
+ *   Forward: Standard PN junction
+ *   Reverse: Breakdown at BV with impedance Rz
+ */
+struct ZenerDiode {
+    std::string instanceName;             // e.g., "D1"
+    int anode = -1;                       // Anode (+)
+    int cathode = -1;                     // Cathode (-)
+    std::string modelName = "1N4733";     // default 5.1V
+    
+    // DC Parameters
+    double breakdownVoltage_V = 5.1;      // BV
+    double currentAtBreakdown_A = 0.049;  // Izt
+    double seriesResistance_Rs_ohms = 7.0; // Rz
+    double emissionCoefficient_N = 1.0;
+    double saturationCurrent_I_S_A = 1e-14;
+    double thermalVoltage_V_T_V = 0.02585;
+    
+    double temperature_K = 300.15;
+};
+
 struct Mosfet {
     std::string instanceName;             // e.g., "M1"
     int drain;                        // D terminal
     int gate;                         // G terminal
     int source;                       // S terminal
     int body;                         // B (Bulk/Substrate) terminal
-    std::string modelName;                // Reference to .model card (e.g., "NMOS_SKY130")
-    double channelWidth_m;                // W [meters]
-    double channelLength_m;               // L [meters]
+    
+    // Standard SPICE / PDK Parameters
+    std::string modelName;                // .model reference (e.g., "nfet_01v8")
+    
+    // Dimensions (Standard SPICE)
+    double w = 1e-6;                      // Channel Width [m]
+    double l = 1e-6;                      // Channel Length [m]
+    
+    // Legacy mapping (Deprecated, synced with w/l)
+    double channelWidth_m = 1e-6;
+    double channelLength_m = 1e-6;
+
+    // Layout Parasitics (Geometry)
+    struct Geometry {
+        double ad = 0.0; // Area Drain
+        double as = 0.0; // Area Source
+        double pd = 0.0; // Perimeter Drain
+        double ps = 0.0; // Perimeter Source
+        double nrd = 0.0; // Number of squares Drain
+        double nrs = 0.0; // Number of squares Source
+    } geo;
+
+    // Advanced Params
+    struct Params {
+        int nf = 1;      // Number of fingers
+        int mult = 1;    // Multiplier
+    } extra;
     
     double temperature_K = 300.15;
-    
-    // Operating Point REMOVED (moved to BlockState)
-
 };
 
 // ...
@@ -502,10 +558,10 @@ struct TensorBlock {
     std::vector<SignalSource> signalSources;
     
     // Controlled Sources
-    std::vector<VoltageControl_Voltage_Source> voltageControlledVoltageSources;
-    std::vector<VoltageControl_Current_Source> voltageControlledCurrentSources;
-    std::vector<CurrentControl_Voltage_Source> currentControlledVoltageSources;
-    std::vector<CurrentControl_Current_Source> currentControlledCurrentSources;
+    std::vector<VCVS> voltageControlledVoltageSources;
+    std::vector<VCCS> voltageControlledCurrentSources;
+    std::vector<CCVS> currentControlledVoltageSources;
+    std::vector<CCCS> currentControlledCurrentSources;
     
     // Semiconductors
     std::vector<Diode> diodes;
@@ -513,6 +569,7 @@ struct TensorBlock {
     std::vector<Mosfet> mosfets;
     std::vector<BJT> bjts;
     std::vector<JFET> jfets;
+    std::vector<ZenerDiode> zenerDiodes;
     
     // Interconnects
     // Interconnects
@@ -521,6 +578,30 @@ struct TensorBlock {
     // Aux
     std::vector<Probe> probes;
     std::vector<BusProbe> busProbes;
+
+    // --- Phase 1.5: Parasitic Extraction Support ---
+    struct ParasiticResistor {
+        std::string name;
+        int node1, node2;
+        double R;
+    };
+    struct ParasiticCapacitor {
+        std::string name;
+        int node1, node2;
+        double C;
+    };
+    struct WireSegment {
+        std::string layer;      // e.g. "M1", "M2"
+        int node1, node2;
+        double width_um;
+        double length_um;
+        double r_per_um = 0.0;
+        double c_per_um = 0.0;
+    };
+
+    std::vector<ParasiticResistor> parasiticResistors;
+    std::vector<ParasiticCapacitor> parasiticCapacitors;
+    std::vector<WireSegment> wireSegments;
 
     bool isFrozen = false;       // Phase 1: Structural Immutability
     size_t topologyHash = 0;     // Phase 4: Symbolic Reuse Key
@@ -597,6 +678,7 @@ struct TensorBlock {
         assert(L > 0 && "Inductance must be positive");
         if (isFrozen) return;
         Inductor ind = {name, n1, n2, L};
+        ind.model_name = "ind_generic";
         // History initialized in BlockState
 
         inductors.push_back(ind);
@@ -661,13 +743,23 @@ struct TensorBlock {
     }
     void addDiode(int anode, int cathode, double Is, double N = 1.0, double Vt = 0.02585) {
         if (isFrozen) return;
-        diodes.push_back({anode, cathode, Is, N, Vt});
+        Diode d = {anode, cathode, Is, N, Vt};
+        d.modelName = "diode_generic"; // Default PDK model
+        diodes.push_back(d);
         updateNodeCount(anode); updateNodeCount(cathode);
     }
     void addMosfet(const std::string& name, int D, int G, int S, int B, 
                    const std::string& model, double W, double L) {
         if (isFrozen) return;
-        mosfets.push_back({name, D, G, S, B, model, W, L});
+        Mosfet m;
+        m.instanceName = name;
+        m.drain = D; m.gate = G; m.source = S; m.body = B;
+        m.modelName = model;
+        m.w = W; m.l = L;
+        // Sync legacy fields
+        m.channelWidth_m = W; m.channelLength_m = L;
+        
+        mosfets.push_back(m);
         updateNodeCount(D); updateNodeCount(G); updateNodeCount(S); updateNodeCount(B);
     }
     void addBJT(const std::string& name, int C, int B, int E, 
@@ -734,6 +826,21 @@ struct TensorBlock {
         schottkyDiodes.push_back(newD);
         updateNodeCount(anode); updateNodeCount(cathode);
     }
+    void addZenerDiode(const std::string& name, int anode, int cathode, 
+                       double Vz = 5.1, double Rz = 7.0, double Izt = 0.049) {
+        if (isFrozen) return;
+        
+        ZenerDiode newD;
+        newD.instanceName = name;
+        newD.anode = anode;
+        newD.cathode = cathode;
+        newD.breakdownVoltage_V = Vz;
+        newD.seriesResistance_Rs_ohms = Rz;
+        newD.currentAtBreakdown_A = Izt;
+        
+        zenerDiodes.push_back(newD);
+        updateNodeCount(anode); updateNodeCount(cathode);
+    }
     void addTransmissionLine(int p1p, int p1n, int p2p, int p2n, double Z0, double Td) {
         if (isFrozen) return;
         transmissionLines.push_back({p1p, p1n, p2p, p2n, Z0, Td});
@@ -744,6 +851,29 @@ struct TensorBlock {
         probes.push_back({name, nPos, nNeg});
         // NOTE: Probes do NOT call updateNodeCount because they are passive observers
         // and should not inflate the matrix dimensions.
+    }
+
+    // Dependent Sources
+    void addVCVS(int outPos, int outNeg, int ctrlPos, int ctrlNeg, double gain, std::string role = "") {
+        if (isFrozen) return;
+        voltageControlledVoltageSources.push_back({outPos, outNeg, ctrlPos, ctrlNeg, gain, role});
+        updateNodeCount(outPos); updateNodeCount(outNeg); updateNodeCount(ctrlPos); updateNodeCount(ctrlNeg);
+    }
+    void addVCCS(int outPos, int outNeg, int ctrlPos, int ctrlNeg, double gm, std::string role = "") {
+        if (isFrozen) return;
+        voltageControlledCurrentSources.push_back({outPos, outNeg, ctrlPos, ctrlNeg, gm, role});
+        updateNodeCount(outPos); updateNodeCount(outNeg); updateNodeCount(ctrlPos); updateNodeCount(ctrlNeg);
+    }
+    void addCCVS(int outPos, int outNeg, int ctrlPos, int ctrlNeg, double rm, std::string role = "") {
+        if (isFrozen) return;
+        // Sensing via ctrlPos-ctrlNeg (small sense resistor model in stamps.h)
+        currentControlledVoltageSources.push_back({outPos, outNeg, ctrlPos, ctrlNeg, rm, role});
+        updateNodeCount(outPos); updateNodeCount(outNeg); updateNodeCount(ctrlPos); updateNodeCount(ctrlNeg);
+    }
+    void addCCCS(int outPos, int outNeg, int ctrlPos, int ctrlNeg, double alpha, std::string role = "") {
+        if (isFrozen) return;
+        currentControlledCurrentSources.push_back({outPos, outNeg, ctrlPos, ctrlNeg, alpha, role});
+        updateNodeCount(outPos); updateNodeCount(outNeg); updateNodeCount(ctrlPos); updateNodeCount(ctrlNeg);
     }
 };
 
@@ -865,12 +995,38 @@ public:
         blockDefinitions[block.name] = block;
     }
     
-    void addInstance(const std::string& blockName, const std::vector<int>& nodeMap) {
+    void addInstance(const std::string& blockName, std::vector<int> nodeMap) {
+        // Sync numGlobalNodes with user-supplied mapping to avoid collisions
+        for (int n : nodeMap) if (n > numGlobalNodes) numGlobalNodes = n;
+
+        // Validation and Auto-Expansion of Node Map
+        auto it = blockDefinitions.find(blockName);
+        if (it != blockDefinitions.end()) {
+             const TensorBlock& block = it->second;
+             // Ensure nodeMap defines at least the pins? 
+             // Ideally we check against pinCount.
+             
+             // Expand nodeMap for internal nodes
+             // Typically pin nodes are 1..pinCount.
+             // Internal nodes are pinCount+1..numInternalNodes.
+             // Map them to new global nodes.
+             
+             int requiredSize = block.numInternalNodes + 1; // 0-based indexing requires size N+1
+             
+             if ((int)nodeMap.size() < requiredSize) {
+                 int currentSize = nodeMap.size();
+                 for (int i = currentSize; i < requiredSize; ++i) {
+                     // Allocate new global node
+                     numGlobalNodes++;
+                     nodeMap.push_back(numGlobalNodes);
+                 }
+             }
+        }
+        
         instances.push_back({blockName, nodeMap});
         
         // Initialize state for new instance
         BlockState newState;
-        auto it = blockDefinitions.find(blockName);
         if (it != blockDefinitions.end()) {
              newState.initialize(it->second);
         }
@@ -883,6 +1039,11 @@ public:
     // --- Convenience Methods for Global Block ---
     void addResistor(int n1, int n2, double R) {
         globalBlock.addResistor(n1, n2, R);
+        if (n1 > numGlobalNodes) numGlobalNodes = n1;
+        if (n2 > numGlobalNodes) numGlobalNodes = n2;
+    }
+    void addResistor(const std::string& name, int n1, int n2, double R) {
+        globalBlock.addResistor(name, n1, n2, R);
         if (n1 > numGlobalNodes) numGlobalNodes = n1;
         if (n2 > numGlobalNodes) numGlobalNodes = n2;
     }
@@ -951,6 +1112,17 @@ public:
         globalBlock.addBJT(name, C, B, E, model, isNPN, betaF, betaR, Is, Vt);
         numGlobalNodes = std::max({numGlobalNodes, C, B, E});
     }
+    void addJFET(const std::string& name, int D, int G, int S, 
+                 const std::string& model, bool isNChannel = true,
+                 double beta = 1e-4, double Vto = -2.0, double lambda = 0.01) {
+        globalBlock.addJFET(name, D, G, S, model, isNChannel, beta, Vto, lambda);
+        numGlobalNodes = std::max({numGlobalNodes, D, G, S});
+    }
+    void addZenerDiode(const std::string& name, int anode, int cathode, 
+                       double Vz = 5.1, double Rz = 7.0, double Izt = 0.049) {
+        globalBlock.addZenerDiode(name, anode, cathode, Vz, Rz, Izt);
+        numGlobalNodes = std::max({numGlobalNodes, anode, cathode});
+    }
     void addTransmissionLine(int p1p, int p1n, int p2p, int p2n, double Z0, double Td) {
         globalBlock.addTransmissionLine(p1p, p1n, p2p, p2n, Z0, Td);
         numGlobalNodes = std::max({numGlobalNodes, p1p, p1n, p2p, p2n});
@@ -958,6 +1130,22 @@ public:
     void addProbe(const std::string& name, int nPos, int nNeg) {
         globalBlock.addProbe(name, nPos, nNeg);
         // NOTE: Probes do NOT inflate numGlobalNodes because they are passive observers.
+    }
+    void addVCVS(int outPos, int outNeg, int ctrlPos, int ctrlNeg, double gain, std::string role = "") {
+        globalBlock.addVCVS(outPos, outNeg, ctrlPos, ctrlNeg, gain, role);
+        numGlobalNodes = std::max({numGlobalNodes, outPos, outNeg, ctrlPos, ctrlNeg});
+    }
+    void addVCCS(int outPos, int outNeg, int ctrlPos, int ctrlNeg, double gm, std::string role = "") {
+        globalBlock.addVCCS(outPos, outNeg, ctrlPos, ctrlNeg, gm, role);
+        numGlobalNodes = std::max({numGlobalNodes, outPos, outNeg, ctrlPos, ctrlNeg});
+    }
+    void addCCVS(int outPos, int outNeg, int ctrlPos, int ctrlNeg, double rm, std::string role = "") {
+        globalBlock.addCCVS(outPos, outNeg, ctrlPos, ctrlNeg, rm, role);
+        numGlobalNodes = std::max({numGlobalNodes, outPos, outNeg, ctrlPos, ctrlNeg});
+    }
+    void addCCCS(int outPos, int outNeg, int ctrlPos, int ctrlNeg, double alpha, std::string role = "") {
+        globalBlock.addCCCS(outPos, outNeg, ctrlPos, ctrlNeg, alpha, role);
+        numGlobalNodes = std::max({numGlobalNodes, outPos, outNeg, ctrlPos, ctrlNeg});
     }
     void addBusProbe(const std::string& name, const std::vector<int>& nodes) {
         BusProbe bp;

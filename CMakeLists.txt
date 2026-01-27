@@ -17,6 +17,7 @@ if(NOT DEFINED Qt6_DIR)
             # EXTREMELY IMPORTANT: Use the full "qt" package to ensure all modules (Svg, etc.)
             # have matching versions. Mixing qtbase (6.9.3) with qt (6.9.0) causes segfaults.
             set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt/lib/cmake")
+            # set(CMAKE_PREFIX_PATH "/opt/homebrew/Cellar/qtbase/6.9.3_1/lib/cmake")
             message(STATUS "Mac-specific CMAKE_PREFIX_PATH set to: ${CMAKE_PREFIX_PATH}")
         elseif(WIN32)
             # On Windows, try to detect a Qt installation under C:/Qt and append likely cmake folders.
@@ -142,6 +143,8 @@ add_executable(${PROJECT_NAME}
     gui/editors/component_wizard.h
     gui/components/visual_component.cpp
     gui/components/visual_component.h
+    gui/components/probe_tip.cpp
+    gui/components/probe_tip.h
 
     gui/widgets/component_library.cpp
     gui/widgets/component_library.h
@@ -445,6 +448,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_auto_harness
         tests/test_auto_harness.cpp
         gui/components/visual_component.cpp
+        gui/components/probe_tip.cpp
         gui/editors/schematic_editor.cpp
         gui/editors/schematic_view.cpp
         gui/editors/component_wizard.cpp
@@ -542,6 +546,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_copilot_validate
         tests/test_copilot_validate.cpp
         gui/components/visual_component.cpp
+        gui/components/probe_tip.cpp
         gui/editors/schematic_editor.cpp
         gui/editors/schematic_view.cpp
         gui/editors/component_wizard.cpp
@@ -733,6 +738,52 @@ target_include_directories(test_simulation PRIVATE
 target_compile_features(test_simulation PUBLIC cxx_std_17)
 target_link_libraries(test_simulation PRIVATE Qt6::Core)
 
+# BJT Thermal Verification
+add_executable(verify_bjt_thermal 
+    tests/verify_bjt_thermal.cpp
+    physics/quick_analysis.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(verify_bjt_thermal PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_features(verify_bjt_thermal PUBLIC cxx_std_17)
+target_link_libraries(verify_bjt_thermal PRIVATE Qt6::Core)
+
+# Dependent Source Test
+add_executable(test_dependent_simulation 
+    tests/test_dependent_simulation.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_dependent_simulation PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_dependent_simulation PRIVATE Qt6::Core)
+target_compile_features(test_dependent_simulation PUBLIC cxx_std_17)
+
 # Emscripten link options for all test targets
 if(EMSCRIPTEN)
     set(EMSCRIPTEN_TEST_LINK_OPTIONS
@@ -747,6 +798,96 @@ if(EMSCRIPTEN)
     target_link_options(test_superposition PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     target_link_options(test_erc_rules PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     # test_auto_harness and test_copilot_validate excluded from WASM due to threading
+    target_link_options(test_erc_rules PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
+    # test_auto_harness and test_copilot_validate excluded from WASM due to threading
+endif()
+
+# Phase 1.5 PDK Compliance Test (GUI Integration)
+if(NOT EMSCRIPTEN)
+    add_executable(test_pdk_compliance
+        tests/test_pdk_compliance.cpp
+        gui/components/visual_component.cpp
+        gui/components/probe_tip.cpp
+        gui/editors/schematic_editor.cpp
+        gui/editors/schematic_view.cpp
+        gui/editors/component_wizard.cpp
+        gui/editors/schematic_editor_api.cpp
+        gui/editors/schematic_editor_sync.cpp
+        gui/panels/ai_assistant_panel.cpp
+        gui/widgets/component_library.cpp
+        gui/widgets/design_flow.cpp
+        gui/analysis/system_inspector.cpp
+        gui/analysis/logic_analyzer.cpp
+        gui/editors/hdl_editor.cpp
+        gui/core/mainwindow.cpp
+        gui/core/welcome_widget.cpp
+        ai_api/system/schema_api.cpp
+        ai_api/context/context_engine.cpp
+        ai_api/analysis/failure_classifier.cpp
+        ai_api/simulation/auto_harness.cpp
+        ai_api/simulation/speculative_runner.cpp
+        ai_api/context/prompt_builder.cpp
+        ai_api/context/rag_context.cpp
+        ai_api/analysis/topology_analyzer.cpp
+        ai_api/system/feedback_loop.cpp
+        ai_api/simulation/simulation_trace.cpp
+        compute/tensors/physics_tensors.cpp
+        compute/tensors/kernel_dispatch.cpp
+        compute/tensors/physics_kernels_avx512.cpp
+        compute/solvers/superposition.cpp
+        compute/solvers/circuitsim_solver.cpp
+        gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_explorer.cpp
+        gui/analysis/corner_setup_widget.cpp
+        gui/widgets/problems_panel.cpp
+        gui/widgets/debug_suggestions_panel.cpp
+        gui/widgets/trust_badge_widget.cpp
+        gui/orchestration/worker_status_panel.cpp
+        gui/orchestration/worker_manager.cpp
+        physics/quick_analysis.cpp
+        compute/orchestration/grpc_worker_client.cpp
+        gui/analysis/statistical_dashboard.cpp
+        gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/styling/theme_manager.cpp
+        gui/core/layout_manager.cpp
+        gui/core/storage_manager.cpp
+        gui/core/docking_manager.cpp
+        gui/widgets/waveform_widget.cpp
+        gui/widgets/output_dock_widget.cpp
+        gui/widgets/terminal_widget.cpp
+        gui/core/platform_helper.cpp
+        gui/core/activity_bar.cpp
+        gui/core/icon_provider.cpp
+        resources/icons.qrc
+        gui/widgets/command_palette.cpp
+        gui/widgets/ghost_diff_viewer.cpp
+        gui/widgets/toast_manager.cpp
+        gui/core/keybinding_manager.cpp
+        gui/widgets/keybindings_dialog.cpp
+        gui/widgets/search_dock.cpp
+        gui/widgets/project_model.cpp
+        gui/widgets/project_explorer.cpp
+    )
+    target_include_directories(test_pdk_compliance PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    )
+    target_link_libraries(test_pdk_compliance PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
+    target_compile_features(test_pdk_compliance PUBLIC cxx_std_17)
 endif()
 
 # =============================================================================
@@ -758,7 +899,7 @@ add_test(NAME test_safe_io COMMAND test_safe_io)
 add_test(NAME test_ai_simulation_intelligence COMMAND test_ai_simulation_intelligence)
 
 # Phase 5 GUI Logic Test
-add_executable(test_gui_logic tests/test_gui_logic.cpp gui/components/visual_component.cpp gui/styling/theme_manager.cpp gui/core/platform_helper.cpp)
+add_executable(test_gui_logic tests/test_gui_logic.cpp gui/components/visual_component.cpp gui/components/probe_tip.cpp gui/styling/theme_manager.cpp gui/core/platform_helper.cpp)
 target_include_directories(test_gui_logic PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
@@ -882,4 +1023,25 @@ target_include_directories(test_verification_harness PRIVATE
 )
 target_compile_features(test_verification_harness PUBLIC cxx_std_17)
 target_link_libraries(test_verification_harness PRIVATE Qt6::Core)
-add_executable(test_linalg_improvements tests/test_linalg_improvements.cpp)
+# Standard Cell Verification (Generic Darlington)
+add_executable(test_std_cells 
+    tests/test_std_cells.cpp
+    physics/quick_analysis.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_std_cells PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_features(test_std_cells PUBLIC cxx_std_17)
+target_link_libraries(test_std_cells PRIVATE Qt6::Core)

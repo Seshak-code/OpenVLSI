@@ -1,5 +1,6 @@
 #include "visual_component.h"
 #include "schematic_editor.h" 
+#include "../../components/standard_cells.h"
 #include <cmath>
 #include <QGraphicsSceneHoverEvent>
 #include <QKeyEvent>
@@ -15,22 +16,19 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::Diode: return "Diode";
         case ComponentType::Mosfet: return "Mosfet";
         case ComponentType::Bjt: return "Bjt";
-        case ComponentType::JFET_N: return "JFET_N";
-        case ComponentType::JFET_P: return "JFET_P";
         case ComponentType::CurrentSource: return "CurrentSource";
         case ComponentType::SchottkyDiode: return "SchottkyDiode";
         case ComponentType::Wire: return "Wire";
         case ComponentType::Probe: return "Probe";
-        case ComponentType::ICPackage: return "ICPackage";
+        case ComponentType::PDK_NFET: return "PDK_NFET";
+        case ComponentType::PDK_PFET: return "PDK_PFET";
+        case ComponentType::PDK_Resistor: return "PDK_Resistor";
+        case ComponentType::PDK_Capacitor: return "PDK_Capacitor";
         case ComponentType::VCVS: return "VCVS";
         case ComponentType::CCVS: return "CCVS";
         case ComponentType::VCCS: return "VCCS";
         case ComponentType::CCCS: return "CCCS";
-        case ComponentType::PowerPort: return "PowerPort";
-        case ComponentType::RailDriver: return "RailDriver";
-        case ComponentType::PowerVdd: return "PowerVdd";
-        case ComponentType::PowerVss: return "PowerVss";
-        case ComponentType::WaveformGen: return "WaveformGen";
+        case ComponentType::SubCircuit: return "SubCircuit";
         default: return "Unknown";
     }
 }
@@ -46,83 +44,27 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "Schottky" || s == "SchottkyDiode") return ComponentType::SchottkyDiode;
     if (s == "Mosfet" || s == "NMOS" || s == "PMOS") return ComponentType::Mosfet;
     if (s == "Bjt" || s == "NPN" || s == "PNP" || s == "BJT_NPN" || s == "BJT_PNP") return ComponentType::Bjt;
-    if (s == "JFET_N" || s == "N-JFET" || s == "NJFET") return ComponentType::JFET_N;
-    if (s == "JFET_P" || s == "P-JFET" || s == "PJFET") return ComponentType::JFET_P;
     if (s == "Wire") return ComponentType::Wire;
-    if (s == "Probe") return ComponentType::Probe;
-    if (s == "ICPackage" || s == "IC" || s == "ULN2003A" || s == "ULN2803A") return ComponentType::ICPackage;
+    if (s == "Probe" || s == "PowerPort" || s == "Power Vdd" || s == "Power Vss") return ComponentType::Probe;
+    if (s == "RailDriver" || s == "WaveformGen") return ComponentType::VoltageSource;
+    if (s == "PDK_NFET") return ComponentType::PDK_NFET;
+    if (s == "PDK_PFET") return ComponentType::PDK_PFET;
+    if (s == "PDK_Resistor") return ComponentType::PDK_Resistor;
+    if (s == "PDK_Capacitor") return ComponentType::PDK_Capacitor;
     if (s == "VCVS") return ComponentType::VCVS;
     if (s == "CCVS") return ComponentType::CCVS;
     if (s == "VCCS") return ComponentType::VCCS;
     if (s == "CCCS") return ComponentType::CCCS;
-    if (s == "PowerPort" || s == "Vin" || s == "Vout") return ComponentType::PowerPort;
-    if (s == "RailDriver" || s == "Battery" || s == "LDO" || s == "Regulator") return ComponentType::RailDriver;
-    if (s == "PowerVdd" || s == "Vdd" || s == "Vcc") return ComponentType::PowerVdd;
-    if (s == "PowerVss" || s == "Vss" || s == "Vee") return ComponentType::PowerVss;
-    if (s == "WaveformGen" || s == "SignalGen" || s == "Clock") return ComponentType::WaveformGen;
+    if (s == "SubCircuit") return ComponentType::SubCircuit;
     return ComponentType::Select;
 }
 
 // ============================================================================
 // PROBE TIP
 // ============================================================================
-ProbeTip::ProbeTip(VisualComponent* parent, bool isPos) 
-    : isPositive(isPos), probeBody(parent) {
-    setFlags(ItemIsMovable | ItemIsSelectable | ItemSendsGeometryChanges);
-    setParentItem(parent);
-    setZValue(3); // Above cables
-}
+// Old ProbeTip inline implementation removed.
 
-QRectF ProbeTip::boundingRect() const {
-    return QRectF(-15, -35, 30, 50);
-}
-
-QPainterPath ProbeTip::shape() const {
-    QPainterPath path;
-    path.addRect(-10, -10, 20, 20);
-    return path;
-}
-
-void ProbeTip::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
-    painter->setRenderHint(QPainter::Antialiasing);
-    
-    // Draw the pointed probe handle/body
-    painter->setPen(QPen(Qt::white, 1));
-    painter->setBrush(isPositive ? QColor(255, 50, 50) : QColor(30, 30, 30));
-    
-    static const QPointF points[] = {
-        {0, 0},     // Tip
-        {-6, -20},  // Base left
-        {6, -20}    // Base right
-    };
-    painter->drawPolygon(points, 3);
-    painter->drawRect(-4, -30, 8, 10); // Handle neck
-    
-    // Indicator String (+/-)
-    painter->setPen(Qt::white);
-    QFont f = painter->font();
-    f.setPointSize(10);
-    f.setBold(true);
-    painter->setFont(f);
-    painter->drawText(QRectF(-15, -35, 30, 30), Qt::AlignCenter, isPositive ? "+" : "-");
-}
-
-QVariant ProbeTip::itemChange(GraphicsItemChange change, const QVariant &value) {
-    if (change == ItemPositionChange && scene()) {
-        GridScene* gs = qobject_cast<GridScene*>(scene());
-        if (gs && gs->isSnappingEnabled()) {
-            QPointF newPos = value.toPointF();
-            qreal x = std::round(newPos.x() / GRID_STEP) * GRID_STEP;
-            qreal y = std::round(newPos.y() / GRID_STEP) * GRID_STEP;
-            
-            // Inform body to update its dashed lines
-            if (probeBody) probeBody->update();
-            
-            return QPointF(x, y);
-        }
-    }
-    return QGraphicsItem::itemChange(change, value);
-}
+// Old ProbeTip::itemChange removed.
 
 // ============================================================================
 // VISUAL WIRE
@@ -224,16 +166,26 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             value = "1k"; 
             params["Tolerance"] = "5%";
             paramOptions["Tolerance"] = {"1%", "5%", "10%", "20%"};
+            // PDK Transformation Support
+            params["Model"] = ""; 
+            params["W"] = "";
+            params["L"] = "";
             break;
         case ComponentType::Capacitor: 
             name = "C?"; 
             value = "1uF"; 
             params["Voltage Rating"] = "50V"; 
             paramOptions["Voltage Rating"] = {"6.3V", "10V", "16V", "25V", "50V", "100V"};
+            // PDK Transformation Support
+            params["Model"] = "";
+            params["W"] = "";
+            params["L"] = "";
             break;
         case ComponentType::Inductor: 
             name = "L?"; 
             value = "1mH"; 
+            // PDK Transformation Support
+            params["Model"] = "";
             break;
         case ComponentType::VoltageSource: 
             name = "V?"; 
@@ -245,56 +197,51 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             name = "M?";
             value = "NMOS";
             params["W"] = "1u";
-            params["L"] = "180n";
+            params["L"] = "0.18u";
             params["Model"] = "nfet_01v8";
-            paramOptions["Model"] = {"nfet_01v8", "pfet_01v8", "nfet_03v3", "pfet_03v3"};
+            paramOptions["Model"] = {"nfet_01v8", "pfet_01v8"};
             break;
         case ComponentType::Bjt:
             name = "Q?";
             value = "NPN";
-            params["Model"] = "2N2222";
-            paramOptions["Model"] = {"2N2222", "2N3904", "2N3906", "BC547"};
+            params["Model"] = "NPN_GEN";
+            paramOptions["Model"] = {"NPN_GEN", "PNP_GEN"};
             break;
-        case ComponentType::JFET_N:
-            name = "J?";
-            value = "N-JFET";
-            params["Model"] = "J201";
-            params["Beta"] = "1e-4";
-            params["Vto"] = "-2.0";
-            params["Lambda"] = "0.01";
-            paramOptions["Model"] = {"J201", "2N5457", "2N5458", "BF245A"};
+        case ComponentType::Probe:
+            name = "Probe?";
+            // Initialize child tips
+            probePositiveTip = new ProbeTip(ProbeTip::Positive, this);
+            probeNegativeTip = new ProbeTip(ProbeTip::Negative, this);
+            probePositiveTip->setPos(40, -40); // Initial offset
+            probeNegativeTip->setPos(40, 40);
             break;
-        case ComponentType::JFET_P:
-            name = "J?";
-            value = "P-JFET";
-            params["Model"] = "J175";
-            params["Beta"] = "1e-4";
-            params["Vto"] = "2.0";
-            params["Lambda"] = "0.01";
-            paramOptions["Model"] = {"J175", "2N5460", "2N5461"};
+        case ComponentType::PDK_NFET:
+            name = "MN?";
+            value = "PDK_NFET";
+            params["Model"] = "nfet_01v8"; // Default PDK model
+            params["W"] = "1.0u";
+            params["L"] = "0.18u";
+            break;
+        case ComponentType::PDK_PFET:
+            name = "MP?";
+            value = "PDK_PFET";
+            params["Model"] = "pfet_01v8"; // Default PDK model
+            params["W"] = "1.0u";
+            params["L"] = "0.18u";
+            break;
+        case ComponentType::PDK_Resistor:
+            name = "RP?";
+            value = "PDK_PolyRes";
+            params["R"] = "1k";
+            break;
+        case ComponentType::PDK_Capacitor:
+            name = "CP?";
+            value = "PDK_MIMCap";
+            params["C"] = "1p";
             break;
         case ComponentType::CurrentSource:
             name = "I?";
             value = "1mA";
-            break;
-        case ComponentType::SchottkyDiode:
-            name = "D?";
-            value = "BAT54";
-            break;
-        case ComponentType::Probe:
-            name = "P?";
-            value = "";
-            probePositiveTip = new ProbeTip(this, true);
-            probePositiveTip->setPos(0, -60);
-            probeNegativeTip = new ProbeTip(this, false);
-            probeNegativeTip->setPos(0, 60);
-            break;
-        case ComponentType::ICPackage:
-            name = "U?";
-            value = "ULN2003A";
-            params["Model"] = "ULN2003A";
-            params["PinCount"] = "16";
-            paramOptions["Model"] = {"ULN2003A", "ULN2803A", "LM7805", "NE555"};
             break;
         case ComponentType::VCVS:
             name = "E?";
@@ -313,29 +260,9 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             name = "F?";
             value = "1.0";
             break;
-        case ComponentType::PowerPort:
-            name = "P?";
-            value = "VDD";
-            params["Net"] = "VDD";
-            break;
-        case ComponentType::RailDriver:
-            name = "S?";
-            value = "Battery";
-            params["Type"] = "IdealRail";
-            paramOptions["Type"] = {"IdealRail", "LinearRegulator", "SwitchingRegulator"};
-            break;
-        case ComponentType::PowerVdd:
-            name = "VDD";
-            value = "1.8V";
-            break;
-        case ComponentType::PowerVss:
-            name = "VSS";
-            value = "0V";
-            break;
-        case ComponentType::WaveformGen:
-            name = "W?";
-            value = "Clock";
-            params["Frequency"] = "1MHz";
+        case ComponentType::SubCircuit:
+            name = "X?";
+            value = "SubCkt";
             break;
         default: 
             name = "U?"; 
@@ -348,9 +275,9 @@ QRectF VisualComponent::boundingRect() const {
     if (type == ComponentType::Probe) {
         return QRectF(-20, -20, 40, 40);
     }
-    if (type == ComponentType::ICPackage) {
-        // DIP-16 package: ~80px wide (8 pins * 10px spacing), ~120px tall
-        return QRectF(-50, -70, 100, 140);
+    if (type == ComponentType::SubCircuit) {
+        // Dynamic size based on pin count? For now fixed large box
+        return QRectF(-60, -80, 120, 160);
     }
     return QRectF(-50, -50, 100, 100);
 }
@@ -377,7 +304,7 @@ QVector<QPointF> VisualComponent::getTerminals() const {
             break;
         case ComponentType::Capacitor:
         case ComponentType::Diode:
-        case ComponentType::SchottkyDiode:
+        case ComponentType::PDK_Capacitor:
             t << QPointF(-20, 0) << QPointF(20, 0);
             break;
         case ComponentType::VoltageSource:
@@ -392,49 +319,44 @@ QVector<QPointF> VisualComponent::getTerminals() const {
             t << QPointF(0, -20); 
             break;
         case ComponentType::Mosfet:
-             // Gate (-20, 0), Drain (20, -20), Source (20, 20)
-             t << QPointF(-20, 0) << QPointF(20, -20) << QPointF(20, 20); 
+        case ComponentType::PDK_NFET:
+        case ComponentType::PDK_PFET:
+             // Gate (-20, 0), Drain (20, -20), Source (20, 20), Bulk (0, 0)
+             t << QPointF(-20, 0) << QPointF(20, -20) << QPointF(20, 20) << QPointF(0, 0); 
              break;
-        case ComponentType::JFET_N:
-        case ComponentType::JFET_P:
-             // Gate (-20, 0), Drain (20, -20), Source (20, 20) - same as MOSFET
-             t << QPointF(-20, 0) << QPointF(20, -20) << QPointF(20, 20); 
+        case ComponentType::PDK_Resistor:
+             // A (-40, 0), B (40, 0), SUB (0, 20)
+             t << QPointF(-40, 0) << QPointF(40, 0) << QPointF(0, 20);
              break;
+        case ComponentType::SubCircuit: {
+            const auto* def = StandardCells::StandardCellLibrary::instance().get(subCircuitName.toStdString());
+            if (!def) return t;
+            int total = (int)def->pinNames.size();
+            for (int i=0; i<total; ++i) {
+                QString pname = QString::fromStdString(def->pinNames[i]).toUpper();
+                QPointF pos;
+                if (pname == "GND" || pname == "VSS") { 
+                    t << QPointF(0, 80); // Bottom center
+                } else if (pname == "VDD" || pname == "VCC") { 
+                    t << QPointF(0, -80); // Top center
+                } else if (pname.startsWith("IN") || pname == "VIN" || pname == "A" || pname == "B") { 
+                    t << QPointF(-60, -40 + (i%4)*40); // Left side
+                } else if (pname.startsWith("OUT") || pname == "VOUT") {
+                    t << QPointF(60, 0); // Right side
+                } else {
+                    t << QPointF(-60, 0); // Default left
+                }
+            }
+            break;
+        }
         case ComponentType::Probe:
-             // NO fixed terminals. Measurement points are derived from tips.
              return {};
-        case ComponentType::ICPackage:
-             // DIP-16 layout: 8 pins per side, 20px spacing
-             // Left side pins 1-8 (bottom to top), right side pins 9-16 (top to bottom)
-             for (int i = 0; i < 8; ++i) {
-                 t << QPointF(-40, 60 - i * 20);  // Left side: pin 1 at bottom
-             }
-             for (int i = 0; i < 8; ++i) {
-                 t << QPointF(40, -60 + i * 20);  // Right side: pin 16 at top
-             }
-             break;
         case ComponentType::VCVS:
         case ComponentType::VCCS:
-            // 4 terminals: 2 control (-40, -20/20), 2 output (40, -20/20)
-            t << QPointF(-40, -20) << QPointF(-40, 20) << QPointF(40, -20) << QPointF(40, 20);
-            break;
         case ComponentType::CCVS:
         case ComponentType::CCCS:
-            // 2 terminals (output)
-            t << QPointF(40, -20) << QPointF(40, 20);
-            break;
-        case ComponentType::PowerPort:
-            t << QPointF(0, 0); // Single connection point
-            break;
-        case ComponentType::RailDriver:
-        case ComponentType::WaveformGen:
-            t << QPointF(0, -40) << QPointF(0, 40);
-            break;
-        case ComponentType::PowerVdd:
-            t << QPointF(0, 20); // Connect at bottom
-            break;
-        case ComponentType::PowerVss:
-            t << QPointF(0, -20); // Connect at top
+            // 4 terminals: 2 control (-40, -20/20), 2 output (40, -20/20)
+            t << QPointF(-40, -20) << QPointF(-40, 20) << QPointF(40, -20) << QPointF(40, 20);
             break;
         default: break;
     }
@@ -483,12 +405,12 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
     auto& tm = acutesim::gui::styling::ThemeManager::instance();
     
     // Phase 11.6: Ghost Rendering Logic
+    QColor ghostColor = tm.getColor("schematic.ghost");
+    if (!ghostColor.isValid()) ghostColor = QColor(0, 200, 255); // Fallback Cyan
+
     if (ghostState == GhostState::Preview || ghostState == GhostState::Focused) {
         // High confidence = more opaque
         int alpha = static_cast<int>(128 * ghostConfidence);
-        
-        QColor ghostColor = tm.getColor("schematic.ghost");
-        if (!ghostColor.isValid()) ghostColor = QColor(0, 200, 255); // Fallback Cyan
         
         QColor ghostFill = ghostColor;
         ghostFill.setAlpha(alpha / 4); // Very faint fill
@@ -500,6 +422,23 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
         QPen p(ghostPen, 2, Qt::DashLine);
         painter->setPen(p);
         painter->setBrush(ghostFill);
+    } else {
+        // Normal Paint
+        painter->setPen(QPen(Qt::white, 2));
+        painter->setBrush(QBrush(tm.getColor("schematic.component_fill")));
+        
+        // If this is a Probe, draw dashed connecting lines to tips
+        if (type == ComponentType::Probe && probePositiveTip && probeNegativeTip) {
+            painter->save();
+            QPen dashPen(QColor(200, 200, 200), 1, Qt::DashLine);
+            painter->setPen(dashPen);
+            painter->drawLine(QPointF(0,0), probePositiveTip->pos());
+            painter->drawLine(QPointF(0,0), probeNegativeTip->pos());
+            painter->restore();
+            // Reset for body
+            painter->setPen(QPen(Qt::white, 2));
+        }
+    }
         
         // Render "Why?" Tooltip if Focused
         if (ghostState == GhostState::Focused && !ghostWhy.isEmpty()) {
@@ -526,11 +465,6 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
             
             painter->restore();
         }
-    } else {
-        // Normal Rendering
-        painter->setPen(QPen(tm.getColor("ui.text"), 2));
-        painter->setBrush(tm.getColor("schematic.background")); 
-    }
     
     // Draw Components (Grid Aligned)
     switch(type) {
@@ -583,56 +517,42 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
             break;
             
         case ComponentType::Diode:
-        case ComponentType::SchottkyDiode:
             painter->drawLine(-5, -10, -5, 10); // Anode
             {
                 // Triangle
                 QPointF poly[] = {{10, 0}, {-5, -10}, {-5, 10}};
                 painter->drawPolygon(poly, 3);
             }
-            // Cathode Bar
-            if (type == ComponentType::SchottkyDiode) {
-                // S shape
-                painter->drawLine(10, -10, 10, 10);
-                painter->drawLine(10, -10, 14, -10); // Top hook right
-                painter->drawLine(10, 10, 6, 10);    // Bottom hook left
-            } else {
-                painter->drawLine(10, -10, 10, 10);
-            }
-            
+            painter->drawLine(10, -10, 10, 10); // Cathode Bar
             painter->drawLine(-20, 0, -5, 0);
             painter->drawLine(10, 0, 20, 0);
             break;
             
         case ComponentType::Mosfet:
+        case ComponentType::PDK_NFET:
+        case ComponentType::PDK_PFET:
             // Draw NMOS/PMOS Symbol
             {
-                bool isPMOS = (value.contains("PMOS") || value.contains("pfet"));
+                bool isPMOS = (type == ComponentType::PDK_PFET || value.contains("PMOS") || value.contains("pfet"));
                 
                 // Leads
                 painter->drawLine(-20, 0, -10, 0); // Gate lead
-                painter->drawLine(0, 20, 10, 20);  // Drain/Source lead
-                painter->drawLine(20, 0, 10, 0);   // Drain/Source lead
                 
                 // Gate Plate
                 painter->drawLine(-10, -15, -10, 15);
                 
-                // Channel Plates (3 dashed segments)
-                painter->drawLine(0, -15, 0, -9);
-                painter->drawLine(0, -3, 0, 3);
-                painter->drawLine(0, 9, 0, 15);
+                // Channel Plates (3 segments - solid for PDK)
+                painter->drawLine(0, -15, 0, 15);
                 
-                // Substrate
+                // Bulk connection (PDK-specific or generic)
                 painter->drawLine(0, 0, 10, 0); // Bulk connection
+                
                 // Arrow
                 if (isPMOS) {
-                    // Arrow pointing OUT from Channel (on Bulk)
                     painter->drawLine(5, 0, 2, -3);
                     painter->drawLine(5, 0, 2, 3);
-                    // Gate bubble
-                     painter->drawEllipse(-12, -2, 4, 4);
+                    painter->drawEllipse(-12, -2, 4, 4);
                 } else {
-                    // NMOS: Arrow pointing IN to Channel
                     painter->drawLine(0, 0, 5, -3);
                     painter->drawLine(0, 0, 5, 3);
                 }
@@ -641,17 +561,28 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                 painter->drawLine(10, -15, 0, -15);
                 painter->drawLine(10, 15, 0, 15);
                 
-                // Vertical D/S lines to new terminals
-                // Drain (20, -20) -> Dogleg
+                // Vertical D/S lines to terminals (20, -20) and (20, 20)
                 painter->drawLine(10, -15, 20, -15);
                 painter->drawLine(20, -15, 20, -20);
-                
-                // Source (20, 20) -> Dogleg
                 painter->drawLine(10, 15, 20, 15);
                 painter->drawLine(20, 15, 20, 20);
             }
             break;
             
+        case ComponentType::PDK_Resistor:
+            painter->drawRect(-20, -8, 40, 16);
+            painter->drawLine(-40, 0, -20, 0); 
+            painter->drawLine(20, 0, 40, 0);
+            painter->drawLine(0, 8, 0, 20); // Substrate terminal
+            break;
+            
+        case ComponentType::PDK_Capacitor:
+            painter->drawLine(-5, -20, -5, 20);
+            painter->drawLine(5, -20, 5, 20);
+            painter->drawLine(-20, 0, -5, 0);
+            painter->drawLine(5, 0, 20, 0);
+            break;
+
         case ComponentType::Bjt:
              // Draw BJT Symbol
              {
@@ -675,7 +606,6 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                  
                  // Arrow
                  if (isPNP) {
-                     // Emitter Arrow Pointing IN
                      QPointF mid(0, 10); // on emitter leg
                      painter->drawLine(mid.x(), mid.y(), mid.x()-3, mid.y()-5);
                      painter->drawLine(mid.x(), mid.y(), mid.x()+5, mid.y()-2);
@@ -687,43 +617,44 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                  }
              }
              break;
-             
-        case ComponentType::JFET_N:
-        case ComponentType::JFET_P:
-             // Draw JFET Symbol (distinct from MOSFET: dashed gate, symmetric channel)
+
+        case ComponentType::SubCircuit:
              {
-                 bool isPChannel = (type == ComponentType::JFET_P);
+                 // Draw Box Body
+                 QRectF bodyRect(-40, -60, 80, 120);
+                 painter->drawRect(bodyRect);
                  
-                 // Gate lead
-                 painter->drawLine(-20, 0, -10, 0);
+                 // Draw Name
+                 painter->drawText(bodyRect, Qt::AlignCenter, subCircuitName);
                  
-                 // Gate bar (dashed to show depletion-mode)
-                 painter->setPen(QPen(Qt::white, 2, Qt::DashLine));
-                 painter->drawLine(-10, -12, -10, 12);
-                 painter->setPen(QPen(Qt::white, 2));
-                 
-                 // Channel (solid vertical bar)
-                 painter->drawLine(0, -15, 0, 15);
-                 
-                 // Drain lead (top)
-                 painter->drawLine(0, -15, 10, -15);
-                 painter->drawLine(10, -15, 20, -15);
-                 painter->drawLine(20, -15, 20, -20);
-                 
-                 // Source lead (bottom)
-                 painter->drawLine(0, 15, 10, 15);
-                 painter->drawLine(10, 15, 20, 15);
-                 painter->drawLine(20, 15, 20, 20);
-                 
-                 // Arrow on gate (direction indicates N/P channel)
-                 if (isPChannel) {
-                     // P-channel: Arrow pointing OUT from gate
-                     painter->drawLine(-10, 0, -5, -3);
-                     painter->drawLine(-10, 0, -5, 3);
-                 } else {
-                     // N-channel: Arrow pointing IN to gate
-                     painter->drawLine(-5, 0, -10, -3);
-                     painter->drawLine(-5, 0, -10, 3);
+                 // Draw Terminals and Labels
+                 const auto* def = StandardCells::StandardCellLibrary::instance().get(subCircuitName.toStdString());
+                 if (def) {
+                     auto terms = getTerminals();
+                     int n = std::min((int)terms.size(), (int)def->pinNames.size());
+                     for(int i=0; i<n; ++i) {
+                         QPointF p = terms[i];
+                         painter->drawEllipse(p, 2, 2); // Pin dot
+                         
+                         // Draw Label near pin
+                         QString pname = QString::fromStdString(def->pinNames[i]);
+                         QRectF labelRect(p.x() - 20, p.y() - 10, 40, 20);
+                         
+                         // Adjust label position based on side
+                         if (p.x() < -30) { // Left
+                             labelRect.moveLeft(p.x() + 5);
+                             painter->drawText(labelRect, Qt::AlignLeft | Qt::AlignVCenter, pname);
+                         } else if (p.x() > 30) { // Right
+                             labelRect.moveRight(p.x() - 5);
+                             painter->drawText(labelRect, Qt::AlignRight | Qt::AlignVCenter, pname);
+                         } else if (p.y() < -50) { // Top
+                             labelRect.moveTop(p.y() + 5);
+                             painter->drawText(labelRect, Qt::AlignCenter, pname);
+                         } else { // Bottom
+                             labelRect.moveBottom(p.y() - 5);
+                             painter->drawText(labelRect, Qt::AlignCenter, pname);
+                         }
+                     }
                  }
              }
              break;
@@ -775,78 +706,7 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                 painter->drawText(QRectF(-35, -5, 20, 12), Qt::AlignRight | Qt::AlignVCenter, name);
             }
             break;
-        
-        case ComponentType::ICPackage:
-            // DIP-16 Package Rendering (like ULN2003A)
-            {
-                // --- Body Rectangle ---
-                painter->setPen(QPen(Qt::white, 2));
-                painter->setBrush(QColor("#2D2D30"));
-                painter->drawRect(-35, -60, 70, 120);
-                
-                // --- Notch (Orientation Marker) ---
-                painter->setBrush(QColor("#1E1E1E"));
-                painter->drawEllipse(-8, -64, 16, 16);
-                
-                // --- Model Name (Center) ---
-                painter->setPen(Qt::white);
-                QFont f = painter->font();
-                f.setFamily("Consolas");
-                f.setPointSize(9);
-                f.setBold(true);
-                painter->setFont(f);
-                painter->drawText(QRectF(-35, -15, 70, 30), Qt::AlignCenter, value);
-                
-                // --- Instance Name (Above) ---
-                f.setPointSize(8);
-                f.setBold(false);
-                painter->setFont(f);
-                painter->drawText(QRectF(-35, -50, 70, 20), Qt::AlignCenter, name);
-                
-                // --- Pin Labels ---
-                f.setPointSize(6);
-                painter->setFont(f);
-                
-                // ULN2003A pin names (standard)
-                QStringList pinNames = {"1B", "2B", "3B", "4B", "5B", "6B", "7B", "GND",
-                                        "COM", "7C", "6C", "5C", "4C", "3C", "2C", "1C"};
-                
-                // Left side pins 1-8 (bottom to top)
-                for (int i = 0; i < 8; ++i) {
-                    int y = 60 - i * 20;
-                    // Pin leg
-                    painter->setPen(QPen(Qt::white, 1));
-                    painter->drawLine(-35, y, -40, y);
-                    // Pin number
-                    painter->setPen(Qt::gray);
-                    painter->drawText(QRectF(-33, y - 6, 15, 12), Qt::AlignLeft, QString::number(i + 1));
-                    // Pin label (if available)
-                    if (i < pinNames.size()) {
-                        painter->setPen(QColor("#888"));
-                        painter->drawText(QRectF(-55, y - 6, 15, 12), Qt::AlignRight, pinNames[i]);
-                    }
-                }
-                
-                // Right side pins 9-16 (bottom to top)
-                for (int i = 0; i < 8; ++i) {
-                    int y = 60 - i * 20;
-                    int pinNum = 16 - i;  // Pin 16 at top
-                    // Pin leg
-                    painter->setPen(QPen(Qt::white, 1));
-                    painter->drawLine(35, y, 40, y);
-                    // Pin number
-                    painter->setPen(Qt::gray);
-                    painter->drawText(QRectF(20, y - 6, 15, 12), Qt::AlignRight, QString::number(pinNum));
-                    // Pin label
-                    int labelIdx = 15 - i;
-                    if (labelIdx < pinNames.size()) {
-                        painter->setPen(QColor("#888"));
-                        painter->drawText(QRectF(42, y - 6, 20, 12), Qt::AlignLeft, pinNames[labelIdx]);
-                    }
-                }
-            }
-            break;
-        
+
         case ComponentType::VCVS:
         case ComponentType::VCCS:
         case ComponentType::CCVS:
@@ -864,74 +724,27 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                     painter->drawLine(-3, 3, 0, 10);
                     painter->drawLine(3, 3, 0, 10);
                 }
-                // Control leads (dashed) for V-controlled
-                if (type == ComponentType::VCVS || type == ComponentType::VCCS) {
-                    painter->setPen(QPen(Qt::gray, 1, Qt::DashLine));
-                    painter->drawLine(-20, -10, -40, -20);
-                    painter->drawLine(-20, 10, -40, 20);
-                }
-                // Output leads
-                painter->setPen(QPen(Qt::white, 2));
-                painter->drawLine(20, -10, 40, -20);
-                painter->drawLine(20, 10, 40, 20);
-            }
-            break;
-
-        case ComponentType::PowerPort:
-            // Pentagon / Arrow shape for Port
-            {
-                QPolygonF poly;
-                poly << QPointF(-15, -10) << QPointF(5, -10) 
-                     << QPointF(15, 0)   // Point
-                     << QPointF(5, 10) << QPointF(-15, 10);
-                painter->drawPolygon(poly);
                 
-                painter->setPen(Qt::white); // Ensure text is visible
-                // Center text better
-                painter->drawText(QRectF(-15, -10, 20, 20), Qt::AlignCenter, value.mid(0, 3)); 
+                // Straight control leads
+                painter->setPen(QPen(Qt::gray, 1, Qt::DashLine));
+                painter->drawLine(-20, 0, -30, 0); // Control bus point
+                painter->drawLine(-30, 0, -30, -20);
+                painter->drawLine(-30, 0, -30, 20);
+                painter->drawLine(-30, -20, -40, -20);
+                painter->drawLine(-30, 20, -40, 20);
                 
-                // Full label outside
-                painter->setPen(Qt::gray);
-                painter->drawText(QRectF(-40, -25, 80, 15), Qt::AlignCenter, value);
+                // Straight output leads
+                painter->setPen(QPen(tm.getColor("ui.text"), 2));
+                painter->drawLine(20, 0, 30, 0); // Output bus point
+                painter->drawLine(30, 0, 30, -20);
+                painter->drawLine(30, 0, 30, 20);
+                painter->drawLine(30, -20, 40, -20);
+                painter->drawLine(30, 20, 40, 20);
             }
-            break;
-
-        case ComponentType::PowerVdd:
-            // Up arrow
-            painter->drawLine(0, 20, 0, -10);
-            painter->drawLine(0, -10, -10, 0);
-            painter->drawLine(0, -10, 10, 0);
-            painter->drawText(QRectF(-20, -30, 40, 20), Qt::AlignCenter, value);
-            break;
-
-        case ComponentType::PowerVss:
-            // Down arrow (VSS/VEE Rail) - Distinct from Earth Ground
-            painter->drawLine(0, -20, 0, 10); // Stem
-            painter->drawLine(0, 10, -10, 0); // Arrow Left
-            painter->drawLine(0, 10, 10, 0);  // Arrow Right
-            painter->drawText(QRectF(-20, 15, 40, 20), Qt::AlignCenter, value);
-            break;
-
-        case ComponentType::RailDriver:
-            // Battery icon
-            painter->drawRect(-15, -25, 30, 50);
-            painter->drawRect(-8, -30, 16, 5); // Cap
-            painter->drawLine(0, -40, 0, -30);
-            painter->drawLine(0, 25, 0, 40);
-            painter->drawText(QRectF(-15, -15, 30, 30), Qt::AlignCenter, "B");
-            break;
-
-        case ComponentType::WaveformGen:
-            // Sine wave icon
-            painter->drawRect(-20, -20, 40, 40);
-            for (int i = -15; i < 15; ++i) {
-                painter->drawLine(i, 5 * sin(i * 0.3), i + 1, 5 * sin((i + 1) * 0.3));
-            }
-            painter->drawLine(0, -40, 0, -20);
-            painter->drawLine(0, 20, 0, 40);
             break;
 
         default:
+            painter->setPen(QPen(Qt::white, 2));
             painter->drawRect(-15, -15, 30, 30);
             break;
     }
@@ -969,8 +782,7 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
     // Quick Preview tooltip (Phase 1.7)
     // Draw estimated voltage badge for probes when hasQuickPreview is true
     if (hasQuickPreview && (type == ComponentType::Probe || 
-                            type == ComponentType::VoltageSource ||
-                            type == ComponentType::RailDriver)) {
+                            type == ComponentType::VoltageSource)) {
         painter->save();
         
         // Yellow badge background
@@ -1002,8 +814,7 @@ void VisualComponent::hoverEnterEvent(QGraphicsSceneHoverEvent* event) {
     
     // Only show quick preview for probes and sources
     if (type == ComponentType::Probe || 
-        type == ComponentType::VoltageSource ||
-        type == ComponentType::RailDriver) {
+        type == ComponentType::VoltageSource) {
         
         // Set cursor to indicate hoverable
         setCursor(Qt::CrossCursor);

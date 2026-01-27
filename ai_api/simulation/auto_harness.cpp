@@ -6,11 +6,11 @@ namespace AIAPI {
 
 AutoValidator::AutoValidator(QObject* parent) : QObject(parent) {}
 
-AutoValidator::ValidationResult AutoValidator::validateBlock(const QJsonObject& blockDef, 
+AutoValidator::ValidationResult AutoValidator::validateBlock(const QJsonObject& blockDef,
                                                            const QVector<Stimulus>& stimuli) {
     // 1. Create a headless scene
     GridScene harnessScene;
-    harnessScene.setMode(AppMode::BENCH_TEST); // Validation happens in Bench Mode!
+    // setMode() removed - unified component library
 
     // 2. Setup the test harness
     setupHarness(&harnessScene, blockDef, stimuli);

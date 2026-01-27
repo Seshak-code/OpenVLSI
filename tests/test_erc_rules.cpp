@@ -39,8 +39,8 @@ bool testMultipleDrivers() {
     // V2: Also Drives Node 1 (Collision!)
     block.addVoltageSource(1, 0, 3.3, "Generic");
     
-    // Validate in BLOCK mode (should error)
-    ViolationReport report = validate<DesignMode::BLOCK>(block);
+    // Validate in raw state
+    ViolationReport report = validate(block);
     
     bool hasMultipleDriverError = false;
     for (const auto& e : report.entries) {
@@ -54,18 +54,18 @@ bool testMultipleDrivers() {
     return hasMultipleDriverError;
 }
 
-// 2. Test System Mode Forbids Generic Sources
-bool testSystemModeGenericSource() {
-    printHeader("Test 2: System Mode Rejects Generic VSource");
+// 2. Test Raw State Rejects Generic Sources
+bool testRawStateGenericSource() {
+    printHeader("Test 2: Raw State Rejects Generic VSource");
     
     TensorBlock block;
-    block.name = "SystemWithGeneric";
+    block.name = "RawWithGeneric";
     
     // Generic Source
     block.addVoltageSource(1, 0, 1.8, "Generic");
     
-    // Validate in SYSTEM mode
-    ViolationReport report = validate<DesignMode::SYSTEM>(block);
+    // Validate
+    ViolationReport report = validate(block);
     
     bool hasSourceError = false;
     for (const auto& e : report.entries) {
@@ -75,36 +75,36 @@ bool testSystemModeGenericSource() {
         }
     }
     
-    printResult("Rejects Generic Source in System Mode", hasSourceError);
+    printResult("Rejects Generic Source (Must use RailDriver)", hasSourceError);
     return hasSourceError;
 }
 
-// 3. Test System Mode Allows RailDriver
-bool testSystemModeRailDriver() {
-    printHeader("Test 3: System Mode Accepts RailDriver");
+// 3. Test Raw State Allows RailDriver
+bool testRawStateRailDriver() {
+    printHeader("Test 3: Raw State Accepts RailDriver");
     
     TensorBlock block;
-    block.name = "SystemWithRailDriver";
+    block.name = "RawWithRailDriver";
     
     // RailDriver Source
     block.addVoltageSource(1, 0, 3.3, "RailDriver");
     
-    // Validate in SYSTEM mode
-    ViolationReport report = validate<DesignMode::SYSTEM>(block);
+    // Validate
+    ViolationReport report = validate(block);
     
     bool hasSourceError = false;
     bool hasErrors = report.hasErrors;
     
     for (const auto& e : report.entries) {
          if (e.code & Violation::INDEPENDENT_SOURCE) hasSourceError = true;
-         if (e.getSeverity(DesignMode::SYSTEM) == ViolationEntry::Severity::ERR) hasErrors = true;
+         if (e.getSeverity() == ViolationEntry::Severity::ERR) hasErrors = true;
          // Print any errors found
          std::cout << "  Entry: " << e.message << "\n";
     }
     
     // Should be valid (no source error)
     bool passed = !hasSourceError;
-    printResult("Accepts RailDriver in System Mode", passed);
+    printResult("Accepts RailDriver for power delivery", passed);
     return passed;
 }
 
@@ -115,22 +115,16 @@ bool testValidBlock() {
     TensorBlock block;
     block.name = "ValidBlock";
     
-    // V1: Drives Node 1
-    // Wait, Block mode usually forbids ANY source.
-    // If we use "Generic" it fails INDEPENDENT_SOURCE.
-    // If we want to test MULTIPLE_DRIVERS validity separately, we might trigger INDEPENDENT_SOURCE too.
-    // So let's test in BENCH mode where sources are allowed.
+    block.addVoltageSource(1, 0, 5.0, "RailDriver");
     
-    block.addVoltageSource(1, 0, 5.0, "Generic");
-    
-    ViolationReport report = validate<DesignMode::BENCH>(block);
+    ViolationReport report = validate(block);
     
     bool hasMultipleError = false;
     for(const auto& e : report.entries) {
         if (e.code & Violation::MULTIPLE_DRIVERS) hasMultipleError = true;
     }
     
-    printResult("Single driver in Bench mode is valid", !hasMultipleError);
+    printResult("Single RailDriver is valid", !hasMultipleError);
     return !hasMultipleError;
 }
 
@@ -138,8 +132,8 @@ int main() {
     bool allPassed = true;
     
     if (!testMultipleDrivers()) allPassed = false;
-    if (!testSystemModeGenericSource()) allPassed = false;
-    if (!testSystemModeRailDriver()) allPassed = false;
+    if (!testRawStateGenericSource()) allPassed = false;
+    if (!testRawStateRailDriver()) allPassed = false;
     if (!testValidBlock()) allPassed = false;
     
     std::cout << "\nOverall Result: " << (allPassed ? "PASS" : "FAIL") << "\n";

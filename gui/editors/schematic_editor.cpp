@@ -1,6 +1,5 @@
 #include "schematic_editor.h"
 #include "component_wizard.h"
-#include "../../components/standard_cells.h"
 #include "../../ai_api/system/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
@@ -112,8 +111,9 @@ void GridScene::clearGhostWires() {
     ghostWires.clear();
 }
 
-void GridScene::setTool(ComponentType t) {
+void GridScene::setTool(ComponentType t, const QString& subName) {
     currentTool = t;
+    currentSubTool = subName;
     if (ghostItem) {
         removeItem(ghostItem);
         delete ghostItem;
@@ -126,6 +126,10 @@ void GridScene::setTool(ComponentType t) {
     
     if (t != ComponentType::Select && t != ComponentType::Wire) {
         ghostItem = new VisualComponent(t);
+        if (t == ComponentType::SubCircuit && !subName.isEmpty()) {
+            ghostItem->subCircuitName = subName;
+        }
+        ghostItem->setOpacity(0.5);
         ghostItem->setOpacity(0.5);
         // Ensure ghost ignores collisions so checking code works on other stuff
         ghostItem->setZValue(100); 
@@ -243,6 +247,9 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 
             if (!colliding) {
                 auto* item = new VisualComponent(currentTool);
+                if (currentTool == ComponentType::SubCircuit && !currentSubTool.isEmpty()) {
+                    item->subCircuitName = currentSubTool;
+                }
                 item->setPos(p);
                 item->setRotation(ghostItem->rotation());
                 addItem(item);
@@ -785,7 +792,7 @@ TensorNetlist GridScene::generateNetlist() {
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
             // Include Probes so they get net IDs
-            // if (c->type == ComponentType::Probe) continue; 
+            if (c->type == ComponentType::Probe) continue; 
             QVector<QPointF> terms = c->getTerminals();
             for (const auto& localP : terms) {
                 // Ensure this point gets an ID
@@ -936,34 +943,6 @@ TensorNetlist GridScene::generateNetlist() {
     
     QMap<int, std::string> forcedNetNames;
     
-    // Scan for Global Power Symbols
-    for (auto* item : allItems) {
-        auto* c = dynamic_cast<VisualComponent*>(item);
-        if (!c) continue;
-        
-        if (c->type == ComponentType::PowerVdd || c->type == ComponentType::PowerVss) {
-            // Get the net this symbol is attached to
-            // Check terminals (index 0 is the pin)
-            QVector<QPointF> terms = c->getTerminals();
-            if (terms.isEmpty()) continue;
-            
-            QPointF sceneP = c->mapToScene(terms[0]);
-            QPair<int,int> key = {qRound(sceneP.x()), qRound(sceneP.y())};
-            
-            if (pointToNetID.contains(key)) {
-                int rawID = pointToNetID[key];
-                int rootID = findSet(rawID);
-                
-                if (c->type == ComponentType::PowerVdd) {
-                    forcedNetNames[rootID] = "VDD";
-                } else {
-                    forcedNetNames[rootID] = "VSS";
-                    // If VSS is tied to Ground component elsewhere, it becomes 0.
-                    // But if it's floating relative to 0 (isolated ground), it keeps VSS name.
-                }
-            }
-        }
-    }
     
     // Build Standard Map
     for (int id : uniqueNets) {
@@ -1027,9 +1006,7 @@ TensorNetlist GridScene::generateNetlist() {
         
         // Skip purely visual symbols that don't stamp (unless they are sources)
         if (c->type == ComponentType::Select || c->type == ComponentType::Wire || 
-            c->type == ComponentType::Probe || c->type == ComponentType::Ground ||
-            c->type == ComponentType::PowerPort || c->type == ComponentType::PowerVdd ||
-            c->type == ComponentType::PowerVss) continue;
+            c->type == ComponentType::Probe || c->type == ComponentType::Ground) continue;
 
         // Get Node IDs for terminals
         std::vector<int> nodes;
@@ -1057,41 +1034,56 @@ TensorNetlist GridScene::generateNetlist() {
             case ComponentType::CurrentSource: expected = 2; break;
             case ComponentType::Diode: expected = 2; break;
             case ComponentType::SchottkyDiode: expected = 2; break;
-            case ComponentType::Mosfet: expected = 3; break; 
+            case ComponentType::Mosfet: expected = 3; break;
             case ComponentType::Bjt: expected = 3; break;
-            case ComponentType::RailDriver: expected = 0; break; // Handled specially
             case ComponentType::VCVS: expected = 4; break;
             case ComponentType::CCVS: expected = 4; break;
             case ComponentType::VCCS: expected = 4; break;
             case ComponentType::CCCS: expected = 4; break;
+            case ComponentType::PDK_NFET: expected = 4; break;
+            case ComponentType::PDK_PFET: expected = 4; break;
+            case ComponentType::PDK_Resistor: expected = 3; break;
+            case ComponentType::PDK_Capacitor: expected = 2; break;
             default: break;
         }
         
-        if (c->type != ComponentType::Ground && c->type != ComponentType::RailDriver && nodes.size() < expected) {
+        // Phase 1.5: Helper lambda for parsing geometry/model
+        auto getParam = [&](const QString& key, const QString& def) { return c->params.value(key, def).toStdString(); };
+        auto getValParam = [&](const QString& key, const QString& def) { return parseValue(c->params.value(key, def)); };
+
+        if (c->type != ComponentType::Ground && nodes.size() < expected) {
             emit messageLogged(QString("Warning: Component %1 has incomplete terminals!").arg(c->name));
            continue;
         }
         
-        // SPECIAL HANDLING: RailDriver -> VoltageSource
-        if (c->type == ComponentType::RailDriver) {
-            // RailDriver explicitly drives the net it is on (which should be VDD)
-            // relative to ground.
-            // Terminals: 0 is Output (VDD), 1 is GND.
-            if (nodes.size() >= 2) {
-                netlist.addVoltageSource(nodes[0], nodes[1], val, "RailDriver"); 
-            }
-            continue;
-        }
 
         switch(c->type) {
             case ComponentType::Resistor:
                 netlist.addResistor(nodes[0], nodes[1], val);
+                {
+                    auto& r = netlist.globalBlock.resistors.back();
+                    r.model_name = getParam("Model", "poly_res");
+                    r.width_m = getValParam("W", "1u");
+                    r.length_m = getValParam("L", "10u");
+                }
                 break;
             case ComponentType::Capacitor:
                 netlist.addCapacitor(nodes[0], nodes[1], val);
+                {
+                    auto& cap = netlist.globalBlock.capacitors.back();
+                    cap.model_name = getParam("Model", "mim_cap");
+                    cap.width_m = getValParam("W", "10u");
+                    cap.length_m = getValParam("L", "10u");
+                }
                 break;
             case ComponentType::Inductor:
                 netlist.addInductor(nodes[0], nodes[1], val);
+                {
+                     auto& ind = netlist.globalBlock.inductors.back();
+                     ind.model_name = getParam("Model", "spiral_ind");
+                     ind.width_m = getValParam("W", "5u");
+                     ind.area_m2 = getValParam("Area", "100p");
+                }
                 break;
             case ComponentType::VoltageSource:
                 netlist.addVoltageSource(nodes[0], nodes[1], val, "Generic");
@@ -1101,9 +1093,19 @@ TensorNetlist GridScene::generateNetlist() {
                 break;
             case ComponentType::Diode:
                 netlist.addDiode(nodes[0], nodes[1], 1e-14); 
+                {
+                    auto& d = netlist.globalBlock.diodes.back();
+                    d.modelName = getParam("Model", "diode_generic");
+                    d.area_m2 = getValParam("Area", "1p");
+                    d.perimeter_m = getValParam("P", "4u");
+                }
                 break;
             case ComponentType::SchottkyDiode:
-                netlist.addDiode(nodes[0], nodes[1], 200e-9); 
+                netlist.addSchottkyDiode(c->name.toStdString(), nodes[0], nodes[1]);
+                // Schottky add helper doesn't expose model yet, accessing back
+                if (!netlist.globalBlock.schottkyDiodes.empty()) {
+                     netlist.globalBlock.schottkyDiodes.back().modelName = getParam("Model", "BAT54");
+                }
                 break;
             case ComponentType::Mosfet:
                 {
@@ -1120,30 +1122,47 @@ TensorNetlist GridScene::generateNetlist() {
                         netlist.addBJT(c->name.toStdString(), nodes[1], nodes[0], nodes[2], model, true);
                 }
                 break;
-            case ComponentType::ICPackage:
+            case ComponentType::PDK_NFET:
+            case ComponentType::PDK_PFET:
                 {
-                    // Instantiate IC as hierarchical subcircuit
-                    std::string modelName = c->params.value("Model", "ULN2003A").toStdString();
-                    const auto* icDef = StandardCells::StandardCellLibrary::instance().get(modelName);
-                    if (icDef) {
-                        // Register the block definition if not already present
-                        if (netlist.blockDefinitions.find(modelName) == netlist.blockDefinitions.end()) {
-                            netlist.defineBlock(icDef->internalBlock);
-                        }
-                        // Create node mapping: external pins -> global nodes
-                        // IC terminals should match pinCount
-                        std::vector<int> pinMapping;
-                        for (size_t i = 0; i < nodes.size() && i < static_cast<size_t>(icDef->pinCount); ++i) {
-                            pinMapping.push_back(nodes[i]);
-                        }
-                        netlist.addInstance(modelName, pinMapping);
-                        emit messageLogged(QString("IC %1 (%2): Instantiated as subcircuit")
-                            .arg(c->name).arg(QString::fromStdString(modelName)));
-                    } else {
-                        emit messageLogged(QString("Warning: IC %1 model %2 not found in StandardCellLibrary")
-                            .arg(c->name).arg(QString::fromStdString(modelName)));
+                    // 4-terminal MOSFET: D(0), G(1), S(2), B(3)
+                    if (nodes.size() >= 4) {
+                        double W = parseValue(c->params.value("W", "1u"));
+                        double L = parseValue(c->params.value("L", "180n"));
+                        std::string model = (c->type == ComponentType::PDK_NFET) ? "nfet" : "pfet";
+                        // Terminal order: gate, drain, source, bulk
+                        netlist.addMosfet(c->name.toStdString(), nodes[1], nodes[0], nodes[2], nodes[3], model, W, L);
                     }
                 }
+                break;
+            case ComponentType::PDK_Resistor:
+                {
+                    // 3-terminal: A(0), B(1), SUB(2) - substrate ignored for simulation
+                    if (nodes.size() >= 2) {
+                        double R = parseValue(c->params.value("R", c->value));
+                        netlist.addResistor(nodes[0], nodes[1], R);
+                    }
+                }
+                break;
+            case ComponentType::PDK_Capacitor:
+                {
+                    if (nodes.size() >= 2) {
+                        double C = parseValue(c->params.value("C", c->value));
+                        netlist.addCapacitor(nodes[0], nodes[1], C);
+                    }
+                }
+                break;
+            case ComponentType::VCVS:
+                if (nodes.size() >= 4) netlist.addVCVS(nodes[2], nodes[3], nodes[0], nodes[1], val);
+                break;
+            case ComponentType::VCCS:
+                if (nodes.size() >= 4) netlist.addVCCS(nodes[2], nodes[3], nodes[0], nodes[1], val);
+                break;
+            case ComponentType::CCVS:
+                if (nodes.size() >= 4) netlist.addCCVS(nodes[2], nodes[3], nodes[0], nodes[1], val);
+                break;
+            case ComponentType::CCCS:
+                if (nodes.size() >= 4) netlist.addCCCS(nodes[2], nodes[3], nodes[0], nodes[1], val);
                 break;
             default:
                 break;
@@ -1225,6 +1244,56 @@ TensorNetlist GridScene::generateNetlist() {
                 .arg(c->name).arg(posNode).arg(negNode));
         }
     }
+
+    // Stop 6: Phase 1.5 Wire Parasitics
+    // =========================================================================
+    // Iterate wires, calculate length, map to net nodes, and store segments
+    for (auto* item : allItems) {
+        auto* wire = dynamic_cast<VisualWire*>(item);
+        if (!wire) continue;
+
+        QLineF l = wire->line();
+        double length_pixels = l.length();
+        // 1 pixel = 0.1um (Arbitrary scaling for now)
+        double length_um = length_pixels * 0.1; 
+        
+        // Find connectivity
+        QPointF p1 = wire->mapToScene(l.p1());
+        QPointF p2 = wire->mapToScene(l.p2());
+        QPair<int,int> k1 = {qRound(p1.x()), qRound(p1.y())};
+        QPair<int,int> k2 = {qRound(p2.x()), qRound(p2.y())};
+        
+        int n1 = 0, n2 = 0;
+        if (pointToNetID.contains(k1)) n1 = finalNodeMap[findSet(pointToNetID[k1])];
+        if (pointToNetID.contains(k2)) n2 = finalNodeMap[findSet(pointToNetID[k2])];
+        
+        // For simple wires, n1 == n2 usually (shorted).
+        // But for parasitic modeling, we might eventually break this node.
+        // For Phase 1.5, we just export the segment info attached to the node.
+        
+        TensorBlock::WireSegment seg;
+        seg.layer = wire->layer.toStdString();
+        seg.node1 = n1;
+        seg.node2 = n2;
+        seg.width_um = wire->width_um;
+        seg.length_um = length_um;
+        seg.r_per_um = 0.1; // Placeholder: 0.1 Ohm/um
+        seg.c_per_um = 0.2; // Placeholder: 0.2 fF/um
+        
+        netlist.globalBlock.wireSegments.push_back(seg);
+        
+        // Optional: Inject Lumped Parasitic Resistor if length is significant
+        if (length_um > 10.0) { // > 1um long
+             TensorBlock::ParasiticResistor pr;
+             pr.name = "R_WIRE_" + std::to_string(netlist.globalBlock.wireSegments.size());
+             // Note: In a real extractor, we'd insert an internal node. 
+             // Here we just record it for the SPICE writer to decide.
+             pr.node1 = n1; 
+             pr.node2 = n1; // Shorted in ideal sim
+             pr.R = length_um * seg.r_per_um;
+             netlist.globalBlock.parasiticResistors.push_back(pr);
+        }
+    }
     
     return netlist; 
 }
@@ -1234,13 +1303,9 @@ TensorNetlist GridScene::generateNetlist() {
 QStringList GridScene::runERC() {
     // Delegate fully to the ERC Engine
     // ercEngine_ is a member object, no check needed.
-    
-    // Set current mode
-    auto* editor = qobject_cast<SchematicEditor*>(parent());
-    if (editor) {
-        ercEngine_.setMode(editor->getMode()); 
-    }
-    
+
+    // Mode setting removed - unified component library
+
     // Run Check
     QList<ERC::Violation> violations = ercEngine_.runFullCheck(this);
     
@@ -1425,25 +1490,10 @@ void SchematicEditor::onSnappingToggled(bool checked) {
     scene->setSnappingEnabled(checked);
 }
 
-void SchematicEditor::setMode(AppMode mode) {
-    // DEPRECATED: Mode system removed - unified component library
-    // This method is kept for API compatibility but mode no longer affects behavior
-    Q_UNUSED(mode);
-    currentMode = AppMode::BENCH_TEST;  // Default value for compatibility
+// setMode() removed - unified component library
 
-    // Status label now shows generic "Ready" message (no mode display)
-    statusLabel->setText("Ready");
-    statusLabel->setStyleSheet("background: #007ACC; color: white; padding: 4px; font-weight: bold;");
-
-    // Scene mode setting deprecated
-    // if (scene) scene->setMode(mode); // Removed
-
-    // modeChanged signal still emitted for any listeners
-    emit modeChanged(currentMode);
-}
-
-void SchematicEditor::setTool(ComponentType t) {
-    scene->setTool(t);
+void SchematicEditor::setTool(ComponentType t, const QString& subName) {
+    scene->setTool(t, subName);
 }
 
 void SchematicEditor::setWireName(VisualWire* wire, const QString& name) {
@@ -1453,20 +1503,20 @@ void SchematicEditor::setWireName(VisualWire* wire, const QString& name) {
 }
 
 QStringList SchematicEditor::getAvailableComponents() {
-    // Return all available components - unified library (no mode filtering)
+    // Return all available components - unified PDK library
     return {
         // Passives
-        "Resistor", "Capacitor", "Inductor", "Ferrite Bead",
+        "Resistor", "Capacitor", "Inductor",
         // Sources
         "Voltage Source", "Current Source", "VCVS", "CCVS", "VCCS", "CCCS",
         // Semiconductors
-        "Diode", "Schottky Diode", "N-MOSFET", "NPN BJT", "N-JFET", "P-JFET",
+        "Diode", "Schottky Diode", "N-MOSFET", "NPN BJT",
+        // PDK Primitives
+        "PDK_NFET", "PDK_PFET", "PDK_Resistor", "PDK_Capacitor",
         // Power
-        "Ground", "Vdd/Vcc", "Vss/GND", "Battery", "LDO Regulator", "Waveform Gen",
+        "Ground",
         // Interfaces
-        "PowerPort",
-        // ICs
-        "ULN2003A", "ULN2803A", "LM7805", "NE555"
+        "Probe"
     };
 }
 
@@ -1503,9 +1553,7 @@ void SchematicEditor::placePhysicallyAwareWire(const QVector<QPointF>& points, f
 
 QJsonObject SchematicEditor::getCircuitState() {
     QJsonObject state = scene->getCircuitState();
-    QJsonObject meta = state["metadata"].toObject();
-    meta["mode"] = (currentMode == AppMode::SYSTEM_INTEGRATION) ? "SYSTEM" : "LAB";
-    state["metadata"] = meta;
+    // mode metadata removed - unified component library
     return state;
 }
 

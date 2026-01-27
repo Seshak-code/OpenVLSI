@@ -501,9 +501,10 @@ void MainWindow::createLibraryDock() {
     libraryPanel = new ComponentLibrary(this);
     
     // Connect Selection
-    connect(libraryPanel, &ComponentLibrary::componentSelected, this, [this](ComponentType type){
+    connect(libraryPanel, qOverload<ComponentType, const QString&>(&ComponentLibrary::componentSelected), 
+        this, [this](ComponentType type, const QString& name){
         if (schematicEditor) {
-            schematicEditor->setTool(type);
+            schematicEditor->setTool(type, name);
         }
     });
     
@@ -647,7 +648,24 @@ void MainWindow::updateProperties(VisualComponent* item) {
             propertiesTable->setCellWidget(row, 1, combo);
         } else {
             // Standard Text Edit
-            propertiesTable->setItem(row, 1, new QTableWidgetItem(val));
+            QTableWidgetItem* valItem = new QTableWidgetItem(val);
+            
+            // Phase 3: Enforce Read-Only Model for PDK Components
+            // If the user selected a "Standard Cell" (PDK Component), the Model is fixed by the library.
+            // For "Primitives", the Model is empty/editable to allow transformation.
+            bool isPDK = (item->type == ComponentType::PDK_NFET || 
+                          item->type == ComponentType::PDK_PFET || 
+                          item->type == ComponentType::PDK_Resistor || 
+                          item->type == ComponentType::PDK_Capacitor ||
+                          item->type == ComponentType::SubCircuit);
+                          
+            if (key == "Model" && isPDK) {
+                valItem->setFlags(valItem->flags() & ~Qt::ItemIsEditable);
+                valItem->setToolTip("Model is fixed for Standard Library Cells.");
+                valItem->setForeground(QBrush(QColor("#808080"))); // Gray text
+            }
+            
+            propertiesTable->setItem(row, 1, valItem);
         }
         row++;
     }
@@ -934,8 +952,8 @@ void MainWindow::setupMenus() {
 }
 
 void MainWindow::newProject() {
-    // Create new schematic tab with default mode (Bench Test for ideal component testing)
-    createSchematicFromWelcome(AppMode::BENCH_TEST);
+    // Create new schematic tab
+    createSchematicFromWelcome();
     statusBar()->showMessage("New schematic created", 3000);
 }
 
@@ -1214,65 +1232,7 @@ void MainWindow::openHDLFile(const QString& filePath, const QString& fileName) {
     statusBar()->showMessage(QString("Opened HDL file: %1").arg(fileName), 4000);
 }
 
-AppMode MainWindow::detectModeFromSchematic(const QJsonObject& state) {
-    // Default mode
-    AppMode mode = AppMode::BENCH_TEST;
-
-    if (state.isEmpty()) {
-        return mode;
-    }
-
-    // Check metadata for explicit mode
-    if (state.contains("metadata")) {
-        QJsonObject meta = state["metadata"].toObject();
-        if (meta.contains("mode")) {
-            QString modeStr = meta["mode"].toString();
-            if (modeStr == "BLOCK" || modeStr == "BLOCK_SUBSYSTEM") {
-                return AppMode::BLOCK_SUBSYSTEM;
-            } else if (modeStr == "SYSTEM" || modeStr == "SYSTEM_INTEGRATION") {
-                return AppMode::SYSTEM_INTEGRATION;
-            }
-            return AppMode::BENCH_TEST;
-        }
-    }
-
-    // Heuristic detection based on component types
-    QJsonArray components = state["components"].toArray();
-    bool hasPowerPort = false;
-    bool hasRailDriver = false;
-    bool hasIdealSource = false;
-
-    for (const auto& val : components) {
-        QJsonObject comp = val.toObject();
-        QString type = comp["type"].toString().toLower();
-
-        if (type.contains("powerport") || type.contains("power_port")) {
-            hasPowerPort = true;
-        }
-        if (type.contains("raildriver") || type.contains("rail_driver")) {
-            hasRailDriver = true;
-        }
-        if (type.contains("voltage source") || type.contains("current source") ||
-            type == "vsource" || type == "isource") {
-            hasIdealSource = true;
-        }
-    }
-
-    // Determine mode from components
-    if (hasRailDriver) {
-        mode = AppMode::SYSTEM_INTEGRATION;
-    } else if (hasPowerPort) {
-        mode = AppMode::BLOCK_SUBSYSTEM;
-    } else if (hasIdealSource) {
-        mode = AppMode::BENCH_TEST;
-    }
-
-    qDebug() << "[MainWindow] Detected mode:" << static_cast<int>(mode)
-             << "(PowerPort:" << hasPowerPort << "RailDriver:" << hasRailDriver
-             << "IdealSource:" << hasIdealSource << ")";
-
-    return mode;
-}
+// detectModeFromSchematic() removed - unified component library
 
 void MainWindow::closeEvent(QCloseEvent *event) {
     // Save layout state (Phase 11.2)
@@ -1351,9 +1311,7 @@ void MainWindow::syncVerilogToSchematic() {
 
 void MainWindow::onStageChanged(DesignStage stage) {
     // Update Component Library based on stage
-    if (libraryPanel) {
-        libraryPanel->setStage(stage);
-    }
+    // Update Component Library: Unified library handles all stages now (always visible)
     
     // Update status bar
     statusBar()->showMessage(QString("Stage: %1").arg(DesignFlowManager::stageName(stage)));
@@ -1395,9 +1353,8 @@ void MainWindow::addRtlPage() {
     statusBar()->showMessage(QString("Added new schematic: %1").arg(pageName), 3000);
 }
 
-void MainWindow::createSchematicFromWelcome(AppMode mode) {
-    // DEPRECATED: mode parameter ignored - unified component library
-    Q_UNUSED(mode);
+void MainWindow::createSchematicFromWelcome() {
+    // Mode parameter removed - unified component library
 
     static int pageCount = 0;
     QString pageName = QString("schematic_%1.sch").arg(++pageCount);
@@ -1468,31 +1425,7 @@ void MainWindow::onRtlTabChanged(int index) {
     }
 }
 
-QString MainWindow::modeLabel(AppMode mode) {
-    switch (mode) {
-        case AppMode::BENCH_TEST: return "Bench";
-        case AppMode::BLOCK_SUBSYSTEM: return "Block";
-        case AppMode::SYSTEM_INTEGRATION: return "System";
-        default: return "Unknown";
-    }
-}
-
-AppMode MainWindow::getMode() const {
-    // DEPRECATED: Mode system removed - unified component library
-    // Returns BENCH_TEST for backwards compatibility
-    return AppMode::BENCH_TEST;
-}
-
-void MainWindow::setMode(AppMode mode) {
-    // DEPRECATED: Mode system removed - unified component library
-    // This method is kept for API compatibility but is now a no-op
-    Q_UNUSED(mode);
-
-    // Mode propagation to editor and library removed
-    // All components are now available regardless of mode
-}
-
-
+// modeLabel(), getMode(), setMode() removed - unified component library
 
 void MainWindow::createWorkerDock() {
     workerDock = new QDockWidget("Worker Status", this);

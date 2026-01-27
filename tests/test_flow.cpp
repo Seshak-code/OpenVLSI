@@ -12,15 +12,13 @@
 #include "../compute/solvers/superposition.cpp"
 
 /**
- * test_flow.cpp
- * 
- * Automated flow testing for Bench → Block → System design progression.
+ * Automated flow testing for Raw State component integration.
  * 
  * This test validates:
- * 1. Bench circuits can be extracted as Blocks
- * 2. Block ERC rules are enforced during promotion
- * 3. Blocks can be integrated into System designs
- * 4. System ERC rules catch integration errors
+ * 1. Circuits can be extracted as integrated components
+ * 2. Raw State ERC rules are enforced during promotion
+ * 3. Components can be integrated into larger designs
+ * 4. Physics-backed rules catch integration errors
  */
 
 using namespace DesignRules;
@@ -43,35 +41,36 @@ void printResult(const std::string& test, bool passed) {
 // TEST 1: BENCH CIRCUIT CREATION & VALIDATION
 // ============================================================================
 
-bool testBenchCircuit() {
-    printHeader("Test 1: Bench Circuit Creation");
+bool testRawStateCircuit() {
+    printHeader("Test 1: Raw State Circuit Creation");
     
-    // Create a simple voltage divider in Bench mode
-    TensorBlock benchCircuit;
-    benchCircuit.name = "VoltageDivider_Bench";
+    // Create a simple voltage divider
+    TensorBlock rawCircuit;
+    rawCircuit.name = "VoltageDivider_Raw";
     
-    // Add voltage source (allowed in Bench mode)
+    // Add RailDriver (required in raw state)
     VoltageSource vs;
     vs.nodePositive = 1;
     vs.nodeNegative = 0;
     vs.voltage_V = 10.0;
-    benchCircuit.voltageSources.push_back(vs);
+    vs.type = "RailDriver";
+    rawCircuit.voltageSources.push_back(vs);
     
     // Add resistive divider
-    benchCircuit.addResistor(1, 2, 10000.0);  // R1: 10k
-    benchCircuit.addResistor(2, 0, 10000.0);  // R2: 10k
+    rawCircuit.addResistor(1, 2, 10000.0);  // R1: 10k
+    rawCircuit.addResistor(2, 0, 10000.0);  // R2: 10k
     
-    // Validate in Bench mode
-    ViolationReport report = validate<DesignMode::BENCH>(benchCircuit);
+    // Validate
+    ViolationReport report = validate(rawCircuit);
     
     std::cout << "Violations: " << report.entries.size() << "\n";
     for (const auto& e : report.entries) {
         std::cout << "  - " << e.message << "\n";
     }
     
-    // Bench mode should allow voltage sources
+    // Raw state should allow RailDrivers
     bool passed = !report.hasErrors;
-    printResult("Bench circuit with voltage source is valid", passed);
+    printResult("Raw circuit with RailDriver is valid", passed);
     
     return passed;
 }
@@ -110,12 +109,12 @@ bool testBenchToBlockPromotion() {
     bool extractPassed = valResult.isValid;
     printResult("Extracted subcircuit is valid", extractPassed);
     
-    // Now validate the internal block in Block mode
-    ViolationReport blockReport = validate<DesignMode::BLOCK>(blockDef.internalBlock);
+    // Now validate the internal block in Raw mode
+    ViolationReport blockReport = validate(blockDef.internalBlock);
     
-    // Block mode should succeed (no voltage sources at interface)
+    // Should pass if no non-RailDriver sources
     bool blockPassed = !blockReport.hasErrors;
-    printResult("Block mode validation passed", blockPassed);
+    printResult("Raw mode validation passed", blockPassed);
     
     return extractPassed && blockPassed;
 }
@@ -124,26 +123,27 @@ bool testBenchToBlockPromotion() {
 // TEST 3: BLOCK MODE REJECTS INTERFACE SOURCES
 // ============================================================================
 
-bool testBlockModeRejectsInterfaceSources() {
-    printHeader("Test 3: Block Mode Rejects Interface Sources");
+bool testRawStateRejectsGenericSources() {
+    printHeader("Test 3: Raw State Rejects Generic Sources");
     
-    // Create a block with voltage source (should fail)
+    // Create a block with generic voltage source (should fail)
     TensorBlock badBlock;
     badBlock.name = "BadBlock_WithSource";
     
-    // Add voltage source (NOT allowed in Block mode)
+    // Add generic voltage source (NOT allowed in Raw State)
     VoltageSource vs;
     vs.nodePositive = 1;
     vs.nodeNegative = 0;
     vs.voltage_V = 5.0;
+    vs.type = "Generic";
     badBlock.voltageSources.push_back(vs);
     
     badBlock.addResistor(1, 2, 1000.0);
     
-    // Validate in Block mode
-    ViolationReport report = validate<DesignMode::BLOCK>(badBlock);
+    // Validate
+    ViolationReport report = validate(badBlock);
     
-    std::cout << "Block mode violations: " << report.entries.size() << "\n";
+    std::cout << "Raw mode violations: " << report.entries.size() << "\n";
     for (const auto& e : report.entries) {
         std::cout << "  - [" << (int)e.code << "] " << e.message << "\n";
     }
@@ -157,7 +157,7 @@ bool testBlockModeRejectsInterfaceSources() {
         }
     }
     
-    printResult("Block mode correctly rejects voltage source", hasSourceError);
+    printResult("Raw state correctly rejects generic voltage source", hasSourceError);
     
     return hasSourceError;
 }
@@ -187,8 +187,8 @@ bool testFloatingGateDetection() {
     // Add resistor load
     circuit.addResistor(1, 2, 1000.0);
     
-    // Validate in Block mode
-    ViolationReport report = validate<DesignMode::BLOCK>(circuit);
+    // Validate
+    ViolationReport report = validate(circuit);
     
     std::cout << "Floating gate check violations: " << report.entries.size() << "\n";
     for (const auto& e : report.entries) {
@@ -236,25 +236,21 @@ bool testBlockToSystemIntegration() {
     validBlock.addResistor(1, 0, 10000.0);   // Base-emitter
     validBlock.addResistor(4, 2, 5000.0);    // Collector load
     
-    // Validate in Block mode first
-    ViolationReport blockReport = validate<DesignMode::BLOCK>(validBlock);
-    bool blockValid = !blockReport.hasErrors;
+    // Validate in Raw State
+    ViolationReport systemReport = validate(validBlock);
     
-    std::cout << "Block validation: " << (blockValid ? "PASS" : "FAIL") << "\n";
+    bool blockValid = !systemReport.hasErrors;
     
-    // Now validate in System mode (stricter)
-    ViolationReport systemReport = validate<DesignMode::SYSTEM>(validBlock);
-    
-    std::cout << "System mode violations: " << systemReport.entries.size() << "\n";
+    std::cout << "Raw mode violations: " << systemReport.entries.size() << "\n";
     for (const auto& e : systemReport.entries) {
-        auto severity = e.getSeverity(DesignMode::SYSTEM);
+        auto severity = e.getSeverity();
         std::string sevStr = (severity == ViolationEntry::Severity::ERR) ? "ERR" :
                              (severity == ViolationEntry::Severity::WARN) ? "WARN" : "INFO";
         std::cout << "  - [" << sevStr << "] " << e.message << "\n";
     }
     
-    // Block should be valid in both modes (no sources)
-    printResult("Valid block passes Block mode", blockValid);
+    // Block should be valid
+    printResult("Valid block passes raw state validation", blockValid);
     
     return blockValid;
 }
@@ -266,9 +262,9 @@ bool testBlockToSystemIntegration() {
 bool testCompleteFlow() {
     printHeader("Test 6: Complete Flow - Bench → Block → Simulate");
     
-    // Step 1: Create bench circuit
+    // Step 1: Create circuit
     TensorNetlist benchNet;
-    benchNet.addVoltageSource(1, 0, 5.0);
+    benchNet.addVoltageSource(1, 0, 5.0, "RailDriver");
     benchNet.addResistor(1, 2, 2000.0);
     benchNet.addResistor(2, 0, 2000.0);
     
@@ -304,7 +300,7 @@ bool testCompleteFlow() {
     
     // Step 4: Validate block
     ValidationResult valResult = validateSubCircuit(blockDef);
-    ViolationReport drReport = validate<DesignMode::BLOCK>(blockDef.internalBlock);
+    ViolationReport drReport = validate(blockDef.internalBlock);
     
     std::cout << "Step 4: Block validation - " << valResult.summary() << "\n";
     
@@ -335,19 +331,13 @@ bool testERCAtEachLevel() {
     // Add a very low resistance (potential short)
     circuit.addResistor(3, 4, 0.5);       // Very low R
     
-    // Validate at each level
-    auto benchReport = validate<DesignMode::BENCH>(circuit);
-    auto blockReport = validate<DesignMode::BLOCK>(circuit);
-    auto systemReport = validate<DesignMode::SYSTEM>(circuit);
+    // Validate in raw state
+    auto report = validate(circuit);
     
-    std::cout << "Bench mode:  " << benchReport.entries.size() << " violations, hasErrors=" << benchReport.hasErrors << "\n";
-    std::cout << "Block mode:  " << blockReport.entries.size() << " violations, hasErrors=" << blockReport.hasErrors << "\n";
-    std::cout << "System mode: " << systemReport.entries.size() << " violations, hasErrors=" << systemReport.hasErrors << "\n";
+    std::cout << "Raw mode:  " << report.entries.size() << " violations, hasErrors=" << report.hasErrors << "\n";
     
-    // All modes should detect VDD/GND short potential
-    bool detected = (benchReport.entries.size() > 0 || 
-                     blockReport.entries.size() > 0 || 
-                     systemReport.entries.size() > 0);
+    // Should detect VDD/GND short potential
+    bool detected = (report.entries.size() > 0);
     
     printResult("ERC detected low-resistance path", detected);
     
@@ -363,7 +353,7 @@ bool testDiodeRectifierBlock() {
     
     // Create half-wave rectifier circuit
     TensorNetlist rectifier;
-    rectifier.addVoltageSource(1, 0, 10.0);  // AC input (DC for test)
+    rectifier.addVoltageSource(1, 0, 10.0, "RailDriver"); 
     
     // Add diode (D1)
     Diode d;
@@ -448,8 +438,8 @@ bool testCMOSInverterBlock() {
     inverter.addResistor(1, 0, 100000.0);  // Input bias to GND
     inverter.addResistor(3, 0, 100000.0);  // VDD rail bias
     
-    // Validate in Block mode (no floating gates because of bias resistors)
-    ViolationReport report = validate<DesignMode::BLOCK>(inverter);
+    // Validate
+    ViolationReport report = validate(inverter);
     
     std::cout << "CMOS Inverter violations: " << report.entries.size() << "\n";
     for (const auto& e : report.entries) {
@@ -528,7 +518,7 @@ bool testBJTDifferentialPair() {
     diffPair.addResistor(6, 0, 100000.0);  // VCC path
     
     // Validate
-    ViolationReport report = validate<DesignMode::BLOCK>(diffPair);
+    ViolationReport report = validate(diffPair);
     
     std::cout << "Diff pair violations: " << report.entries.size() << "\n";
     for (const auto& e : report.entries) {
@@ -589,7 +579,7 @@ bool testRCFilterBlock() {
     std::cout << "Calculated cutoff frequency: " << fc / 1000.0 << " kHz\n";
     
     // Validate
-    ViolationReport report = validate<DesignMode::BLOCK>(rcFilter);
+    ViolationReport report = validate(rcFilter);
     std::cout << "RC filter violations: " << report.entries.size() << "\n";
     
     // Extract as block
@@ -667,7 +657,7 @@ bool testFullAnalogIntegration() {
     analogChain.addResistor(5, 0, 10000.0);
     
     // Validate entire chain
-    ViolationReport report = validate<DesignMode::BLOCK>(analogChain.globalBlock);
+    ViolationReport report = validate(analogChain.globalBlock);
     std::cout << "Analog chain violations: " << report.entries.size() << "\n";
     for (const auto& e : report.entries) {
         std::cout << "  - " << e.message << "\n";
@@ -743,7 +733,7 @@ bool testMixedBJTMOSFET() {
     bicmos.addResistor(4, 0, 100000.0);   // VDD bias
     
     // Validate
-    ViolationReport report = validate<DesignMode::BLOCK>(bicmos);
+    ViolationReport report = validate(bicmos);
     std::cout << "BiCMOS violations: " << report.entries.size() << "\n";
     
     // Extract as block
@@ -787,9 +777,9 @@ int main() {
     int failed = 0;
     
     // Basic flow tests (1-7)
-    if (testBenchCircuit())                    passed++; else failed++;
+    if (testRawStateCircuit())                 passed++; else failed++;
     if (testBenchToBlockPromotion())           passed++; else failed++;
-    if (testBlockModeRejectsInterfaceSources()) passed++; else failed++;
+    if (testRawStateRejectsGenericSources())   passed++; else failed++;
     if (testFloatingGateDetection())           passed++; else failed++;
     if (testBlockToSystemIntegration())        passed++; else failed++;
     if (testCompleteFlow())                    passed++; else failed++;

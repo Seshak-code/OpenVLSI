@@ -1,9 +1,15 @@
 #pragma once
 
+#include <vector>
+#include <string>
+#include <functional> // for std::hash
+
+#if defined(QT_CORE_LIB) || defined(USE_QT)
 #include <QString>
 #include <QMetaType>
 #include <QList>
-#include <random>
+#include <QVector>
+#endif
 
 namespace acutesim::physics {
 
@@ -34,7 +40,7 @@ enum class RunMode {
  * @brief Configuration for a single Simulation Corner (PVT + Statistical)
  */
 struct CornerConfig {
-    QString name; // e.g., "Worst-Case Hot"
+    std::string name; // e.g., "Worst-Case Hot"
     
     // Environmental
     double temperatureC = 27.0;
@@ -70,7 +76,7 @@ struct CornerConfig {
     }
     
     // Helper for UI population
-    static QVector<CornerConfig> standard5() {
+    static std::vector<CornerConfig> standard5() {
         return {
             { "TT (Typical)", 27.0, 1.0, ProcessCorner::TT },
             { "FF (Fast-Fast)", 27.0, 1.0, ProcessCorner::FF },
@@ -79,8 +85,16 @@ struct CornerConfig {
             { "SF (Slow-Fast)", 27.0, 1.0, ProcessCorner::SF }
         };
     }
+
+#if defined(QT_CORE_LIB) || defined(USE_QT)
+    // Conversion helpers if needed
+    QString qName() const { return QString::fromStdString(name); }
+#endif
 };
 
 } // namespace acutesim::physics
 
+#if defined(QT_CORE_LIB) || defined(USE_QT)
 Q_DECLARE_METATYPE(acutesim::physics::CornerConfig)
+#endif
+

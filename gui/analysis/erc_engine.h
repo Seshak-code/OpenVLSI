@@ -457,19 +457,9 @@ private:
             if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
                 // Determine if this component IS a voltage driver
                 bool isDriver = (comp->type == ComponentType::VoltageSource || 
-                                 comp->type == ComponentType::RailDriver ||
                                  comp->type == ComponentType::VCVS ||
                                  comp->type == ComponentType::CCVS);
                                  
-                // In Block Mode, Input Ports are also drivers (conceptually)
-                if (currentMode_ == AppMode::BLOCK_SUBSYSTEM && comp->type == ComponentType::PowerPort) {
-                    // Primitive direction check based on name? 
-                    // For now, assume ALL ports count as potential drivers to warn against conflicts
-                    // Better: check if name implies output? No, let's stick to electrical sources.
-                    // Actually, connecting a VoltageSource to an Input PowerPort is bad.
-                    // Connecting two Input PowerPorts is fine.
-                    // Connecting Output PowerPort to VoltageSource is bad.
-                }
 
                 if (isDriver) {
                     // Find which net it drives (Terminal 1 is usually +, Terminal 0 is -)

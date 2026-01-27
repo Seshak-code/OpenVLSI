@@ -45,7 +45,7 @@ bool testCircuitState() {
     net.globalBlock.bjts.push_back(q);
     
     // Get circuit state
-    CircuitState state = getCircuitState(net, {}, DesignMode::BENCH);
+    CircuitState state = getCircuitState(net, {});
     
     std::cout << "Circuit: " << state.name << "\n";
     std::cout << "Nodes: " << state.numNodes << "\n";
@@ -71,7 +71,7 @@ bool testJSONSerialization() {
     net.addResistor(1, 0, 1000.0);
     
     std::vector<double> voltages = {5.0, 2.5};
-    CircuitState state = getCircuitState(net, voltages, DesignMode::BLOCK);
+    CircuitState state = getCircuitState(net, voltages);
     
     std::string json = state.toJSON();
     
@@ -79,10 +79,10 @@ bool testJSONSerialization() {
     
     // Basic validation
     bool hasName = json.find("\"name\"") != std::string::npos;
-    bool hasMode = json.find("\"mode\": \"block\"") != std::string::npos;
+    bool hasPrecision = json.find("\"precision\": \"emulated_f64\"") != std::string::npos;
     bool hasVoltages = json.find("\"nodeVoltages\"") != std::string::npos;
     
-    bool passed = hasName && hasMode && hasVoltages;
+    bool passed = hasName && hasPrecision && hasVoltages;
     std::cout << (passed ? "[PASS]" : "[FAIL]") << " JSON contains required fields\n";
     
     return passed;
@@ -186,8 +186,8 @@ bool testCompleteFlow() {
     m.channelLength_m = 0.18e-6;
     net.globalBlock.mosfets.push_back(m);
     
-    // Get state in Block mode (stricter)
-    std::string json = getCircuitStateJSON(net, {}, DesignMode::BLOCK);
+    // Get state
+    std::string json = getCircuitStateJSON(net, {});
     
     std::cout << "Complete state JSON:\n" << json << "\n";
     

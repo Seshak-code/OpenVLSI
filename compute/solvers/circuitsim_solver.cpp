@@ -225,10 +225,29 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     
     // Phase 1 Hardening: Use extracted helper for PN junction limiting
     applyPnJunctionLimits(netlist, v_new, voltageEstimate);
-    
+
     // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
     double kcl_error = calculatePhysicalResiduals(netlist, v_new);
-    final_kcl_error = kcl_error;
+
+    // Limit Cycle Breaker: Damping
+    // If residual is not improving, dampen the step to force a different path
+    if (iteration > 0 && kcl_error >= final_kcl_error) { // final_kcl_error holds prev_error
+         // Apply damping: v_new = v_old + 0.5 * (v_new - v_old)
+         for(size_t i=0; i<v_new.size(); ++i) {
+             v_new[i] = voltageEstimate[i] + 0.5 * (v_new[i] - voltageEstimate[i]);
+         }
+         // Re-evaluate residual after damping
+         kcl_error = calculatePhysicalResiduals(netlist, v_new);
+         
+         // If still bad, dampen again (aggressive backoff)
+         if (kcl_error >= final_kcl_error) {
+              for(size_t i=0; i<v_new.size(); ++i) {
+                 v_new[i] = voltageEstimate[i] + 0.5 * (v_new[i] - voltageEstimate[i]);
+              }
+              kcl_error = calculatePhysicalResiduals(netlist, v_new);
+         }
+    }
+    final_kcl_error = kcl_error; // Store for next iteration comparison
 
     // During GMIN stepping, we relax the KCL check because GMIN itself adds residual.
     // We only enforce strict KCL at the final (nominal GMIN) step.

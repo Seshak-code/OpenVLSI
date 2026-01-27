@@ -14,16 +14,13 @@ The `physics/` directory contains the core numerical engine of CuteApp. It is de
     ```cpp
     // physics/device_physics.h
     template <typename T, typename P>
-    inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 30.0) 
-    {
-        // Linear Continuation for stability
-        T arg = vd / (p.N * p.Vt);
-        if (arg > max_arg) {
-            // ... linear extrapolation logic ...
-            return i_max + delta * g_max; 
-        }
-        return p.Is * (std::exp(arg) - 1.0);
-    }
+    inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 30.0);
+
+    template <typename T, typename P>
+    inline T zener_current_clamped(T vd, const ZenerParams<P>& p);
+
+    template <typename T, typename P>
+    inline T jfet_ids_clamped(T vgs, T vds, const JFETParams<P>& p);
     ```
 
     -   **PNJLIM**: SPICE-style voltage limiting logic (`pnjlim`) to dampen Newton-Raphson oscillations.
@@ -110,6 +107,8 @@ The `physics/` directory contains the core numerical engine of CuteApp. It is de
 2.  **Loop**:
     -   `CircuitSim::stepTransient` calls `IntegratorArbiter`.
     -   If stable, `matrixBuilder` assembles Jacobian via `stamps.h` (Parallel/Batch).
+        -   **Global Block**: Stamped via `stampSoABlock` (Optimized AVX-512).
+        -   **Hierarchical Instances**: Stamped via `stampBlockLinear`/`stampBlockNonLinear` loop (Scalar).
     -   Solver computes $\Delta V$.
     -   **State Update**: `BlockState` histories (inductors/capacitors) updated.
     -   `calculatePhysicalResiduals` validates the result against physics.

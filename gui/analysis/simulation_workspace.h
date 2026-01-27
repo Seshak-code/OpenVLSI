@@ -53,7 +53,7 @@ public:
     
     // Topology invalidation
     void onTopologyChanged(size_t newHash);
-    void onModeChanged(AppMode mode);
+    // onModeChanged() removed - unified component library
     
 signals:
     void simulationStarted(const QString& profileId);
@@ -112,7 +112,7 @@ private:
     QMap<QString, Simulation::SimulationProfile> profiles_;
     QString currentProfileId_;
     size_t currentTopologyHash_ = 0;
-    AppMode currentMode_ = AppMode::BENCH_TEST;
+    // currentMode_ removed - unified component library
     
     // Simulation engine
     CircuitSim sim_;

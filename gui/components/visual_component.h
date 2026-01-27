@@ -20,27 +20,23 @@ enum class ComponentType {
     Diode,
     Mosfet,
     Bjt,
-    JFET_N,         // N-Channel JFET
-    JFET_P,         // P-Channel JFET
     CurrentSource,
-    SchottkyDiode,
     Probe,
-    ICPackage,      // Hierarchical IC (e.g., ULN2003A, 555 Timer)
-    
-    // Dependent Sources (Bench + Block internal)
+    SchottkyDiode,
+
+    // PDK-Ready Primitives (Full Simulation Support)
+    PDK_NFET,       // 4-Terminal (D, G, S, B)
+    PDK_PFET,       // 4-Terminal (D, G, S, B)
+    PDK_Resistor,   // 3-Terminal (A, B, SUB)
+    PDK_Capacitor,  // 2-Terminal (TOP, BOT)
+
+    // Dependent Sources
     VCVS,           // Voltage-Controlled Voltage Source
     CCVS,           // Current-Controlled Voltage Source
     VCCS,           // Voltage-Controlled Current Source
     CCCS,           // Current-Controlled Current Source
     
-    // Block mode (PowerPort never stamps MNA - constraint endpoint only)
-    PowerPort,      // Interface pin: Vin, Vout, GND as requirement
-    
-    // System mode (RailDrivers inject net power)
-    RailDriver,     // Abstract: IdealRail, LinearRegulator, SwitchingRegulator
-    PowerVdd,       // Vdd/Vcc symbol (binds to global net)
-    PowerVss,       // Vss/GND symbol (binds to global net)
-    WaveformGen     // System-level clock/IO driver
+    SubCircuit      // Generic SubCircuit (Standard Cell)
 };
 
 QString componentTypeToString(ComponentType t);
@@ -96,6 +92,11 @@ public:
         m_pen.setWidthF(width);
         update(); // Trigger repaint
     }
+    
+    // Phase 1.5: Parasitic/Physical Properties
+    QString layer = "M1"; // Default Metal 1
+    double width_um = 0.5; // Default 0.5um
+    QString model_name = "wire_generic"; // Generic model for R/C lookup
 
     // Helper to get effective pen
     QPen pen() const { return m_pen; }
@@ -106,24 +107,8 @@ private:
     QPen m_pen; // QGraphicsObject doesn't store a pen like QGraphicsLineItem/PathItem does
 };
 
-// ============================================================================
-// PROBE TIP
-// ============================================================================
-class VisualComponent;
-class ProbeTip : public QGraphicsItem {
-public:
-    ProbeTip(VisualComponent* parent, bool isPositive);
-
-    QRectF boundingRect() const override;
-    QPainterPath shape() const override;
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
-    
-    // Snapping support
-    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
-
-    bool isPositive;
-    VisualComponent* probeBody;
-};
+// ProbeTip included from probe_tip.h
+#include "probe_tip.h"
 
 // ============================================================================
 // VISUAL COMPONENT
@@ -134,6 +119,7 @@ public:
     ComponentType type;
     QString name;
     QString value;
+    QString subCircuitName; // Name of the subcircuit definition (if type == SubCircuit)
     QMap<QString, QString> params; // Dynamic parameters
     QMap<QString, QStringList> paramOptions; // Options for parameters (Key -> List of Choices)
 

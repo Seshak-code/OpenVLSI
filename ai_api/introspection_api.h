@@ -146,7 +146,6 @@ struct CircuitState {
     // Identity
     std::string name;
     uint64_t topologyHash = 0;
-    DesignMode mode = DesignMode::BENCH;
     
     // Component counts
     int numNodes = 0;
@@ -166,7 +165,7 @@ struct CircuitState {
     int iterations = 0;
     double residual = 0.0;
     
-    // DRC/LVS status
+    // DRC/LVS status (Raw State)
     int drcErrors = 0;
     int drcWarnings = 0;
     std::vector<std::string> drcViolations;
@@ -186,12 +185,10 @@ struct CircuitState {
  * - Topology summary
  * - Component counts
  * - Simulation results (if available)
- * - DRC/LVS violations
- * - Active rules and their values
+ * - DRC/LVS violations (Validated in Raw State)
  */
 inline CircuitState getCircuitState(const TensorNetlist& netlist,
-                                    const std::vector<double>& voltages = {},
-                                    DesignMode mode = DesignMode::BENCH) {
+                                    const std::vector<double>& voltages = {}) {
     CircuitState state;
     
     const auto& block = netlist.globalBlock;
@@ -199,7 +196,6 @@ inline CircuitState getCircuitState(const TensorNetlist& netlist,
     // Identity
     state.name = block.name;
     state.topologyHash = block.topologyHash;
-    state.mode = mode;
     
     // Component counts
     state.numNodes = netlist.numGlobalNodes;
@@ -219,28 +215,17 @@ inline CircuitState getCircuitState(const TensorNetlist& netlist,
         state.converged = true;  // Assume converged if we have voltages
     }
     
-    // Run DRC validation
-    DesignRules::ViolationReport report;
-    switch (mode) {
-        case DesignMode::BENCH:
-            report = DesignRules::validate<DesignMode::BENCH>(block);
-            break;
-        case DesignMode::BLOCK:
-            report = DesignRules::validate<DesignMode::BLOCK>(block);
-            break;
-        case DesignMode::SYSTEM:
-            report = DesignRules::validate<DesignMode::SYSTEM>(block);
-            break;
-    }
+    // Run DRC validation (Raw State)
+    DesignRules::ViolationReport report = DesignRules::validate(block);
     
-    state.drcErrors = report.hasErrors ? 1 : 0;
-    state.drcWarnings = report.hasWarnings ? 1 : 0;
+    state.drcErrors = 0;
+    state.drcWarnings = 0;
     
     for (const auto& e : report.entries) {
         state.drcViolations.push_back(e.message);
-        if (e.getSeverity(mode) == DesignRules::ViolationEntry::Severity::ERR) {
+        if (e.getSeverity() == DesignRules::ViolationEntry::Severity::ERR) {
             state.drcErrors++;
-        } else if (e.getSeverity(mode) == DesignRules::ViolationEntry::Severity::WARN) {
+        } else if (e.getSeverity() == DesignRules::ViolationEntry::Severity::WARN) {
             state.drcWarnings++;
         }
     }
@@ -252,9 +237,8 @@ inline CircuitState getCircuitState(const TensorNetlist& netlist,
  * getCircuitStateJSON() - Convenience wrapper returning JSON string
  */
 inline std::string getCircuitStateJSON(const TensorNetlist& netlist,
-                                       const std::vector<double>& voltages = {},
-                                       DesignMode mode = DesignMode::BENCH) {
-    return getCircuitState(netlist, voltages, mode).toJSON();
+                                       const std::vector<double>& voltages = {}) {
+    return getCircuitState(netlist, voltages).toJSON();
 }
 
 /**
@@ -273,7 +257,7 @@ inline std::string CircuitState::toJSON() const {
     ss << "{\n";
     ss << "  \"name\": \"" << name << "\",\n";
     ss << "  \"topologyHash\": " << topologyHash << ",\n";
-    ss << "  \"mode\": \"" << modeToString(mode) << "\",\n";
+    ss << "  \"precision\": \"emulated_f64\",\n";
     
     // Component counts
     ss << "  \"components\": {\n";

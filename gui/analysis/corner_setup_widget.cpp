@@ -3,6 +3,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QGroupBox>
+#include <QDoubleSpinBox>
+#include <QCheckBox>
+#include <QComboBox>
+#include <random>
 
 namespace acutesim::gui::analysis {
 
@@ -98,7 +102,7 @@ QVector<acutesim::physics::CornerConfig> CornerSetupWidget::getCorners() const {
         
         for (int i = 0; i < runs; ++i) {
             CornerConfig c;
-            c.name = QString("MC Run #%1").arg(i+1);
+            c.name = QString("MC Run #%1").arg(i+1).toStdString();
             c.temperatureC = m_tempMin->value(); // Use Min as Nominal for MC usually, or fix it
             c.voltageScale = v;
             c.process = p;
@@ -128,7 +132,7 @@ QVector<acutesim::physics::CornerConfig> CornerSetupWidget::getCorners() const {
         if (tStop < tStart) temp = tStart; // Safety
         
         CornerConfig c;
-        c.name = QString("T=%1C %2 V=%3").arg(temp).arg(m_processCombo->currentText().left(2)).arg(v);
+        c.name = QString("T=%1C %2 V=%3").arg(temp).arg(m_processCombo->currentText().left(2)).arg(v).toStdString();
         c.temperatureC = temp;
         c.voltageScale = v;
         c.process = p;

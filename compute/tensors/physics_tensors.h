@@ -102,8 +102,9 @@ struct MosfetTensor {
     std::vector<double> vgs;     // Gate-source voltage [V]
     std::vector<double> vds;     // Drain-source voltage [V]
     std::vector<double> ids;     // Drain current [A]
-    std::vector<double> gm;      // Transconductance [S]
-    std::vector<double> gds;     // Output conductance [S]
+    std::vector<double> gm;      // Transconductance [S] (dId/dVgs)
+    std::vector<double> gmb;     // Body transconductance [S] (dId/dVbs)
+    std::vector<double> gds;     // Output conductance [S] (dId/dVds)
     
     // Design Rule Validation Masks (GPU-compatible uint8)
     std::vector<uint8_t> dr_validity;
@@ -118,7 +119,7 @@ struct MosfetTensor {
         drains.reserve(n); gates.reserve(n); sources.reserve(n); bodies.reserve(n);
         W.reserve(n); L.reserve(n); Kp.reserve(n); Vth.reserve(n); lambda.reserve(n);
         Temp.reserve(n);
-        vgs.reserve(n); vds.reserve(n); ids.reserve(n); gm.reserve(n); gds.reserve(n);
+        vgs.reserve(n); vds.reserve(n); ids.reserve(n); gm.reserve(n); gmb.reserve(n); gds.reserve(n);
         dr_validity.reserve(n);
     }
     
@@ -126,7 +127,7 @@ struct MosfetTensor {
         drains.clear(); gates.clear(); sources.clear(); bodies.clear();
         W.clear(); L.clear(); Kp.clear(); Vth.clear(); lambda.clear();
         Temp.clear();
-        vgs.clear(); vds.clear(); ids.clear(); gm.clear(); gds.clear();
+        vgs.clear(); vds.clear(); ids.clear(); gm.clear(); gmb.clear(); gds.clear();
         dr_validity.clear();
     }
     
@@ -146,6 +147,7 @@ struct MosfetTensor {
         vds.push_back(0.0);
         ids.push_back(0.0);
         gm.push_back(0.0);
+        gmb.push_back(0.0);
         gds.push_back(1e-12);
         dr_validity.push_back(DR_OK);
     }

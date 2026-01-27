@@ -90,10 +90,8 @@ void SimulationExplorer::addProfile(const Simulation::SimulationProfile& profile
     QTreeWidgetItem* item = new QTreeWidgetItem(parent, {profile.name});
     item->setData(0, Qt::UserRole, profile.profileId);
     item->setIcon(0, getStatusIcon(profile.status));
-    item->setToolTip(0, QString("Analysis: %1\nMode: %2")
-        .arg(Simulation::analysisToString(profile.analysis))
-        .arg(profile.mode == AppMode::BENCH_TEST ? "Bench" :
-             profile.mode == AppMode::BLOCK_SUBSYSTEM ? "Block" : "System"));
+    item->setToolTip(0, QString("Analysis: %1")
+        .arg(Simulation::analysisToString(profile.analysis)));
 }
 
 void SimulationExplorer::updateProfileStatus(const QString& profileId, 

@@ -29,35 +29,23 @@ struct CircuitTemplate {
 
 class CircuitTemplates {
 public:
-    // Mode-aware template lookup (primary)
-    static CircuitTemplate getTemplate(const QString& name, AppMode mode) {
-        QString key = name.toLower() + "_" + modeKey(mode);
+    // Template lookup (mode-aware lookup removed - unified component library)
+    static CircuitTemplate getTemplate(const QString& name) {
         static QMap<QString, CircuitTemplate> templates = initTemplates();
+        // Try bench variant first (legacy), then base name
+        QString key = name.toLower() + "_bench";
         if (templates.contains(key)) {
             return templates.value(key);
         }
-        // Fallback to bench mode if mode-specific not found
-        return templates.value(name.toLower() + "_bench", templates.value(name.toLower()));
+        return templates.value(name.toLower());
     }
-    
-    // Legacy lookup (defaults to Bench)
-    static CircuitTemplate getTemplate(const QString& name) {
-        return getTemplate(name, AppMode::BENCH_TEST);
-    }
-    
+
     static QStringList availableTemplates() {
         return {"darlington", "current_mirror", "differential_pair", "inverter", "source_follower", "uln2003a"};
     }
 
 private:
-    static QString modeKey(AppMode mode) {
-        switch (mode) {
-            case AppMode::BENCH_TEST: return "bench";
-            case AppMode::BLOCK_SUBSYSTEM: return "block";
-            case AppMode::SYSTEM_INTEGRATION: return "system";
-            default: return "bench";
-        }
-    }
+    // modeKey() removed - unified component library
     
     static QMap<QString, CircuitTemplate> initTemplates() {
         QMap<QString, CircuitTemplate> map;
@@ -235,37 +223,9 @@ private:
             map["source_follower"] = t;
         }
         
-        // ====== ULN2003A DARLINGTON ARRAY ======
-        // 7-channel Darlington driver IC (DIP-16)
-        {
-            CircuitTemplate t;
-            t.name = "uln2003a";
-            t.description = "ULN2003A - 7-Channel Darlington Driver IC (System Integration)";
-            
-            // Single IC package component for schematic representation
-            // Internal circuitry is expanded during netlist generation
-            t.components = QJsonArray{
-                QJsonObject{
-                    {"type", "ICPackage"}, 
-                    {"id", "U1"}, 
-                    {"x", 0}, {"y", 0}, 
-                    {"value", "ULN2003A"},
-                    {"params", QJsonObject{{"Model", "ULN2003A"}, {"PinCount", "16"}}}
-                }
-            };
-            
-            // No explicit wires - IC package has integrated connections
-            t.wires = QJsonArray{};
-            
-            // External ports map to IC pins
-            t.ports = {"U1.1", "U1.2", "U1.3", "U1.4", "U1.5", "U1.6", "U1.7", // Inputs 1B-7B
-                       "U1.8", // GND
-                       "U1.9", // COM (flyback common)
-                       "U1.10", "U1.11", "U1.12", "U1.13", "U1.14", "U1.15", "U1.16"}; // Outputs
-            
-            map["uln2003a"] = t;
-        }
-        
+        // Note: ULN2003A IC template removed - ICPackage not available in unified PDK library
+        // Use discrete BJT arrays for Darlington drivers instead
+
         return map;
     }
 };

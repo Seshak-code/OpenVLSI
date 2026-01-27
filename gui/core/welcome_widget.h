@@ -7,7 +7,7 @@
 #include <QListWidget>
 #include <QSettings>
 #include <QDateTime>
-#include "gui_types.h"
+// gui_types.h include removed - AppMode no longer used
 
 class WelcomeWidget : public QWidget {
     Q_OBJECT
@@ -16,9 +16,8 @@ public:
     void addRecentProject(const QString& path, const QString& name);
 
 signals:
-    // DEPRECATED: Mode parameter ignored - unified component library
-    // Signal always emits BENCH_TEST for backwards compatibility
-    void newSchematicRequested(AppMode mode);
+    // Signal to create a new schematic (mode parameter removed - unified library)
+    void newSchematicRequested();
 
     void openRecentProjectRequested(const QString& path);
 

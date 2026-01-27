@@ -18,14 +18,13 @@ private slots:
     void testBlockModeRestrictions() {
         GridScene scene;
         ERC::ERCEngine erc;
-        
-        // Setup: BLOCK Mode
-        erc.setMode(AppMode::BLOCK_SUBSYSTEM);
+
+        // Mode setup removed - unified component library
         
         // Case A: Valid Block (Ports + Components)
         auto* r1 = new VisualComponent(ComponentType::Resistor);
-        auto* pIn = new VisualComponent(ComponentType::PowerPort); // "Vin"
-        auto* pOut = new VisualComponent(ComponentType::PowerPort); // "Vout"
+        auto* pIn = new VisualComponent(ComponentType::Probe); // "Vin"
+        auto* pOut = new VisualComponent(ComponentType::Probe); // "Vout"
         scene.addItem(r1);
         scene.addItem(pIn);
         scene.addItem(pOut);
@@ -55,7 +54,7 @@ private slots:
     void testSystemModeRestrictions() {
         GridScene scene;
         ERC::ERCEngine erc;
-        erc.setMode(AppMode::SYSTEM_INTEGRATION);
+        // setMode() removed - unified component library
         
         // Case A: Invalid System (Generic Sources)
         auto* vsrc = new VisualComponent(ComponentType::VoltageSource);
@@ -71,7 +70,7 @@ private slots:
         // Case B: Valid System (RailDriver)
         scene.removeItem(vsrc);
         delete vsrc;
-        auto* bat = new VisualComponent(ComponentType::RailDriver);
+        auto* bat = new VisualComponent(ComponentType::VoltageSource);
         scene.addItem(bat);
         
         v = erc.runFullCheck(&scene);
@@ -92,7 +91,7 @@ private slots:
         QJsonArray comps;
         
         // Input Port
-        QJsonObject pin; pin["type"] = "PowerPort"; pin["name"] = "In"; pin["x"] = 0; pin["y"] = 0;
+        QJsonObject pin; pin["type"] = "Probe"; pin["name"] = "In"; pin["x"] = 0; pin["y"] = 0;
         comps.append(pin);
         
         // Resistor
@@ -100,7 +99,7 @@ private slots:
         comps.append(r);
         
         // Output Port
-        QJsonObject pout; pout["type"] = "PowerPort"; pout["name"] = "Out"; pout["x"] = 40; pout["y"] = 0;
+        QJsonObject pout; pout["type"] = "Probe"; pout["name"] = "Out"; pout["x"] = 40; pout["y"] = 0;
         comps.append(pout);
         blockDef["components"] = comps;
         
@@ -127,7 +126,7 @@ private slots:
         QJsonArray comps;
 
         // In Port -> Gate
-        QJsonObject pin; pin["type"] = "PowerPort"; pin["name"] = "In"; pin["x"] = 0; pin["y"] = 40;
+        QJsonObject pin; pin["type"] = "Probe"; pin["name"] = "In"; pin["x"] = 0; pin["y"] = 40;
         comps.append(pin);
         
         // PMOS

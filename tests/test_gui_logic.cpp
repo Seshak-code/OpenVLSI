@@ -136,23 +136,19 @@ private slots:
             QCOMPARE(comp.type, ComponentType::VoltageSource);
         }
 
-        // --- Digital ---
+        // --- PDK Primitives ---
         {
-            VisualComponent comp(ComponentType::ICPackage);
-            QCOMPARE(comp.type, ComponentType::ICPackage);
-            // Digital logic items usually have "Part Number"
-            comp.params["Part"] = "ULN2003A";
-            QCOMPARE(comp.params["Part"], "ULN2003A");
+            VisualComponent comp(ComponentType::PDK_Resistor);
+            QCOMPARE(comp.type, ComponentType::PDK_Resistor);
+            // PDK components have specific parameters
+            comp.params["R"] = "10k";
+            QCOMPARE(comp.params["R"], "10k");
         }
 
         // --- Mixed Signal / System ---
         {
-            VisualComponent comp(ComponentType::WaveformGen);
-            QCOMPARE(comp.type, ComponentType::WaveformGen);
-        }
-        {
-            VisualComponent comp(ComponentType::PowerVdd);
-            QCOMPARE(comp.type, ComponentType::PowerVdd);
+            VisualComponent comp(ComponentType::PDK_NFET);
+            QCOMPARE(comp.type, ComponentType::PDK_NFET);
         }
     }
 
@@ -340,7 +336,7 @@ private slots:
     void testAspectRatioResilience() {
         // Verify that grid/objects don't distort when view is resized disproportionately
         GridScene scene;
-        VisualComponent* c = new VisualComponent(ComponentType::ICPackage);
+        VisualComponent* c = new VisualComponent(ComponentType::Resistor);
         scene.addItem(c);
         
         // Initial Aspect 1:1

@@ -27,29 +27,8 @@
 namespace fs = std::filesystem;
 
 // ============================================================================
-// DESIGN MODE ENUM
+// PIN TYPE ENUM (for AI API wiring hints)
 // ============================================================================
-
-enum class DesignMode {
-    BENCH,   // Testing mode: Ideal sources allowed, implicit ground
-    BLOCK,   // Reusable subsystem: No independent sources at interface
-    SYSTEM   // Integration mode: Only RailDrivers inject power
-};
-
-inline std::string modeToString(DesignMode mode) {
-    switch (mode) {
-        case DesignMode::BENCH:  return "bench";
-        case DesignMode::BLOCK:  return "block";
-        case DesignMode::SYSTEM: return "system";
-    }
-    return "bench";
-}
-
-inline DesignMode stringToMode(const std::string& s) {
-    if (s == "block") return DesignMode::BLOCK;
-    if (s == "system") return DesignMode::SYSTEM;
-    return DesignMode::BENCH;
-}
 
 // ============================================================================
 // PIN TYPE ENUM (for AI API wiring hints)
@@ -109,9 +88,6 @@ struct LibraryComponent {
     std::string name;
     std::string description;
     std::string formatVersion = "1.0";
-    
-    // Design abstraction
-    DesignMode mode = DesignMode::BENCH;
     
     // Package info
     std::string packageType = "DIP";  // DIP, QFN, BGA, CUSTOM
@@ -274,7 +250,6 @@ inline bool saveComponent(const std::string& filepath, const LibraryComponent& c
     file << "  \"component\": {\n";
     file << "    \"name\": \"" << ComponentJSON::escape(comp.name) << "\",\n";
     file << "    \"description\": \"" << ComponentJSON::escape(comp.description) << "\",\n";
-    file << "    \"mode\": \"" << modeToString(comp.mode) << "\",\n";
     file << "    \"package\": \"" << ComponentJSON::escape(comp.packageType) << "\",\n";
     file << "    \"category\": \"" << ComponentJSON::escape(comp.category) << "\",\n";
     
@@ -336,7 +311,6 @@ inline std::string getLibraryPath() {
 struct ComponentEntry {
     std::string name;
     std::string filepath;
-    DesignMode mode;
     std::string category;
 };
 
@@ -351,7 +325,6 @@ inline std::vector<ComponentEntry> listLibraryComponents() {
             ComponentEntry ce;
             ce.filepath = entry.path().string();
             ce.name = entry.path().stem().string();
-            ce.mode = DesignMode::BENCH;  // TODO: Parse file to get actual mode
             entries.push_back(ce);
         }
     }
@@ -378,7 +351,6 @@ namespace ComponentLibraryAPI {
         ss << "[";
         for (size_t i = 0; i < components.size(); ++i) {
             ss << "{\"name\":\"" << ComponentJSON::escape(components[i].name) << "\","
-               << "\"mode\":\"" << modeToString(components[i].mode) << "\","
                << "\"path\":\"" << ComponentJSON::escape(components[i].filepath) << "\"}";
             if (i < components.size() - 1) ss << ",";
         }

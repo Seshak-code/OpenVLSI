@@ -33,8 +33,8 @@ class GridScene : public QGraphicsScene {
 public:
     explicit GridScene(QObject* parent = nullptr);
 
-    void setTool(ComponentType t);
-    void setMode(AppMode mode) { ercEngine_.setMode(mode); updateERC(); }
+    void setTool(ComponentType t, const QString& subName = "");
+    // setMode() removed - unified component library
     void setGridVisible(bool visible);
     void setSnappingEnabled(bool enabled);
     bool isSnappingEnabled() const { return snappingEnabled; }
@@ -91,6 +91,7 @@ private:
     bool snappingEnabled = true;
 
     ComponentType currentTool = ComponentType::Select;
+    QString currentSubTool; // Name for SubCircuit
     
     // Wire drawing
     QPointF wireStart;
@@ -146,9 +147,8 @@ protected:
 class SchematicEditor : public QWidget {
     Q_OBJECT
 public:
-    void setMode(AppMode mode);
-    AppMode getMode() const { return currentMode; }
-    
+    // setMode()/getMode() removed - unified component library
+
     // Quick Preview
     void setQuickPreviewEnabled(bool enabled);
     bool isQuickPreviewEnabled() const { return quickPreviewEnabled_; }
@@ -188,7 +188,7 @@ public:
     
 signals:
     void topologyChanged(size_t hash); // Forwarded from GridScene
-    void modeChanged(AppMode mode);    // Bench / Block / System
+    // modeChanged() signal removed - unified component library
     void violationsChanged(const QList<ERC::Violation>& violations); // Forwarded from GridScene
     
 public:
@@ -200,7 +200,7 @@ public:
     bool optimizeComponentRotation(const QString& id);
     
     // Tool Selection API
-    void setTool(ComponentType t);
+    void setTool(ComponentType t, const QString& subName = "");
     
     // Validation
     QStringList runERC();
@@ -266,7 +266,7 @@ private slots:
 
 
 private:
-    AppMode currentMode = AppMode::SYSTEM_INTEGRATION;
+    // currentMode member removed - unified component library
     GridScene* scene;
     SchematicView* view;
     QLabel* statusLabel;

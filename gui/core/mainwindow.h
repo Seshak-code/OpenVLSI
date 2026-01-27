@@ -48,10 +48,8 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
     SchematicEditor* getSchematicEditor() const { return schematicEditor; }
-    
-    // Mode Management
-    AppMode getMode() const; 
-    void setMode(AppMode mode);
+
+    // Mode management removed - unified component library
 
     // AI/API Access
     void openSchematicTab(const QString& title, const QJsonObject& content);
@@ -154,27 +152,25 @@ private slots:
     void openFileFromExplorer(const QString& category, const QString& fileName, const QString& filePath);
     void openSchematicFile(const QString& filePath, const QString& fileName);
     void openHDLFile(const QString& filePath, const QString& fileName);
-    AppMode detectModeFromSchematic(const QJsonObject& state);
+    // detectModeFromSchematic() removed - unified component library
 
     // Actions
     void newProject();
     void openProject();
     void runSimulation();
     
-    // Stage Switching (replaces old Mode Switching)
+    // Stage Switching
     void setupStageToolbar();
     void onStageChanged(DesignStage stage);
     void addRtlPage();
-    void createSchematicFromWelcome(AppMode mode);
+    void createSchematicFromWelcome();
     void onRtlTabChanged(int index);
-    QString modeLabel(AppMode mode);
+    // modeLabel() removed - unified component library
 
 private:
-    AppMode currentMode = AppMode::SYSTEM_INTEGRATION;
+    // currentMode removed - unified component library
     QToolBar* modeToolbar;
     QAction* toggleModeAction;
-    
-    void onModeToggle();
     void syncSchematicToVerilog();
     void syncVerilogToSchematic();
     

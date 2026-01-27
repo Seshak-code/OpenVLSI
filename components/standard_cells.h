@@ -37,94 +37,383 @@ namespace StandardCells {
  * 
  * Darlington: Q1 collector tied to Q2 base, provides ~2000x gain.
  */
-inline SubCircuitDefinition createULN2003A() {
+/**
+ * createGenericDarlington
+ * 
+ * A generic, physics-based Darlington Pair.
+ * Structure:
+ *   - Q1: Driver Transistor
+ *   - Q2: Output Transistor
+ *   - R1: Bias Resistor (Base-Emitter of Q1) - Optional, included for stability
+ *   - R2: Bias Resistor (Base-Emitter of Q2) - Optional, included for stability
+ *
+ * Topology:
+ *   Collector (C) -> Q1.C, Q2.C
+ *   Base (B)      -> Q1.B
+ *   Emitter (E)   -> Q2.E
+ *   Internal      -> Q1.E connected to Q2.B
+ * 
+ * Pins: "B", "C", "E"
+ */
+inline SubCircuitDefinition createGenericDarlington() {
     SubCircuitDefinition def;
-    def.name = "ULN2003A";
-    def.description = "7-Channel Darlington Transistor Array with Clamp Diodes";
-    def.pinCount = 16;
-    def.pinNames = {
-        "1B", "2B", "3B", "4B", "5B", "6B", "7B",  // Inputs
-        "GND",                                      // Pin 8
-        "COM",                                      // Pin 9 (diode common)
-        "7C", "6C", "5C", "4C", "3C", "2C", "1C"   // Outputs (reversed)
-    };
+    def.name = "Darlington Pair";
+    def.description = "Generic NPN Darlington Pair (High Gain)";
+    def.pinCount = 3;
+    def.pinNames = {"B", "C", "E"};
     
     TensorBlock& block = def.internalBlock;
-    block.name = "ULN2003A_INTERNAL";
+    block.name = "DARLINGTON_INTERNAL";
     
-    // Pin-to-internal node mapping:
-    // External pins 1-7 (inputs) -> internal nodes 1-7
-    // External pin 8 (GND) -> internal node 0 (ground reference)
-    // External pin 9 (COM) -> internal node 8
-    // External pins 10-16 (outputs 7C-1C) -> internal nodes 9-15
+    // External Pin Mapping
+    // 0: Base
+    // 1: Collector
+    // 2: Emitter
     
-    def.pinToInternalNode[0] = 1;   // 1B -> node 1
-    def.pinToInternalNode[1] = 2;   // 2B -> node 2
-    def.pinToInternalNode[2] = 3;   // 3B -> node 3
-    def.pinToInternalNode[3] = 4;   // 4B -> node 4
-    def.pinToInternalNode[4] = 5;   // 5B -> node 5
-    def.pinToInternalNode[5] = 6;   // 6B -> node 6
-    def.pinToInternalNode[6] = 7;   // 7B -> node 7
-    def.pinToInternalNode[7] = 0;   // GND -> node 0
-    def.pinToInternalNode[8] = 8;   // COM -> node 8
-    def.pinToInternalNode[9] = 15;  // 7C -> node 15
-    def.pinToInternalNode[10] = 14; // 6C -> node 14
-    def.pinToInternalNode[11] = 13; // 5C -> node 13
-    def.pinToInternalNode[12] = 12; // 4C -> node 12
-    def.pinToInternalNode[13] = 11; // 3C -> node 11
-    def.pinToInternalNode[14] = 10; // 2C -> node 10
-    def.pinToInternalNode[15] = 9;  // 1C -> node 9
+    // Internal Node Mapping
+    // 0: Local Ground (Reference, unused if floating, but good practice to map E to logic GND if needed)
+    // Let's use 1-based indexing for signals and map them.
+    // Node 1: Base
+    // Node 2: Collector
+    // Node 3: Emitter
+    // Node 4: Internal Q1E_Q2B
     
-    // Internal node allocation:
-    // Nodes 1-7: Input pins
-    // Node 0: GND
-    // Node 8: COM
-    // Nodes 9-15: Output pins (1C-7C)
-    // Nodes 16-22: Q1 emitter / Q2 base (internal Darlington connection)
+    def.pinToInternalNode[0] = 1; // Base
+    def.pinToInternalNode[1] = 2; // Collector
+    def.pinToInternalNode[2] = 3; // Emitter
     
-    int nextInternalNode = 16;
+    // Internal components
+    // Q1: NPN
+    //   C: Node 2
+    //   B: Node 1
+    //   E: Node 4
+    // Q2: NPN
+    //   C: Node 2
+    //   B: Node 4
+    //   E: Node 3
     
-    // Create 7 Darlington channels
-    for (int ch = 0; ch < 7; ++ch) {
-        int inputNode = ch + 1;      // 1B is node 1, etc.
-        int outputNode = 9 + ch;     // 1C is node 9, etc.
-        int q1q2Node = nextInternalNode++;  // Internal connection Q1.E <-> Q2.B
-        
-        // Input Resistor: 2.7kΩ from input to Q1 base
-        int q1BaseNode = nextInternalNode++;
-        block.addResistor("R_IN_" + std::to_string(ch+1), inputNode, q1BaseNode, 2700.0);
-        
-        // Q1: First transistor of Darlington
-        // Collector -> GND (or actually, to output for sink current? No, for Darlington sink:
-        //   Q1: C=Output, B=inputResistor, E=Q2.B
-        //   Q2: C=Output, B=Q1.E, E=GND
-        // Wait, ULN2003 is a current sink. Output is open-collector.
-        // Q1.C and Q2.C tied together -> Output
-        // Q1.E -> Q2.B
-        // Q2.E -> GND
-        block.addBJT("Q1_" + std::to_string(ch+1), 
-                     outputNode,    // Collector -> Output
-                     q1BaseNode,    // Base <- Input resistor
-                     q1q2Node,      // Emitter -> Q2 Base
-                     "npn_generic", true, 
-                     100.0, 1.0, 1e-14, 0.02585);
-        
-        block.addBJT("Q2_" + std::to_string(ch+1),
-                     outputNode,    // Collector -> Output
-                     q1q2Node,      // Base <- Q1 Emitter
-                     0,             // Emitter -> GND
-                     "npn_generic", true,
-                     100.0, 1.0, 1e-14, 0.02585);
-        
-        // Clamp Diode: Output -> COM (for flyback protection)
-        // When output goes below GND (inductive kickback), diode clamps to COM
-        block.addDiode(8, outputNode, 1e-14);  // COM is anode, Output is cathode
-    }
+    block.addBJT("Q1", 2, 1, 4, "npn_generic", true, 100.0, 1.0, 1e-14);
+    block.addBJT("Q2", 2, 4, 3, "npn_generic", true, 100.0, 1.0, 1e-14);
     
-    block.numInternalNodes = nextInternalNode;
+    // Optional Stability Resistors (simulating leakage paths or commercial integration)
+    // Removed for stability debugging - starting with pure Darlington
+    // block.addResistor("R1", 1, 4, 8000.0);
+    // block.addResistor("R2", 4, 3, 120.0);
     
+    block.numInternalNodes = 4;
     return def;
 }
+
+/**
+ * createResistiveDivider
+ * A simple 1:1 voltage divider using two 10k resistors.
+ * Pins: VIN, VOUT, GND
+ */
+inline SubCircuitDefinition createResistiveDivider() {
+    SubCircuitDefinition def;
+    def.name = "Resistive Divider (10k:10k)";
+    def.description = "Precision 1:1 Voltage Divider (10k/10k)";
+    def.pinCount = 3;
+    def.pinNames = {"VIN", "VOUT", "GND"};
+    
+    // Pin Mapping: VIN(1), VOUT(2), GND(3 -> maps to internal 0)
+    // Note: We map external GND pin to internal Node 0 for convenience
+    def.pinToInternalNode[0] = 1; // VIN
+    def.pinToInternalNode[1] = 2; // VOUT
+    def.pinToInternalNode[2] = 0; // GND -> Internal 0
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "DIVIDER_INTERNAL";
+    block.addResistor("R1", 1, 2, 10000.0);
+    block.addResistor("R2", 2, 0, 10000.0);
+    
+    block.numInternalNodes = 2;
+    return def;
+}
+
+/**
+ * createHalfWaveRectifier
+ * AC to DC rectifier using a generic diode and load resistor.
+ * Pins: VIN, VOUT, GND
+ */
+inline SubCircuitDefinition createHalfWaveRectifier() {
+    SubCircuitDefinition def;
+    def.name = "Half-Wave Rectifier";
+    def.description = "Simple Diode Rectifier with 100k Load";
+    def.pinCount = 3;
+    def.pinNames = {"VIN", "VOUT", "GND"};
+    
+    def.pinToInternalNode[0] = 1; // VIN
+    def.pinToInternalNode[1] = 2; // VOUT
+    def.pinToInternalNode[2] = 0; // GND
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "RECTIFIER_INTERNAL";
+    block.addDiode(1, 2, 1e-12); // D1: VIN -> VOUT
+    block.diodes.back().modelName = "diode_pw2dw"; // Generic PDK diode
+    block.addResistor(2, 0, 100000.0); // R_LOAD: 100k
+    block.resistors.back().model_name = "poly_res_high";
+    
+    block.numInternalNodes = 2;
+    return def;
+}
+
+/**
+ * createCMOSInverter
+ * Standard Digital Logic Inverter (NOT Gate).
+ * Pins: VIN, VOUT, VDD, GND
+ */
+inline SubCircuitDefinition createCMOSInverter() {
+    SubCircuitDefinition def;
+    def.name = "CMOS Inverter";
+    def.description = "High-speed Digital Inverter (NOT Gate)";
+    def.pinCount = 4;
+    def.pinNames = {"VIN", "VOUT", "VDD", "GND"};
+    
+    def.pinToInternalNode[0] = 1; // VIN
+    def.pinToInternalNode[1] = 2; // VOUT
+    def.pinToInternalNode[2] = 3; // VDD
+    def.pinToInternalNode[3] = 0; // GND
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "INVERTER_INTERNAL";
+    
+    // NMOS: VOUT pulled to GND when VIN is High
+    // D=2, G=1, S=0, B=0
+    // Using PDK_NFET primitive mapping
+    block.addMosfet("M1_NMOS", 2, 1, 0, 0, "nfet_01v8", 2e-6, 0.18e-6);
+    
+    // PMOS: VOUT pulled to VDD when VIN is Low
+    // D=2, G=1, S=3, B=3 (Body tied to VDD)
+    // Using PDK_PFET primitive mapping
+    block.addMosfet("M2_PMOS", 2, 1, 3, 3, "pfet_01v8", 4e-6, 0.18e-6);
+    
+    // High-Z Bias Resistors (100Meg) to prevent floating gate errors in unconnected state
+    block.addResistor("R_BIAS_GND", 1, 0, 1e8);
+    block.addResistor("R_BIAS_VDD", 3, 0, 1e8);
+    
+    block.numInternalNodes = 3;
+    return def;
+}
+
+/**
+ * createDifferentialPair
+ * NPN Differential Amplifier pair with tail resistor.
+ * Pins: IN+, IN-, OUT+, OUT-, VCC, GND
+ */
+inline SubCircuitDefinition createDifferentialPair() {
+    SubCircuitDefinition def;
+    def.name = "BJT Differential Pair";
+    def.description = "Analog Differential Amplifier Stage";
+    def.pinCount = 6;
+    def.pinNames = {"IN+", "IN-", "OUT+", "OUT-", "VCC", "GND"};
+    
+    def.pinToInternalNode[0] = 1; // IN+
+    def.pinToInternalNode[1] = 2; // IN-
+    def.pinToInternalNode[2] = 4; // OUT+ (Collector Q2, right)
+    def.pinToInternalNode[3] = 3; // OUT- (Collector Q1, left)
+    def.pinToInternalNode[4] = 6; // VCC
+    def.pinToInternalNode[5] = 0; // GND
+    
+    // Internal Node 5: Common Emitter Tail
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "DIFFPAIR_INTERNAL";
+    
+    // Q1 (Left): C=3, B=1, E=5
+    block.addBJT("Q1", 3, 1, 5, "npn_generic", true, 100.0, 1.0, 1e-14);
+    
+    // Q2 (Right): C=4, B=2, E=5
+    block.addBJT("Q2", 4, 2, 5, "npn_generic", true, 100.0, 1.0, 1e-14);
+    
+    // Collector Loads (10k)
+    block.addResistor("RC1", 6, 3, 10000.0);
+    block.addResistor("RC2", 6, 4, 10000.0);
+    
+    // Tail Resistor (5k)
+    block.addResistor("RE", 5, 0, 5000.0);
+    
+    // Input Bias (50k)
+    block.addResistor("RB1", 1, 0, 50000.0);
+    block.addResistor("RB2", 2, 0, 50000.0);
+    
+    block.numInternalNodes = 6;
+    return def;
+}
+
+/**
+ * createRCLowPass
+ * First-order RC Filter (fc = 15.9 kHz).
+ * Pins: VIN, VOUT, GND
+ */
+inline SubCircuitDefinition createRCLowPass() {
+    SubCircuitDefinition def;
+    def.name = "RC Low-Pass Filter";
+    def.description = "Passive Filter (R=10k, C=1nF, fc=16kHz)";
+    def.pinCount = 3;
+    def.pinNames = {"VIN", "VOUT", "GND"};
+    
+    def.pinToInternalNode[0] = 1; // VIN
+    def.pinToInternalNode[1] = 2; // VOUT
+    def.pinToInternalNode[2] = 0; // GND
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "RC_INTERNAL";
+    
+    block.addResistor("R1", 1, 2, 10000.0);
+    block.resistors.back().model_name = "poly_res";
+    block.addCapacitor(2, 0, 1e-9);
+    block.capacitors.back().model_name = "mim_cap";
+    
+    block.numInternalNodes = 2;
+    return def;
+}
+
+/**
+ * createBiCMOSBuffer
+ * High-impedance NMOS input driving low-impedance BJT output.
+ * Pins: VIN, VOUT, VDD, GND
+ */
+inline SubCircuitDefinition createBiCMOSBuffer() {
+    SubCircuitDefinition def;
+    def.name = "BiCMOS Buffer";
+    def.description = "NMOS Input + NPN Emitter Follower Output";
+    def.pinCount = 4;
+    def.pinNames = {"VIN", "VOUT", "VDD", "GND"};
+    
+    def.pinToInternalNode[0] = 1; // VIN
+    def.pinToInternalNode[1] = 3; // VOUT (Emitter of Q1)
+    def.pinToInternalNode[2] = 4; // VDD
+    def.pinToInternalNode[3] = 0; // GND
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "BICMOS_INTERNAL";
+    
+    // M1 (NMOS Input): D=2, G=1, S=0
+    block.addMosfet("M1", 2, 1, 0, 0, "nmos_generic", 10e-6, 0.5e-6);
+    
+    // Q1 (NPN Output): C=4[VDD], B=2, E=3[VOUT]
+    block.addBJT("Q1", 4, 2, 3, "npn_generic", true, 150.0); // Beta=150
+    
+    // Loads
+    block.addResistor("R_DRAIN", 4, 2, 10000.0); // 10k Pull-up for NMOS
+    block.addResistor("R_LOAD", 3, 0, 5000.0);   // 5k Emitter Load
+    
+    // Input Bias
+    block.addResistor("R_BIAS", 1, 0, 100000.0);
+    
+    block.numInternalNodes = 4;
+    return def;
+}
+
+/**
+ * createPDK_NFET
+ * Generic 4-terminal NMOS template for PDK mapping.
+ * Pins: D, G, S, B
+ */
+inline SubCircuitDefinition createPDK_NFET() {
+    SubCircuitDefinition def;
+    def.name = "PDK_NFET";
+    def.description = "Generic 4-Terminal NMOS (PDK Template)";
+    def.pinCount = 4;
+    def.pinNames = {"D", "G", "S", "B"};
+    
+    def.pinToInternalNode[0] = 1; // Drain
+    def.pinToInternalNode[1] = 2; // Gate
+    def.pinToInternalNode[2] = 3; // Source
+    def.pinToInternalNode[3] = 4; // Body
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "PDK_NFET_INTERNAL";
+    block.addMosfet("M1", 1, 2, 3, 4, "nmos_generic", 1.0e-6, 0.18e-6);
+    
+    block.numInternalNodes = 4;
+    return def;
+}
+
+/**
+ * createPDK_PFET
+ * Generic 4-terminal PMOS template for PDK mapping.
+ * Pins: D, G, S, B
+ */
+inline SubCircuitDefinition createPDK_PFET() {
+    SubCircuitDefinition def;
+    def.name = "PDK_PFET";
+    def.description = "Generic 4-Terminal PMOS (PDK Template)";
+    def.pinCount = 4;
+    def.pinNames = {"D", "G", "S", "B"};
+    
+    def.pinToInternalNode[0] = 1; // Drain
+    def.pinToInternalNode[1] = 2; // Gate
+    def.pinToInternalNode[2] = 3; // Source
+    def.pinToInternalNode[3] = 4; // Body
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "PDK_PFET_INTERNAL";
+    block.addMosfet("M1", 1, 2, 3, 4, "pmos_generic", 1.0e-6, 0.18e-6);
+    
+    block.numInternalNodes = 4;
+    return def;
+}
+
+/**
+ * createPDK_Resistor_Poly
+ * Generic Polysilicon Resistor with substrate terminal.
+ * Pins: A, B, SUB
+ */
+inline SubCircuitDefinition createPDK_Resistor_Poly() {
+    SubCircuitDefinition def;
+    def.name = "PDK_Resistor_Poly";
+    def.description = "Generic Poly Resistor with Substrate Terminal";
+    def.pinCount = 3;
+    def.pinNames = {"A", "B", "SUB"};
+    
+    def.pinToInternalNode[0] = 1; // Terminal A
+    def.pinToInternalNode[1] = 2; // Terminal B
+    def.pinToInternalNode[2] = 3; // Substrate
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "PDK_RES_POLY_INTERNAL";
+    block.addResistor("R1", 1, 2, 1000.0);
+    block.resistors.back().model_name = "poly_res_generic";
+    block.resistors.back().width_m = 1.0e-6;
+    block.resistors.back().length_m = 10.0e-6;
+    
+    // Parasitic capacitance to substrate (simplified)
+    block.addCapacitor(1, 3, 1e-15); 
+    block.addCapacitor(2, 3, 1e-15);
+    
+    block.numInternalNodes = 3;
+    return def;
+}
+
+/**
+ * createPDK_Capacitor_MIM
+ * Generic Metal-Insulator-Metal Capacitor.
+ * Pins: TOP, BOT
+ */
+inline SubCircuitDefinition createPDK_Capacitor_MIM() {
+    SubCircuitDefinition def;
+    def.name = "PDK_Capacitor_MIM";
+    def.description = "Generic MIM Capacitor";
+    def.pinCount = 2;
+    def.pinNames = {"TOP", "BOT"};
+    
+    def.pinToInternalNode[0] = 1; // Top Plate
+    def.pinToInternalNode[1] = 2; // Bottom Plate
+    
+    TensorBlock& block = def.internalBlock;
+    block.name = "PDK_CAP_MIM_INTERNAL";
+    block.addCapacitor(1, 2, 1e-12); // 1pF Default
+    block.capacitors.back().model_name = "mim_cap_generic";
+    block.capacitors.back().width_m = 10.0e-6;
+    block.capacitors.back().length_m = 10.0e-6;
+    
+    block.numInternalNodes = 2;
+    return def;
+}
+
+
 
 /**
  * StandardCellLibrary
@@ -152,12 +441,31 @@ public:
         return definitions_.find(name) != definitions_.end();
     }
     
+    std::vector<std::string> getNames() const {
+        std::vector<std::string> names;
+        for (const auto& kv : definitions_) {
+            names.push_back(kv.first);
+        }
+        return names;
+    }
+    
 private:
     StandardCellLibrary() {
         // Register built-in ICs
-        registerDefinition(createULN2003A());
-        // Future: registerDefinition(createNE555());
-        // Future: registerDefinition(createLM7805());
+        registerDefinition(createGenericDarlington());
+        registerDefinition(createResistiveDivider());
+        registerDefinition(createHalfWaveRectifier());
+        registerDefinition(createCMOSInverter());
+        registerDefinition(createDifferentialPair());
+        registerDefinition(createRCLowPass());
+        registerDefinition(createBiCMOSBuffer());
+        
+        // PDK-Ready Templates
+        registerDefinition(createPDK_NFET());
+        registerDefinition(createPDK_PFET());
+        registerDefinition(createPDK_Resistor_Poly());
+        registerDefinition(createPDK_Capacitor_MIM());
+        
     }
     
     std::map<std::string, SubCircuitDefinition> definitions_;

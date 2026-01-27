@@ -82,6 +82,13 @@ run_debug
 test_diff_runner
 test_regression
 test_sensitivity
+test_pdk_compliance
+test_std_cells
+verify_bjt_thermal
+test_erc_rules
+test_safe_io
+accuracy_test
+transient_test
 
 # ============================================
 # Qt Auto-Generated Files

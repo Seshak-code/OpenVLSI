@@ -46,7 +46,7 @@ struct CircuitState {
     // Identity
     string name;
     uint64_t topologyHash;
-    DesignMode mode; // BENCH, BLOCK, SYSTEM
+    string precision; // "emulated_f64"
     
     // Physical Reality
     vector<double> nodeVoltages; // The ultimate ground truth

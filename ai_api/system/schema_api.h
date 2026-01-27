@@ -298,12 +298,12 @@ QJsonObject validateComponent(const QString& componentId, const QJsonObject& sti
 
 /**
  * Get current simulation context for AI copilot queries.
- * Includes: topology hash, mode, ERC violations, last run status.
+ * Includes: topology hash, ERC violations, last run status.
  * Used for "Why did this fail?" and debug assistance queries.
  */
 struct SimulationContext {
     size_t topologyHash;           // Current schematic topology hash
-    QString currentMode;           // "BENCH_TEST", "BLOCK_SUBSYSTEM", "SYSTEM_INTEGRATION"
+    QString currentMode;           // "UNIFIED" (mode system removed)
     QJsonArray ercViolations;      // Current ERC violations
     bool canSimulate;              // Whether simulation can run (no blocking ERCs)
     QString lastRunStatus;         // "CONVERGED", "FAILED", "CANCELLED", "NOT_RUN"
