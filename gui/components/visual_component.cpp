@@ -56,6 +56,7 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "VCCS") return ComponentType::VCCS;
     if (s == "CCCS") return ComponentType::CCCS;
     if (s == "SubCircuit") return ComponentType::SubCircuit;
+    if (s == "Pin") return ComponentType::Pin;
     return ComponentType::Select;
 }
 
@@ -618,46 +619,34 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
              }
              break;
 
-        case ComponentType::SubCircuit:
-             {
-                 // Draw Box Body
-                 QRectF bodyRect(-40, -60, 80, 120);
-                 painter->drawRect(bodyRect);
-                 
-                 // Draw Name
-                 painter->drawText(bodyRect, Qt::AlignCenter, subCircuitName);
-                 
-                 // Draw Terminals and Labels
-                 const auto* def = StandardCells::StandardCellLibrary::instance().get(subCircuitName.toStdString());
-                 if (def) {
-                     auto terms = getTerminals();
-                     int n = std::min((int)terms.size(), (int)def->pinNames.size());
-                     for(int i=0; i<n; ++i) {
-                         QPointF p = terms[i];
-                         painter->drawEllipse(p, 2, 2); // Pin dot
-                         
-                         // Draw Label near pin
-                         QString pname = QString::fromStdString(def->pinNames[i]);
-                         QRectF labelRect(p.x() - 20, p.y() - 10, 40, 20);
-                         
-                         // Adjust label position based on side
-                         if (p.x() < -30) { // Left
-                             labelRect.moveLeft(p.x() + 5);
-                             painter->drawText(labelRect, Qt::AlignLeft | Qt::AlignVCenter, pname);
-                         } else if (p.x() > 30) { // Right
-                             labelRect.moveRight(p.x() - 5);
-                             painter->drawText(labelRect, Qt::AlignRight | Qt::AlignVCenter, pname);
-                         } else if (p.y() < -50) { // Top
-                             labelRect.moveTop(p.y() + 5);
-                             painter->drawText(labelRect, Qt::AlignCenter, pname);
-                         } else { // Bottom
-                             labelRect.moveBottom(p.y() - 5);
-                             painter->drawText(labelRect, Qt::AlignCenter, pname);
-                         }
-                     }
-                 }
-             }
-             break;
+        case ComponentType::SubCircuit: {
+        // Draw a generic box
+        QString displayText = subCircuitName.isEmpty() ? "SUB" : subCircuitName;
+        QRectF rect(-40, -40, 80, 80);
+        painter->drawRect(rect);
+        painter->drawText(rect, Qt::AlignCenter, displayText);
+        
+        // Pin visualization (simple dots)
+        if (StandardCells::StandardCellLibrary::instance().contains(subCircuitName.toStdString())) {
+            const auto* def = StandardCells::StandardCellLibrary::instance().get(subCircuitName.toStdString());
+            if (def) {
+               auto terms = getTerminals(); // Use consistency
+               for(const auto& t : terms) {
+                   painter->drawEllipse(t, 2, 2);
+               }
+            }
+        }
+        break;
+    }
+    case ComponentType::Pin: {
+        // Draw a Diamond
+        QPolygonF diamond;
+        diamond << QPointF(-10, 0) << QPointF(0, -10) << QPointF(10, 0) << QPointF(0, 10);
+        painter->drawPolygon(diamond);
+        // Draw Name
+        painter->drawText(QRectF(-20, -25, 40, 15), Qt::AlignCenter, name);
+        break;
+    }
              
         case ComponentType::Probe:
             // Monochrome ASCII-Style Multimeter

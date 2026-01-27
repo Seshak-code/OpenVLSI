@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QMap>
 #include <QVector>
+#include "../../components/design_db.h"
 
 const int GRID_STEP = 20;
 
@@ -36,7 +37,9 @@ enum class ComponentType {
     VCCS,           // Voltage-Controlled Current Source
     CCCS,           // Current-Controlled Current Source
     
-    SubCircuit      // Generic SubCircuit (Standard Cell)
+    SubCircuit,      // Generic SubCircuit (Standard Cell)
+    ICPackage,      // Hierarchical (File-Based)
+    Pin             // External Interface Pin
 };
 
 QString componentTypeToString(ComponentType t);
@@ -115,13 +118,23 @@ private:
 // ============================================================================
 class VisualComponent : public QGraphicsObject {
     Q_OBJECT
+    Q_PROPERTY(QPointF pos READ pos WRITE setPos)
+
 public:
     ComponentType type;
     QString name;
-    QString value;
-    QString subCircuitName; // Name of the subcircuit definition (if type == SubCircuit)
+    QString value; // e.g., "10k"
+    QString subCircuitName; // For Standard Cells / Library Items
+    QString sourceFilePath; // For File-Based Hierarchical Blocks
+    
+    // Pin Properties
+    enum class PinDirection { Input, Output, BiDir };
+    PinDirection pinDirection = PinDirection::Input;
     QMap<QString, QString> params; // Dynamic parameters
     QMap<QString, QStringList> paramOptions; // Options for parameters (Key -> List of Choices)
+    
+    // Paradigm Bridge: Link to Unified DesignDb
+    acutesim::components::InstUUID dbId;
 
     // For Oscilloscope-style Probes
     ProbeTip* probePositiveTip = nullptr;

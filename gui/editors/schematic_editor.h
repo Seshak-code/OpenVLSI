@@ -23,15 +23,18 @@
 #include "gui_types.h"
 #include "../analysis/erc_engine.h"
 #include "../analysis/erc_autofix.h"
+#include "../analysis/erc_autofix.h"
 #include "../../physics/simulation_profile.h"
+#include "../../components/design_db.h"
 
 // ============================================================================
 // SCENE (Grid Handling + Validation)
 // ============================================================================
-class GridScene : public QGraphicsScene {
+class GridScene : public QGraphicsScene, public acutesim::components::DesignDbObserver {
     Q_OBJECT
 public:
     explicit GridScene(QObject* parent = nullptr);
+    ~GridScene() override { designDb.removeObserver(this); }
 
     void setTool(ComponentType t, const QString& subName = "");
     // setMode() removed - unified component library
@@ -61,17 +64,28 @@ public:
         return QPointF(x, y);
     }
     
+    // Paradigm Bridge: Access to the Unified Substrate
+    acutesim::components::DesignDb& getDesignDb() { return designDb; }
+    
     // Manually trigger updates (for API/UndoRedo)
     void triggerTopologyUpdate() {
         emit topologyChanged(QDateTime::currentMSecsSinceEpoch());
         updateERC();
     }
+    
+    // DesignDbObserver Implementation (Backward Sync)
+    void onNetCreated(const acutesim::components::Net& net) override {}
+    void onNetModified(const acutesim::components::Net& net) override; 
+    void ofInstancePlaced(const acutesim::components::Instance& inst) override;
+    void onInstanceMoved(const acutesim::components::Instance& inst) override;
+    void onTopologyInvalidated() override;
 
 protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override;
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override; // Drill-Down
     void keyPressEvent(QKeyEvent* event) override;
 
 signals:
@@ -82,6 +96,7 @@ signals:
     void componentSelected(VisualComponent* component); 
     void wireSelected(VisualWire* wire);
     void violationsChanged(const QList<ERC::Violation>& violations);
+    void requestOpenSubcircuit(const QString& filePath); // Drill-Down Event
 
 private:
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
@@ -139,6 +154,9 @@ public:
     
 protected:
     void drawForeground(QPainter* painter, const QRectF& rect) override;
+    
+    // Unified Data Substrate
+    acutesim::components::DesignDb designDb;
 };
 
 // ============================================================================
@@ -256,9 +274,15 @@ public:
     // Verilog-AMS Code -> Schematic (Ghost Placement)
     void parseVerilogToSchematic(const QString& code);
 
+    // --- Phase 2: Hierarchical Schematics ---
+    bool saveToFile(const QString& filePath);
+    bool loadFromFile(const QString& filePath);
+    void createSubcircuitFromSelection();
+
 signals:
     void itemSelected(VisualComponent* item); 
     void wireSelected(VisualWire* wire);
+    void requestOpenSubcircuit(const QString& filePath); // Drill-Down Event
 
 private slots:
     void onGridToggled(bool checked);

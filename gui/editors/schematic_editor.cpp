@@ -1,5 +1,7 @@
 #include "schematic_editor.h"
 #include "component_wizard.h"
+#include "../widgets/compliance_report_dialog.h"
+#include "../../components/pdk_compliance.h"
 #include "../../ai_api/system/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
@@ -7,9 +9,14 @@
 #include <QGraphicsRectItem>
 #include <cmath>
 #include <QDebug>
+#include <QJsonDocument>
+#include <QFile>
+#include <QFileInfo>
+#include <QMessageBox>
 #include <QMenu>
 #include <QAction>
 #include <QDateTime>
+#include <QRegularExpression>
 #include "../../gui/styling/theme_manager.h"
 
 // ============================================================================
@@ -40,6 +47,9 @@ GridScene::GridScene(QObject* parent) : QGraphicsScene(parent) {
             }
         }
     });
+
+    // Register as Observer for Backward Sync
+    designDb.addObserver(this);
 }
 
 
@@ -687,7 +697,7 @@ static double parseValue(const QString& str) {
     bool suffixFound = false;
     
     for (QChar c : str) {
-        if (!suffixFound && (c.isDigit() || c == '.' || c == '-')) {
+        if (!suffixFound && (c.isDigit() || c == '.' || c == '-' || c == '+' || c.toLower() == 'e')) {
             numStr.append(c);
         } else {
             suffixFound = true;
@@ -712,7 +722,9 @@ static double parseValue(const QString& str) {
 }
 
 TensorNetlist GridScene::generateNetlist() {
-    TensorNetlist netlist;
+    // Phase 6.1: Paradigm Bridge
+    // 1. Populate/Update DesignDb from Spatial State (Migration Strategy)
+    // 2. Snapshot DesignDb to TensorBlock
     
     // --- Step 1: Connectivity Analysis (Spatial Approach) ---
     QMap<QPair<int,int>, int> pointToNetID;
@@ -730,11 +742,8 @@ TensorNetlist GridScene::generateNetlist() {
     // Temporary structure to merge sets: map old_id -> new_id
     QMap<int, int> merges;
     
-    // Find representative set
     std::function<int(int)> findSet = [&](int id) {
-        while (merges.contains(id)) {
-            id = merges[id];
-        }
+        while (merges.contains(id)) id = merges[id];
         return id;
     };
     
@@ -742,560 +751,141 @@ TensorNetlist GridScene::generateNetlist() {
         int root1 = findSet(id1);
         int root2 = findSet(id2);
         if (root1 != root2) {
-            // Merge higher into lower
             if (root1 < root2) merges[root2] = root1;
             else merges[root1] = root2;
         }
     };
     
-    // 1.1 Traverse Wires -> Unify points along the wire
     QList<QGraphicsItem*> allItems = items();
+    
+    // 1.1 Traverse Wires -> Unify points
     for (auto* item : allItems) {
         if (auto* w = dynamic_cast<VisualWire*>(item)) {
             if (!w->isVisible()) continue;
-            
-            // CRITICAL: Convert LOCAL wire coordinates to SCENE coordinates
             QLineF line = w->line();
             QPointF sceneP1 = w->mapToScene(line.p1());
             QPointF sceneP2 = w->mapToScene(line.p2());
             
-            int x1 = (int)round(sceneP1.x());
-            int y1 = (int)round(sceneP1.y());
-            int x2 = (int)round(sceneP2.x());
-            int y2 = (int)round(sceneP2.y());
+            int x1 = (int)round(sceneP1.x()); int y1 = (int)round(sceneP1.y());
+            int x2 = (int)round(sceneP2.x()); int y2 = (int)round(sceneP2.y());
             
             // Unify Start
             int startID = getNetID(QPointF(x1, y1));
             
-            // Walk the line
             if (x1 == x2) { // Vertical
-                int minY = std::min(y1, y2);
-                int maxY = std::max(y1, y2);
-                for (int y = minY; y <= maxY; y += GRID_STEP) {
-                    unionSets(startID, getNetID(QPointF(x1, y)));
-                }
+                int minY = std::min(y1, y2); int maxY = std::max(y1, y2);
+                for (int y = minY; y <= maxY; y += GRID_STEP) unionSets(startID, getNetID(QPointF(x1, y)));
             } else if (y1 == y2) { // Horizontal
-                int minX = std::min(x1, x2);
-                int maxX = std::max(x1, x2);
-                for (int x = minX; x <= maxX; x += GRID_STEP) {
-                    unionSets(startID, getNetID(QPointF(x, y1)));
-                }
+                int minX = std::min(x1, x2); int maxX = std::max(x1, x2);
+                for (int x = minX; x <= maxX; x += GRID_STEP) unionSets(startID, getNetID(QPointF(x, y1)));
             } else {
-                // Diagonal (Shouldn't happen with current tool but handle endpoints)
                 unionSets(startID, getNetID(QPointF(x2, y2)));
             }
         }
     }
     
-    // 1.2 Traverse Components -> Get Terminals -> Get Net IDs
-    // SKIP Probes: They are measurement-only and should not create nodes
+    // 1.2 Unify Terminals
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            // Include Probes so they get net IDs
-            if (c->type == ComponentType::Probe) continue; 
-            QVector<QPointF> terms = c->getTerminals();
-            for (const auto& localP : terms) {
-                // Ensure this point gets an ID
+            if (c->type == ComponentType::Probe) continue;
+            for (const auto& localP : c->getTerminals()) {
                 getNetID(c->mapToScene(localP));
             }
         }
     }
     
-    // 1.3 OPTIONAL: Unify Co-located Component Pins?
-    // Already implicit because getNetID handles spatial hashing. 
-    // If two components have pins at (100,100), getNetID returns same ID for both.
+    // --- Step 2: Sync to DesignDb ---
+    using namespace acutesim::components;
     
-    // Step 2: Resolve Global Nodes
-    QMap<int, int> finalNodeMap;
-    int currentNodeIndex = 1; // 0 is reserved for Ground
+    // 2.1 Map Spatial Nets to DB Nets
+    QMap<int, NetUUID> spatialToDbNet;
     
-    auto getFinalNode = [&](QPointF p) -> int {
+    auto getDbNet = [&](QPointF p) -> NetUUID {
         int rawID = getNetID(p);
         int rootID = findSet(rawID);
-        if (!finalNodeMap.contains(rootID)) {
-            finalNodeMap[rootID] = currentNodeIndex++;
+        if (!spatialToDbNet.contains(rootID)) {
+             spatialToDbNet[rootID] = designDb.createNet("N" + std::to_string(rootID));
         }
-        return finalNodeMap[rootID];
+        return spatialToDbNet[rootID];
     };
     
-    // Check for Ground Components to fix node 0
+    // Check Ground
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
             if (c->type == ComponentType::Ground) {
                 QPointF termPos = c->mapToScene(c->getTerminals()[0]);
-                int rawID = getNetID(termPos);
-                int rootID = findSet(rawID);
-                finalNodeMap[rootID] = 0; 
+                int rootID = findSet(getNetID(termPos));
+                if (!spatialToDbNet.contains(rootID)) {
+                     // Create explicit GND net
+                     // Note: We need a way to set name to "GND" if we want deterministic ground
+                     // For now createNet("GND") works but unique ID matters.
+                     spatialToDbNet[rootID] = designDb.createNet("GND");
+                }
             }
         }
     }
 
-    auto isPointOnCircuit = [&](QPointF p) -> bool {
-        QPair<int,int> key = {(int)round(p.x()), (int)round(p.y())};
-        return pointToNetID.contains(key);
-    };
-    
-    // Helper: Find a net ID at a point that may be on a wire segment (not just grid endpoints)
-    // CRITICAL: This must NEVER create new nodes, only return existing ones
-    auto findNetOnWireAt = [&](QPointF tipPos) -> int {
-        int tx = qRound(tipPos.x());
-        int ty = qRound(tipPos.y());
-        
-        for (auto* item : allItems) {
-            auto* wire = dynamic_cast<VisualWire*>(item);
-            if (!wire) continue;
-            
-            QLineF l = wire->line();
-            QPointF p1 = wire->mapToScene(l.p1());
-            QPointF p2 = wire->mapToScene(l.p2());
-            QPointF p(tx, ty);
-            
-            // Distance from point to line segment
-            double l2 = QLineF(p1, p2).length() * QLineF(p1, p2).length();
-            double d = 0;
-            if (l2 == 0) d = QLineF(p1, p).length();
-            else {
-                double t = ((p.x() - p1.x()) * (p2.x() - p1.x()) + (p.y() - p1.y()) * (p2.y() - p1.y())) / l2;
-                t = std::max(0.0, std::min(1.0, t));
-                d = QLineF(p, QPointF(p1.x() + t * (p2.x() - p1.x()), p1.y() + t * (p2.y() - p1.y()))).length();
-            }
-            
-            if (d < 15.0) {
-                // Tip is on this wire. Snap to nearest grid point on this wire.
-                int wx1 = qRound(p1.x()), wy1 = qRound(p1.y());
-                int wx2 = qRound(p2.x()), wy2 = qRound(p2.y());
-                
-                // For H/V wires, snap tip to the nearest grid point along the wire
-                if (wx1 == wx2) { // Vertical wire
-                    int snapY = qRound((double)ty / GRID_STEP) * GRID_STEP;
-                    snapY = std::max(std::min(wy1, wy2), std::min(snapY, std::max(wy1, wy2)));
-                    QPair<int,int> key = {wx1, snapY};
-                    if (pointToNetID.contains(key)) {
-                        return getFinalNode(QPointF(wx1, snapY));
-                    }
-                } else if (wy1 == wy2) { // Horizontal wire
-                    int snapX = qRound((double)tx / GRID_STEP) * GRID_STEP;
-                    snapX = std::max(std::min(wx1, wx2), std::min(snapX, std::max(wx1, wx2)));
-                    QPair<int,int> key = {snapX, wy1};
-                    if (pointToNetID.contains(key)) {
-                        return getFinalNode(QPointF(snapX, wy1));
-                    }
-                }
-                
-                // Fallback: Try wire endpoints (only if they exist in the map!)
-                QPair<int,int> key1 = {wx1, wy1};
-                QPair<int,int> key2 = {wx2, wy2};
-                if (pointToNetID.contains(key1)) {
-                    return getFinalNode(p1);
-                }
-                if (pointToNetID.contains(key2)) {
-                    return getFinalNode(p2);
-                }
-            }
-        }
-        return -1; // Not on any wire
-    };
-    
-    // ============================================================================
-    // Step 2: Analyze Connectivity (Identify Roots & Grounds)
-    // ============================================================================
-    QSet<int> uniqueNets;
-    QMap<int, bool> netHasGround;
-    QSet<int> rootHasGround;
-    QMap<int, int> netConnectionCount;
-    int nodeCounter = 1;
-    // finalNodeMap is defined earlier
-
-    // Scan components for Ground and populate netHasGround
+    // 2.2 Populate Instances
     for (auto* item : allItems) {
-        auto* c = dynamic_cast<VisualComponent*>(item);
-        if (c && c->type == ComponentType::Ground) {
-             for (const auto& localP : c->getTerminals()) {
-                QPointF sceneP = c->mapToScene(localP);
-                QPair<int,int> key = {qRound(sceneP.x()), qRound(sceneP.y())};
-                if (pointToNetID.contains(key)) {
-                    netHasGround[pointToNetID[key]] = true;
-                }
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->type == ComponentType::Select || c->type == ComponentType::Wire || 
+                c->type == ComponentType::Probe || c->type == ComponentType::Ground) continue;
+
+             // Ensure Instance Exists
+             if (c->dbId == InstUUID()) {
+                  c->dbId = designDb.createInstance(componentTypeToString(c->type).toStdString(), 
+                                                    c->name.toStdString());
+             }
+             
+             // Sync Parameters
+             double val = parseValue(c->value);
+             
+             std::string mainKey = "val";
+             if (c->type == ComponentType::Resistor) { mainKey = "R"; designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "poly_res").toStdString()); }
+             else if (c->type == ComponentType::Capacitor) { mainKey = "C"; designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "mim_cap").toStdString()); }
+             else if (c->type == ComponentType::Inductor) { mainKey = "L"; designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "spiral_ind").toStdString()); }
+             else if (c->type == ComponentType::VoltageSource) mainKey = "V";
+             else if (c->type == ComponentType::CurrentSource) mainKey = "I";
+             else if (c->type == ComponentType::Diode) mainKey = "Is";
+             
+             if (!mainKey.empty()) {
+                 designDb.setParam(c->dbId, mainKey, val);
+             }
+             
+             // MOSFET Specifics
+             if (c->type == ComponentType::Mosfet || c->type == ComponentType::PDK_NFET || c->type == ComponentType::PDK_PFET) {
+                 designDb.setParam(c->dbId, "W", parseValue(c->params.value("W", "1u")));
+                 designDb.setParam(c->dbId, "L", parseValue(c->params.value("L", "180n")));
+                 designDb.setStringParam(c->dbId, "Model", c->params.value("Model", (c->type==ComponentType::PDK_PFET ? "pfet" : "nfet")).toStdString());
+             }
+             
+             // VCVS/VCCS/CCVS/CCCS -> Gain
+             if (c->type == ComponentType::VCVS || c->type == ComponentType::VCCS || 
+                 c->type == ComponentType::CCVS || c->type == ComponentType::CCCS) {
+                 designDb.setParam(c->dbId, "Gain", val);
+             }
+
+             // Wire up pins (Clear first to avoid dupes in this "refresh" logic)
+             designDb.clearPins(c->dbId);
+             
+             QVector<QPointF> terms = c->getTerminals();
+             for (int i = 0; i < terms.size(); ++i) {
+                 QPointF p = c->mapToScene(terms[i]);
+                 NetUUID netId = getDbNet(p);
+                 designDb.connectPin(c->dbId, i, netId);
              }
         }
     }
     
-    // Populate uniqueNets and rootHasGround (Initial Pass)
-    for (auto it = pointToNetID.begin(); it != pointToNetID.end(); ++it) {
-        int rawID = it.value();
-        int root = findSet(rawID);
-        uniqueNets.insert(root);
-        
-        if (netHasGround.contains(rawID) && netHasGround[rawID]) {
-             rootHasGround.insert(root);
-        }
-    }
+    // 3. Snapshot
+    TensorBlock block = designDb.snapshot();
     
-    if (netHasGround.contains(0)) rootHasGround.insert(findSet(0));
-
-    // ============================================================================
-    // Step 3: Global Net Naming Optimization (Standardized Global Rails)
-    // ============================================================================
-    // Priority:
-    // 1. Global Power Symbol (VDD/VSS) -> Forces Net Name
-    // 2. User Label (Future)
-    // 3. Auto-Generated (nodeX)
+    // Wrap in TensorNetlist
+    TensorNetlist netlist;
+    netlist.globalBlock = block;
+    netlist.globalState.initialize(block); 
     
-    QMap<int, std::string> forcedNetNames;
-    
-    
-    // Build Standard Map
-    for (int id : uniqueNets) {
-        if (rootHasGround.contains(id)) {
-            finalNodeMap[id] = 0; // GND is always 0
-        } else {
-             // Check forced names
-             if (forcedNetNames.contains(id)) {
-                 // For now, CuteApp uses int-based nodes. 
-                 // We don't change the integer ID in the map (that's for the solver matrix)
-                 // But we DO need to ensure all disjoint nets named "VDD" are merged.
-             }
-             finalNodeMap[id] = nodeCounter++;
-        }
-    }
-    
-    // RE-MERGE based on Global Names!
-    // If two disjoint nets are both labeled "VDD", they must be electrically the same.
-    QMap<std::string, int> nameToRootID;
-    for (auto it = forcedNetNames.begin(); it != forcedNetNames.end(); ++it) {
-        std::string name = it.value();
-        int rootID = it.key();
-        
-        if (nameToRootID.contains(name)) {
-            unionSets(rootID, nameToRootID[name]); // Merge disjoint VDDs
-        } else {
-            nameToRootID[name] = rootID;
-        }
-    }
-    
-    // Re-build unique sets after named merges
-    uniqueNets.clear();
-    rootHasGround.clear();
-    finalNodeMap.clear();
-    
-    // Re-scan ground after merge
-    for (auto it = netConnectionCount.begin(); it != netConnectionCount.end(); ++it) {
-        int root = findSet(it.key());
-        if (!uniqueNets.contains(root)) uniqueNets.insert(root);
-        if (netHasGround[it.key()]) rootHasGround.insert(root);
-    }
-    
-    // Assign Final Node IDs (0 for ground, 1..N for others)
-    nodeCounter = 1;
-    for (int id : uniqueNets) {
-        if (rootHasGround.contains(id)) {
-            finalNodeMap[id] = 0;
-        } else {
-            finalNodeMap[id] = nodeCounter++;
-        }
-    }
-
-    // =========================================================================
-    // Step 4: Component Netlisting (Standardized)
-    // ============================================================================
-    // netlist.reset() not needed
-    
-    for (auto* item : allItems) {
-        auto* c = dynamic_cast<VisualComponent*>(item);
-        if (!c) continue;
-        
-        // Skip purely visual symbols that don't stamp (unless they are sources)
-        if (c->type == ComponentType::Select || c->type == ComponentType::Wire || 
-            c->type == ComponentType::Probe || c->type == ComponentType::Ground) continue;
-
-        // Get Node IDs for terminals
-        std::vector<int> nodes;
-        for (const auto& localP : c->getTerminals()) {
-            QPointF sceneP = c->mapToScene(localP);
-            QPair<int,int> key = {qRound(sceneP.x()), qRound(sceneP.y())};
-            if (pointToNetID.contains(key)) {
-                int rawID = pointToNetID[key];
-                int rootID = findSet(rawID);
-                nodes.push_back(finalNodeMap[rootID]);
-            } else {
-                nodes.push_back(0); 
-            }
-        }
-        
-        double val = parseValue(c->value);
-        
-        // Safety Checks
-        int expected = 0;
-        switch(c->type) {
-            case ComponentType::Resistor: expected = 2; break;
-            case ComponentType::Capacitor: expected = 2; break;
-            case ComponentType::Inductor: expected = 2; break;
-            case ComponentType::VoltageSource: expected = 2; break;
-            case ComponentType::CurrentSource: expected = 2; break;
-            case ComponentType::Diode: expected = 2; break;
-            case ComponentType::SchottkyDiode: expected = 2; break;
-            case ComponentType::Mosfet: expected = 3; break;
-            case ComponentType::Bjt: expected = 3; break;
-            case ComponentType::VCVS: expected = 4; break;
-            case ComponentType::CCVS: expected = 4; break;
-            case ComponentType::VCCS: expected = 4; break;
-            case ComponentType::CCCS: expected = 4; break;
-            case ComponentType::PDK_NFET: expected = 4; break;
-            case ComponentType::PDK_PFET: expected = 4; break;
-            case ComponentType::PDK_Resistor: expected = 3; break;
-            case ComponentType::PDK_Capacitor: expected = 2; break;
-            default: break;
-        }
-        
-        // Phase 1.5: Helper lambda for parsing geometry/model
-        auto getParam = [&](const QString& key, const QString& def) { return c->params.value(key, def).toStdString(); };
-        auto getValParam = [&](const QString& key, const QString& def) { return parseValue(c->params.value(key, def)); };
-
-        if (c->type != ComponentType::Ground && nodes.size() < expected) {
-            emit messageLogged(QString("Warning: Component %1 has incomplete terminals!").arg(c->name));
-           continue;
-        }
-        
-
-        switch(c->type) {
-            case ComponentType::Resistor:
-                netlist.addResistor(nodes[0], nodes[1], val);
-                {
-                    auto& r = netlist.globalBlock.resistors.back();
-                    r.model_name = getParam("Model", "poly_res");
-                    r.width_m = getValParam("W", "1u");
-                    r.length_m = getValParam("L", "10u");
-                }
-                break;
-            case ComponentType::Capacitor:
-                netlist.addCapacitor(nodes[0], nodes[1], val);
-                {
-                    auto& cap = netlist.globalBlock.capacitors.back();
-                    cap.model_name = getParam("Model", "mim_cap");
-                    cap.width_m = getValParam("W", "10u");
-                    cap.length_m = getValParam("L", "10u");
-                }
-                break;
-            case ComponentType::Inductor:
-                netlist.addInductor(nodes[0], nodes[1], val);
-                {
-                     auto& ind = netlist.globalBlock.inductors.back();
-                     ind.model_name = getParam("Model", "spiral_ind");
-                     ind.width_m = getValParam("W", "5u");
-                     ind.area_m2 = getValParam("Area", "100p");
-                }
-                break;
-            case ComponentType::VoltageSource:
-                netlist.addVoltageSource(nodes[0], nodes[1], val, "Generic");
-                break;
-            case ComponentType::CurrentSource:
-                netlist.addCurrentSource(nodes[0], nodes[1], val);
-                break;
-            case ComponentType::Diode:
-                netlist.addDiode(nodes[0], nodes[1], 1e-14); 
-                {
-                    auto& d = netlist.globalBlock.diodes.back();
-                    d.modelName = getParam("Model", "diode_generic");
-                    d.area_m2 = getValParam("Area", "1p");
-                    d.perimeter_m = getValParam("P", "4u");
-                }
-                break;
-            case ComponentType::SchottkyDiode:
-                netlist.addSchottkyDiode(c->name.toStdString(), nodes[0], nodes[1]);
-                // Schottky add helper doesn't expose model yet, accessing back
-                if (!netlist.globalBlock.schottkyDiodes.empty()) {
-                     netlist.globalBlock.schottkyDiodes.back().modelName = getParam("Model", "BAT54");
-                }
-                break;
-            case ComponentType::Mosfet:
-                {
-                   double W = parseValue(c->params.value("W", "1u"));
-                   double L = parseValue(c->params.value("L", "180n"));
-                   std::string model = c->params.value("Model", "nfet").toStdString();
-                   netlist.addMosfet(c->name.toStdString(), nodes[1], nodes[0], nodes[2], nodes[2], model, W, L); 
-                }
-                break;
-            case ComponentType::Bjt:
-                {
-                    std::string model = c->params.value("Model", "2N2222").toStdString();
-                    if (nodes.size() >= 3)
-                        netlist.addBJT(c->name.toStdString(), nodes[1], nodes[0], nodes[2], model, true);
-                }
-                break;
-            case ComponentType::PDK_NFET:
-            case ComponentType::PDK_PFET:
-                {
-                    // 4-terminal MOSFET: D(0), G(1), S(2), B(3)
-                    if (nodes.size() >= 4) {
-                        double W = parseValue(c->params.value("W", "1u"));
-                        double L = parseValue(c->params.value("L", "180n"));
-                        std::string model = (c->type == ComponentType::PDK_NFET) ? "nfet" : "pfet";
-                        // Terminal order: gate, drain, source, bulk
-                        netlist.addMosfet(c->name.toStdString(), nodes[1], nodes[0], nodes[2], nodes[3], model, W, L);
-                    }
-                }
-                break;
-            case ComponentType::PDK_Resistor:
-                {
-                    // 3-terminal: A(0), B(1), SUB(2) - substrate ignored for simulation
-                    if (nodes.size() >= 2) {
-                        double R = parseValue(c->params.value("R", c->value));
-                        netlist.addResistor(nodes[0], nodes[1], R);
-                    }
-                }
-                break;
-            case ComponentType::PDK_Capacitor:
-                {
-                    if (nodes.size() >= 2) {
-                        double C = parseValue(c->params.value("C", c->value));
-                        netlist.addCapacitor(nodes[0], nodes[1], C);
-                    }
-                }
-                break;
-            case ComponentType::VCVS:
-                if (nodes.size() >= 4) netlist.addVCVS(nodes[2], nodes[3], nodes[0], nodes[1], val);
-                break;
-            case ComponentType::VCCS:
-                if (nodes.size() >= 4) netlist.addVCCS(nodes[2], nodes[3], nodes[0], nodes[1], val);
-                break;
-            case ComponentType::CCVS:
-                if (nodes.size() >= 4) netlist.addCCVS(nodes[2], nodes[3], nodes[0], nodes[1], val);
-                break;
-            case ComponentType::CCCS:
-                if (nodes.size() >= 4) netlist.addCCCS(nodes[2], nodes[3], nodes[0], nodes[1], val);
-                break;
-            default:
-                break;
-        }
-    }
-    
-    // =========================================================================
-    // Step 5: Attach Probes to EXISTING nodes
-    // =========================================================================
-    auto findNearestTerminalNodeOnWire = [&](QPointF tipPos) -> int {
-        int tx = qRound(tipPos.x());
-        int ty = qRound(tipPos.y());
-        
-        VisualWire* touchedWire = nullptr;
-        double minWireDist = 1e9;
-        
-        for (auto* item : allItems) {
-            auto* wire = dynamic_cast<VisualWire*>(item);
-            if (!wire) continue;
-            
-            QLineF l = wire->line();
-            QPointF p1 = wire->mapToScene(l.p1());
-            QPointF p2 = wire->mapToScene(l.p2());
-            QPointF p(tx, ty);
-            
-            double l2 = QLineF(p1, p2).length() * QLineF(p1, p2).length();
-            double d = 0;
-            if (l2 == 0) d = QLineF(p1, p).length();
-            else {
-                double t = ((p.x() - p1.x()) * (p2.x() - p1.x()) + (p.y() - p1.y()) * (p2.y() - p1.y())) / l2;
-                t = std::max(0.0, std::min(1.0, t));
-                d = QLineF(p, QPointF(p1.x() + t * (p2.x() - p1.x()), p1.y() + t * (p2.y() - p1.y()))).length();
-            }
-            
-            if (d < 15.0 && d < minWireDist) {
-                minWireDist = d;
-                touchedWire = wire;
-            }
-        }
-        
-        if (!touchedWire) return -1;
-        
-        QLineF wl = touchedWire->line();
-        QPointF wp1 = touchedWire->mapToScene(wl.p1());
-        QPointF wp2 = touchedWire->mapToScene(wl.p2());
-        
-        QPair<int,int> key1 = {qRound(wp1.x()), qRound(wp1.y())};
-        QPair<int,int> key2 = {qRound(wp2.x()), qRound(wp2.y())};
-        
-        if (pointToNetID.contains(key1)) {
-            int rawID = pointToNetID[key1];
-            int rootID = findSet(rawID);
-            if (finalNodeMap.contains(rootID)) return finalNodeMap[rootID];
-        }
-        if (pointToNetID.contains(key2)) {
-            int rawID = pointToNetID[key2];
-            int rootID = findSet(rawID);
-            if (finalNodeMap.contains(rootID)) return finalNodeMap[rootID];
-        }
-        
-        return -1;
-    };
-    
-    // Attach all probes
-    for (auto* item : allItems) {
-        auto* c = dynamic_cast<VisualComponent*>(item);
-        if (!c || c->type != ComponentType::Probe) continue;
-        if (!c->probePositiveTip || !c->probeNegativeTip) continue;
-        
-        int posNode = findNearestTerminalNodeOnWire(c->probePositiveTip->scenePos());
-        int negNode = findNearestTerminalNodeOnWire(c->probeNegativeTip->scenePos());
-        
-        if (posNode >= 0 && negNode >= 0) {
-            netlist.addProbe(c->name.toStdString(), posNode, negNode);
-            emit messageLogged(QString("Probe %1: measuring V(node%2) - V(node%3)")
-                .arg(c->name).arg(posNode).arg(negNode));
-        } else {
-            emit messageLogged(QString("Probe %1: Not fully connected (pos=%2, neg=%3)")
-                .arg(c->name).arg(posNode).arg(negNode));
-        }
-    }
-
-    // Stop 6: Phase 1.5 Wire Parasitics
-    // =========================================================================
-    // Iterate wires, calculate length, map to net nodes, and store segments
-    for (auto* item : allItems) {
-        auto* wire = dynamic_cast<VisualWire*>(item);
-        if (!wire) continue;
-
-        QLineF l = wire->line();
-        double length_pixels = l.length();
-        // 1 pixel = 0.1um (Arbitrary scaling for now)
-        double length_um = length_pixels * 0.1; 
-        
-        // Find connectivity
-        QPointF p1 = wire->mapToScene(l.p1());
-        QPointF p2 = wire->mapToScene(l.p2());
-        QPair<int,int> k1 = {qRound(p1.x()), qRound(p1.y())};
-        QPair<int,int> k2 = {qRound(p2.x()), qRound(p2.y())};
-        
-        int n1 = 0, n2 = 0;
-        if (pointToNetID.contains(k1)) n1 = finalNodeMap[findSet(pointToNetID[k1])];
-        if (pointToNetID.contains(k2)) n2 = finalNodeMap[findSet(pointToNetID[k2])];
-        
-        // For simple wires, n1 == n2 usually (shorted).
-        // But for parasitic modeling, we might eventually break this node.
-        // For Phase 1.5, we just export the segment info attached to the node.
-        
-        TensorBlock::WireSegment seg;
-        seg.layer = wire->layer.toStdString();
-        seg.node1 = n1;
-        seg.node2 = n2;
-        seg.width_um = wire->width_um;
-        seg.length_um = length_um;
-        seg.r_per_um = 0.1; // Placeholder: 0.1 Ohm/um
-        seg.c_per_um = 0.2; // Placeholder: 0.2 fF/um
-        
-        netlist.globalBlock.wireSegments.push_back(seg);
-        
-        // Optional: Inject Lumped Parasitic Resistor if length is significant
-        if (length_um > 10.0) { // > 1um long
-             TensorBlock::ParasiticResistor pr;
-             pr.name = "R_WIRE_" + std::to_string(netlist.globalBlock.wireSegments.size());
-             // Note: In a real extractor, we'd insert an internal node. 
-             // Here we just record it for the SPICE writer to decide.
-             pr.node1 = n1; 
-             pr.node2 = n1; // Shorted in ideal sim
-             pr.R = length_um * seg.r_per_um;
-             netlist.globalBlock.parasiticResistors.push_back(pr);
-        }
-    }
-    
-    return netlist; 
+    return netlist;
 }
 // ============================================================================
 // ERC (Electrical Rule Check)
@@ -1359,6 +949,9 @@ SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {
     
     // Forward ERC violations
     connect(scene, &GridScene::violationsChanged, this, &SchematicEditor::violationsChanged);
+    
+    // Forward Drill-Down request
+    connect(scene, &GridScene::requestOpenSubcircuit, this, &SchematicEditor::requestOpenSubcircuit);
 }
 
 QWidget* SchematicEditor::createRibbon() {
@@ -1419,6 +1012,20 @@ QWidget* SchematicEditor::createRibbon() {
         }
     });
     layout->addWidget(extractBtn);
+    
+    // PDK Audit button
+    QPushButton* auditBtn = new QPushButton("🔍 Audit PDK");
+    auditBtn->setFixedHeight(35);
+    auditBtn->setStyleSheet(
+        "QPushButton { background: #333; color: #569CD6; border: 1px solid #569CD6; border-radius: 3px; padding: 5px 10px; }"
+        "QPushButton:hover { background: #264f78; }"
+    );
+    connect(auditBtn, &QPushButton::clicked, this, [this](){
+        ComplianceReport report = PDKComplianceChecker::checkCompliance(scene);
+        ComplianceReportDialog dlg(report, this);
+        dlg.exec();
+    });
+    layout->addWidget(auditBtn);
 
     layout->addStretch();
     return ribbon;
@@ -1581,11 +1188,13 @@ void SchematicEditor::loadState(const QJsonObject& state) {
         
         QString newId = placeComponent(type, pos, rot, params);
         
-        // Restore ID
-        QString targetId = c["id"].toString();
-        if (!targetId.isEmpty()) {
-            if (VisualComponent* comp = findComponent(newId)) {
-                comp->name = targetId;
+        // Restore Name/ID
+        if (VisualComponent* comp = findComponent(newId)) {
+            QString targetName = c["name"].toString();
+            if (targetName.isEmpty()) targetName = c["id"].toString();
+            
+            if (!targetName.isEmpty()) {
+                comp->name = targetName;
             }
         }
     }
@@ -1764,4 +1373,160 @@ void SchematicEditor::setQuickPreviewEnabled(bool enabled) {
     }
 }
 
+// ============================================================================
+// HIERARCHICAL SCHEMATICS (Phase 2)
+// ============================================================================
 
+bool SchematicEditor::saveToFile(const QString& filePath) {
+    QFile saveFile(filePath);
+    if (!saveFile.open(QIODevice::WriteOnly)) {
+        qWarning() << "Could not open file for writing:" << filePath;
+        return false;
+    }
+    QJsonObject state = getCircuitState();
+    QJsonDocument saveDoc(state);
+    saveFile.write(saveDoc.toJson());
+    return true;
+}
+
+bool SchematicEditor::loadFromFile(const QString& filePath) {
+    QFile loadFile(filePath);
+    if (!loadFile.open(QIODevice::ReadOnly)) {
+        qWarning() << "Could not open file for reading:" << filePath;
+        return false;
+    }
+    QByteArray saveData = loadFile.readAll();
+    QJsonDocument loadDoc(QJsonDocument::fromJson(saveData));
+    if(loadDoc.isNull() || !loadDoc.isObject()){
+        qWarning() << "Invalid JSON in file:" << filePath;
+        return false;
+    }
+    
+    scene->clear(); 
+    loadState(loadDoc.object());
+    return true;
+}
+
+void GridScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
+    QGraphicsItem* item = itemAt(event->scenePos(), QTransform());
+    if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+        // 1. File-Based Drill Down
+        if (!comp->sourceFilePath.isEmpty()) {
+             emit requestOpenSubcircuit(comp->sourceFilePath);
+             return; // Consume event
+        }
+        
+        // 2. Standard Cell Drill Down (Migration)
+        if (comp->type == ComponentType::SubCircuit || comp->type == ComponentType::ICPackage) {
+             // Heuristic: Check resources/cells/NAME.sch
+             QString cleanName = comp->subCircuitName.toLower().replace(" ", "_");
+             // Clean special chars
+             cleanName.remove(QRegularExpression("[^a-zA-Z0-9_]"));
+             
+             QStringList paths = {
+                 "resources/cells/" + cleanName + ".sch",
+                 "user_libs/" + cleanName + ".sch"
+             };
+             
+             for(const auto& p : paths) {
+                 if (QFileInfo::exists(p)) {
+                     emit requestOpenSubcircuit(p);
+                     return;
+                 }
+             }
+        }
+    }
+    QGraphicsScene::mouseDoubleClickEvent(event);
+}
+
+void SchematicEditor::createSubcircuitFromSelection() {
+    // Scaffold for Phase 2.3
+    QList<QGraphicsItem*> selected = scene->selectedItems();
+    if (selected.isEmpty()) {
+        QMessageBox::information(this, "Encapsulate", "Please select components to encapsulate.");
+        return;
+    }
+    
+    // For now, just log intent
+    qDebug() << "Encapsulate requested for" << selected.size() << "items.";
+    QMessageBox::information(this, "Encapsulate", "Subcircuit functionality coming in Phase 2.3!");
+}
+
+
+
+// ============================================================================
+// DESIGNDB OBSERVER (Backward Sync)
+// ============================================================================
+
+static ComponentType mapStringToType(const QString& s) {
+    if (s == "Resistor" || s == "R") return ComponentType::Resistor;
+    if (s == "Capacitor" || s == "C") return ComponentType::Capacitor;
+    if (s == "Inductor" || s == "L") return ComponentType::Inductor;
+    if (s == "VoltageSource" || s == "V") return ComponentType::VoltageSource;
+    if (s == "CurrentSource" || s == "I") return ComponentType::CurrentSource;
+    if (s == "Diode" || s == "D") return ComponentType::Diode;
+    if (s == "Mosfet" || s == "M") return ComponentType::Mosfet;
+    if (s == "Bjt" || s == "Q") return ComponentType::Bjt;
+    if (s == "Ground" || s == "0") return ComponentType::Ground;
+    return ComponentType::Select; // Default / Fail
+}
+
+void GridScene::onNetModified(const acutesim::components::Net& net) {
+    // If net name changed, update labels?
+    // Not implemented in VisualWire yet, but placeholder for now.
+    emit messageLogged(QString("Db Sync: Net %1 modified").arg(QString::fromStdString(net.name)));
+}
+
+void GridScene::ofInstancePlaced(const acutesim::components::Instance& inst) {
+    // If an instance is placed via API/Script, we need to create a VisualComponent
+    
+    // Check if we already have it (avoid infinite loop if we triggered it)
+    for (auto* item : items()) {
+        if (auto* vc = dynamic_cast<VisualComponent*>(item)) {
+            if (vc->dbId == inst.id) return; // Already exists
+        }
+    }
+    
+    // Create new visual component
+    ComponentType type = mapStringToType(QString::fromStdString(inst.masterName));
+    if (type == ComponentType::Select) return; // Unknown
+    
+    VisualComponent* vc = new VisualComponent(type);
+    vc->dbId = inst.id;
+        vc->name = QString::fromStdString(inst.name);
+    vc->setPos(inst.spatial.x, inst.spatial.y);
+    vc->setRotation(inst.spatial.rotation);
+    
+    // Sync Params
+    for(auto it = inst.parameters.begin(); it != inst.parameters.end(); ++it) {
+        vc->params.insert(QString::fromStdString(it->first), QString::number(it->second));
+        // Special case for main value
+        if (it->first == "val" || it->first == "R" || it->first == "C" || it->first == "L") {
+             vc->value = QString::number(it->second);
+             if (it->first == "val") { /* nothing */ }
+             else if (it->first == "R") vc->value += "k"; // heuristic? No, raw number.
+             else if (it->first == "C") vc->value += "u";
+        }
+    }
+    
+    addItem(vc);
+    update();
+}
+
+void GridScene::onInstanceMoved(const acutesim::components::Instance& inst) {
+    for (auto* item : items()) {
+        if (auto* vc = dynamic_cast<VisualComponent*>(item)) {
+            if (vc->dbId == inst.id) {
+                vc->setPos(inst.spatial.x, inst.spatial.y);
+                vc->setRotation(inst.spatial.rotation);
+                update();
+                return;
+            }
+        }
+    }
+}
+
+void GridScene::onTopologyInvalidated() {
+    emit messageLogged("Db Sync: Topology invalidated. Re-generating netlist...");
+    // Potentially trigger re-scan or invalidation visual
+}

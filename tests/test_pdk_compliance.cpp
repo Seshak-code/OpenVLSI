@@ -7,6 +7,8 @@
 #include "components/standard_cells.h"
 #include "gui/editors/schematic_editor.h"
 #include "gui/components/visual_component.h"
+#include "components/pdk_compliance.h"
+#include <QLineF>
 
 // --- Part 1: Structural Tests (Standard Library) ---
 void test_inverter_pdk_mapping() {
@@ -131,6 +133,37 @@ void test_gui_wire_parasitics(SchematicEditor& editor) {
     std::cout << "  Passed." << std::endl;
 }
 
+void test_pdk_auditor(SchematicEditor& editor) {
+    std::cout << "[Test 4] PDK Compliance Auditor Scan..." << std::endl;
+    GridScene* scene = editor.getScene();
+    scene->clear();
+
+    // 1. Compliant FET
+    auto* nfet = new VisualComponent(ComponentType::PDK_NFET);
+    nfet->name = "M1";
+    nfet->params["Model"] = "nfet_01v8";
+    scene->addItem(nfet);
+
+    // 2. Non-compliant FET (Invalid Model)
+    auto* pfet = new VisualComponent(ComponentType::PDK_PFET);
+    pfet->name = "M2";
+    pfet->params["Model"] = "invalid_model";
+    scene->addItem(pfet);
+
+    // 3. Generic Resistor (Warning)
+    auto* res = new VisualComponent(ComponentType::Resistor);
+    res->name = "R1";
+    scene->addItem(res);
+
+    ComplianceReport report = PDKComplianceChecker::checkCompliance(scene);
+    
+    assert(!report.passed);
+    assert(report.errorCount == 1); // M2 missing model
+    assert(report.warningCount == 1); // R1 generic
+    
+    std::cout << "  Passed (Detected violations correctly)." << std::endl;
+}
+
 int main(int argc, char *argv[]) {
     // headless platform interaction
     QApplication app(argc, argv);
@@ -142,6 +175,7 @@ int main(int argc, char *argv[]) {
     SchematicEditor editor;
     test_gui_pdk_extraction(editor);
     test_gui_wire_parasitics(editor);
+    test_pdk_auditor(editor);
 
     std::cout << "=== All Tests Passed ===" << std::endl;
     return 0;

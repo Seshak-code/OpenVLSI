@@ -46,9 +46,9 @@ This roadmap evolves CuteApp from a standalone open-source simulator into an Age
 ## 🏛 GLOBAL PROJECT GOVERNANCE
 ### 📅 Milestone Calendar (Target 2026)
 *   **Q1 (Stabilization)**: Complete Phases 0-2. Numerical authority established on x86/ARM/WASM.
-*   **Q2 (Design Flows)**: Complete Phases 3-5. Waveform 1.0, **Hierarchical Drill-Down** (Subcircuits), and Layout Prototype.
-*   **Q3 (Industry Grade)**: Complete Phases 6-9. PDK bindings, RF/Mixed-Sig, and Antigravity Deep Sync.
-*   **Q4 (Enterprise Orchestration)**: Complete Phases 10-14. Agentic EDA, VS Code UI, and Worker Drivers.
+*   **Q2 (Design Flows - Current)**: Complete Phases 3-5. **Hierarchical Drill-Down**, **PDK Compliance Auditor**, and **Standard IR Exports** (SPEF/Verilog).
+*   **Q3 (Physical & RF)**: Complete Phases 6-8. **GDSII Layout Editor**, **Harmonic Balance Solver**, and **Simulation Orchestration** (Multi-engine coordinator).
+*   **Q4 (Industry Sign-off)**: Complete Phases 9-14. **Unified Project Management**, **Mixed-Signal (AMS) Engine**, and **GPU-Accelerated Solvers**.
 
 ### ⚖️ Risk & Mitigation
 | Risk | Phase | Mitigation Plan |
@@ -1005,6 +1005,11 @@ graph TD
 - [ ] M2: Power Integrity (PI) Engine: Multi-port power network impedance (Z(f)) extraction.
 - [ ] Ldi/dt dynamic droop modeling for complex PDNs.
 
+#### 5.1 Analog Mixed-Signal (AMS) Foundations
+- [ ] **Schematic-Driven Layout (SDL)**: Real-time connectivity binding between schematic and layout (cross-probing).
+- [ ] **Interactive Layout Assistants**: Automate guard-ring generation, common-centroid placement, and differential matching.
+- [ ] **Legacy PDK Adapter**: Implementation of a PyCell/OpenAccess bridge to execute legacy SKILL-based PCells in a secure sandbox.
+
 ### 🎯 PHASE 5 SUCCESS CRITERIA
 *   **Numerical Parity**: GPU vs CPU result deviation < 1e-12 across all precision modes.
 *   **Throughput KPI**: >10x speedup for 1M node circuits on Metal/Vulkan/WebGPU vs single-threaded CPU.
@@ -1018,6 +1023,11 @@ graph TD
 ### GUI: Electro-Thermal & PI Visuals
 - [ ] Multi-Physics Overlays: IR drop and PDN Droop (Time/Freq) overlays.
 - [ ] Z(f) PDN Plots: Frequency-domain supply network impedance visualizations.
+
+#### 5.2 3D-IC & System-Technology Co-Optimization (STCO)
+- [ ] **3Dblox Support**: Implement the 3Dblox standard for hierarchical representation of 3D stacked die architectures.
+- [ ] **Multi-Physics Feedback Loop**: Dynamic coupling between power density maps and thermal/mechanical solvers (ElmerFEM/3D-ICE) back to the timing engine.
+- [ ] **UCIe Interface Synthesis**: Automated generation of UCIe-compliant wrappers and physical bump-pattern constraints for chiplet-to-chiplet communication.
 
 ### 🔁 Phase 5.9: Physical Feedback Loop (M2/M5 Bridge)
 **Purpose**: explicit feedback mechanism for Layout ↔ Simulation.
@@ -1045,9 +1055,28 @@ graph TD
 
 ---
 
+## Phase 5.6 — DIGITAL SIGNOFF & POWER INTEGRITY
+**Purpose**: Achieve signoff-grade accuracy for advanced nodes.
+
+### 5.6.1 Advanced Timing Physics
+- [ ] **CCS/ECS Delay Modeling**: Transition from NLDM to Composite Current Source (CCS) and Effective Current Source (ECS) for <40nm accuracy.
+- [ ] **Signal Integrity (SI)**: Crosstalk noise propagation and glitch filtering algorithms.
+- [ ] **Useful Skew Scheduling**: Implement CCD (Concurrent Clock and Data) optimization to improve timing slack via clock latencies.
+
+### 5.6.2 Power Intent (UPF)
+- [ ] **Native UPF Compiler**: Full support for IEEE 1801 (Unified Power Format) to automate isolation cell, level shifter, and retention register insertion.
+- [ ] **Static Low Power (SLP) Audit**: Formal verification of netlist against UPF power domains.
+
+---
+
 ## 🏭 PHASE 6 — PDK INTEGRATION, INDUSTRY COMPLIANCE & RTL→GDS FLOW
 **Purpose**: Generic foundry-agnostic PDK integration.
 **Critical Goal**: Ensure strict adherence to PDK specifications across all schematic types (Test Bench, Block, System Integration). Every project must define a valid Die Area / PCB constraints in System Mode to enable Yosys → OpenROAD → KLayout flow.
+
+### 6.1 The Unified Data Substrate (The OA Mandate)
+- [ ] **OpenAccess-Compatible API**: Implement a unified, in-memory database that serves as the universal design substrate.
+- [ ] **Incremental Design Flow**: Enable localized updates (e.g., layout edit → timing re-calc) without full file export-import cycles.
+- [ ] **Advanced Interchange**: Native OASIS support for multi-GB layout files and ODB++ for manufacturing/assembly handoff.
 
 ### 6.10 Supported PDKs (Reference Implementations)
 | PDK | Node | Status | Devices |
@@ -1108,6 +1137,13 @@ graph TD
 - [ ] **Hybrid Simulation Coordinator**: Orchestration of sparse (analog) and dense (digital) solvers including Cloud + Local hardware distribution.
 - [ ] **Multi-Rate Synchronization**: Advanced time-step control for synchronizing fast digital clocks with slow analog thermal time constants.
 
+#### 8.1.1 Advanced Verification & Signoff
+- [ ] **UVM Constraint Solver**: Integrate SAT/SMT solvers (e.g., Z3) into Verilator to support SystemVerilog Constrained Random Verification (CRV).
+- [ ] **Functional Safety (FuSa - ISO 26262)**:
+    - [ ] **Fault Injection Manager**: Automate safety campaigns (stuck-at/bit-flip) for diagnostic coverage analysis.
+    - [ ] **Tool Qualification Kit**: Safety manuals and validation reports for automotive/industrial compliance.
+- [ ] **EM Middleware**: Automated geometry abstraction and port definition for OpenEMS; seamless S-parameter back-annotation to SPICE.
+
 ### 8.2 Interoperability
 - [ ] Layout Integration: GDSII import for overlay/extraction.
 - [ ] Standard Formats: DSPF (parasitics), Touchstone (RF), LEF/DEF.
@@ -1148,6 +1184,11 @@ graph TD
 - [ ] Tool-Integrated Prompt Shortcuts: `@netlist`, `@lastTrace`, `@failureTags`, `@deviceDocs`.
 - [ ] Closed-Loop Interaction & Agency: Secure "Command Execution" handshake.
 
+#### 9.1.2 Neuro-Symbolic "Generate-Verify-Repair" Loop
+- [ ] **Adversarial Verification Loop**: AI Copilot results are automatically wrapped in a feedback loop with formal solvers.
+- [ ] **Autonomous Core**: Generator (LLM) creates RTL/Netlist $\rightarrow$ Verifier (Symbolic Solver) flags violations $\rightarrow$ Generator repairs based on counter-examples.
+- [ ] **Neuro-Symbolic SVA Synthesis**: Transform high-level functional requirements into rigorous SystemVerilog Assertions (SVA) for automated signoff.
+
 #### 🧠 Hallucination Detection & Fail Criteria
 *   **Reference Benchmark**: `tests/ai/grounding_truth.json` containing 500 prompts with known-correct topological edits.
 *   **Fail Condition**: >0% allowance for "phantom node" connections (connecting to non-existent ID).
@@ -1176,6 +1217,10 @@ graph TD
 - [ ] Google Search Grounding: "Web Search" tool for datasheets.
 - [ ] Secure Token Vaulting.
 - [ ] Antigravity Payload Injector.
+
+#### 9.1.1 The Secure Design Enclave
+- [ ] **Trusted Execution Environment (TEE)**: Support for running AcuteSim/OpenROAD inside Intel SGX or AMD SEV to enable secure processing of encrypted, proprietary foundry PDKs.
+- [ ] **Hardware Bill of Materials (HBOM)**: Automated generation of CISA-compliant provenance certificates for all hardware IP and EDA tool versions used.
 
 ### Phase 9.2: AI Guardrails & Confidence
 - [ ] Confidence Metrics: Quantitative "Certainty Score" for every AI suggestion.
@@ -1660,12 +1705,12 @@ service Orchestrator {
 
 ---
 
-## 🧠 HIGH-LEVEL MISSING ARCHITECTURAL THEMES
+## 🧠 HIGH-LEVEL ARCHITECTURAL THEMES (MAPPED TO PHASES)
 
-1.  **Unified Project Management Layer**: One canonical repo, schema, and versioned project definition bridging analog/digital flows.
-2.  **Hierarchical Simulation Orchestration**: Meta-engine coordinating analog and digital simulators (e.g., Spectre and open SPICE variants).
-3.  **Standard Intermediate Representations**: IRs for netlists, parasitics, timing, and physical data.
-4.  **Hardware-Accelerated Solvers Beyond WASM**: GPU kernels for large problem sizes with fallback strategies.
+1.  **Unified Project Management Layer** (Phase 10/11): One canonical repo, schema, and versioned project definition bridging analog/digital flows.
+2.  **Hierarchical Simulation Orchestration** (Phase 8/9): Meta-engine coordinating analog and digital simulators (e.g., Spectre and open SPICE variants).
+3.  **Standard Intermediate Representations** (Phase 2/11): IRs for netlists, parasitics (SPEF), timing (SDF), and physical data.
+4.  **Hardware-Accelerated Solvers** (Phase 1.1/5/7): GPU kernels for large problem sizes with seamless CPU fallback strategies.
 
 ---
 

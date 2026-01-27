@@ -331,5 +331,48 @@ QJsonArray getConvergenceTrace();
  */
 QString analyzeFailure();
 
+// ============================================================================
+// AUDIT LOGGING (Phase 6.1)
+// ============================================================================
+
+/**
+ * @brief AIQueryResult - detailed audit log for AI decisions.
+ * Captures "Why" an action was taken, using which context, and the resulting state.
+ */
+struct AIQueryResult {
+    QString queryId;               // Unique ID for this interaction
+    QString prompt;                // Original user/system prompt
+    QString reasoning;             // Chain-of-Thought (CoT) reasoning
+    QString modelVersion;          // e.g. "Gemini-2.0-Pro-Exp"
+    
+    // RAG Context Used
+    struct ContextRef {
+        QString docId;             // e.g. "datasheet_pdk_nfet.pdf"
+        QString snippet;           // "Vth is 0.7V at 25C"
+        double relevanceScore;     // 0.0 - 1.0
+    };
+    QVector<ContextRef> references;
+    
+    // Decision/Mutation
+    struct Mutation {
+        QString actionType;        // "PLACE_COMPONENT", "CHANGE_PARAM"
+        QString targetUuid;        // UUID of affected object
+        QString details;           // "R=10k -> 12k"
+    };
+    QVector<Mutation> mutations;
+    
+    // Safety Checks
+    bool safetyCheckPassed;
+    QStringList safetyWarnings;    // "Warning: Decap placed near high-voltage node"
+    
+    // Timestamp
+    qint64 timestampMs;
+};
+
+/**
+ * @brief Log an AI decision to the persistent audit trail.
+ */
+void logAUDIT(const AIQueryResult& result);
+
 } // namespace AIAPI
 

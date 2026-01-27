@@ -1,73 +1,104 @@
-# AcuteSim/CuteApp Codebase Context
+# AcuteSim/CuteApp: Architectural Blueprint & Interconnections
 
-## 🌟 Project Vision
-**AcuteSim** (Engine) and **CuteApp** (Application) form an AI-native EDA platform for ASIC design (RTL->GDS). It aims to transition from a standalone simulator to an **Agent-Centric Cognitive Foundry**.
+This document provides a high-level map of how the different modules of AcuteSim (Engine) and CuteApp (Application) interconnect to form an AI-native ASIC design platform.
 
-## 🏛 Structural Overview & Interconnections
+## 🏗 High-Level Module Topology
 
-### 1. GUI / Frontend (`gui/`)
-The frontend is built with **Qt 6**, focusing on a modern, dockable VS Code-like paradigm.
--   **Visual Primitives** (`gui/components/`):
-    -   `VisualComponent` (`visual_component.h`): The base class for all renderable items. It now supports a **Unified Component Library** (no separate digital/analog modes) and **Ghosting** for AI suggestions.
-    -   `ProbeTip` (`probe_tip.h`): Implements "Oscilloscope Style" drag-and-drop measurement probes that snap to wires.
--   **Editors** (`gui/editors/`):
-    -   `SchematicEditor` (`schematic_editor.cpp`): Handles the canvas logic. Crucially, it manages **Spatial Connectivity Analysis** (merging wires via union-find) and **Netlist Generation** (converting visual items to `TensorNetlist`). It explicitly wires PDK primitives (NFET/PFET) to 4 terminals.
--   **Interconnections**:
-    -   Outputs `TensorNetlist` to `components/` for structural definition.
-    -   Consumes `SimulationTrace` from `compute/` for visualization in `WaveformViewer`.
+```mermaid
+graph TD
+    subgraph GUI ["GUI (Qt 6)"]
+        SE["Schematic Editor"]
+        AV["AI Assistant Panel"]
+        WV["Waveform Viewer"]
+        WS["Simulation Workspace"]
+    end
 
-### 2. Structural Layer (`components/`)
-Defines *what* the circuit is, independent of physics or visual representation.
--   **Core Definitions**: `circuit.h` defines `TensorBlock` (immutable definition) and `BlockState` (mutable history).
--   **Canonicalization** (`graph_canonical.h`): Implements orientation-invariant hashing (BFS from Ground) to detect topologically identical circuits.
--   **Difference Engine** (`netlist_diff.h`): Computes semantic diffs (Structure vs Parameter changes) to optimize re-simulation.
+    subgraph AI_API ["AI API (Cognitive Stack)"]
+        Core["Core (Action)"]
+        Sens["Senses (Infrastructure)"]
+        Mem["Memory (RAG/Context)"]
+        Imag["Imagination (Speculative Run)"]
+        Perc["Perception (Analysis)"]
+        Pol["Policy (Conscience/Safety)"]
+    end
 
-### 3. Compute Engine (`compute/`)
-The execution engine follows a **Data-Oriented Pipeline**, moving data downwards from simple structs to SIMD-optimized tensors.
--   **Control** (`compute/orchestration/`): Manages external tools and cloud dispatch (`WorkerClient`).
--   **Strategy** (`compute/solvers/`): Orchestrates the Newton-Raphson loop (`circuitsim_solver.cpp`).
--   **Math Kernels** (`compute/math/`): Provides `solvePCG` (Iterative) and `solveLU` (Direct) solvers using `linalg.h`.
--   **Tensors** (`compute/tensors/`): Stores simulation data in **Structure-of-Arrays (SoA)** format for AVX-512/GPU efficiency (`physics_tensors.h`).
+    subgraph Structural ["Structural Layer"]
+        TB["TensorBlock / Netlist"]
+        GC["Graph Canonicalization"]
+        Diff["Semantic Diff Engine"]
+        SC["Standard Cell Library"]
+    end
 
-### 4. Physics Core (`physics/`)
-Implements a **Dual Kernel** architecture for numerical robustness (`physics/flow.md`).
--   **Physical Truth** (`device_physics.h`): Contains exact constitutive equations (stateless).
--   **Numerical Stability**: Wraps truth models with **Clamping** (e.g., `pnjlim`) and **Linear Continuation** to prevent solver divergence.
--   **Stamping** (`stamps.h` -> `circuitsim.h`): Maps physical quantities to the solver matrix. Uses "Norton Equivalents" for voltage sources to minimize matrix size.
+    subgraph Compute ["Compute Engine"]
+        Solv["Solvers (NR/DC/Tran)"]
+        Tens["Tensorized Memory (SoA)"]
+        Math["Math Kernels (LU/PCG)"]
+        Orch["Orchestration (gRPC)"]
+    end
 
-## ✅ Recent Implementation Status
+    subgraph Physics ["Physics Core"]
+        DP["Device Physics (Stateless)"]
+        Stmp["Stamps (MNA)"]
+    end
 
-### 1. Unified Component Library & PDK Compliance (Phase 1-5 Completed)
-The legacy "Digital vs Analog" component split has been removed.
--   **Unified Enum**: `ComponentType` (`visual_component.h`) serves as the single source of truth.
--   **PDK Primitives**: `PDK_NFET`, `PDK_PFET`, `PDK_Resistor`, `PDK_Capacitor` map to foundry models (e.g., "nfet_01v8").
--   **Standard Cells**: Logic gates (Inverter, NAND) in `standard_cells.h` are now composed of explicitly parameterized PDK MOSFETs, ensuring RTL-to-GDS flow compatibility.
--   **PDK Integration**: `SchematicEditor` netlisting extracts geometry (W, L, Area) and Model names for *all* components, defaulting to generic PDK values if unspecified.
+    subgraph External ["External EDA Tools"]
+        Yosys["Yosys (Synthesis)"]
+        OR["OpenROAD (P&R)"]
+        KL["Klayout (GDS)"]
+    end
 
-### 2. Parasitic-Aware Netlisting (Phase 1.5 Implemented)
--   **VisualWire**: Now carries physical attributes: `layer` (M1..M6), `width_um`, and `model_name`.
--   **Netlist Extraction**: `SchematicEditor::generateNetlist` iterates wires to extract `WireSegment` data (Length, Layer) and injects `WireSegment` and `ParasiticResistor` structs into the `TensorNetlist`.
--   **SPEF Readiness**: The `TensorNetlist` structure (`circuit.h`) now supports `wireSegments` and `parasiticResistors`, ready for future SPEF export.
+    %% Interconnections
+    SE -->|Generates| TB
+    TB -->|Feeds| Tens
+    Tens -->|Stamped by| Stmp
+    Stmp -->|Uses| DP
+    WV -->|Consumes| Solv
+    AV -->|Communicates with| Core
+    Core -->|Uses| Sens
+    Sens -->|Manipulates| SE
+    Imag -->|Runs| Solv
+    Orch -->|Dispatches to| Yosys
+    Orch -->|Dispatches to| OR
+    Orch -->|Dispatches to| KL
+```
 
-### 3. Oscilloscope-Style Probes (Implemented)
--   **Visuals**: `ProbeTip` classes allow draggable positive/negative tips that snap to wires (`visual_component.h`).
--   **Logic**: `SchematicEditor` implements specific logic to "Find Nearest Terminal Node" on wires (`schematic_editor.cpp:1135`) and inject `Probe` objects into the netlist *after* stamping logic.
+---
 
-## 🔬 Deep Data Flow (The Pipeline)
+## 🔌 Functional Interconnections
 
-1.  **User/AI Action**: User places a `PDK_NFET` in the `SchematicEditor`.
-2.  **Netlisting**: `GridScene::generateNetlist` runs spatial union-find to determine connectivity and outputs a `TensorNetlist`.
-3.  **Transformation**: `physics_tensors.cpp` converts the netlist from **AoS** (Circuit objects) to **SoA** (aligned vectors).
-4.  **Solver Loop**: `CircuitSim` starts the Newton-Raphson process:
-    -   **Stamping**: Calls `stampSoABlock` to evaluate device physics in parallel batches.
-    -   **Solve**: Calls `solveLU` or `solvePCG` to find $\Delta V$.
-    -   **Check**: `calculatePhysicalResiduals` validates KCL conservation (< 1pA).
-5.  **Visualization**: `SimulationTrace` is sent back to the GUI, where `WaveformViewer` renders the results.
+### 1. The Design-to-Simulation Loop
+*   **Editor → Substrate**: `gui/editors/schematic_editor.cpp` populates the **Unified DesignDb** (`components/design_db.h`), which acts as the persistent, object-oriented source of truth for connectivity.
+*   **Substrate → Snapshot**: `DesignDb` generates an immutable `TensorBlock` snapshot (SoA-ready).
+*   **AoS → SoA**: `compute/tensors/physics_tensors.cpp` consumes this snapshot to initialize the `TensorizedBlock` (Structure-of-Arrays).
+*   **Stamping & Solving**: `compute/solvers/circuitsim_solver.cpp` orchestrates the Newton-Raphson loop. It calls `physics/circuitsim.h` to stamp the MNA matrix using `physics/stamps.h` and pure kernels from `physics/device_physics.h`. Numerical solving is performed by `compute/math/linalg.h`.
+*   **Trace → Visualization**: Results are captured in a `SimulationTrace` (`ai_api/simulation/simulation_trace.h`) and rendered by the `WaveformViewer` or standard Qt widgets in `gui/widgets/`.
 
-## 🧩 Standard Agentic Development Workflow
-The project enforces a strict "Context-First" development loop via `/Users/seshak/.gemini/antigravity/global_workflows/agentic_flow.md`:
-1.  **Analyze Roadmap**: Ground every task in an M1-M15 milestone or strategy.
-2.  **Flow Grounding**: Read the `flow.md` for *every* folder touched. If it creates/modifies files, you **MUST** consult the "🤖 SME Validation Checklist" in that `flow.md` before proceeding.
-3.  **Structured Planning**: Refer explicitly to constraints in `flow.md` (e.g., "Dual Kernel separation").
-4.  **Approval Loop**: Human-in-the-loop validation of `implementation_plan.md`.
-5.  **Trust Surface Verification**: Validate against physical conservation and residuals.
+### 2. The AI Cognitive Loop (The "Artificial Engineer")
+*   **Perception**: `ai_api/analysis/topology_analyzer.h` examines the netlist to identify functional blocks (e.g., "Differential Pair").
+*   **Memory**: `ai_api/context/rag_context.h` provides the LLM with relevant snippets from past simulations or documentation.
+*   **Action**: `ai_api/system/schema_api.h` allows the AI to programmatically place components or route wires in the `SchematicEditor`.
+*   **Conscience**: `ai_api/policy/ai_policy.h` enforces that every AI suggestion must be grounded in raw solver data (residuals, conservation laws).
+
+### 3. The Orchestration Layer (RTL-to-GDS Flow)
+*   **Drivers**: `compute/orchestration/drivers/` (e.g., `yosys_task.cpp`, `openroad_task.cpp`) translate high-level design goals into tool-specific TCL/Shell scripts.
+*   **Client**: `compute/orchestration/grpc_worker_client.cpp` dispatches these tasks to local or remote workers using gRPC (`worker_service.proto`).
+*   **GUI Bridge**: `gui/orchestration/worker_manager.cpp` manages the connection and streams real-time logs back to the user console.
+
+### 4. PDK & Standard Cell Integration
+*   **Standard Cells**: `components/standard_cells.h` defines complex gates (and Darlington pairs, OpAmps) as transistor-level subcircuits.
+*   **PDK Primitives**: These subcircuits are composed of `PDK_NFET`, `PDK_PFET`, etc., which map to foundry-specific models (e.g., `nfet_01v8`).
+*   **Compliance**: `components/pdk_compliance.h` audits the schematic to ensure all components and parameters align with the target process design kit.
+
+### 5. Numerical Authority & Trust
+*   **Canonicalization**: `components/graph_canonical.h` generates a unique hash based on circuit topology (BFS from ground), ensuring that identical circuits produce identical results, regardless of visual layout.
+*   **Canonicalization**: `components/graph_canonical.h` generates a unique hash based on circuit topology (BFS from ground), ensuring that identical circuits produce identical results, regardless of visual layout.
+*   **Trust Surface**: The UI exposes the **KCL Residual Audit** (`calculatePhysicalResiduals`), providing mathematical proof that the simulation converged to a physically valid state.
+*   **Paradigm Bridge**: `gui/core/crossprobe_manager.h` maintains a bidirectional map between `DesignDb` UUIDs, GUI elements, and simulation traces, enabling features like cross-probing and Tcl-driven highlighting.
+
+---
+
+## 🤖 Development Rules (Flow Grounding)
+1.  **Context First**: Always read the `flow.md` in a directory before modifying its files.
+2.  **Stateless Physics**: Keep `device_physics.h` kernels pure and stateless to facilitate parallel/GPU execution.
+3.  **Grounding**: AI suggestions must cite specific log lines or introspection data.
+4.  **Evidence-First**: Never let the AI explain a failure without first showing the raw solver evidence.

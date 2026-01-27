@@ -1048,7 +1048,10 @@ public:
         if (n2 > numGlobalNodes) numGlobalNodes = n2;
     }
     void addCapacitor(int n1, int n2, double C) {
-        globalBlock.addCapacitor(n1, n2, C);
+        addCapacitor("", n1, n2, C);
+    }
+    void addCapacitor(const std::string& name, int n1, int n2, double C) {
+        globalBlock.addCapacitor(name, n1, n2, C);
         // Sync global state
         globalState.capacitorState.emplace_back();
         globalState.capacitorState.back().resize(3);
@@ -1057,7 +1060,10 @@ public:
         if (n2 > numGlobalNodes) numGlobalNodes = n2;
     }
     void addInductor(int n1, int n2, double L) {
-        globalBlock.addInductor(n1, n2, L);
+        addInductor("", n1, n2, L);
+    }
+    void addInductor(const std::string& name, int n1, int n2, double L) {
+        globalBlock.addInductor(name, n1, n2, L);
         globalState.inductorState.emplace_back();
         globalState.inductorState.back().resize(3);
 

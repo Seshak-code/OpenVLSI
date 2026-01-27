@@ -11,7 +11,9 @@ The GUI is organized into 9 specialized sub-modules, representing a layered arch
 ### 1. The Interaction Layer
 Where the user communicates with the agent.
 -   [**panels/**](file:///Users/seshak/Desktop/CuteApp/gui/panels/flow.md): The Chat Interface (`AiAssistantPanel`).
+-   [**panels/**](file:///Users/seshak/Desktop/CuteApp/gui/panels/flow.md): The Chat Interface (`AiAssistantPanel`).
 -   [**orchestration/**](file:///Users/seshak/Desktop/CuteApp/gui/orchestration/flow.md): The Bridge to the Compute Worker (`WorkerManager`).
+-   [**scripting/**](file:///Users/seshak/Desktop/CuteApp/gui/scripting/flow.md): Tcl/Python Hooks (`TclBridge`) for automation and testing.
 
 ### 2. The Creative Layer
 Where the design happens.

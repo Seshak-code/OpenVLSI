@@ -148,6 +148,10 @@ add_executable(${PROJECT_NAME}
 
     gui/widgets/component_library.cpp
     gui/widgets/component_library.h
+    gui/widgets/compliance_report_dialog.cpp
+    gui/widgets/compliance_report_dialog.h
+    components/pdk_compliance.cpp
+    components/pdk_compliance.h
     gui/editors/schematic_editor_api.cpp
     gui/analysis/system_inspector.cpp
     gui/analysis/system_inspector.h
@@ -867,6 +871,8 @@ if(NOT EMSCRIPTEN)
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
+        components/pdk_compliance.cpp
+        gui/widgets/compliance_report_dialog.cpp
     )
     target_include_directories(test_pdk_compliance PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -893,7 +899,100 @@ endif()
 # =============================================================================
 # Testing Configuration
 # =============================================================================
+# Phase 2 Hierarchical Sim Test
+if(NOT EMSCRIPTEN)
+    add_executable(test_hierarchical_sim
+        tests/test_hierarchical_sim.cpp
+        gui/components/visual_component.cpp
+        gui/components/probe_tip.cpp
+        gui/editors/schematic_editor.cpp
+        gui/editors/schematic_view.cpp
+        gui/editors/component_wizard.cpp
+        gui/editors/schematic_editor_api.cpp
+        gui/editors/schematic_editor_sync.cpp
+        gui/panels/ai_assistant_panel.cpp
+        gui/widgets/component_library.cpp
+        gui/widgets/design_flow.cpp
+        gui/analysis/system_inspector.cpp
+        gui/analysis/logic_analyzer.cpp
+        gui/editors/hdl_editor.cpp
+        gui/core/mainwindow.cpp
+        gui/core/welcome_widget.cpp
+        ai_api/system/schema_api.cpp
+        ai_api/context/context_engine.cpp
+        ai_api/analysis/failure_classifier.cpp
+        ai_api/simulation/auto_harness.cpp
+        ai_api/simulation/speculative_runner.cpp
+        ai_api/context/prompt_builder.cpp
+        ai_api/context/rag_context.cpp
+        ai_api/analysis/topology_analyzer.cpp
+        ai_api/system/feedback_loop.cpp
+        ai_api/simulation/simulation_trace.cpp
+        compute/tensors/physics_tensors.cpp
+        compute/tensors/kernel_dispatch.cpp
+        compute/tensors/physics_kernels_avx512.cpp
+        compute/solvers/superposition.cpp
+        compute/solvers/circuitsim_solver.cpp
+        gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_explorer.cpp
+        gui/analysis/corner_setup_widget.cpp
+        gui/widgets/problems_panel.cpp
+        gui/widgets/debug_suggestions_panel.cpp
+        gui/widgets/trust_badge_widget.cpp
+        gui/orchestration/worker_status_panel.cpp
+        gui/orchestration/worker_manager.cpp
+        physics/quick_analysis.cpp
+        compute/orchestration/grpc_worker_client.cpp
+        gui/analysis/statistical_dashboard.cpp
+        gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/styling/theme_manager.cpp
+        gui/core/layout_manager.cpp
+        gui/core/storage_manager.cpp
+        gui/core/docking_manager.cpp
+        gui/widgets/waveform_widget.cpp
+        gui/widgets/output_dock_widget.cpp
+        gui/widgets/terminal_widget.cpp
+        gui/core/platform_helper.cpp
+        gui/core/activity_bar.cpp
+        gui/core/icon_provider.cpp
+        resources/icons.qrc
+        components/pdk_compliance.cpp
+        gui/widgets/compliance_report_dialog.cpp
+        gui/widgets/command_palette.cpp
+        gui/widgets/ghost_diff_viewer.cpp
+        gui/widgets/toast_manager.cpp
+        gui/core/keybinding_manager.cpp
+        gui/widgets/keybindings_dialog.cpp
+        gui/widgets/search_dock.cpp
+        gui/widgets/project_model.cpp
+        gui/widgets/project_explorer.cpp
+    )
+    target_include_directories(test_hierarchical_sim PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    )
+    target_link_libraries(test_hierarchical_sim PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
+    target_compile_features(test_hierarchical_sim PUBLIC cxx_std_17)
+endif()
+
 enable_testing()
+
+add_test(NAME test_hierarchical_sim COMMAND test_hierarchical_sim)
+target_compile_definitions(test_hierarchical_sim PRIVATE CURRENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_test(NAME test_safe_io COMMAND test_safe_io)
 add_test(NAME test_ai_simulation_intelligence COMMAND test_ai_simulation_intelligence)
