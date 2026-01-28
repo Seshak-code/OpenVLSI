@@ -1,21 +1,9 @@
 #include "pdk_compliance.h"
 #include "../gui/components/visual_component.h"
 #include "../gui/editors/schematic_editor.h"
+#include "pdk_manager.h"
 #include <QGraphicsItem>
-
-const QSet<QString> PDKComplianceChecker::ALLOWED_MOSFET_MODELS = {
-    "nfet_01v8", "nfet_01v8_lvt", "nfet_g5v0d10v5",
-    "pfet_01v8", "pfet_01v8_lvt", "pfet_g5v0d10v5",
-    "sky130_fd_pr__nfet_01v8", "sky130_fd_pr__pfet_01v8"
-};
-
-const QSet<QString> PDKComplianceChecker::ALLOWED_RESISTOR_MODELS = {
-    "poly_res", "diffusion_res", "metal_res", "sky130_fd_pr__res_high_po"
-};
-
-const QSet<QString> PDKComplianceChecker::ALLOWED_CAPACITOR_MODELS = {
-    "mim_cap", "varactor", "sky130_fd_pr__cap_mim_m3_1"
-};
+#include <QDebug>
 
 PDKComplianceChecker::PDKComplianceChecker() {}
 
@@ -23,52 +11,66 @@ ComplianceReport PDKComplianceChecker::checkCompliance(GridScene* scene) {
     ComplianceReport report;
     if (!scene) return report;
 
+    // Get Active Rules
+    const PDKRules& pdk = PDKManager::instance().getPDK();
+    if (pdk.name.isEmpty()) {
+        // Attempt load default if not loaded
+        PDKManager::instance().loadPDK("resources/pdk/sky130.json");
+    }
+    const PDKRules& rules = PDKManager::instance().getPDK();
+
     for (auto* item : scene->items()) {
         auto* comp = dynamic_cast<VisualComponent*>(item);
         if (!comp) continue;
  
-        // Skip wires and pins (they are handled separately or inherent)
+        // Skip wires and pins
         if (comp->type == ComponentType::Wire || comp->type == ComponentType::Pin) continue;
+        if (comp->type == ComponentType::Ground || comp->type == ComponentType::PDK_VSS) continue;
+        if (comp->type == ComponentType::PDK_VDD || comp->type == ComponentType::VoltageSource) continue;
 
         QString model = comp->params.value("Model");
+        QString devClass = rules.getDeviceClass(model);
         
-        // --- Rule 1: No Generic MOSFETs ---
-        if (comp->type == ComponentType::PDK_NFET || comp->type == ComponentType::PDK_PFET || comp->type == ComponentType::Mosfet) {
-            if (model.isEmpty()) {
-                report.violations.append({comp->name, "MOSFET", "Missing Model property", ComplianceSeverity::ERROR});
-                report.errorCount++;
-            } else if (!ALLOWED_MOSFET_MODELS.contains(model)) {
-                report.violations.append({comp->name, "MOSFET", QString("Model '%1' is not Sky130 compliant").arg(model), ComplianceSeverity::ERROR});
-                report.errorCount++;
-            }
-        }
-
-        // --- Rule 2: PDK Resistor/Capacitor Validation ---
-        if (comp->type == ComponentType::PDK_Resistor || comp->type == ComponentType::Resistor) {
-            if (model.isEmpty() || !ALLOWED_RESISTOR_MODELS.contains(model)) {
-                report.violations.append({comp->name, "Resistor", "Using generic/ideal resistor in tapeout flow", ComplianceSeverity::WARNING});
-                report.warningCount++;
-            }
-        }
-        
-        if (comp->type == ComponentType::PDK_Capacitor || comp->type == ComponentType::Capacitor) {
-            if (model.isEmpty() || !ALLOWED_CAPACITOR_MODELS.contains(model)) {
-                report.violations.append({comp->name, "Capacitor", "Using generic/ideal capacitor in tapeout flow", ComplianceSeverity::WARNING});
-                report.warningCount++;
-            }
-        }
-
-        // --- Rule 3: Forbidden Components ---
-        if (comp->type == ComponentType::ICPackage) {
-             report.violations.append({comp->name, "ICPackage", "Generic IC Packages are forbidden in monolithic PDK flow", ComplianceSeverity::ERROR});
+        // --- Rule 1: Unknown Model (if PDK defines classes) ---
+        if (!rules.deviceClasses.isEmpty() && devClass == "UNKNOWN" && !model.isEmpty()) {
+             // If model is set but not in PDK
+             report.violations.append({comp->name, "Unknown", QString("Model '%1' not found in %2").arg(model).arg(rules.name), ComplianceSeverity::ERROR});
              report.errorCount++;
+             continue; // Cannot check params for unknown model
         }
         
-        // --- Rule 4: SubCircuit Validation ---
-        // (For now, just a placeholder - nested blocks are audited when opened)
-        if (comp->type == ComponentType::SubCircuit && comp->sourceFilePath.isEmpty()) {
-             report.warningCount++;
-             report.violations.append({comp->name, "SubCircuit", "Inline subcircuit has no source file (cannot audit internals)", ComplianceSeverity::WARNING});
+        // --- Rule 2: Validation by Class ---
+        if (devClass == "MOSFET") {
+             // Generic checks if needed
+        }
+        
+        // --- Rule 3: Parametric Validation ---
+        if (rules.paramRules.contains(model)) {
+            const auto& pRules = rules.paramRules[model];
+            for (auto it = pRules.begin(); it != pRules.end(); ++it) {
+                QString paramName = it.key();
+                const ParamRule& rule = it.value();
+                
+                if (comp->params.contains(paramName)) {
+                    QVariant val = comp->params.value(paramName); // This is string usually?
+                    // Convert string "1.0u" to double 1.0e-6 if needed
+                    // For now assume simple numeric string "0.5" or handle unit suffix parsing later
+                    
+                    // Simple parse
+                    bool ok;
+                    double d = val.toString().toDouble(&ok);
+                    if (ok) {
+                        if (rule.min > -1e8 && d < rule.min) {
+                            report.violations.append({
+                                comp->name, devClass,
+                                QString("Parameter '%1' (%2) < min (%3%4)").arg(paramName).arg(d).arg(rule.min).arg(rule.units),
+                                ComplianceSeverity::ERROR
+                            });
+                            report.errorCount++;
+                        }
+                    }
+                }
+            }
         }
     }
 

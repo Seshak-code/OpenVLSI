@@ -145,8 +145,11 @@ add_executable(${PROJECT_NAME}
     gui/widgets/component_library.h
     gui/widgets/compliance_report_dialog.cpp
     gui/widgets/compliance_report_dialog.h
+    gui/widgets/compliance_report_dialog.h
     components/pdk_compliance.cpp
     components/pdk_compliance.h
+    components/pdk_manager.cpp
+    components/pdk_manager.h
     gui/editors/schematic_editor_api.cpp
     gui/analysis/system_inspector.cpp
     gui/analysis/system_inspector.h
@@ -797,6 +800,38 @@ target_include_directories(test_dependent_simulation PRIVATE
 target_link_libraries(test_dependent_simulation PRIVATE Qt6::Core)
 target_compile_features(test_dependent_simulation PUBLIC cxx_std_17)
 
+# Test PDK Manager
+add_executable(test_pdk_manager tests/test_pdk_manager.cpp components/pdk_manager.cpp)
+target_include_directories(test_pdk_manager PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+)
+target_link_libraries(test_pdk_manager PRIVATE Qt6::Core Qt6::Test)
+target_link_libraries(test_pdk_manager PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_pdk_manager PUBLIC cxx_std_17)
+
+# Test PDK Swap (Regression)
+add_executable(test_pdk_swap 
+    tests/test_pdk_swap.cpp 
+    components/pdk_manager.cpp 
+    components/pdk_compliance.cpp 
+    components/design_db.cpp
+    gui/components/visual_component.cpp
+    gui/components/probe_tip.cpp
+    gui/styling/theme_manager.cpp
+    gui/styling/theme_manager.h
+    tests/stubs/grid_scene_stub.cpp # Stub implementation
+    gui/editors/schematic_editor.h # Triggers MOC for GridScene
+)
+target_include_directories(test_pdk_swap PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+)
+target_link_libraries(test_pdk_swap PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_compile_features(test_pdk_swap PUBLIC cxx_std_17)
+
 # Emscripten link options for all test targets
 if(EMSCRIPTEN)
     set(EMSCRIPTEN_TEST_LINK_OPTIONS
@@ -880,7 +915,11 @@ if(NOT EMSCRIPTEN)
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
+        gui/widgets/project_explorer.cpp
         components/pdk_compliance.cpp
+        components/pdk_manager.cpp
+        components/design_db.cpp
+        gui/scripting/tcl_bridge.cpp
         gui/widgets/compliance_report_dialog.cpp
     )
     target_include_directories(test_pdk_compliance PRIVATE
@@ -900,8 +939,9 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+        ${TCL_INCLUDE_PATH}
     )
-    target_link_libraries(test_pdk_compliance PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
+    target_link_libraries(test_pdk_compliance PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_pdk_compliance PUBLIC cxx_std_17)
 endif()
 

@@ -103,6 +103,8 @@ test_simulation
 test_spatial_logic
 test_statistical_interactivity
 test_superposition
+test_pdk_manager
+test_pdk_swap
 
 # ============================================
 # Qt Auto-Generated Files
