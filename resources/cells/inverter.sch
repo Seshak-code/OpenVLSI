@@ -5,7 +5,7 @@
             "name": "M_NMOS",
             "type": "PDK_NFET",
             "x": 0,
-            "y": 20,
+            "y": 40,
             "rotation": 0,
             "properties": {
                 "Model": "nfet_01v8",
@@ -18,7 +18,7 @@
             "name": "M_PMOS",
             "type": "PDK_PFET",
             "x": 0,
-            "y": -20,
+            "y": -40,
             "rotation": 0,
             "properties": {
                 "Model": "pfet_01v8",
@@ -52,8 +52,8 @@
             "id": "PIN_VDD",
             "name": "VDD",
             "type": "Pin",
-            "x": 0,
-            "y": -60,
+            "x": 40,
+            "y": -80,
             "rotation": 0,
             "properties": {
                 "direction": "Input"
@@ -63,8 +63,8 @@
             "id": "PIN_GND",
             "name": "GND",
             "type": "Pin",
-            "x": 0,
-            "y": 60,
+            "x": 40,
+            "y": 80,
             "rotation": 0,
             "properties": {
                 "direction": "Input"
@@ -74,16 +74,40 @@
     "wires": [
         {
             "netName": "in_net",
-            "points": [ {"x": -60, "y": 0}, {"x": -30, "y": 0} ] 
+            "points": [ {"x": -60, "y": 0}, {"x": -40, "y": 0} ]
+        },
+        {
+            "netName": "in_net",
+            "points": [ {"x": -40, "y": 0}, {"x": -40, "y": -40}, {"x": -20, "y": -40} ]
+        },
+        {
+            "netName": "in_net",
+            "points": [ {"x": -40, "y": 0}, {"x": -40, "y": 40}, {"x": -20, "y": 40} ]
         },
         {
             "netName": "out_net",
-            "points": [ {"x": 30, "y": 0}, {"x": 60, "y": 0} ]
+            "points": [ {"x": 60, "y": 0}, {"x": 20, "y": 0} ]
+        },
+        {
+            "netName": "out_net",
+            "points": [ {"x": 20, "y": 0}, {"x": 20, "y": -60} ]
+        },
+        {
+            "netName": "out_net",
+            "points": [ {"x": 20, "y": 0}, {"x": 20, "y": 20} ]
+        },
+        {
+            "netName": "vdd_net",
+            "points": [ {"x": 40, "y": -80}, {"x": 40, "y": -20}, {"x": 20, "y": -20} ]
+        },
+        {
+            "netName": "gnd_net",
+            "points": [ {"x": 40, "y": 80}, {"x": 40, "y": 60}, {"x": 20, "y": 60} ]
         }
     ],
     "metadata": {
-        "description": "CMOS Inverter (File-Based)",
-        "author": "System",
+        "description": "Functional CMOS Inverter Cell",
+        "author": "Antigravity",
         "timestamp": "2026-01-27"
     }
 }

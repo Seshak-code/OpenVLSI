@@ -24,6 +24,10 @@ public:
     // Automation
     void setTool(ComponentType t);
     QStringList runERC();
+
+    // Hierarchical Support
+    // Handles recursive loading of "sourceFile" for ICPackage components
+    // Emits requestOpenSubcircuit(path) for drill-down navigation
 };
 ```
 

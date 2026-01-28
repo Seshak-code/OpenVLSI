@@ -5,6 +5,7 @@
 #include "../../ai_api/system/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
+#include <QGraphicsSceneContextMenuEvent>
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
 #include <cmath>
@@ -111,6 +112,7 @@ void GridScene::drawBackground(QPainter* painter, const QRectF& rect) {
 }
 
 
+
 void GridScene::clearGhostWires() {
     for (auto* wire : ghostWires) {
         if (wire && wire->scene()) {
@@ -160,16 +162,98 @@ void GridScene::setSnappingEnabled(bool enabled) {
 
 bool GridScene::isWireValid(VisualWire* wire) {
     if (!wire) return false;
-    // Check collision with all items that are VisualComponents
-    QList<QGraphicsItem*> collisions = wire->collidingItems();
+    QLineF l = wire->line();
+    return isEndpointLegal(l.p1(), wire) && 
+           isEndpointLegal(l.p2(), wire) && 
+           isSegmentLegal(l, wire);
+}
+
+bool GridScene::isEndpointLegal(const QPointF& p, const VisualWire* context) {
+    // Endpoints are legal if they land on a terminal, even if they touch the body.
+    // If NOT on a terminal, they must NOT collide with any component body.
+    
+    // Check if p is on ANY terminal of ANY component
+    auto allItems = items();
+    for (auto* item : allItems) {
+        if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+            auto terminals = comp->getTerminals();
+            for (const auto& localPort : terminals) {
+                QPointF scenePort = comp->mapToScene(localPort);
+                // Exact match (within small epsilon for float stability)
+                if (QLineF(p, scenePort).length() < 0.1) {
+                    return true; 
+                }
+            }
+        }
+    }
+
+    // If not a terminal, check for body collision at endpoint
+    QList<QGraphicsItem*> collisions = items(QRectF(p.x()-1, p.y()-1, 2, 2));
     for (auto* item : collisions) {
-        if (item == wire || item == ghostItem) continue;
-        if (dynamic_cast<VisualComponent*>(item)) {
-            // Found a component body collision
-            return false; 
+        if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+            if (comp->shape().translated(comp->pos()).contains(p)) {
+                return false; // Collides with body but not a terminal
+            }
         }
     }
     return true;
+}
+
+bool GridScene::isSegmentLegal(const QLineF& line, const VisualWire* context) {
+    // Interior of the segment must NOT intersect any component body.
+    // We use a path stroker to create a thin rectangle for the segment.
+    QPainterPath path;
+    path.moveTo(line.p1());
+    path.lineTo(line.p2());
+    
+    QPainterPathStroker stroker;
+    stroker.setWidth(1.0); 
+    QPainterPath stroke = stroker.createStroke(path);
+
+    auto collisions = items(stroke);
+    for (auto* item : collisions) {
+        if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+            // Check if the intersection is ONLY at the endpoints
+            QPainterPath compShape = comp->shape().translated(comp->pos());
+            if (compShape.intersects(stroke)) {
+                // If the intersection is more than just the endpoints being on terminals, it's illegal.
+                // We already checked endpoints in isEndpointLegal. 
+                // Here we check if the LINE body crosses the COMP body.
+                
+                // Simple heuristic: if mid-point is inside, it's a collision.
+                if (compShape.contains(line.pointAt(0.5))) return false;
+                
+                // More robust: check if segment length inside is > epsilon
+                // For now, mid-point + endpoint check is usually sufficient for grid-aligned EDA.
+            }
+        }
+    }
+    return true;
+}
+
+TerminalSnapResult GridScene::findNearestTerminal(const QPointF& pos, double threshold) {
+    TerminalSnapResult result;
+    double minDoc = threshold;
+
+    auto allItems = items();
+    for (auto* item : allItems) {
+        if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+            auto terminals = comp->getTerminals();
+            for (int i=0; i < terminals.size(); ++i) {
+                QPointF scenePort = comp->mapToScene(terminals[i]);
+                double d = QLineF(pos, scenePort).length();
+                if (d < minDoc) {
+                    minDoc = d;
+                    result.snapped = true;
+                    result.point = scenePort;
+                    result.component = comp;
+                    result.terminalIndex = i;
+                    result.distance = d;
+                }
+            }
+        }
+    }
+    return result;
 }
 
 bool GridScene::isPlacementValid(const QPointF& pos, QGraphicsItem* item) {
@@ -197,6 +281,10 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             QGraphicsScene::mousePressEvent(event);
         }
         else if (currentTool == ComponentType::Wire) {
+            // Apply snapping at click time
+            TerminalSnapResult snap = findNearestTerminal(event->scenePos(), GRID_STEP * 0.8);
+            if (snap.snapped) p = snap.point;
+
             if (!isWiring) {
                 // START WIRING
                 isWiring = true;
@@ -317,15 +405,20 @@ void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     }
 
     if (currentTool == ComponentType::Wire && isWiring) {
+        // TERMINAL SNAPPING (MAGNETIC)
+        TerminalSnapResult snap = findNearestTerminal(event->scenePos(), GRID_STEP * 0.8);
+        if (snap.snapped) {
+            p = snap.point;
+            // Provide visual feedback via cursor
+            QGraphicsView* view = views().first();
+            if (view) view->setCursor(Qt::PointingHandCursor);
+        } else {
+            QGraphicsView* view = views().first();
+            if (view) view->setCursor(Qt::CrossCursor);
+        }
+
         // Orthogonal L-Shape Routing
-        // Path: wireStart -> Corner -> p
-        // Corner is (p.x, wireStart.y) -> Horizontal first
-        
         QPointF corner(p.x(), wireStart.y());
-        
-        // We reuse or create ghost wires as needed
-        // Case 1: Straight horizontal (y aligned) or vertical (x aligned)
-        // Case 2: L-shape
         
         if (ghostWires.isEmpty()) {
             ghostWires.append(new VisualWire(QLineF(wireStart, wireStart))); // 1
@@ -338,15 +431,23 @@ void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
         ghostWires[0]->setLine(QLineF(wireStart, corner));
         ghostWires[1]->setLine(QLineF(corner, p));
         
-        // Validity Check (Red/Cyan)
+        // Validity Check using new contract-based logic
         for(auto* w : ghostWires) {
             if (w->line().length() > 0) {
                  w->setVisible(true);
                  if (isWireValid(w)) w->setPen(QPen(Qt::cyan, 2));
                  else w->setPen(QPen(Qt::red, 2));
             } else {
-                 w->setVisible(false); // Hide zero length segments
+                 w->setVisible(false); 
             }
+        }
+    } else if (currentTool == ComponentType::Wire && !isWiring) {
+        // Cursor feedback when hovering terminals while in wire tool
+        TerminalSnapResult snap = findNearestTerminal(event->scenePos(), GRID_STEP * 0.8);
+        QGraphicsView* view = views().first();
+        if (view) {
+            if (snap.snapped) view->setCursor(Qt::PointingHandCursor);
+            else view->setCursor(Qt::CrossCursor);
         }
     }
     
@@ -460,6 +561,26 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
     if (showAlignV) {
         painter->setPen(QPen(QColor(255, 165, 0), 1, Qt::DashLine)); // Orange
         painter->drawLine(alignmentGuideV);
+    }
+
+    // ====== TERMINAL GLOW (MAGNETIC) ======
+    if (currentTool == ComponentType::Wire) {
+        QGraphicsView* view = views().first();
+        if (view) {
+            QPointF p = view->mapToScene(view->mapFromGlobal(QCursor::pos()));
+            TerminalSnapResult snap = findNearestTerminal(p, GRID_STEP * 0.8);
+            if (snap.snapped) {
+                painter->save();
+                painter->setBrush(QColor(0, 255, 255, 128)); // Cyan glow
+                painter->setPen(Qt::NoPen);
+                painter->drawEllipse(snap.point, 6, 6);
+                
+                painter->setPen(QPen(Qt::cyan, 2));
+                painter->drawLine(snap.point.x() - 10, snap.point.y(), snap.point.x() + 10, snap.point.y());
+                painter->drawLine(snap.point.x(), snap.point.y() - 10, snap.point.x(), snap.point.y() + 10);
+                painter->restore();
+            }
+        }
     }
     
     // ====== JUNCTION DOTS (Wire-to-Wire / Wire-to-Pin Branching) ======
@@ -1195,23 +1316,31 @@ QJsonObject SchematicEditor::getCircuitState() {
 }
 
 void SchematicEditor::loadState(const QJsonObject& state) {
+    qDebug() << "[SchematicEditor] loadState called. Keys:" << state.keys();
     if(!scene) return;
     scene->clear(); 
     
     // Components
     QJsonArray components = state["components"].toArray();
+    qDebug() << "[SchematicEditor] loadState: components count =" << components.size();
     for(const auto& val : components) {
         QJsonObject c = val.toObject();
         
         QPointF pos(c["x"].toDouble(), c["y"].toDouble());
+        if(scene) pos = scene->snapToGrid(pos); // Ensure alignment with wires
         double rot = c["rotation"].toDouble();
         QString type = c["type"].toString();
         
         // Prepare params
         QJsonObject params;
         for(auto it = c.begin(); it != c.end(); ++it) {
-            if(it.key() != "type" && it.key() != "x" && it.key() != "y" 
-               && it.key() != "rotation" && it.key() != "id") {
+            if (it.key() == "properties") {
+                QJsonObject props = it.value().toObject();
+                for (auto pit = props.begin(); pit != props.end(); ++pit) {
+                    params[pit.key()] = pit.value();
+                }
+            } else if(it.key() != "type" && it.key() != "x" && it.key() != "y" 
+               && it.key() != "rotation" && it.key() != "id" && it.key() != "name") {
                 params[it.key()] = it.value();   
             }
         }
@@ -1225,6 +1354,43 @@ void SchematicEditor::loadState(const QJsonObject& state) {
             
             if (!targetName.isEmpty()) {
                 comp->name = targetName;
+            }
+            
+            // ICPackage: Load pins from source schematic
+            if (comp->type == ComponentType::ICPackage) {
+                qDebug() << "[ICPackage] Processing ICPackage component:" << comp->name;
+                QString srcFile = params["sourceFile"].toString();
+                qDebug() << "[ICPackage] sourceFile from params:" << srcFile;
+                
+                if (!srcFile.isEmpty()) {
+                    comp->sourceFilePath = srcFile;
+                    // Resolve path relative to resources or user_libs
+                    QStringList searchPaths = {
+                        srcFile,
+                        "resources/cells/" + srcFile,
+                        "user_libs/" + srcFile
+                    };
+                    bool found = false;
+                    for (const QString& path : searchPaths) {
+                        qDebug() << "[ICPackage] Checking path:" << path << "exists:" << QFileInfo::exists(path);
+                        if (QFileInfo::exists(path)) {
+                            comp->loadPinsFromSchematic(path);
+                            comp->sourceFilePath = path; // FIX: Store resolved path for drill-down
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        qDebug() << "[ICPackage] WARNING: Could not find source file:" << srcFile;
+                    }
+                } else {
+                    qDebug() << "[ICPackage] No sourceFile specified in properties";
+                }
+                // Also set display name from params
+                if (params.contains("displayName")) {
+                    comp->displayName = params["displayName"].toString();
+                    qDebug() << "[ICPackage] Set displayName:" << comp->displayName;
+                }
             }
         }
     }
@@ -1243,6 +1409,8 @@ void SchematicEditor::loadState(const QJsonObject& state) {
             scene->placeWirePath(points);
         }
     }
+    
+    if(scene) scene->triggerTopologyUpdate(); // Force ERC update
 }
 
 QString SchematicEditor::dumpSceneState() {
@@ -1282,7 +1450,7 @@ QString SchematicEditor::dumpSceneState() {
 // ============================================================================
 // GRID SCENE JSON SERIALIZATION
 // ============================================================================
-QJsonObject GridScene::getCircuitState() {
+QJsonObject GridScene::getCircuitState() const {
     QJsonObject root;
     
     // 1. Components
@@ -1469,6 +1637,43 @@ void GridScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
     QGraphicsScene::mouseDoubleClickEvent(event);
 }
 
+void GridScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
+    QGraphicsItem* item = itemAt(event->scenePos(), QTransform());
+    if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+        // Check if component supports drill-down
+        QString path = comp->sourceFilePath;
+        
+        // If path is empty, try heuristic for SubCircuits/ICPackages
+        if (path.isEmpty() && (comp->type == ComponentType::SubCircuit || comp->type == ComponentType::ICPackage)) {
+             QString cleanName = comp->subCircuitName.toLower().replace(" ", "_");
+             cleanName.remove(QRegularExpression("[^a-zA-Z0-9_]"));
+             
+             QStringList paths = {
+                 "resources/cells/" + cleanName + ".sch",
+                 "user_libs/" + cleanName + ".sch"
+             };
+             
+             for(const auto& p : paths) {
+                 if (QFileInfo::exists(p)) {
+                     path = p;
+                     break;
+                 }
+             }
+        }
+        
+        if (!path.isEmpty()) {
+            QMenu menu;
+            QAction* drillDown = menu.addAction(QString("Open Schematic (%1)").arg(comp->name));
+            connect(drillDown, &QAction::triggered, this, [this, path](){
+                emit requestOpenSubcircuit(path);
+            });
+            menu.exec(event->screenPos());
+            return;
+        }
+    }
+    QGraphicsScene::contextMenuEvent(event);
+}
+
 void SchematicEditor::createSubcircuitFromSelection() {
     // Scaffold for Phase 2.3
     QList<QGraphicsItem*> selected = scene->selectedItems();
@@ -1481,6 +1686,128 @@ void SchematicEditor::createSubcircuitFromSelection() {
     qDebug() << "Encapsulate requested for" << selected.size() << "items.";
     QMessageBox::information(this, "Encapsulate", "Subcircuit functionality coming in Phase 2.3!");
 }
+
+QPointF SchematicEditor::findClearSpace(QPointF idealPos, QSizeF size, int searchRadius) const {
+    GridScene* gs = qobject_cast<GridScene*>(scene);
+    if (!gs) return idealPos;
+
+    QRectF testRect(idealPos, size);
+    
+    // 0. Check Ideal (Deterministic: Always check first)
+    if (!gs->collidesWithAny(testRect) && gs->followsPDKRules(testRect)) {
+        return idealPos;
+    }
+
+    // 1. Clockwise Spiral Search (Deterministic)
+    // Radius in grid steps (20px)
+    int step = gs->getGridSnap(); 
+    if (step <= 0) step = 20;
+    
+    for (int r = 1; r <= searchRadius; r++) {
+        // Perimeter search for box of size 2*r
+        // Start Top-Left (-r, -r) relative to ideal
+        // Order: Top Edge (L->R), Right Edge (T->B), Bottom Edge (R->L), Left Edge (B->T)
+        // Coords relative to idealPos in grid steps
+        
+        // 1. Top Edge: (-r, -r) to (r, -r)
+        for (int x = -r; x < r; x++) {
+            QPointF trial = idealPos + QPointF(x * step, -r * step);
+            testRect.moveTopLeft(trial);
+            if (!gs->collidesWithAny(testRect) && gs->followsPDKRules(testRect)) return trial;
+        }
+        
+        // 2. Right Edge: (r, -r) to (r, r)
+        for (int y = -r; y < r; y++) {
+            QPointF trial = idealPos + QPointF(r * step, y * step);
+            testRect.moveTopLeft(trial);
+            if (!gs->collidesWithAny(testRect) && gs->followsPDKRules(testRect)) return trial;
+        }
+        
+        // 3. Bottom Edge: (r, r) to (-r, r)
+        for (int x = r; x > -r; x--) {
+            QPointF trial = idealPos + QPointF(x * step, r * step);
+            testRect.moveTopLeft(trial);
+            if (!gs->collidesWithAny(testRect) && gs->followsPDKRules(testRect)) return trial;
+        }
+        
+        // 4. Left Edge: (-r, r) to (-r, -r)
+        for (int y = r; y > -r; y--) {
+            QPointF trial = idealPos + QPointF(-r * step, y * step);
+            testRect.moveTopLeft(trial);
+            if (!gs->collidesWithAny(testRect) && gs->followsPDKRules(testRect)) return trial;
+        }
+    }
+    
+    // Fallback: Return ideal (user must resolve collision)
+    return idealPos;
+}
+
+void SchematicEditor::placeNextTo(const QString& refId, const QString& newType, Direction dir) {
+    // 1. Find Reference
+    VisualComponent* refComp = nullptr;
+    for (auto* item : scene->items()) {
+        if (auto* vc = dynamic_cast<VisualComponent*>(item)) {
+            if (vc->name == refId) {
+                refComp = vc;
+                break;
+            }
+        }
+    }
+    
+    if (!refComp) {
+        qDebug() << "Error: Reference component '" + refId + "' not found.";
+        return;
+    }
+    
+    // 2. Calculate Ideal Position with Pin Alignment
+    QRectF refBox = refComp->sceneBoundingRect();
+    QPointF idealPos = refBox.topLeft();
+    
+    // New Component Size Estimation (Hardcoded for now, TODO: Fetch from library)
+    QSizeF newSize(100, 60); 
+    
+    // Default Spacing
+    double spacing = 100.0;
+    
+    switch (dir) {
+        case Direction::East: 
+            idealPos.rx() += refBox.width() + spacing;
+            // Align Y Center
+            idealPos.ry() += (refBox.height() - newSize.height()) / 2.0;
+            break;
+            
+        case Direction::West:  
+            idealPos.rx() -= (newSize.width() + spacing); 
+            // Align Y Center
+            idealPos.ry() += (refBox.height() - newSize.height()) / 2.0;
+            break;
+            
+        case Direction::North: 
+            idealPos.ry() -= (newSize.height() + spacing); 
+            // Align X Center
+            idealPos.rx() += (refBox.width() - newSize.width()) / 2.0;
+            break;
+            
+        case Direction::South: 
+            idealPos.ry() += refBox.height() + spacing; 
+            // Align X Center
+            idealPos.rx() += (refBox.width() - newSize.width()) / 2.0;
+            break;
+    }
+    
+    // Snap to Grid (Coarse)
+    int grid = 20;
+    idealPos.setX(round(idealPos.x() / grid) * grid);
+    idealPos.setY(round(idealPos.y() / grid) * grid);
+    
+    // 3. Find Clear Space (Deterministic)
+    QPointF validPos = findClearSpace(idealPos, newSize); 
+    
+    // 4. Place
+    placeComponent(newType, validPos, 0, QJsonObject());
+}
+
+// ============================================================================
 
 
 
@@ -1576,4 +1903,39 @@ void GridScene::onNetRenamed(acutesim::components::NetUUID id, const std::string
         }
     }
     update();
+}
+
+// ============================================================================
+// SPATIAL INTELLIGENCE
+// ============================================================================
+
+bool GridScene::collidesWithAny(const QRectF& rect, const QGraphicsItem* ignore) const {
+    // Get all items in the rect
+    QList<QGraphicsItem*> collisions = items(rect, Qt::IntersectsItemBoundingRect);
+    for (auto* item : collisions) {
+        if (item == ignore) continue;
+        
+        // Only care about Components and Wires (VisualWire)
+        if (dynamic_cast<VisualComponent*>(item) || dynamic_cast<VisualWire*>(item)) {
+            // Precise shape check if needed, but rect is usually safer for placement
+            if (item->sceneBoundingRect().intersects(rect)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool GridScene::followsPDKRules(const QRectF& rect) const {
+    // Default PDK Die Area: -5000 to +5000 (microns/units)
+    // TODO: Fetch from actual PDK Manager
+    QRectF dieArea(-5000, -5000, 10000, 10000);
+    return dieArea.contains(rect);
+}
+
+bool GridScene::isWireAllowed(const QLineF& line) const {
+    // Check against Forbidden Zones
+    // For now, assume any long wire crossing the origin (0,0) is risky if that's a central block
+    // Placeholder logic
+    return true; 
 }

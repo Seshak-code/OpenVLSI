@@ -250,6 +250,41 @@ struct PowerRail {
 };
 
 /*
+ * PDK Power Domain (Phase 1.3 Addition)
+ * Represents a named voltage domain for PDK-aware design.
+ * Multiple instances of the same domain share a common node.
+ * Model: Ideal voltage source with optional internal resistance.
+ */
+struct PDKPowerDomain {
+    std::string name;              // Instance name, e.g., "VDD_CORE1"
+    std::string domain;            // Domain grouping, e.g., "CORE", "IO", "ANALOG"
+    enum Type { VDD, VSS, VDDIO, VBB } type;
+    
+    int globalNode;                // Assigned node index in circuit matrix
+    double nominalVoltage;         // 1.8V, 0V, 3.3V, -0.3V (for VBB)
+    double maxCurrent;             // Maximum current capacity [A]
+    double internalResistance;     // IR drop model: V = Vnom - I * Rint
+    
+    // Verilog-A Export Helper
+    std::string getVerilogAModule() const {
+        if (type == VSS) {
+            return "// VSS connects to global ground (node 0)";
+        }
+        std::string code =
+            "module " + name + "_supply(vout);\n"
+            "    output vout;\n"
+            "    electrical vout;\n"
+            "    parameter real vnom = " + std::to_string(nominalVoltage) + ";\n"
+            "    parameter real rint = " + std::to_string(internalResistance) + ";\n"
+            "    analog begin\n"
+            "        V(vout) <+ vnom - I(vout) * rint;\n"
+            "    end\n"
+            "endmodule\n";
+        return code;
+    }
+};
+
+/*
  * Signal Source (Waveform Generator)
  * Models complex signal inputs (Clock, Data, Noise).
  */
@@ -556,6 +591,9 @@ struct TensorBlock {
     // System Simulation Sources (Phase 2.9)
     std::vector<PowerRail> powerRails;
     std::vector<SignalSource> signalSources;
+    
+    // PDK Power Domains (Phase 1.3)
+    std::vector<PDKPowerDomain> powerDomains;
     
     // Controlled Sources
     std::vector<VCVS> voltageControlledVoltageSources;

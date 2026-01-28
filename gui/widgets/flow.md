@@ -44,6 +44,37 @@ enum class ToastLevel { Info, Success, Warning, Error, Critical };
 void showToast(const QString& message, ToastLevel level = ToastLevel::Info);
 ```
 
+void showToast(const QString& message, ToastLevel level = ToastLevel::Info);
+```
+
+### Project Explorer (`project_explorer.h`)
+**Role**: VS Code-style file browser for the active project.
+- **Model-View**: Uses `ProjectModel` to provide a tree view of project assets.
+- **Organization**: Automatically categorizes files (Schematics, HDL, Scripts, etc.).
+
+```cpp
+class ProjectExplorer : public QWidget {
+    // Signals when a file is opened or created
+    void fileOpenRequested(const QString& category, const QString& fileName, const QString& filePath);
+    void newFileRequested(const QString& category);
+};
+```
+
+### Project Model (`project_model.h`)
+**Role**: The Virtual File System. Manages the project structure in RAM (session persistence).
+- **Structure**: Root -> Categories (Folders) -> Items (Files).
+- **Persistence**: Can be serialized to/from JSON.
+
+```cpp
+class ProjectModel : public QAbstractItemModel {
+    // Add file to the project structure
+    bool addFile(const QString& category, const QString& fileName, const QString& filePath);
+    
+    // Serialization
+    QJsonObject toJson() const;
+};
+```
+
 ## 2. Engineering Displays
 
 ### Waveform Widget (`waveform_widget.h`)
@@ -56,6 +87,9 @@ void appendDataPoint(double time, double value, int traceIndex = 0);
 
 // Toggle between Dock and Central Tab mode
 void setFloatingMode(bool isFloatingTab);
+
+// DesignDb Integration
+void onNetRenamed(NetUUID id, const std::string& oldName, const std::string& newName);
 
 class WaveformView : public QGraphicsView {
     void handlePinch(class QNativeGestureEvent* event);

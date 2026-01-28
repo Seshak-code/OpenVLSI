@@ -103,6 +103,16 @@ void ComponentLibrary::populateLists() {
     addComponentItem(basicList, "Capacitor", "capacitor.png", ComponentType::Capacitor);
     addComponentItem(basicList, "Inductor", "inductor.png", ComponentType::Inductor);
     addComponentItem(basicList, "Ground", "ground.png", ComponentType::Ground);
+    
+    // Power Rails (PDK Domain-Aware)
+    addComponentItem(basicList, "VDD Rail", "vdd.png", ComponentType::PDK_VDD);
+    addComponentItem(basicList, "VSS (Ground)", "vss.png", ComponentType::PDK_VSS);
+    addComponentItem(basicList, "VDDIO Rail", "vddio.png", ComponentType::PDK_VDDIO);
+    addComponentItem(basicList, "VBB (Body Bias)", "vbb.png", ComponentType::PDK_VBB);
+    
+    // Sources
+    addComponentItem(basicList, "Voltage Source", "vsource.png", ComponentType::VoltageSource);
+    addComponentItem(basicList, "Current Source", "isource.png", ComponentType::CurrentSource);
 
     // =========================================================================
     // PDK / STANDARD CELLS - Sourced from StandardCellLibrary

@@ -124,32 +124,215 @@ struct Net {
     
     // Physical Annotations (Layout Parity)
     // Extraction results annotate here, rather than replacing the net
-    double extractedC = 0.0; 
-    double extractedR = 0.0;
+    double rotation; // Degrees
+    bool isFlippedX;
+    bool isFlippedY;
+};
+
+// Phase 1.3: Placement Intent Preservation
+struct PlacementConstraint {
+    std::string refId; // Reference component instance name/ID
+    enum Type { RELATIVE, ABSOLUTE, ALIGN } type;
+    double offset; // Spacing or offset value
+    std::string direction; // "East", "North", etc.
 };
 
 /**
- * @brief Instance: A placed component (Resistor, MOSFET, Subcircuit).
+ * @brief Component Instance: A realized device in the circuit.
  */
 struct Instance {
     InstUUID id;
-    std::string name;       // "R1", "M1"
-    std::string masterName; // "nfet_01v8", "res_generic"
+    std::string name;       // User-defined name (e.g., "M1", "R_Bias")
+    std::string masterName; // Reference to Component Library (e.g., "nmos_3v3", "res_poly")
     
     // Parameter Blob (Key-Value)
     std::map<std::string, double> parameters;
     std::map<std::string, std::string> stringParameters;
-
+    
     // Spatial Annotation (GUI only - NOT electrical truth)
-    struct Spatial {
+    struct SpatialInfo {
         double x, y;
         double rotation;
         bool flipped;
     } spatial;
+    
+    // Phase 1.3: Placement Intent (optional storage for re-layout)
+    PlacementConstraint layoutIntent;
 };
 
 // ============================================================================
-// UNIFIED DESIGNDB (The Substrate)
+// POWER DOMAIN REGISTRY (Phase 1.3 Refinement)
+// ============================================================================
+
+/**
+ * @brief Power Domain Type (matches PDKPowerDomain::Type in circuit.h)
+ */
+enum class PowerDomainType { VDD, VSS, VDDIO, VBB };
+
+/**
+ * @brief Result of domain registration
+ */
+struct DomainRegisterResult {
+    bool success;
+    std::string message;
+    int assignedNode = -1;  // Valid if success
+};
+
+/**
+ * @brief Power Domain Entry: Global electrical concept.
+ * Multiple power symbols can reference the same domain.
+ */
+struct PowerDomainEntry {
+    std::string domainName;           // "CORE", "IO", "ANALOG"
+    PowerDomainType type;             // VDD, VSS, VDDIO, VBB
+    double nominalVoltage;            // 1.8V, 0V, 3.3V
+    int globalNode = -1;              // Assigned during netlisting
+    bool isImmutable = false;         // True for VSS (cannot delete/rename)
+    double internalResistance = 0.05; // IR drop: V = Vnom - I * Rint
+    double maxCurrent = 0.1;          // 100mA default
+    
+    std::vector<std::string> connectedSymbolIds;  // Visual instance IDs
+};
+
+/**
+ * @brief Centralized Power Domain Registry.
+ * Manages domain creation, merging, conflict detection, and ground immutability.
+ */
+class PowerDomainRegistry {
+public:
+    PowerDomainRegistry() {
+        // VSS is ALWAYS present and immutable
+        PowerDomainEntry vss;
+        vss.domainName = "VSS";
+        vss.type = PowerDomainType::VSS;
+        vss.nominalVoltage = 0.0;
+        vss.globalNode = 0;  // Ground is always Node 0
+        vss.isImmutable = true;
+        domains_["VSS"] = vss;
+    }
+    
+    /**
+     * @brief Register a domain. Returns existing or creates new.
+     * MERGE RULES:
+     *   - Same name + different voltage → ERROR
+     *   - Same name + different type → ERROR  
+     *   - Same name + same properties → MERGE (reuse node)
+     */
+    DomainRegisterResult registerDomain(const std::string& name, 
+                                        PowerDomainType type, 
+                                        double voltage,
+                                        const std::string& symbolId = "") {
+        if (domains_.count(name)) {
+            auto& existing = domains_[name];
+            
+            // CONFLICT: Same name, different voltage
+            constexpr double VOLTAGE_TOL = 1e-6;
+            if (std::abs(existing.nominalVoltage - voltage) > VOLTAGE_TOL) {
+                return {false, "Voltage conflict: '" + name + "' exists at " + 
+                        std::to_string(existing.nominalVoltage) + "V, cannot register at " + 
+                        std::to_string(voltage) + "V", -1};
+            }
+            
+            // CONFLICT: Same name, different type
+            if (existing.type != type) {
+                return {false, "Type conflict: '" + name + "' exists as different power type", -1};
+            }
+            
+            // MERGE: Same properties, add symbol reference
+            if (!symbolId.empty()) {
+                existing.connectedSymbolIds.push_back(symbolId);
+            }
+            return {true, "Merged with existing domain '" + name + "'", existing.globalNode};
+        }
+        
+        // NEW DOMAIN
+        PowerDomainEntry entry;
+        entry.domainName = name;
+        entry.type = type;
+        entry.nominalVoltage = voltage;
+        entry.isImmutable = (type == PowerDomainType::VSS);
+        entry.globalNode = nextNodeId_++;
+        if (!symbolId.empty()) {
+            entry.connectedSymbolIds.push_back(symbolId);
+        }
+        
+        domains_[name] = entry;
+        return {true, "Created new domain '" + name + "'", entry.globalNode};
+    }
+    
+    /**
+     * @brief Remove a symbol from a domain. Domain persists if symbols remain.
+     */
+    bool unregisterSymbol(const std::string& domainName, const std::string& symbolId) {
+        auto it = domains_.find(domainName);
+        if (it == domains_.end()) return false;
+        if (it->second.isImmutable && it->second.type == PowerDomainType::VSS) {
+            // VSS domain cannot be removed
+            return false;
+        }
+        auto& syms = it->second.connectedSymbolIds;
+        syms.erase(std::remove(syms.begin(), syms.end(), symbolId), syms.end());
+        return true;
+    }
+    
+    /**
+     * @brief Query domain by name
+     */
+    const PowerDomainEntry* getDomain(const std::string& name) const {
+        auto it = domains_.find(name);
+        return it != domains_.end() ? &it->second : nullptr;
+    }
+    
+    /**
+     * @brief Get all domains
+     */
+    const std::map<std::string, PowerDomainEntry>& getAllDomains() const {
+        return domains_;
+    }
+    
+    /**
+     * @brief Check if a domain name is reserved/immutable
+     */
+    bool isImmutable(const std::string& name) const {
+        auto it = domains_.find(name);
+        return it != domains_.end() && it->second.isImmutable;
+    }
+    
+    /**
+     * @brief Assign global node IDs for netlisting
+     */
+    void assignNodes(int startingNode = 1) {
+        nextNodeId_ = startingNode;
+        for (auto& [name, entry] : domains_) {
+            if (entry.type == PowerDomainType::VSS) {
+                entry.globalNode = 0;  // Ground always 0
+            } else {
+                entry.globalNode = nextNodeId_++;
+            }
+        }
+    }
+    
+private:
+    std::map<std::string, PowerDomainEntry> domains_;
+    int nextNodeId_ = 1;  // Node 0 is reserved for VSS
+};
+
+// ============================================================================
+// VBB CONNECTIVITY VALIDATION
+// ============================================================================
+
+/**
+ * @brief Validates that VBB only connects to bulk/body pins
+ * @return true if connection is valid
+ */
+inline bool validateVBBConnection(const std::string& pinName) {
+    std::string upper = pinName;
+    for (auto& c : upper) c = std::toupper(c);
+    return upper == "BULK" || upper == "BODY" || upper == "B" || upper == "SUB";
+}
+
+// ============================================================================
+// DESIGN DB ENUMS
 // ============================================================================
 
 /**
@@ -161,25 +344,13 @@ enum class MutationResult {
     NotFound,
     NameCollision,
     InvalidName,
-    NoChange
+    NoChange,
+    ImmutableError  // Attempted to modify immutable domain (e.g., VSS)
 };
 
-/*
- * POLICY DOCUMENTATION: Identity vs. Labels
- * =========================================
- * 1. IDENTITY: UUIDs (NetUUID, InstUUID) are the ONLY immutable identity.
- *    - They persist across sessions and renames.
- *    - Simulation results are keyed by UUID (internally mapped to Solver Indices).
- * 
- * 2. LABELS: "Names" (strings) are mutable human-readable labels.
- *    - Renaming a Net does NOT invalidate simulation state (topology is same).
- *    - Renaming is a cosmetic metadata update.
- * 
- * 3. HIERARCHY: (Future)
- *    - Names may be hierarchical (e.g. "u_cpu/clk").
- *    - DesignDb implementation treats names as flat keys for now, but 
- *      renaming logic should respect scope in future iterations.
- */
+// ============================================================================
+// DESIGN DB OBSERVER
+// ============================================================================
 
 class DesignDbObserver {
 public:
@@ -217,7 +388,10 @@ public:
     // Queries
     const Net* getNet(NetUUID id) const;
     const std::map<NetUUID, Net>& getAllNets() const { return nets_; }
-    // ...
+    
+    // Power Domain Management
+    PowerDomainRegistry& getPowerDomains() { return powerDomainRegistry_; }
+    const PowerDomainRegistry& getPowerDomains() const { return powerDomainRegistry_; }
     // Mutable Access (Paradigm Bridge - careful!)
     Instance* getInstanceMutable(InstUUID id);
     const Instance* getInstance(InstUUID id) const;
@@ -239,6 +413,9 @@ private:
     
     // Observers
     std::vector<DesignDbObserver*> observers_;
+    
+    // Power Domain Registry (Phase 1.3)
+    PowerDomainRegistry powerDomainRegistry_;
     
     // Helper
     void notifyTopologyChanged() {

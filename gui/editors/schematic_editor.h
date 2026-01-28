@@ -14,8 +14,8 @@
 #include <QGroupBox>
 #include <QMap>
 #include <QKeyEvent>
-#include "visual_component.h"
-#include "circuit.h" 
+#include "../components/visual_component.h"
+#include "../../components/circuit.h" 
 #include "schematic_view.h"
 
 
@@ -26,6 +26,17 @@
 #include "../analysis/erc_autofix.h"
 #include "../../physics/simulation_profile.h"
 #include "../../components/design_db.h"
+
+// ============================================================================
+// DATA STRUCTURES
+// ============================================================================
+struct TerminalSnapResult {
+    bool snapped = false;
+    QPointF point;
+    VisualComponent* component = nullptr;
+    int terminalIndex = -1;
+    double distance = 1e9;
+};
 
 // ============================================================================
 // SCENE (Grid Handling + Validation)
@@ -50,10 +61,23 @@ public:
     
     // Automation API (GenAI Hook)
     // Returns full circuit state for AI context
-    QJsonObject getCircuitState();
+    QJsonObject getCircuitState() const;
     
     // Check if a region is occupied by components or wires
+    int getGridSnap() const { return GRID_STEP; }
+    
+    // Geometric Query
     bool isOccupied(const QRectF& rect, QGraphicsItem* exclude = nullptr);
+    bool collidesWithAny(const QRectF& rect, const QGraphicsItem* ignore = nullptr) const;
+    bool followsPDKRules(const QRectF& rect) const;
+    bool isWireAllowed(const QLineF& line) const;
+    
+    // Contract-based Wire Validation
+    bool isWireValid(VisualWire* wire); // Legacy wrapper
+    bool isEndpointLegal(const QPointF& p, const VisualWire* context);
+    bool isSegmentLegal(const QLineF& line, const VisualWire* context);
+    
+    TerminalSnapResult findNearestTerminal(const QPointF& pos, double threshold);
     
     void placeWirePath(const QVector<QPointF>& points);
 
@@ -87,6 +111,7 @@ protected:
     void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override; // Drill-Down
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override; // Right-Click Menu
     void keyPressEvent(QKeyEvent* event) override;
 
 signals:
@@ -101,7 +126,6 @@ signals:
 
 private:
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
-    bool isWireValid(VisualWire* wire); 
 
     bool gridVisible = true;
     bool snappingEnabled = true;
@@ -203,8 +227,15 @@ public:
     QStringList getAvailableComponents();
     
     // Wire naming API
-    void setWireName(VisualWire* wire, const QString& name);
+    void setWireName(VisualWire* wire, const QString& name); // Renaming
     
+    // Geometric API
+    enum class Direction { North, South, East, West };
+    Q_ENUM(Direction)
+
+    QPointF findClearSpace(QPointF idealPos, QSizeF size, int searchRadius = 5) const;
+    void placeNextTo(const QString& refId, const QString& newType, Direction dir);
+
 signals:
     void topologyChanged(size_t hash); // Forwarded from GridScene
     // modeChanged() signal removed - unified component library
@@ -225,14 +256,14 @@ public:
     QStringList runERC();
     
     // Geometric Query for AI
-    bool collidesWithAny(int x, int y, int w, int h, const QString& excludeId = "");
+    bool collidesWithAny(int x, int y, int w, int h, const QString& excludeId = "") const;
     
     // AI API Implementation
     QString placeComponent(const QString& type, QPointF pos, double rotation, const QJsonObject& params);
     bool moveComponent(const QString& id, double x, double y);
     bool rotateComponent(const QString& id, double degrees);
     bool deleteComponent(const QString& id);
-    VisualComponent* findComponent(const QString& id);
+    VisualComponent* findComponent(const QString& id) const;
     
     // Helper to generate unique ID
     QString generateUniqueId(ComponentType type);

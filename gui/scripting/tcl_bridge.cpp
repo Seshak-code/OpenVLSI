@@ -5,10 +5,23 @@
 #else
 #include <tcl.h> // Assumes system Tcl is available.
 #endif
+#include "../editors/schematic_editor.h" // Include full definition for casting
 
 namespace acutesim {
 namespace gui {
 namespace scripting {
+
+using namespace acutesim::gui::scripting;
+using namespace acutesim::components;
+
+// Helper to convert string to Direction
+static SchematicEditor::Direction stringToDir(const std::string& s) {
+    if (s == "North") return SchematicEditor::Direction::North;
+    if (s == "South") return SchematicEditor::Direction::South;
+    if (s == "East")  return SchematicEditor::Direction::East;
+    if (s == "West")  return SchematicEditor::Direction::West;
+    return SchematicEditor::Direction::East; // Default
+}
 
 TclBridge& TclBridge::instance() {
     static TclBridge inst;
@@ -31,6 +44,7 @@ void TclBridge::init(Tcl_Interp* interp) {
     Tcl_CreateCommand(interp_, "db_set_param", cmd_set_param, (ClientData)this, NULL);
     Tcl_CreateCommand(interp_, "db_undo", cmd_undo, (ClientData)this, NULL);
     Tcl_CreateCommand(interp_, "db_redo", cmd_redo, (ClientData)this, NULL);
+    Tcl_CreateCommand(interp_, "place_next_to", cmd_place_next_to, (ClientData)this, NULL);
 }
 
 std::string TclBridge::execute(const std::string& cmd) {
@@ -117,8 +131,37 @@ int TclBridge::cmd_undo(void* clientData, Tcl_Interp* interp, int argc, const ch
 
 // db_redo
 int TclBridge::cmd_redo(void* clientData, Tcl_Interp* interp, int argc, const char** argv) {
-    // Stub implementation
-    Tcl_SetResult(interp, (char*)"Redo not yet implemented.", TCL_STATIC);
+    // Stub
+    Tcl_SetResult(interp, (char*)"Redo not implemented", TCL_STATIC);
+    return TCL_OK;
+}
+
+int TclBridge::cmd_place_next_to(void* clientData, Tcl_Interp* interp, int argc, const char** argv) {
+    TclBridge* self = (TclBridge*)clientData;
+    if (!self->editor_) {
+        Tcl_SetResult(interp, (char*)"Error: Schematic Editor not attached", TCL_STATIC);
+        return TCL_ERROR;
+    }
+    
+    if (argc != 4) {
+        Tcl_SetResult(interp, (char*)"Usage: place_next_to <refId> <newType> <direction>", TCL_STATIC);
+        return TCL_ERROR;
+    }
+    
+    const char* refId = argv[1];
+    const char* newType = argv[2];
+    const char* dirStr = argv[3];
+    
+    SchematicEditor* editor = static_cast<SchematicEditor*>(self->editor_);
+    
+    // Qt interaction usually needs to be on main thread.
+    // If Tcl is running on a worker thread, this is unsafe.
+    // Assuming for now Tcl is running on main thread via invokeMethod or similar in the test harness/console.
+    // In strict threading model, we would use QMetaObject::invokeMethod.
+    
+    editor->placeNextTo(QString(refId), QString(newType), stringToDir(dirStr));
+    
+    Tcl_SetResult(interp, (char*)"Placed", TCL_STATIC);
     return TCL_OK;
 }
 

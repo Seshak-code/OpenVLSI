@@ -47,7 +47,10 @@ enum class ViolationType {
     // Solver Violations (Dynamic)
     SOLVER_SINGULAR_MATRIX,  // LU decomposition failed (rank deficiency)
     SOLVER_DIVERGENCE,       // Newton-Raphson failed to converge
-    SOLVER_TIMEOUT           // Simulation exceeded iteration/time limit
+    SOLVER_TIMEOUT,           // Simulation exceeded iteration/time limit
+    
+    // Power Domain Violations
+    CROSS_DOMAIN_SIGNAL      // Signal crosses power domains without level shifter
 };
 
 enum class Severity {
@@ -74,6 +77,7 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::MULTIPLE_DRIVERS:
         case ViolationType::OPEN_DRAIN:
         case ViolationType::SOLVER_TIMEOUT:
+        case ViolationType::CROSS_DOMAIN_SIGNAL:
             return Severity::WARNING;
         case ViolationType::NEAR_MISS:
             return Severity::INFO;
@@ -98,6 +102,7 @@ inline QString typeToString(ViolationType type) {
         case ViolationType::SOLVER_SINGULAR_MATRIX: return "Singular Matrix (Solver)";
         case ViolationType::SOLVER_DIVERGENCE: return "Divergence (Solver)";
         case ViolationType::SOLVER_TIMEOUT: return "Timeout (Solver)";
+        case ViolationType::CROSS_DOMAIN_SIGNAL: return "Cross-Domain Signal";
         default: return "Unknown";
     }
 }
@@ -149,6 +154,7 @@ public:
         checkShortCircuits(scene);
         checkNearMisses(scene);
         checkMultipleDrivers(scene);
+        checkCrossDomainSignals(scene); // Power domain isolation check
 
         // Mode-specific checks removed - unified component library
         // checkBlockModeRules() and checkSystemModeRules() are deprecated
@@ -287,7 +293,7 @@ private:
             if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
                 ComponentType type = comp->type;
                 
-                if (type == ComponentType::Ground) {
+                if (type == ComponentType::Ground || type == ComponentType::PDK_VSS) {
                     hasGroundComponent_ = true;
                 }
                 
@@ -298,7 +304,7 @@ private:
                     int netID = getNetID(x, y);
                     netConnectionCount_[netID]++;
                     
-                    if (type == ComponentType::Ground) {
+                    if (type == ComponentType::Ground || type == ComponentType::PDK_VSS) {
                         netHasGround_[netID] = true;
                     }
                     if (type == ComponentType::VoltageSource) {
@@ -310,11 +316,26 @@ private:
     }
     
     void checkGroundExists(QGraphicsScene* scene) {
-        Q_UNUSED(scene);
-        if (!hasGroundComponent_) {
+        if (hasGroundComponent_) return;
+
+        // Check for Pins named GND/VSS (for hierarchical blocks)
+        bool hasGroundPin = false;
+        for (QGraphicsItem* item : scene->items()) {
+            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+                if (comp->type == ComponentType::Pin) {
+                    QString name = comp->name.toUpper();
+                    if (name == "GND" || name == "VSS" || name == "GROUND" || name == "0") {
+                        hasGroundPin = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!hasGroundPin) {
             violations_.append(Violation(
                 ViolationType::NO_GROUND,
-                "No ground reference found. Add a Ground component.",
+                "No ground reference found. Add a Ground component or a Pin named GND/VSS.",
                 QPoint(0, 0)
             ));
         }
@@ -379,45 +400,88 @@ private:
     }
     
     void checkShortCircuits(QGraphicsScene* scene) {
-        // Check for VDD connected directly to GND (or through very low resistance)
-        // Simple heuristic: if a net has both ground and voltage source
-        for (auto it = netHasGround_.begin(); it != netHasGround_.end(); ++it) {
-            int netID = it.key();
-            if (netHasVoltageSource_.value(netID, false)) {
-                // This net has both ground and voltage source!
-                for (auto pit = pointToNetID_.begin(); pit != pointToNetID_.end(); ++pit) {
-                    if (pit.value() == netID) {
-                        violations_.append(Violation(
-                            ViolationType::SHORT_CIRCUIT,
-                            "Voltage source shorted to ground!",
-                            QPoint(pit.key().first, pit.key().second)
-                        ));
-                        break;
+        // 1. Check for Voltage Source Self-Shorts (Plus connected to Minus)
+        for (QGraphicsItem* item : scene->items()) {
+            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+                if (comp->type == ComponentType::VoltageSource || 
+                    comp->type == ComponentType::VCVS || 
+                    comp->type == ComponentType::CCVS) {
+                    
+                    QVector<QPointF> terms = comp->getTerminals();
+                    if (terms.size() >= 2) {
+                        QPointF p1 = comp->mapToScene(terms[0]);
+                        QPointF p2 = comp->mapToScene(terms[1]);
+                        
+                        QPair<int,int> k1 = {qRound(p1.x()), qRound(p1.y())};
+                        QPair<int,int> k2 = {qRound(p2.x()), qRound(p2.y())};
+                        
+                        int net1 = pointToNetID_.value(k1, -1);
+                        int net2 = pointToNetID_.value(k2, -1);
+                        
+                        if (net1 != -1 && net1 == net2) {
+                             violations_.append(Violation(
+                                ViolationType::SHORT_CIRCUIT,
+                                QString("Source %1 is shorted ( terminals connected to same net)").arg(comp->name),
+                                k1.first == 0 ? QPoint(k2.first, k2.second) : QPoint(k1.first, k1.second)
+                            ));
+                        }
+                    }
+                }
+                
+                // 2. Check for VDD connected to GND (Rail Short)
+                if (comp->type == ComponentType::PDK_VDD || comp->type == ComponentType::PDK_VDDIO) {
+                    QVector<QPointF> terms = comp->getTerminals();
+                    for (const QPointF& localP : terms) {
+                        QPointF sceneP = comp->mapToScene(localP);
+                        QPair<int,int> key = {qRound(sceneP.x()), qRound(sceneP.y())};
+                        int netID = pointToNetID_.value(key, -1);
+                        
+                        if (netID != -1 && netHasGround_.value(netID, false)) {
+                             violations_.append(Violation(
+                                ViolationType::SHORT_CIRCUIT,
+                                QString("Power Rail (%1) shorted to Ground!").arg(comp->name),
+                                QPoint(key.first, key.second)
+                            ));
+                        }
                     }
                 }
             }
         }
     }
     
+    struct TerminalPoint {
+        QPair<int,int> pos;
+        VisualComponent* component;
+    };
+
     void checkNearMisses(QGraphicsScene* scene) {
         // Find terminals that are 1 grid step apart but not connected
-        QList<QPair<int,int>> terminalPoints;
+        QList<TerminalPoint> terminals;
         
         for (QGraphicsItem* item : scene->items()) {
             if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
                 for (const QPointF& localP : comp->getTerminals()) {
                     QPointF sceneP = comp->mapToScene(localP);
-                    terminalPoints.append({qRound(sceneP.x()), qRound(sceneP.y())});
+                    terminals.append({
+                        {qRound(sceneP.x()), qRound(sceneP.y())},
+                        comp
+                    });
                 }
             }
         }
         
-        // O(n²) but terminals are few
+        // O(n^2) but terminals are few
         std::set<QPair<QPair<int,int>, QPair<int,int>>> reported;
-        for (int i = 0; i < terminalPoints.size(); ++i) {
-            for (int j = i + 1; j < terminalPoints.size(); ++j) {
-                auto p1 = terminalPoints[i];
-                auto p2 = terminalPoints[j];
+        for (int i = 0; i < terminals.size(); ++i) {
+            for (int j = i + 1; j < terminals.size(); ++j) {
+                auto t1 = terminals[i];
+                auto t2 = terminals[j];
+                
+                // Ignore terminals from the same component (e.g. MOSFET Gate vs Bulk)
+                if (t1.component == t2.component) continue;
+
+                auto p1 = t1.pos;
+                auto p2 = t2.pos;
                 
                 int dx = std::abs(p1.first - p2.first);
                 int dy = std::abs(p1.second - p2.second);
@@ -430,6 +494,9 @@ private:
                     
                     if (net1 != net2 || net1 == -1) {
                         // Not connected - this is a near miss!
+                        // Order points for consistent key
+                        if (p1 > p2) std::swap(p1, p2);
+                        
                         auto key = std::make_pair(p1, p2);
                         if (reported.find(key) == reported.end()) {
                             reported.insert(key);
@@ -503,6 +570,74 @@ private:
     void checkSystemModeRules(QGraphicsScene* scene) {
         Q_UNUSED(scene);
         // System mode rules removed - all component types now allowed
+    }
+    
+    /**
+     * @brief Check for signals crossing power domains without proper isolation.
+     * Warns when components in different power domains share a net.
+     */
+    void checkCrossDomainSignals(QGraphicsScene* scene) {
+        // Build a map of netID -> list of power domains connected to that net
+        QMap<int, QSet<QString>> netDomains;
+        QMap<int, QList<VisualComponent*>> netComponents;
+        
+        for (auto* item : scene->items()) {
+            if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+                QString domain;
+                switch(comp->type) {
+                    case ComponentType::PDK_VDD:
+                        domain = "VDD";
+                        break;
+                    case ComponentType::PDK_VSS:
+                        domain = "VSS";
+                        break;
+                    case ComponentType::PDK_VDDIO:
+                        domain = "VDDIO";
+                        break;
+                    case ComponentType::PDK_VBB:
+                        domain = "VBB";
+                        break;
+                    default:
+                        continue; // Non-power components don't define domains
+                }
+                
+                // Find which nets this power component connects to
+                QVector<QPointF> terms = comp->getTerminals();
+                for (const QPointF& localP : terms) {
+                    QPointF sceneP = comp->mapToScene(localP);
+                    int x = qRound(sceneP.x()), y = qRound(sceneP.y());
+                    QPair<int,int> pt = {x, y};
+                    if (pointToNetID_.contains(pt)) {
+                        int netID = pointToNetID_[pt];
+                        if (domain != "VSS") { // VSS is shared globally
+                            netDomains[netID].insert(domain);
+                            netComponents[netID].append(comp);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check for nets with multiple power domains
+        for (auto it = netDomains.begin(); it != netDomains.end(); ++it) {
+            if (it.value().size() > 1) {
+                QStringList domainList = it.value().values();
+                QList<QGraphicsItem*> affectedItems;
+                for (auto* c : netComponents[it.key()]) {
+                    affectedItems.append(c);
+                }
+                if (!affectedItems.isEmpty()) {
+                    Violation v(
+                        ViolationType::CROSS_DOMAIN_SIGNAL,
+                        QString("Net connects components from different power domains: %1. Level shifter may be required.")
+                            .arg(domainList.join(", ")),
+                        affectedItems.first()->scenePos().toPoint()
+                    );
+                    v.affectedItems = affectedItems;
+                    violations_.append(v);
+                }
+            }
+        }
     }
 
 private:

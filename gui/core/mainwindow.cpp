@@ -40,7 +40,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     // Allows up to 3-way horizontal splits of bottom panel docks (Results, Waveforms, etc.)
     setDockNestingEnabled(true);
     
-    qDebug() << "[MW INIT] Creating DesignFlowManager...";
     // Initialize Design Flow Manager
     flowManager = new DesignFlowManager(this);
     connect(flowManager, &DesignFlowManager::stageChanged, this, &MainWindow::onStageChanged);
@@ -352,7 +351,7 @@ void MainWindow::setupDocks() {
             if (cmd.startsWith("sync -to-hdl")) syncSchematicToVerilog();
             else if (cmd.startsWith("sync -from-hdl")) syncVerilogToSchematic();
             else if (cmd == "layout -reset") acutesim::gui::core::LayoutManager::instance().resetToFactory();
-            else if (cmd.startsWith("db_")) {
+            else if (cmd.startsWith("db_") || cmd.startsWith("place_")) {
                 // Route to TclBridge
                 // Ensure we have the current DesignDb
                 auto* editor = dynamic_cast<SchematicEditor*>(rtlPageTabs->currentWidget());
@@ -360,6 +359,7 @@ void MainWindow::setupDocks() {
                     // Phase 6.2: Ensure DesignDb is synced with latest spatial state
                     editor->getScene()->generateNetlist();
                     acutesim::gui::scripting::TclBridge::instance().setDesignDb(&(editor->getScene()->getDesignDb()));
+                    acutesim::gui::scripting::TclBridge::instance().setSchematicEditor(editor);
                 }
                 
                 std::string result = acutesim::gui::scripting::TclBridge::instance().execute(cmd.toStdString());
@@ -459,20 +459,48 @@ void MainWindow::createProjectDock() {
     ProjectModel* model = projectExplorer_->model();
     model->setProjectName(projectName);
 
-    // Create demo schematic file if it doesn't exist
-    if (!storage.fileExists(projectName, "schematics/inverter.sch")) {
-        QJsonObject demoSchematic;
-        demoSchematic["components"] = QJsonArray();
-        demoSchematic["wires"] = QJsonArray();
-        QJsonObject meta;
-        meta["version"] = 1;
-        meta["name"] = "Inverter Demo";
-        demoSchematic["metadata"] = meta;
-        storage.saveFile(projectName, "schematics/inverter.sch",
-                         QJsonDocument(demoSchematic).toJson());
-        qDebug() << "[MainWindow] Created demo schematic: schematics/inverter.sch";
+    // List all files in storage for debug
+    QStringList allFiles = storage.listFiles(projectName);
+    qDebug() << "[WASM Debug] Storage inventory:" << allFiles.size() << "files";
+    for (const QString& f : allFiles) {
+        qDebug() << "  -> " << f << "(" << storage.loadFile(projectName, f).size() << "bytes)";
     }
-    model->addFile("Schematics", "inverter.sch", "schematics/inverter.sch");
+
+    // Create demo schematic file if it doesn't exist
+    bool forceInit = !storage.fileExists(projectName, ".initialized_v3");
+    if (!storage.fileExists(projectName, "schematics/inverter.sch") || forceInit) {
+        storage.saveFile(projectName, ".initialized_v3", "true");
+        
+        bool loadedFromRes = false;
+        QFile resFile("/resources/cells/inverter.sch"); // Emscripten preloaded path
+        if (resFile.exists() && resFile.open(QIODevice::ReadOnly)) {
+            QByteArray data = resFile.readAll();
+            storage.saveFile(projectName, "schematics/inverter.sch", data);
+            loadedFromRes = true;
+            qDebug() << "[MainWindow] POPULATED storage from preloaded resources. Size:" << data.size();
+        } else {
+             // Fallback for desktop or other paths
+             QFile resFile2(":/resources/cells/inverter.sch");
+             if (resFile2.exists() && resFile2.open(QIODevice::ReadOnly)) {
+                 storage.saveFile(projectName, "schematics/inverter.sch", resFile2.readAll());
+                 loadedFromRes = true;
+             }
+        }
+
+        if (!loadedFromRes) {
+            QJsonObject demoSchematic;
+            demoSchematic["components"] = QJsonArray();
+            demoSchematic["wires"] = QJsonArray();
+            QJsonObject meta;
+            meta["version"] = 1;
+            meta["name"] = "Inverter Demo (Empty)";
+            demoSchematic["metadata"] = meta;
+            storage.saveFile(projectName, "schematics/inverter.sch",
+                             QJsonDocument(demoSchematic).toJson());
+            qDebug() << "[MainWindow] Created empty demo schematic (Resources not found).";
+        }
+    }
+    model->addFile("Schematics", "inverter.sch", "resources/cells/inverter.sch");
 
     // Create demo HDL file if it doesn't exist
     if (!storage.fileExists(projectName, "hdl/counter.v")) {
@@ -1034,6 +1062,19 @@ void MainWindow::openSchematicTab(const QString& title, const QJsonObject& conte
     connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
     connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
     
+    // Drill-down: Open subcircuit schematic when double-clicking ICPackage/SubCircuit
+    connect(newEditor, &SchematicEditor::requestOpenSubcircuit, this, [this](const QString& subPath) {
+        QStringList searchPaths = { subPath, "resources/cells/" + subPath, "user_libs/" + subPath };
+        QString resolvedPath;
+        for (const QString& p : searchPaths) {
+            if (QFile::exists(p)) { resolvedPath = p; break; }
+        }
+        if (!resolvedPath.isEmpty()) {
+            QFileInfo info(resolvedPath);
+            openSchematicFile(resolvedPath, info.baseName() + ".sch");
+        }
+    });
+    
     statusBar()->showMessage(QString("Opened %1").arg(title), 4000);
 }
 
@@ -1056,8 +1097,7 @@ void MainWindow::removeCentralTab(QWidget* widget) {
 // ============================================================================
 
 void MainWindow::openFileFromExplorer(const QString& category, const QString& fileName, const QString& filePath) {
-    qDebug() << "[MainWindow] Opening file:" << fileName << "from category:" << category << "path:" << filePath;
-
+    qDebug() << "[MainWindow] openFileFromExplorer:" << category << fileName << filePath;
     if (category == "Schematics") {
         openSchematicFile(filePath, fileName);
     } else if (category == "HDL") {
@@ -1074,6 +1114,7 @@ void MainWindow::openFileFromExplorer(const QString& category, const QString& fi
 }
 
 void MainWindow::openSchematicFile(const QString& filePath, const QString& fileName) {
+    qDebug() << "[MainWindow] openSchematicFile:" << filePath << fileName;
     using namespace acutesim::gui::core;
     auto& storage = StorageManager::instance();
 
@@ -1095,18 +1136,32 @@ void MainWindow::openSchematicFile(const QString& filePath, const QString& fileN
         }
     }
 
-    // Fallback: Try absolute filesystem path
-    if (state.isEmpty() && !filePath.isEmpty() && QFile::exists(filePath)) {
-        QFile file(filePath);
-        if (file.open(QIODevice::ReadOnly)) {
-            QByteArray data = file.readAll();
-            file.close();
-
-            QJsonParseError error;
-            QJsonDocument doc = QJsonDocument::fromJson(data, &error);
-            if (error.error == QJsonParseError::NoError && doc.isObject()) {
-                state = doc.object();
-                qDebug() << "[MainWindow] Loaded schematic from filesystem:" << filePath;
+    // Fallback: Try filesystem with multiple search paths
+    if (state.isEmpty() && !filePath.isEmpty()) {
+        QStringList searchPaths = {
+            filePath,                          // Direct path
+            "resources/cells/" + QFileInfo(filePath).fileName(),  // Resource cells
+            "user_libs/" + QFileInfo(filePath).fileName()         // User libraries
+        };
+        
+        for (const QString& searchPath : searchPaths) {
+            qDebug() << "[MainWindow] Trying path:" << searchPath << "exists:" << QFile::exists(searchPath);
+            if (QFile::exists(searchPath)) {
+                QFile file(searchPath);
+                if (file.open(QIODevice::ReadOnly)) {
+                    QByteArray data = file.readAll();
+                    file.close();
+                    
+                    QJsonParseError error;
+                    QJsonDocument doc = QJsonDocument::fromJson(data, &error);
+                    if (error.error == QJsonParseError::NoError && doc.isObject()) {
+                        state = doc.object();
+                        qDebug() << "[MainWindow] Loaded schematic from filesystem:" << searchPath;
+                        break;
+                    } else {
+                        qWarning() << "[MainWindow] JSON parse error in" << searchPath << ":" << error.errorString();
+                    }
+                }
             }
         }
     }
@@ -1134,6 +1189,37 @@ void MainWindow::openSchematicFile(const QString& filePath, const QString& fileN
     // Connect signals
     connect(newEditor, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
     connect(newEditor, &SchematicEditor::wireSelected, this, &MainWindow::updateWireProperties);
+    
+    // Drill-down: Open subcircuit schematic when double-clicking ICPackage/SubCircuit
+    connect(newEditor, &SchematicEditor::requestOpenSubcircuit, this, [this](const QString& subPath) {
+        qDebug() << "[MainWindow] Drill-down requested:" << subPath;
+        
+        // Resolve path - try multiple locations
+        QStringList searchPaths = {
+            subPath,
+            "resources/cells/" + subPath,
+            "user_libs/" + subPath
+        };
+        
+        QString resolvedPath;
+        for (const QString& p : searchPaths) {
+            if (QFile::exists(p)) {
+                resolvedPath = p;
+                break;
+            }
+        }
+        
+        if (resolvedPath.isEmpty()) {
+            statusBar()->showMessage(QString("Subcircuit not found: %1").arg(subPath), 4000);
+            return;
+        }
+        
+        // Extract filename for tab title
+        QFileInfo info(resolvedPath);
+        QString tabName = info.baseName();
+        
+        openSchematicFile(resolvedPath, tabName + ".sch");
+    });
 
     // Switch to RTL Design stage if not already there
     if (stageTabs) {

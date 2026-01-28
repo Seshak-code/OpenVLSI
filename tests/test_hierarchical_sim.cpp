@@ -68,12 +68,65 @@ void test_load_inverter(SchematicEditor& editor) {
     std::cout << "  Passed." << std::endl;
 }
 
+void test_icpackage_hierarchical(SchematicEditor& editor) {
+    std::cout << "[Test 2] Loading ICPackage with hierarchical pins..." << std::endl;
+    
+    // Load the test_hierarchical.sch which contains an ICPackage
+    QString path = CURRENT_SOURCE_DIR "/resources/cells/test_hierarchical.sch";
+    if (!QFile::exists(path)) {
+        path = "resources/cells/test_hierarchical.sch";
+    }
+    
+    bool loaded = editor.loadFromFile(path);
+    if (!loaded) {
+        std::cout << "  Skipped (test_hierarchical.sch not found)" << std::endl;
+        return;
+    }
+    
+    GridScene* scene = editor.getScene();
+    
+    // Find the ICPackage component
+    VisualComponent* icPackage = nullptr;
+    for (auto* item : scene->items()) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->type == ComponentType::ICPackage) {
+                icPackage = c;
+                break;
+            }
+        }
+    }
+    
+    if (!icPackage) {
+        std::cout << "  Skipped (ICPackage not found)" << std::endl;
+        return;
+    }
+    
+    // Verify pins were loaded
+    std::cout << "  ICPackage has " << icPackage->pinList.size() << " pins" << std::endl;
+    
+    // The test_alu.sch has 11 pins: CLK, RST, A[0:1], B[0:1], OUT[0:1], CARRY, VDD, VSS
+    assert(icPackage->pinList.size() == 11 && "Expected 11 pins from test_alu.sch");
+    
+    // Verify terminals match pin count
+    auto terminals = icPackage->getTerminals();
+    assert(terminals.size() == 11 && "Terminal count should match pin count");
+    
+    // Verify bounding rect is sized for pins
+    QRectF bounds = icPackage->boundingRect();
+    assert(bounds.height() > 100 && "Bounding rect should be tall enough for pins");
+    
+    std::cout << "  Passed." << std::endl;
+}
+
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     std::cout << "=== Running Hierarchical IO Tests ===" << std::endl;
     
     SchematicEditor editor;
     test_load_inverter(editor);
+    
+    SchematicEditor editor2;
+    test_icpackage_hierarchical(editor2);
     
     std::cout << "=== All Tests Passed ===" << std::endl;
     return 0;

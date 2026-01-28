@@ -307,15 +307,20 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-find_package(TCL REQUIRED)
-target_include_directories(${PROJECT_NAME} PRIVATE ${TCL_INCLUDE_PATH})
+if(NOT EMSCRIPTEN)
+    find_package(TCL REQUIRED)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${TCL_INCLUDE_PATH})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${TCL_LIBRARY})
+else()
+    # On WASM, we use the internal mock Tcl or just disable it
+    target_compile_definitions(${PROJECT_NAME} PRIVATE TEST_MODE)
+endif()
 
 # Link Qt libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
-    ${TCL_LIBRARY}
 )
 
 # Optional: Link Qt6::Svg if available
@@ -348,6 +353,8 @@ if(EMSCRIPTEN)
         "-sERROR_ON_UNDEFINED_SYMBOLS=0"
         "-sUSE_WEBGPU=1"
         "-sEXPORTED_RUNTIME_METHODS=['specialHTMLTargets','UTF8ToString','stringToUTF8','ccall','cwrap','wasmMemory']"
+        "-sEXPORTED_FUNCTIONS=['_main','_dumpStorageFile','_malloc','_free']"
+        "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/resources@/resources"
     )
     # Ensure the output filename is predictable for the HTML shell
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
@@ -968,6 +975,8 @@ if(NOT EMSCRIPTEN)
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
+        components/design_db.cpp
+        gui/scripting/tcl_bridge.cpp
     )
     target_include_directories(test_hierarchical_sim PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -987,21 +996,70 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
     )
-    target_link_libraries(test_hierarchical_sim PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
+    target_link_libraries(test_hierarchical_sim PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_hierarchical_sim PUBLIC cxx_std_17)
+    target_compile_definitions(test_hierarchical_sim PRIVATE CURRENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME test_hierarchical_sim COMMAND test_hierarchical_sim)
 endif()
 
 enable_testing()
 
-add_test(NAME test_hierarchical_sim COMMAND test_hierarchical_sim)
-target_compile_definitions(test_hierarchical_sim PRIVATE CURRENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-
 add_test(NAME test_safe_io COMMAND test_safe_io)
 add_test(NAME test_ai_simulation_intelligence COMMAND test_ai_simulation_intelligence)
 
+# Helper for testing Tcl without GUI
+# add_executable(test_tcl_bridge tests/test_tcl_bridge.cpp gui/scripting/tcl_bridge.cpp components/design_db.cpp)
+# target_link_libraries(test_tcl_bridge PRIVATE TCL_LIBRARY)
+
+# Spatial Logic Test (Headless-ish GUI)
+if(NOT EMSCRIPTEN)
+    add_executable(test_spatial_logic tests/test_spatial_logic.cpp)
+    target_link_libraries(test_spatial_logic PRIVATE Qt6::Widgets Qt6::Core Qt6::Gui ${TCL_LIBRARY})
+    # Link against app objects or sources?
+    # Currently CuteApp sources are scattered. Best to add them or link a library if available.
+    # Since we don't have a library target for gui/components, we must add sources interactively.
+    target_sources(test_spatial_logic PRIVATE
+        gui/editors/schematic_editor.cpp
+        gui/editors/schematic_editor_api.cpp
+        gui/editors/schematic_editor_sync.cpp
+        gui/editors/schematic_view.cpp
+        gui/editors/component_wizard.cpp
+        gui/components/visual_component.cpp
+        gui/components/probe_tip.cpp
+        gui/styling/theme_manager.cpp
+        gui/widgets/compliance_report_dialog.cpp
+        components/design_db.cpp
+        components/pdk_compliance.cpp
+        gui/scripting/tcl_bridge.cpp
+    )
+    # Includes
+    target_include_directories(test_spatial_logic PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/scripting
+    )
+endif()
+
+# Power Domain Test (Phase 1.3)
+if(NOT EMSCRIPTEN)
+    add_executable(test_power_domains tests/test_power_domains.cpp)
+    target_link_libraries(test_power_domains PRIVATE Qt6::Widgets Qt6::Core Qt6::Gui)
+    target_sources(test_power_domains PRIVATE
+        components/design_db.cpp
+    )
+    target_include_directories(test_power_domains PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+    )
+endif()
+
 # Phase 5 GUI Logic Test
 add_executable(test_gui_logic tests/test_gui_logic.cpp gui/components/visual_component.cpp gui/components/probe_tip.cpp gui/styling/theme_manager.cpp gui/core/platform_helper.cpp)
-target_include_directories(test_gui_logic PRIVATE 
+target_include_directories(test_gui_logic PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors

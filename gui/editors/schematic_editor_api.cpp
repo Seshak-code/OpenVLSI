@@ -6,7 +6,7 @@
 // AI API IMPLEMENTATION
 // ============================================================================
 
-VisualComponent* SchematicEditor::findComponent(const QString& id) {
+VisualComponent* SchematicEditor::findComponent(const QString& id) const {
     if (!scene) return nullptr;
     for (auto* item : scene->items()) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
@@ -96,6 +96,8 @@ QString SchematicEditor::placeComponent(const QString& typeStr, QPointF pos, dou
     
     scene->addItem(comp);
     scene->triggerTopologyUpdate();
+    
+    qDebug() << "[SchematicEditor] Placed component:" << typeStr << "as" << comp->name << "at" << pos;
     
     return comp->name;
 }
@@ -201,7 +203,7 @@ QString SchematicEditor::placeProbe(const QString& id, QPointF bodyPos, QPointF 
     return comp->name;
 }
 
-bool SchematicEditor::collidesWithAny(int x, int y, int w, int h, const QString& excludeId) {
+bool SchematicEditor::collidesWithAny(int x, int y, int w, int h, const QString& excludeId) const {
     if (!scene) return false;
     
     VisualComponent* excludeComp = excludeId.isEmpty() ? nullptr : findComponent(excludeId);

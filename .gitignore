@@ -90,6 +90,19 @@ test_safe_io
 accuracy_test
 transient_test
 test_tcl_bridge
+test_ai_simulation_intelligence
+test_dependent_simulation
+test_dual_emulated
+test_emulated_f64
+test_fpu_determinism
+test_gui_logic
+test_hierarchical_sim
+test_physics_kernels
+test_power_domains
+test_simulation
+test_spatial_logic
+test_statistical_interactivity
+test_superposition
 
 # ============================================
 # Qt Auto-Generated Files
@@ -159,3 +172,17 @@ test_flow
 # Local Frameworks (Workarounds)
 # ============================================
 libs/Frameworks/
+
+# ============================================
+# Protobuf / GRPC Generated Files
+# ============================================
+*.pb.cc
+*.pb.h
+*.grpc.pb.cc
+*.grpc.pb.h
+
+# ============================================
+# User/Agent Data
+# ============================================
+.gemini/
+

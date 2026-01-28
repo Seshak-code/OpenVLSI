@@ -11,11 +11,23 @@
 
 #ifdef __EMSCRIPTEN__
 #include <sys/stat.h>
+#include <emscripten/emscripten.h>
+#include "gui/core/storage_manager.h"
 // Workaround for missing statx symbol in Emscripten 3.1.56+ vs Qt 6.9.3
 struct statx;
 extern "C" int statx(int dirfd, const char *pathname, int flags,
                      unsigned int mask, struct statx *statxbuf) {
   return -1; // ENOSYS
+}
+
+// Global debug helper for WASM
+extern "C" EMSCRIPTEN_KEEPALIVE const char* dumpStorageFile(const char* projectName, const char* filePath) {
+    using namespace acutesim::gui::core;
+    QByteArray data = StorageManager::instance().loadFile(QString(projectName), QString(filePath));
+    // Leak data for debug only - will return as JS string
+    static QByteArray lastData;
+    lastData = data;
+    return lastData.constData();
 }
 #endif
 

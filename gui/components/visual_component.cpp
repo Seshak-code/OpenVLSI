@@ -4,6 +4,11 @@
 #include <cmath>
 #include <QGraphicsSceneHoverEvent>
 #include <QKeyEvent>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QRegularExpression>
 #include "../../gui/styling/theme_manager.h"
 
 QString componentTypeToString(ComponentType t) {
@@ -28,7 +33,13 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::CCVS: return "CCVS";
         case ComponentType::VCCS: return "VCCS";
         case ComponentType::CCCS: return "CCCS";
+        case ComponentType::PDK_VDD: return "PDK_VDD";
+        case ComponentType::PDK_VSS: return "PDK_VSS";
+        case ComponentType::PDK_VDDIO: return "PDK_VDDIO";
+        case ComponentType::PDK_VBB: return "PDK_VBB";
         case ComponentType::SubCircuit: return "SubCircuit";
+        case ComponentType::ICPackage: return "ICPackage";
+        case ComponentType::Pin: return "Pin";
         default: return "Unknown";
     }
 }
@@ -55,7 +66,13 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "CCVS") return ComponentType::CCVS;
     if (s == "VCCS") return ComponentType::VCCS;
     if (s == "CCCS") return ComponentType::CCCS;
+    if (s == "CCCS") return ComponentType::CCCS;
+    if (s == "PDK_VDD" || s == "VDD") return ComponentType::PDK_VDD;
+    if (s == "PDK_VSS" || s == "VSS") return ComponentType::PDK_VSS;
+    if (s == "PDK_VDDIO" || s == "VDDIO") return ComponentType::PDK_VDDIO;
+    if (s == "PDK_VBB" || s == "VBB") return ComponentType::PDK_VBB;
     if (s == "SubCircuit") return ComponentType::SubCircuit;
+    if (s == "ICPackage") return ComponentType::ICPackage;
     if (s == "Pin") return ComponentType::Pin;
     return ComponentType::Select;
 }
@@ -265,6 +282,18 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             name = "X?";
             value = "SubCkt";
             break;
+        case ComponentType::ICPackage:
+            name = "IC?";
+            value = "Package";
+            // File-based hierarchical component
+            // sourceFilePath will be set when loading from JSON
+            break;
+        case ComponentType::Pin:
+            name = "PIN?";
+            value = "";
+            params["direction"] = "Input";
+            paramOptions["direction"] = {"Input", "Output", "BiDir"};
+            break;
         default: 
             name = "U?"; 
             value = "0"; 
@@ -272,9 +301,122 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
     }
 }
 
+// ============================================================================
+// ICPackage: Load pins dynamically from child schematic
+// ============================================================================
+void VisualComponent::loadPinsFromSchematic(const QString& schPath) {
+    if (type != ComponentType::ICPackage) return;
+    
+    QFile f(schPath);
+    if (!f.open(QIODevice::ReadOnly)) {
+        qDebug() << "[ICPackage] Failed to open schematic:" << schPath;
+        return;
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    
+    if (!doc.isObject()) {
+        qDebug() << "[ICPackage] Invalid JSON in:" << schPath;
+        return;
+    }
+    
+    QJsonArray components = doc.object()["components"].toArray();
+    
+    // Extract display name from metadata if available
+    QJsonObject meta = doc.object()["metadata"].toObject();
+    if (meta.contains("displayName")) {
+        displayName = meta["displayName"].toString();
+    } else if (meta.contains("name")) {
+        displayName = meta["name"].toString();
+    }
+    
+    pinList.clear();
+    
+    for (const auto& val : components) {
+        QJsonObject c = val.toObject();
+        if (c["type"].toString() != "Pin") continue;
+        
+        PinInfo pin;
+        pin.name = c["name"].toString();
+        
+        QJsonObject props = c["properties"].toObject();
+        
+        // Direction
+        QString dir = props["direction"].toString().toLower();
+        if (dir == "input") pin.direction = PinInfo::Direction::Input;
+        else if (dir == "output") pin.direction = PinInfo::Direction::Output;
+        else if (dir == "bidir" || dir == "inout") pin.direction = PinInfo::Direction::BiDir;
+        else if (dir == "power") pin.direction = PinInfo::Direction::Power;
+        else pin.direction = PinInfo::Direction::Input;
+        
+        // Bus detection: NAME[INDEX] pattern (e.g., "D[3]", "ADDR[15]")
+        static QRegularExpression busRe(R"((\w+)\[(\d+)\])");
+        auto match = busRe.match(pin.name);
+        if (match.hasMatch()) {
+            pin.busGroup = match.captured(1);
+            pin.busIndex = match.captured(2).toInt();
+        }
+        
+        // Power pin detection
+        QString upper = pin.name.toUpper();
+        pin.isPower = (upper == "VDD" || upper == "VSS" || 
+                      upper == "VCC" || upper == "GND" ||
+                      upper == "AVDD" || upper == "AVSS" ||  // Analog supplies
+                      upper == "DVDD" || upper == "DVSS" ||  // Digital supplies
+                      upper.startsWith("PWR") || upper.startsWith("GND"));
+        if (pin.isPower) pin.direction = PinInfo::Direction::Power;
+        
+        // Domain hints from properties
+        pin.domain = props["domain"].toString();
+        pin.impedance = props["impedance"].toString();
+        pin.netType = props["netType"].toString();
+        
+        pinList.append(pin);
+    }
+    
+    qDebug() << "[ICPackage] Loaded" << pinList.size() << "pins from" << schPath;
+    
+    // Trigger geometry recalculation
+    prepareGeometryChange();
+    update();
+}
+
 QRectF VisualComponent::boundingRect() const {
     if (type == ComponentType::Probe) {
         return QRectF(-20, -20, 40, 40);
+    }
+    if (type == ComponentType::ICPackage) {
+        // Dynamic size based on loaded pins
+        if (pinList.isEmpty()) {
+            return QRectF(-60, -50, 120, 100); // Default size
+        }
+        
+        // Count pins by side
+        int inputCount = 0, outputCount = 0, powerCount = 0;
+        int maxNameLen = 4; // Minimum label width
+        
+        for (const auto& pin : pinList) {
+            maxNameLen = std::max(maxNameLen, static_cast<int>(pin.name.length()));
+            if (pin.isPower || pin.direction == PinInfo::Direction::Power) {
+                powerCount++;
+            } else if (pin.direction == PinInfo::Direction::Input) {
+                inputCount++;
+            } else {
+                outputCount++;
+            }
+        }
+        
+        // Height: based on max pins on left/right side + power rails
+        int sideMax = std::max(inputCount, outputCount);
+        int verticalPins = std::max(1, sideMax);
+        int height = 60 + verticalPins * 25; // Header + pins
+        
+        // Width: based on longest pin name
+        int width = std::max(120, 40 + maxNameLen * 8 + 40);
+        
+        // Center the rect
+        return QRectF(-width/2.0, -height/2.0, width, height);
     }
     if (type == ComponentType::SubCircuit) {
         // Dynamic size based on pin count? For now fixed large box
@@ -359,6 +501,79 @@ QVector<QPointF> VisualComponent::getTerminals() const {
             // 4 terminals: 2 control (-40, -20/20), 2 output (40, -20/20)
             t << QPointF(-40, -20) << QPointF(-40, 20) << QPointF(40, -20) << QPointF(40, 20);
             break;
+        
+        // Power Rails - Single terminal (connection point)
+        case ComponentType::PDK_VDD:
+        case ComponentType::PDK_VDDIO:
+        case ComponentType::PDK_VBB:
+            t << QPointF(0, 20);  // Output at bottom of symbol
+            break;
+        case ComponentType::PDK_VSS:
+            t << QPointF(0, -20); // Output at top of symbol (ground connects upward)
+            break;
+            
+        case ComponentType::Pin:
+            t << QPointF(0, 0); // Connection point at center of diamond
+            break;
+        
+        case ComponentType::ICPackage: {
+            if (pinList.isEmpty()) {
+                // Fallback: single center terminal
+                t << QPointF(0, 0);
+                break;
+            }
+            
+            QRectF bounds = boundingRect();
+            
+            // Categorize pins
+            QVector<int> inputPins, outputPins, powerVddPins, powerGndPins;
+            for (int i = 0; i < pinList.size(); ++i) {
+                const auto& pin = pinList[i];
+                QString upper = pin.name.toUpper();
+                
+                if (pin.isPower || pin.direction == PinInfo::Direction::Power) {
+                    if (upper.contains("VDD") || upper.contains("VCC") || 
+                        upper.contains("AVDD") || upper.contains("DVDD")) {
+                        powerVddPins.append(i);
+                    } else {
+                        powerGndPins.append(i);
+                    }
+                } else if (pin.direction == PinInfo::Direction::Input) {
+                    inputPins.append(i);
+                } else {
+                    outputPins.append(i);
+                }
+            }
+            
+            // Place input pins on left (snap to grid)
+            double leftX = std::round(bounds.left() / 20.0) * 20.0;
+            double startY = std::round((bounds.top() + 35) / 20.0) * 20.0;
+            for (int i = 0; i < inputPins.size(); ++i) {
+                t << QPointF(leftX, startY + i * 20);
+            }
+            
+            // Place output pins on right
+            double rightX = std::round(bounds.right() / 20.0) * 20.0;
+            for (int i = 0; i < outputPins.size(); ++i) {
+                t << QPointF(rightX, startY + i * 20);
+            }
+            
+            // Place VDD on top
+            double topY = std::round(bounds.top() / 20.0) * 20.0;
+            double powerStartX = std::round((bounds.left() + 40) / 20.0) * 20.0;
+            for (int i = 0; i < powerVddPins.size(); ++i) {
+                t << QPointF(powerStartX + i * 20, topY);
+            }
+            
+            // Place GND on bottom
+            double bottomY = std::round(bounds.bottom() / 20.0) * 20.0;
+            for (int i = 0; i < powerGndPins.size(); ++i) {
+                t << QPointF(powerStartX + i * 20, bottomY);
+            }
+            
+            break;
+        }
+            
         default: break;
     }
     return t;
@@ -381,6 +596,15 @@ QPainterPath VisualComponent::shape() const {
             break;
         case ComponentType::Ground:
             path.addRect(-10, -5, 20, 10); 
+            break;
+        // Power Rails - Compact bounding box
+        case ComponentType::PDK_VDD:
+        case ComponentType::PDK_VDDIO:
+        case ComponentType::PDK_VBB:
+            path.addRect(-15, -30, 30, 50);
+            break;
+        case ComponentType::PDK_VSS:
+            path.addRect(-15, -20, 30, 35);
             break;
         default:
             path.addRect(-15, -15, 30, 30);
@@ -647,6 +871,156 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
         painter->drawText(QRectF(-20, -25, 40, 15), Qt::AlignCenter, name);
         break;
     }
+    
+    case ComponentType::ICPackage: {
+        QRectF bounds = boundingRect();
+        QRectF body = bounds.adjusted(10, 0, -10, 0);
+        
+        // Body fill - always draw this so component is visible
+        painter->setBrush(QColor("#2D2D30"));
+        painter->setPen(QPen(Qt::white, 2));
+        painter->drawRect(body);
+        
+        // Header bar with name
+        QRectF header(body.left(), body.top(), body.width(), 22);
+        painter->setBrush(QColor("#007ACC"));
+        painter->drawRect(header);
+        
+        QString title = displayName.isEmpty() ? 
+            (subCircuitName.isEmpty() ? name : subCircuitName) : displayName;
+        painter->setPen(Qt::white);
+        QFont headerFont = painter->font();
+        headerFont.setBold(true);
+        headerFont.setPointSize(9);
+        painter->setFont(headerFont);
+        painter->drawText(header, Qt::AlignCenter, title);
+        
+        // If no pins loaded, show placeholder message
+        if (pinList.isEmpty()) {
+            painter->setPen(QColor("#888888"));
+            QFont placeholderFont = painter->font();
+            placeholderFont.setPointSize(8);
+            placeholderFont.setItalic(true);
+            painter->setFont(placeholderFont);
+            
+            if (sourceFilePath.isEmpty()) {
+                painter->drawText(body.adjusted(5, 25, -5, -5), 
+                                Qt::AlignCenter | Qt::TextWordWrap, 
+                                "No source file\nspecified");
+            } else {
+                painter->drawText(body.adjusted(5, 25, -5, -5), 
+                                Qt::AlignCenter | Qt::TextWordWrap, 
+                                "Source: " + sourceFilePath + "\n(not found)");
+            }
+            break;
+        }
+        
+        // Reset font for labels
+        QFont labelFont = painter->font();
+        labelFont.setBold(false);
+        labelFont.setPointSize(8);
+        painter->setFont(labelFont);
+        
+        // Draw pins with labels
+        auto terms = getTerminals();
+        
+        // Build index mapping: terminals are ordered input, output, vdd, gnd
+        QVector<int> inputPins, outputPins, powerVddPins, powerGndPins;
+        for (int i = 0; i < pinList.size(); ++i) {
+            const auto& pin = pinList[i];
+            QString upper = pin.name.toUpper();
+            if (pin.isPower || pin.direction == PinInfo::Direction::Power) {
+                if (upper.contains("VDD") || upper.contains("VCC") || 
+                    upper.contains("AVDD") || upper.contains("DVDD")) {
+                    powerVddPins.append(i);
+                } else {
+                    powerGndPins.append(i);
+                }
+            } else if (pin.direction == PinInfo::Direction::Input) {
+                inputPins.append(i);
+            } else {
+                outputPins.append(i);
+            }
+        }
+        
+        int termIdx = 0;
+        
+        // Input pins (left side)
+        painter->setPen(Qt::white);
+        for (int idx : inputPins) {
+            if (termIdx >= terms.size()) break;
+            QPointF pos = terms[termIdx++];
+            
+            // Connection dot
+            painter->setBrush(QColor("#4EC9B0")); // Teal for inputs
+            painter->drawEllipse(pos, 4, 4);
+            
+            // Lead line to body
+            painter->drawLine(pos, QPointF(body.left(), pos.y()));
+            
+            // Label (inside body, right of dot)
+            QString label = pinList[idx].name;
+            painter->drawText(QRectF(body.left() + 5, pos.y() - 8, 50, 16),
+                            Qt::AlignLeft | Qt::AlignVCenter, label);
+        }
+        
+        // Output pins (right side)
+        for (int idx : outputPins) {
+            if (termIdx >= terms.size()) break;
+            QPointF pos = terms[termIdx++];
+            
+            painter->setBrush(QColor("#DCDCAA")); // Yellow for outputs
+            painter->drawEllipse(pos, 4, 4);
+            
+            painter->drawLine(pos, QPointF(body.right(), pos.y()));
+            
+            QString label = pinList[idx].name;
+            painter->drawText(QRectF(body.right() - 55, pos.y() - 8, 50, 16),
+                            Qt::AlignRight | Qt::AlignVCenter, label);
+        }
+        
+        // Power VDD pins (top)
+        for (int idx : powerVddPins) {
+            if (termIdx >= terms.size()) break;
+            QPointF pos = terms[termIdx++];
+            
+            painter->setBrush(QColor("#FF5555")); // Red for VDD
+            painter->drawEllipse(pos, 4, 4);
+            
+            painter->drawLine(pos, QPointF(pos.x(), body.top()));
+            
+            QString label = pinList[idx].name;
+            painter->drawText(QRectF(pos.x() - 20, body.top() + 24, 40, 14),
+                            Qt::AlignCenter, label);
+        }
+        
+        // Power GND pins (bottom)
+        for (int idx : powerGndPins) {
+            if (termIdx >= terms.size()) break;
+            QPointF pos = terms[termIdx++];
+            
+            painter->setBrush(QColor("#569CD6")); // Blue for GND
+            painter->drawEllipse(pos, 4, 4);
+            
+            painter->drawLine(pos, QPointF(pos.x(), body.bottom()));
+            
+            QString label = pinList[idx].name;
+            painter->drawText(QRectF(pos.x() - 20, body.bottom() - 18, 40, 14),
+                            Qt::AlignCenter, label);
+        }
+        
+        // Drill-down indicator if source file exists
+        if (!sourceFilePath.isEmpty()) {
+            painter->setPen(QPen(QColor("#569CD6"), 1));
+            QFont indicatorFont = painter->font();
+            indicatorFont.setPointSize(7);
+            painter->setFont(indicatorFont);
+            painter->drawText(body.adjusted(0, 0, 0, -3), 
+                            Qt::AlignBottom | Qt::AlignHCenter, "▼ dbl-click");
+        }
+        
+        break;
+    }
              
         case ComponentType::Probe:
             // Monochrome ASCII-Style Multimeter
@@ -731,6 +1105,92 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                 painter->drawLine(30, 20, 40, 20);
             }
             break;
+
+        // =====================================================================
+        // POWER RAILS (PDK Domain-Aware)
+        // =====================================================================
+        case ComponentType::PDK_VDD:
+            // VDD Symbol: Horizontal bar with up-arrow
+            {
+                painter->setPen(QPen(QColor("#FF5555"), 2)); // Red for VDD
+                painter->drawLine(-15, -15, 15, -15);        // Horizontal bar
+                painter->drawLine(0, -15, 0, 20);            // Vertical lead down
+                
+                // Up arrow on bar
+                painter->drawLine(0, -15, -5, -10);
+                painter->drawLine(0, -15, 5, -10);
+                
+                // Label
+                painter->setPen(Qt::white);
+                QFont f = painter->font();
+                f.setPointSize(8);
+                f.setBold(true);
+                painter->setFont(f);
+                painter->drawText(QRectF(-20, -30, 40, 12), Qt::AlignCenter, "VDD");
+            }
+            break;
+            
+        case ComponentType::PDK_VSS:
+            // VSS Symbol: Ground variant with multiple horizontal lines
+            {
+                painter->setPen(QPen(QColor("#55AAFF"), 2)); // Blue for VSS/GND
+                painter->drawLine(0, -20, 0, 0);             // Vertical lead up
+                painter->drawLine(-15, 0, 15, 0);            // Main bar
+                painter->drawLine(-10, 5, 10, 5);            // Second bar
+                painter->drawLine(-5, 10, 5, 10);            // Third bar (triangle hint)
+                
+                // Label
+                painter->setPen(Qt::white);
+                QFont f = painter->font();
+                f.setPointSize(8);
+                f.setBold(true);
+                painter->setFont(f);
+                painter->drawText(QRectF(-20, 12, 40, 12), Qt::AlignCenter, "VSS");
+            }
+            break;
+            
+        case ComponentType::PDK_VDDIO:
+            // VDDIO Symbol: Bar with IO label
+            {
+                painter->setPen(QPen(QColor("#FFAA55"), 2)); // Orange for VDDIO
+                painter->drawLine(-15, -15, 15, -15);        // Horizontal bar
+                painter->drawLine(0, -15, 0, 20);            // Vertical lead down
+                
+                // Up arrow
+                painter->drawLine(0, -15, -5, -10);
+                painter->drawLine(0, -15, 5, -10);
+                
+                // Label
+                painter->setPen(Qt::white);
+                QFont f = painter->font();
+                f.setPointSize(7);
+                f.setBold(true);
+                painter->setFont(f);
+                painter->drawText(QRectF(-25, -30, 50, 12), Qt::AlignCenter, "VDDIO");
+            }
+            break;
+            
+        case ComponentType::PDK_VBB:
+            // VBB Symbol: Bar with bias indicator
+            {
+                painter->setPen(QPen(QColor("#AA55FF"), 2)); // Purple for body bias
+                painter->drawLine(-12, -12, 12, -12);        // Horizontal bar
+                painter->drawLine(0, -12, 0, 20);            // Vertical lead down
+                
+                // Tilde for variable bias
+                painter->drawArc(-6, -18, 6, 6, 0, 180 * 16);
+                painter->drawArc(0, -18, 6, 6, 180 * 16, 180 * 16);
+                
+                // Label
+                painter->setPen(Qt::white);
+                QFont f = painter->font();
+                f.setPointSize(8);
+                f.setBold(true);
+                painter->setFont(f);
+                painter->drawText(QRectF(-20, -35, 40, 12), Qt::AlignCenter, "VBB");
+            }
+            break;
+
 
         default:
             painter->setPen(QPen(Qt::white, 2));

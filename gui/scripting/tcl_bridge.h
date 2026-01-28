@@ -32,8 +32,11 @@ public:
     static int cmd_undo(void* clientData, Tcl_Interp* interp, int argc, const char** argv);
     static int cmd_redo(void* clientData, Tcl_Interp* interp, int argc, const char** argv);
     
+    static int cmd_place_next_to(void* clientData, Tcl_Interp* interp, int argc, const char** argv);
+    
     // DesignDb Access
     void setDesignDb(acutesim::components::DesignDb* db) { db_ = db; }
+    void setSchematicEditor(void* editor) { editor_ = editor; } // void* to avoid circular include in header
     
     // Accessor for the internal interpreter (if managed internally)
     // For now we assume init() is called with an external one, OR we create one lazily.
@@ -43,6 +46,7 @@ public:
 private:
     TclBridge() = default;
     acutesim::components::DesignDb* db_ = nullptr;
+    void* editor_ = nullptr; // Actually SchematicEditor*
     Tcl_Interp* interp_ = nullptr;
 };
 

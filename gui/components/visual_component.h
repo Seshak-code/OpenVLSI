@@ -31,6 +31,12 @@ enum class ComponentType {
     PDK_Resistor,   // 3-Terminal (A, B, SUB)
     PDK_Capacitor,  // 2-Terminal (TOP, BOT)
 
+    // Power Rails (Domain-aware)
+    PDK_VDD,        // Positive Core Supply (e.g., 1.8V, 3.3V)
+    PDK_VSS,        // Ground Supply (0V reference)
+    PDK_VDDIO,      // I/O Supply Domain (typically higher voltage)
+    PDK_VBB,        // Body Bias Supply (for back-gate control)
+
     // Dependent Sources
     VCVS,           // Voltage-Controlled Voltage Source
     CCVS,           // Current-Controlled Voltage Source
@@ -42,8 +48,27 @@ enum class ComponentType {
     Pin             // External Interface Pin
 };
 
+
 QString componentTypeToString(ComponentType t);
 ComponentType stringToComponentType(const QString& s);
+
+// ============================================================================
+// HIERARCHICAL PIN METADATA
+// ============================================================================
+// Used by ICPackage components to store pin information from child schematics.
+// Supports any PDK-based design domain: Digital, Analog, RF, Mixed-Signal.
+struct PinInfo {
+    QString name;                      // Pin name (e.g., "CLK", "VIN", "RF_OUT")
+    enum class Direction { Input, Output, BiDir, Power } direction = Direction::Input;
+    QString busGroup;                  // Bus group name (e.g., "ADDR", "DATA") 
+    int busIndex = -1;                 // Index within bus (-1 if not a bus pin)
+    bool isPower = false;              // VDD, VSS, VCC, GND, etc.
+    QString domain;                    // Optional: "digital", "analog", "rf", "power"
+    
+    // For analog/RF: impedance or other metadata
+    QString impedance;                 // e.g., "50Ω" for RF
+    QString netType;                   // e.g., "differential", "single-ended"
+};
 
 // Phase 11.6: Ghosting System
 enum class GhostState {
@@ -139,6 +164,11 @@ public:
     // For Oscilloscope-style Probes
     ProbeTip* probePositiveTip = nullptr;
     ProbeTip* probeNegativeTip = nullptr;
+    
+    // For ICPackage: Dynamic pins loaded from child schematic
+    QVector<PinInfo> pinList;
+    void loadPinsFromSchematic(const QString& schPath);
+    QString displayName;  // User-friendly name for rendering
 
     VisualComponent(ComponentType t);
 

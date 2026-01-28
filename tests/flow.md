@@ -17,6 +17,7 @@ The `tests/` directory contains the **Verification Framework**. It enforces the 
 ### 2. UI Integration
 -   **`test_gui_logic.cpp`**: Headless testing of `SchematicEditor` interactions (Add, Move, Undo).
 -   **`test_docking_interaction.cpp`**: Verifies that panels dock/undock correctly without crashing.
+-   **`test_hierarchical_sim.cpp`**: Verifies `ICPackage` logic, including dynamic pin loading, correct bounding box calculation, and terminal generation.
 
 ### 3. AI & Orchestration
 -   **`test_ai_simulation_intelligence.cpp`**: Validates `SpeculativeRunner` and `FailureTaxonomy`.

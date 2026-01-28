@@ -16,6 +16,8 @@ public:
     void setMode(AppMode mode);
 
     // AI/API Access
+    // Opens schematic with robust path search (Direct -> resources/cells -> user_libs)
+    void openSchematicFile(const QString& filePath, const QString& fileName);
     void openSchematicTab(const QString& title, const QJsonObject& content);
     
     // Core Components
