@@ -855,14 +855,30 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
             if (type == "TransientPoint") {
                 double t = results["time"].toDouble();
                 QJsonArray volts = results["voltages"].toArray();
-                if (!volts.isEmpty()) {
-                    // Pass all voltages as separate traces (one per node)
-                    QVector<double> values;
-                    for (int i = 0; i < volts.size(); ++i) {
-                        values.append(volts[i].toDouble());
+                
+                // Pass all voltages + probes as separate traces
+                QVector<double> values;
+                for (int i = 0; i < volts.size(); ++i) {
+                    values.append(volts[i].toDouble());
+                }
+                
+                // Phase 2.1: Integrated Probes
+                if (results.contains("probes")) {
+                    QJsonObject probes = results["probes"].toObject();
+                    int pIdx = 0;
+                    for (auto it = probes.begin(); it != probes.end(); ++it) {
+                        int traceIdx = volts.size() + pIdx;
+                        values.append(it.value().toDouble());
+                        // Optional: Ensure name is registered (only first time)
+                        if (t < 1e-12) {
+                            wf->setTraceName(traceIdx, "Probe: " + it.key());
+                        }
+                        pIdx++;
                     }
+                }
+                
+                if (!values.isEmpty()) {
                     wf->appendDataPoints(t, values);
-                    qDebug() << "[MainWindow] WaveformWidget updated with" << values.size() << "traces at t=" << t;
                 }
             } else if (type == "DC") {
                 if (results.contains("corner") && results["corner"].toString() == "Nominal") {
@@ -887,7 +903,26 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
                 item->setText(0, QString("V(%1)").arg(i+1));
                 item->setText(1, QString("%1 V").arg(voltages[i].toDouble(), 0, 'f', 6));
             }
+            
+            // Phase 2.1: Probes in DC results
+            if (results.contains("probes")) {
+                QJsonObject probes = results["probes"].toObject();
+                for (auto it = probes.begin(); it != probes.end(); ++it) {
+                    QTreeWidgetItem* item = new QTreeWidgetItem(resultsTree_);
+                    item->setText(0, "Probe: " + it.key());
+                    item->setText(1, QString("%1 V").arg(it.value().toDouble(), 0, 'f', 6));
+                    item->setForeground(0, QBrush(QColor("#4ec9b0"))); // Distinguish probes
+                }
+            }
         }
+        // Show output dock with results
+    }
+    
+    // Phase 2.1: Pass to Scripting Bridge
+    QJsonDocument doc(results);
+    acutesim::gui::scripting::TclBridge::instance().setLastResults(doc.toJson().toStdString());
+
+    if (type == "DC") {
         // Show output dock with results
         if (outputDock_) {
             outputDock_->show();

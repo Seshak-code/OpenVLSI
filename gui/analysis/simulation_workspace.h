@@ -42,6 +42,14 @@ class SimulationWorkspace : public QWidget {
     Q_OBJECT
     
 public:
+    enum class ComputeEngine {
+        LEGACY = 0,      // AoS solver, reference only
+        SOA_SCALAR = 1,  // Tensor MNA on CPU, scalar
+        CPU_SIMD = 2,    // Tensor MNA on CPU, vectorized
+        GPU = 3,         // Primary GPU path
+        GPU_DEBUG = 4    // GPU compute + extra verification
+    };
+
     explicit SimulationWorkspace(QWidget* parent = nullptr);
     
     // Connection to schematic
@@ -102,9 +110,10 @@ private:
     QWidget* toolbar_;
     QPushButton* runBtn_;
     QPushButton* stopBtn_;
-    QComboBox* profileCombo_;
+    // profileCombo_ removed (redundant with sidebar)
     QComboBox* runModeCombo_;
     QComboBox* cornerCombo_;
+    QComboBox* computeEngineCombo_;
     TrustBadgeWidget* trustBadge_ = nullptr;
     
     // State

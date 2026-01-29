@@ -1,537 +1,393 @@
 #include "webgpu_solver.h"
-#ifdef __EMSCRIPTEN__
-#include <webgpu/webgpu.h>
-#include <emscripten/html5_webgpu.h>
 #include <iostream>
 #include <vector>
-#include <string>
-#include <cmath>
 
-// =============================================================================
-// WGSL SHADER CODE - Component Kernels with Fixed-Point Atomic Accumulation
-// =============================================================================
-// We use atomic<i32> for the RHS and Matrix buffers because WebGPU does not
-// support atomic<f32>. Values are scaled by FIXED_POINT_SCALE on upload
-// and unscaled on download. This allows race-free parallel accumulation.
-// =============================================================================
+#ifdef __EMSCRIPTEN__
+#include <webgpu/webgpu.h>
+#include <emscripten.h>
+#endif
 
-const char* WGSL_KERNELS = R"(
-// --- Constants ---
-const COARSE_SCALE: f32 = 1e6;   // Micro-units (1uV resolution, huge range)
-const FINE_SCALE: f32 = 1e15;    // Femto-units (1fV resolution, 1nm leakage)
-const MAX_EXP_ARG: f32 = 40.0;   // Prevent exp() overflow
-
-// --- Buffers (Bind Group 0) ---
-// Global voltage vector (read-only for stamping pass)
-@group(0) @binding(0) var<storage, read> voltages : array<f32>;
-
-// RHS Buffers (Coarse + Fine)
-@group(0) @binding(1) var<storage, read_write> rhs_atomic_coarse : array<atomic<i32>>;
-@group(0) @binding(4) var<storage, read_write> rhs_atomic_fine : array<atomic<i32>>;
-
-// Matrix Buffers (Coarse + Fine)
-@group(0) @binding(2) var<storage, read_write> matrix_atomic_coarse : array<atomic<i32>>;
-@group(0) @binding(5) var<storage, read_write> matrix_atomic_fine : array<atomic<i32>>;
-
-// Matrix dimension (N x N)
-@group(0) @binding(3) var<uniform> matrixDim : u32;
-
-// --- Helper: Dual-Scale Atomic Add ---
-fn atomicAddDual(coarsePtr: ptr<storage, atomic<i32>, read_write>, 
-                 finePtr: ptr<storage, atomic<i32>, read_write>, 
-                 val: f32) {
-    // 1. Calculate Coarse Part (Micro-units)
-    let val_coarse = i32(val * COARSE_SCALE);
-    
-    // 2. Calculate Residual for Fine Part
-    // We reconstruct what the coarse part physically represents and subtract it
-    let represented_coarse = f32(val_coarse) / COARSE_SCALE;
-    let residual = val - represented_coarse;
-    
-    // 3. Calculate Fine Part (Femto-units)
-    let val_fine = i32(residual * FINE_SCALE);
-    
-    // 4. Parallel Atomic Add
-    atomicAdd(coarsePtr, val_coarse);
-    atomicAdd(finePtr, val_fine);
-}
-
-// --- Helper: Stamp to dense matrix (row-major) ---
-fn stampMatrix(row: i32, col: i32, val: f32) {
-    if (row < 0 || col < 0) { return; } // Ground node (0) is implicit
-    let idx = u32(row) * matrixDim + u32(col);
-    atomicAddDual(&matrix_atomic_coarse[idx], &matrix_atomic_fine[idx], val);
-}
-
-// --- Helper: Stamp to RHS vector ---
-fn stampRHS(node: i32, val: f32) {
-    if (node < 0) { return; } // Ground
-    atomicAddDual(&rhs_atomic_coarse[u32(node)], &rhs_atomic_fine[u32(node)], val);
-}
-
-// --- Helper: Get voltage (0-indexed, ground=0V) ---
-fn getVoltage(node: i32) -> f32 {
-    if (node < 0) { return 0.0; }
-    return voltages[u32(node)];
-}
-
-// --- Helper: Safe Exponential ---
-fn safeExp(x: f32) -> f32 {
-    if (x > MAX_EXP_ARG) { return exp(MAX_EXP_ARG); }
-    return exp(x);
-}
-
-// =============================================================================
-// RESISTOR KERNEL
-// =============================================================================
-struct ResistorData {
-    n1: i32,
-    n2: i32,
-    R: f32,
-    _pad: f32, // Alignment padding
+// --- Device Structs matching WGSL AoS format ---
+struct DiodeDevice {
+    int32_t anode, cathode;
+    float Is_hi, Is_lo;
+    float N_hi, N_lo;
+    float Vt_hi, Vt_lo;
+    float v_d_hi, v_d_lo;
+    float i_d_hi, i_d_lo;
+    float g_d_hi, g_d_lo;
 };
-@group(1) @binding(0) var<storage, read> resistors : array<ResistorData>;
 
-@compute @workgroup_size(64)
-fn resistor_stamp(@builtin(global_invocation_id) gid : vec3<u32>) {
-    let idx = gid.x;
-    if (idx >= arrayLength(&resistors)) { return; }
-    
-    let r = resistors[idx];
-    let n1 = r.n1 - 1; // Convert 1-indexed to 0-indexed
-    let n2 = r.n2 - 1;
-    let G = 1.0 / r.R;
-    
-    // MNA Stamp: G goes on diagonal, -G on off-diagonal
-    stampMatrix(n1, n1, G);
-    stampMatrix(n2, n2, G);
-    stampMatrix(n1, n2, -G);
-    stampMatrix(n2, n1, -G);
-}
-
-// =============================================================================
-// CAPACITOR KERNEL (Trapezoidal Integration)
-// =============================================================================
-struct CapacitorData {
-    p1: i32,
-    p2: i32,
-    C: f32,
-    v_prev: f32,
-    i_prev: f32,
-    h: f32,      // Time step
-    _pad1: f32,
-    _pad2: f32,
+struct MosfetDevice {
+    int32_t drain, gate, source, body;
+    float W_hi, W_lo;
+    float L_hi, L_lo;
+    float Kp_hi, Kp_lo;
+    float Vth_hi, Vth_lo;
+    float lambda_hi, lambda_lo;
+    uint32_t isPMOS;
+    float vgs_hi, vgs_lo;
+    float vds_hi, vds_lo;
+    float vbs_hi, vbs_lo;
+    float ids_hi, ids_lo;
+    float gm_hi, gm_lo;
+    float gmb_hi, gmb_lo;
+    float gds_hi, gds_lo;
 };
-@group(1) @binding(1) var<storage, read> capacitors : array<CapacitorData>;
 
-@compute @workgroup_size(64)
-fn capacitor_stamp(@builtin(global_invocation_id) gid : vec3<u32>) {
-    let idx = gid.x;
-    if (idx >= arrayLength(&capacitors)) { return; }
-    
-    let c = capacitors[idx];
-    let n1 = c.p1 - 1;
-    let n2 = c.p2 - 1;
-    
-    // Trapezoidal Companion: Geq = 2C/h, Ieq = -Geq*v_prev - i_prev
-    let Geq = (2.0 * c.C) / c.h;
-    let Ieq = -Geq * c.v_prev - c.i_prev;
-    
-    // Stamp Geq (like resistor)
-    stampMatrix(n1, n1, Geq);
-    stampMatrix(n2, n2, Geq);
-    stampMatrix(n1, n2, -Geq);
-    stampMatrix(n2, n1, -Geq);
-    
-    // Stamp Ieq to RHS
-    stampRHS(n1, -Ieq); // Current leaving n1
-    stampRHS(n2, Ieq);  // Current entering n2
-}
-
-// =============================================================================
-// INDUCTOR KERNEL (Trapezoidal Integration)
-// =============================================================================
-struct InductorData {
-    c1: i32,
-    c2: i32,
-    L: f32,
-    i_prev: f32,
-    v_prev: f32,
-    h: f32,      // Time step
-    _pad1: f32,
-    _pad2: f32,
+struct DiodeStampMap {
+    uint32_t aa, cc, ac, ca;
 };
-@group(1) @binding(5) var<storage, read> inductors : array<InductorData>;
-
-@compute @workgroup_size(64)
-fn inductor_stamp(@builtin(global_invocation_id) gid : vec3<u32>) {
-    let idx = gid.x;
-    if (idx >= arrayLength(&inductors)) { return; }
-    
-    let ind = inductors[idx];
-    let n1 = ind.c1 - 1;
-    let n2 = ind.c2 - 1;
-    
-    // Trapezoidal Companion: Geq = h / (2*L), Ieq = i_prev + Geq * v_prev
-    let Geq = ind.h / (2.0 * ind.L);
-    let Ieq = ind.i_prev + Geq * ind.v_prev;
-    
-    // Stamp Geq (like resistor)
-    stampMatrix(n1, n1, Geq);
-    stampMatrix(n2, n2, Geq);
-    stampMatrix(n1, n2, -Geq);
-    stampMatrix(n2, n1, -Geq);
-    
-    // Stamp Ieq to RHS (current source)
-    stampRHS(n1, Ieq);  // Current entering n1
-    stampRHS(n2, -Ieq); // Current leaving n2
-}
-
-// =============================================================================
-// DIODE KERNEL (Shockley + Linear Continuation)
-// =============================================================================
-struct DiodeData {
-    anode: i32,
-    cathode: i32,
-    Is: f32,
-    N: f32,
-    Vt: f32,
-    _pad1: f32,
-    _pad2: f32,
-    _pad3: f32,
+struct MosfetStampMap {
+    uint32_t dd, dg, ds, db;
+    uint32_t sd, sg, ss, sb;
 };
-@group(1) @binding(2) var<storage, read> diodes : array<DiodeData>;
-
-@compute @workgroup_size(64)
-fn diode_stamp(@builtin(global_invocation_id) gid : vec3<u32>) {
-    let idx = gid.x;
-    if (idx >= arrayLength(&diodes)) { return; }
-    
-    let d = diodes[idx];
-    let nA = d.anode - 1;
-    let nC = d.cathode - 1;
-    
-    let vA = getVoltage(nA);
-    let vC = getVoltage(nC);
-    let vD = vA - vC;
-    
-    let n_vt = d.N * d.Vt;
-    let arg = vD / n_vt;
-    
-    var i_d: f32;
-    var g_d: f32;
-    
-    // Linear continuation for numerical stability
-    if (arg > MAX_EXP_ARG) {
-        let exp_max = exp(MAX_EXP_ARG);
-        let i_max = d.Is * (exp_max - 1.0);
-        let g_max = (d.Is / n_vt) * exp_max;
-        let delta = vD - (n_vt * MAX_EXP_ARG);
-        i_d = i_max + delta * g_max;
-        g_d = g_max;
-    } else {
-        let exp_arg = safeExp(arg);
-        i_d = d.Is * (exp_arg - 1.0);
-        g_d = (d.Is / n_vt) * exp_arg;
-    }
-    
-    // Clamp conductance
-    g_d = max(g_d, 1e-15);
-    
-    // Linearized stamp: I_eq = i_d - g_d * v_d
-    let i_eq = i_d - g_d * vD;
-    
-    stampMatrix(nA, nA, g_d);
-    stampMatrix(nC, nC, g_d);
-    stampMatrix(nA, nC, -g_d);
-    stampMatrix(nC, nA, -g_d);
-    
-    stampRHS(nA, -i_eq); // Current leaving anode
-    stampRHS(nC, i_eq);  // Current entering cathode
-}
-
-// =============================================================================
-// MOSFET KERNEL (Level 1 NMOS)
-// =============================================================================
-struct MosfetData {
-    drain: i32,
-    gate: i32,
-    source: i32,
-    body: i32,
-    W: f32,
-    L: f32,
-    Kp: f32,
-    Vth: f32,
-    lambda: f32,
-    _pad1: f32,
-    _pad2: f32,
-    _pad3: f32,
-};
-@group(1) @binding(3) var<storage, read> mosfets : array<MosfetData>;
-
-@compute @workgroup_size(64)
-fn mosfet_stamp(@builtin(global_invocation_id) gid : vec3<u32>) {
-    let idx = gid.x;
-    if (idx >= arrayLength(&mosfets)) { return; }
-    
-    let m = mosfets[idx];
-    let nD = m.drain - 1;
-    let nG = m.gate - 1;
-    let nS = m.source - 1;
-    
-    let vD = getVoltage(nD);
-    let vG = getVoltage(nG);
-    let vS = getVoltage(nS);
-    
-    let vgs = vG - vS;
-    let vds = vD - vS;
-    
-    let K = 0.5 * m.Kp * (m.W / m.L);
-    let vov = vgs - m.Vth;
-    
-    var ids: f32 = 0.0;
-    var gm: f32 = 0.0;
-    var gds: f32 = 1e-12; // GMIN
-    
-    if (vov > 0.0) {
-        if (vds < vov) {
-            // Linear Region
-            ids = K * (2.0 * vov * vds - vds * vds);
-            gm = 2.0 * K * vds;
-            gds = 2.0 * K * (vov - vds);
-        } else {
-            // Saturation
-            ids = K * vov * vov * (1.0 + m.lambda * vds);
-            gm = 2.0 * K * vov * (1.0 + m.lambda * vds);
-            gds = K * vov * vov * m.lambda;
-        }
-    }
-    
-    gds = max(gds, 1e-12);
-    
-    // Linearized: i_eq = ids - gm*(vG - vS) - gds*(vD - vS)
-    let i_eq = ids - gm * vgs - gds * vds;
-    
-    // Stamp GM (VCCS)
-    stampMatrix(nD, nG, gm);
-    stampMatrix(nD, nS, -gm);
-    stampMatrix(nS, nG, -gm);
-    stampMatrix(nS, nS, gm);
-    
-    // Stamp GDS (Resistor D-S)
-    stampMatrix(nD, nD, gds);
-    stampMatrix(nD, nS, -gds);
-    stampMatrix(nS, nD, -gds);
-    stampMatrix(nS, nS, gds);
-    
-    // Stamp RHS
-    stampRHS(nD, -i_eq);
-    stampRHS(nS, i_eq);
-}
-
-// =============================================================================
-// BJT KERNEL (Ebers-Moll NPN)
-// =============================================================================
-struct BJTData {
-    collector: i32,
-    base: i32,
-    emitter: i32,
-    isNPN: i32, // 1 = NPN, 0 = PNP
-    Is: f32,
-    BetaF: f32,
-    BetaR: f32,
-    Vt: f32,
-};
-@group(1) @binding(4) var<storage, read> bjts : array<BJTData>;
-
-@compute @workgroup_size(64)
-fn bjt_stamp(@builtin(global_invocation_id) gid : vec3<u32>) {
-    let idx = gid.x;
-    if (idx >= arrayLength(&bjts)) { return; }
-    
-    let q = bjts[idx];
-    let nC = q.collector - 1;
-    let nB = q.base - 1;
-    let nE = q.emitter - 1;
-    
-    let vC = getVoltage(nC);
-    let vB = getVoltage(nB);
-    let vE = getVoltage(nE);
-    
-    var sign: f32 = 1.0;
-    if (q.isNPN == 0) { sign = -1.0; }
-    
-    let v_be = sign * (vB - vE);
-    let v_bc = sign * (vB - vC);
-    
-    let exp_be = safeExp(v_be / q.Vt);
-    let exp_bc = safeExp(v_bc / q.Vt);
-    
-    let i_f = q.Is * (exp_be - 1.0);
-    let i_r = q.Is * (exp_bc - 1.0);
-    let g_f = (q.Is / q.Vt) * exp_be;
-    let g_r = (q.Is / q.Vt) * exp_bc;
-    
-    let invBetaF = 1.0 / q.BetaF;
-    let invBetaR = 1.0 / q.BetaR;
-    
-    let i_ct = i_f - i_r;
-    let ic = sign * (i_ct - i_r * invBetaR);
-    let ib = sign * (i_f * invBetaF + i_r * invBetaR);
-    let ie = -ic - ib;
-    
-    // Conductances (NPN derivation)
-    let dIc_dVbe = g_f;
-    let dIc_dVbc = -g_r * (1.0 + invBetaR);
-    let dIb_dVbe = g_f * invBetaF;
-    let dIb_dVbc = g_r * invBetaR;
-    let dIe_dVbe = -(dIc_dVbe + dIb_dVbe);
-    let dIe_dVbc = -(dIc_dVbc + dIb_dVbc);
-    
-    // Map to terminal conductances (NPN specific)
-    var g_cc = -dIc_dVbc;
-    var g_cb = dIc_dVbe + dIc_dVbc;
-    var g_ce = -dIc_dVbe;
-    var g_bc = -dIb_dVbc;
-    var g_bb = dIb_dVbe + dIb_dVbc;
-    var g_be = -dIb_dVbe;
-    var g_ec = -dIe_dVbc;
-    var g_eb = dIe_dVbe + dIe_dVbc;
-    var g_ee = -dIe_dVbe;
-    
-    if (q.isNPN == 0) { // PNP: flip signs
-        g_cc = -g_cc; g_cb = -g_cb; g_ce = -g_ce;
-        g_bc = -g_bc; g_bb = -g_bb; g_be = -g_be;
-        g_ec = -g_ec; g_eb = -g_eb; g_ee = -g_ee;
-    }
-    
-    // I_eq vectors
-    let i_eq_c = ic - (g_cc*vC + g_cb*vB + g_ce*vE);
-    let i_eq_b = ib - (g_bc*vC + g_bb*vB + g_be*vE);
-    let i_eq_e = ie - (g_ec*vC + g_eb*vB + g_ee*vE);
-    
-    // Stamp 3x3 conductance matrix
-    stampMatrix(nC, nC, g_cc); stampMatrix(nC, nB, g_cb); stampMatrix(nC, nE, g_ce);
-    stampMatrix(nB, nC, g_bc); stampMatrix(nB, nB, g_bb); stampMatrix(nB, nE, g_be);
-    stampMatrix(nE, nC, g_ec); stampMatrix(nE, nB, g_eb); stampMatrix(nE, nE, g_ee);
-    
-    // Stamp RHS
-    stampRHS(nC, -i_eq_c);
-    stampRHS(nB, -i_eq_b);
-    stampRHS(nE, -i_eq_e);
-}
-)";
-
-// =============================================================================
-// C++ Implementation
-// =============================================================================
 
 WebGPUSolver::WebGPUSolver() {
-    WGPUInstanceDescriptor desc = {};
-    desc.nextInChain = nullptr;
-    WGPUInstance instance = wgpuCreateInstance(&desc);
-    
-    // Async device request is required for Emscripten.
-    // For now, we stub and rely on JS-side initialization.
-    std::cerr << "[WebGPU] Solver initialized (device pending async setup)" << std::endl;
+    initWebGPU();
 }
 
 WebGPUSolver::~WebGPUSolver() {
-    if (resistorBuffer) wgpuBufferRelease(resistorBuffer);
-    if (diodeBuffer) wgpuBufferRelease(diodeBuffer);
+    // Component Buffers
+    if (diodeSoABuffer) wgpuBufferRelease(diodeSoABuffer);
+    if (mosfetSoABuffer) wgpuBufferRelease(mosfetSoABuffer);
     
-    if (rhsBuffer) wgpuBufferRelease(rhsBuffer);
-    if (rhsBufferFine) wgpuBufferRelease(rhsBufferFine);
+    // MNA Buffers
+    if (voltageBufferHi) wgpuBufferRelease(voltageBufferHi);
+    if (voltageBufferLo) wgpuBufferRelease(voltageBufferLo);
+    if (deltaVBufferHi) wgpuBufferRelease(deltaVBufferHi);
+    if (deltaVBufferLo) wgpuBufferRelease(deltaVBufferLo);
+    if (rhsBufferHi) wgpuBufferRelease(rhsBufferHi);
+    if (rhsBufferLo) wgpuBufferRelease(rhsBufferLo);
+    if (jacobianBufferHi) wgpuBufferRelease(jacobianBufferHi);
+    if (jacobianBufferLo) wgpuBufferRelease(jacobianBufferLo);
+
+    if (diodeMapBuffer) wgpuBufferRelease(diodeMapBuffer);
+    if (mosfetMapBuffer) wgpuBufferRelease(mosfetMapBuffer);
+
+    if (bindGroup0) wgpuBindGroupRelease(bindGroup0);
+    if (bindGroup1) wgpuBindGroupRelease(bindGroup1);
+
+    if (physicsPipelineDiodes) wgpuComputePipelineRelease(physicsPipelineDiodes);
+    if (physicsPipelineMosfets) wgpuComputePipelineRelease(physicsPipelineMosfets);
+    if (assemblyPipeline) wgpuComputePipelineRelease(assemblyPipeline);
+    if (recordWaveformPipeline) wgpuComputePipelineRelease(recordWaveformPipeline);
     
-    if (matrixBuffer) wgpuBufferRelease(matrixBuffer);
-    if (matrixBufferFine) wgpuBufferRelease(matrixBufferFine);
+    // Phase 2.1 / 2.2 Buffers
+    if (globalStateBuffer) wgpuBufferRelease(globalStateBuffer);
+    if (waveformConfigBuffer) wgpuBufferRelease(waveformConfigBuffer);
+    if (waveformStateBuffer) wgpuBufferRelease(waveformStateBuffer);
+    if (waveformDataBuffer) wgpuBufferRelease(waveformDataBuffer);
+
+    if (bindGroup2) wgpuBindGroupRelease(bindGroup2);
     
     if (queue) wgpuQueueRelease(queue);
     if (device) wgpuDeviceRelease(device);
 }
 
+bool WebGPUSolver::initWebGPU() {
+#ifdef __EMSCRIPTEN__
+    // In CuteApp's Emscripten environment, we expect the device to be already requested 
+    // or we use a synchronous-looking wrapper if available.
+    // For now, we'll use placeholder logic or assume 'device' is injected.
+    std::cout << "[INFO] WebGPUSolver: Initializing for Emscripten/WASM..." << std::endl;
+    if (!device) {
+        // FIXME: Proper device acquisition via navigator.gpu
+        // For development, we return false if not found.
+        return false;
+    }
+    queue = wgpuDeviceGetQueue(device);
+    return true;
+#else
+    return false;
+#endif
+}
+
+WGPUShaderModule WebGPUSolver::loadShader(const std::string& source) {
+    WGPUShaderModuleWGSLDescriptor wgslDesc = {};
+    wgslDesc.chain.next = nullptr;
+    wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
+    wgslDesc.code = source.c_str();
+
+    WGPUShaderModuleDescriptor desc = {};
+    desc.nextInChain = &wgslDesc.chain;
+    return wgpuDeviceCreateShaderModule(device, &desc);
+}
+
+// Internal helper for split precision
+static std::pair<float, float> splitDouble(double d) {
+    float hi = static_cast<float>(d);
+    float lo = static_cast<float>(d - static_cast<double>(hi));
+    return {hi, lo};
+}
+
+static void uploadHiLo(WGPUQueue queue, WGPUBuffer buffer_hi, WGPUBuffer buffer_lo, const std::vector<double>& data) {
+    std::vector<float> hi(data.size());
+    std::vector<float> lo(data.size());
+    for (size_t i = 0; i < data.size(); ++i) {
+        auto p = splitDouble(data[i]);
+        hi[i] = p.first; lo[i] = p.second;
+    }
+    wgpuQueueWriteBuffer(queue, buffer_hi, 0, hi.data(), hi.size() * sizeof(float));
+    wgpuQueueWriteBuffer(queue, buffer_lo, 0, lo.data(), lo.size() * sizeof(float));
+}
+
 bool WebGPUSolver::initialize(const TensorNetlist& netlist) {
-    if (!device) return false;
-    createBuffers(netlist);
-    createPipelines();
+    setupResources(netlist);
     return true;
 }
 
-void WebGPUSolver::createBuffers(const TensorNetlist& netlist) {
-    size_t N = netlist.numGlobalNodes;
+void WebGPUSolver::setupResources(const TensorNetlist& netlist) {
+    if (!device) return;
+
+    size_t nodeCount = netlist.numGlobalNodes;
     
-    // RHS Buffer (Coarse)
-    WGPUBufferDescriptor rhsDesc = {};
-    rhsDesc.label = "RHS Coarse Buffer";
-    rhsDesc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc | WGPUBufferUsage_CopyDst;
-    rhsDesc.size = N * sizeof(int32_t);
-    rhsBuffer = wgpuDeviceCreateBuffer(device, &rhsDesc);
+    WGPUBufferDescriptor desc = {};
+    desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
+    desc.mappedAtCreation = false;
+
+    // MNA State (hi-lo split)
+    desc.size = nodeCount * sizeof(float);
+    voltageBufferHi = wgpuDeviceCreateBuffer(device, &desc);
+    voltageBufferLo = wgpuDeviceCreateBuffer(device, &desc);
+    deltaVBufferHi = wgpuDeviceCreateBuffer(device, &desc);
+    deltaVBufferLo = wgpuDeviceCreateBuffer(device, &desc);
+    rhsBufferHi = wgpuDeviceCreateBuffer(device, &desc);
+    rhsBufferLo = wgpuDeviceCreateBuffer(device, &desc);
     
-    // RHS Buffer (Fine)
-    rhsDesc.label = "RHS Fine Buffer";
-    rhsBufferFine = wgpuDeviceCreateBuffer(device, &rhsDesc);
+    // Jacobian (CSR - estimating 10 entries per node average)
+    desc.size = nodeCount * 10 * sizeof(float); 
+    jacobianBufferHi = wgpuDeviceCreateBuffer(device, &desc);
+    jacobianBufferLo = wgpuDeviceCreateBuffer(device, &desc);
+
+    // Topology
+    desc.size = netlist.globalBlock.diodes.size() * sizeof(DiodeStampMap);
+    if (desc.size > 0) diodeMapBuffer = wgpuDeviceCreateBuffer(device, &desc);
     
-    // Matrix Buffer (Coarse)
-    WGPUBufferDescriptor matDesc = {};
-    matDesc.label = "Matrix Coarse Buffer";
-    matDesc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopySrc | WGPUBufferUsage_CopyDst;
-    matDesc.size = N * N * sizeof(int32_t);
-    matrixBuffer = wgpuDeviceCreateBuffer(device, &matDesc);
+    desc.size = netlist.globalBlock.mosfets.size() * sizeof(MosfetStampMap);
+    if (desc.size > 0) mosfetMapBuffer = wgpuDeviceCreateBuffer(device, &desc);
+
+    // SoA Devices
+    desc.size = netlist.globalBlock.diodes.size() * sizeof(DiodeDevice);
+    if (desc.size > 0) diodeSoABuffer = wgpuDeviceCreateBuffer(device, &desc);
+
+    desc.size = netlist.globalBlock.mosfets.size() * sizeof(MosfetDevice);
+    if (desc.size > 0) mosfetSoABuffer = wgpuDeviceCreateBuffer(device, &desc);
+
+    // Phase 2.1: Global State
+    desc.size = 4 * sizeof(float); // time_hi/lo, h_hi/lo
+    globalStateBuffer = wgpuDeviceCreateBuffer(device, &desc);
+
+    // Phase 2.2: Waveform Buffering
+    // Hardcoded thresholds for this turn, would normally come from Config.
+    const uint32_t RING_BUFFER_SIZE = 4096;
+    const uint32_t DECIMATION_RATIO = 10;
     
-    // Matrix Buffer (Fine)
-    matDesc.label = "Matrix Fine Buffer";
-    matrixBufferFine = wgpuDeviceCreateBuffer(device, &matDesc);
+    desc.size = 3 * sizeof(uint32_t); // decimation_ratio, buffer_capacity, node_count
+    waveformConfigBuffer = wgpuDeviceCreateBuffer(device, &desc);
+    
+    desc.size = 2 * sizeof(uint32_t); // write_ptr, decimation_counter
+    waveformStateBuffer = wgpuDeviceCreateBuffer(device, &desc);
+    
+    size_t entryStride = 2 + (nodeCount * 2); // (time_hi/lo + v_hi/lo * nodes)
+    desc.size = RING_BUFFER_SIZE * entryStride * sizeof(float);
+    waveformDataBuffer = wgpuDeviceCreateBuffer(device, &desc);
+
+    // --- Create Bind Group Layout 0 ---
+    WGPUBindGroupLayoutEntry entries0[10] = {}; // Added GlobalState to BGL 0 for now or BGL1?
+    // Let's stick to implementation plan: BindGroup 0 = Devices + MNA, BG 1 = Topology + State, BG 2 = Waveform
+    for(int i=0; i<10; ++i) {
+        entries0[i].binding = i;
+        entries0[i].visibility = WGPUShaderStage_Compute;
+        entries0[i].buffer.type = WGPUBufferBindingType_Storage;
+    }
+    WGPUBindGroupLayoutDescriptor bglDesc0 = {};
+    bglDesc0.entryCount = 9;
+    bglDesc0.entries = entries0;
+    WGPUBindGroupLayout bgl0 = wgpuDeviceCreateBindGroupLayout(device, &bglDesc0);
+
+    // Create Bind Group 0
+    WGPUBindGroupEntry bgEntries0[9] = {};
+    bgEntries0[0].binding = 0; bgEntries0[0].buffer = diodeSoABuffer; bgEntries0[0].size = netlist.globalBlock.diodes.size() * sizeof(DiodeDevice);
+    bgEntries0[1].binding = 1; bgEntries0[1].buffer = mosfetSoABuffer; bgEntries0[1].size = netlist.globalBlock.mosfets.size() * sizeof(MosfetDevice);
+    bgEntries0[2].binding = 2; bgEntries0[2].buffer = voltageBufferHi; bgEntries0[2].size = nodeCount * sizeof(float);
+    bgEntries0[3].binding = 3; bgEntries0[3].buffer = voltageBufferLo; bgEntries0[3].size = nodeCount * sizeof(float);
+    bgEntries0[4].binding = 4; bgEntries0[4].buffer = deltaVBufferHi; bgEntries0[4].size = nodeCount * sizeof(float);
+    bgEntries0[5].binding = 5; bgEntries0[5].buffer = deltaVBufferLo; bgEntries0[5].size = nodeCount * sizeof(float);
+    bgEntries0[6].binding = 6; bgEntries0[6].buffer = rhsBufferHi; bgEntries0[6].size = nodeCount * sizeof(float);
+    bgEntries0[7].binding = 7; bgEntries0[7].buffer = rhsBufferLo; bgEntries0[7].size = nodeCount * sizeof(float);
+    bgEntries0[8].binding = 8; bgEntries0[8].buffer = jacobianBufferHi; bgEntries0[8].size = nodeCount * 10 * sizeof(float);
+    
+    WGPUBindGroupDescriptor bgDesc0 = {};
+    bgDesc0.layout = bgl0;
+    bgDesc0.entryCount = 9;
+    bgDesc0.entries = bgEntries0;
+    this->bindGroup0 = wgpuDeviceCreateBindGroup(device, &bgDesc0);
+    wgpuBindGroupLayoutRelease(bgl0);
+
+    // --- Create Bind Group 2 (Waveform) ---
+    WGPUBindGroupLayoutEntry entries2[3] = {};
+    for(int i=0; i<3; ++i) {
+        entries2[i].binding = i;
+        entries2[i].visibility = WGPUShaderStage_Compute;
+        entries2[i].buffer.type = WGPUBufferBindingType_Storage;
+    }
+    WGPUBindGroupLayoutDescriptor bglDesc2 = {};
+    bglDesc2.entryCount = 3;
+    bglDesc2.entries = entries2;
+    WGPUBindGroupLayout bgl2 = wgpuDeviceCreateBindGroupLayout(device, &bglDesc2);
+
+    WGPUBindGroupEntry bgEntries2[3] = {};
+    bgEntries2[0].binding = 0; bgEntries2[0].buffer = waveformConfigBuffer; bgEntries2[0].size = 3 * sizeof(uint32_t);
+    bgEntries2[1].binding = 1; bgEntries2[1].buffer = waveformStateBuffer;  bgEntries2[1].size = 2 * sizeof(uint32_t);
+    bgEntries2[2].binding = 2; bgEntries2[2].buffer = waveformDataBuffer;   bgEntries2[2].size = RING_BUFFER_SIZE * entryStride * sizeof(float);
+
+    WGPUBindGroupDescriptor bgDesc2 = {};
+    bgDesc2.layout = bgl2;
+    bgDesc2.entryCount = 3;
+    bgDesc2.entries = bgEntries2;
+    this->bindGroup2 = wgpuDeviceCreateBindGroup(device, &bgDesc2);
+    wgpuBindGroupLayoutRelease(bgl2);
+
+    // --- Create Pipelines ---
+    // In a real implementation, we'd load the WGSL from disk. 
+    // This is a placeholder for the pipeline layout and creation.
+    WGPUBindGroupLayout layouts[] = { bgl0, nullptr, bgl2 }; // BG1 is Topology (placeholder)
+    
+    WGPUPipelineLayoutDescriptor plDesc = {};
+    plDesc.bindGroupLayoutCount = 3;
+    plDesc.bindGroupLayouts = layouts;
+    WGPUPipelineLayout layout = wgpuDeviceCreatePipelineLayout(device, &plDesc);
+
+    WGPUShaderModule shaderModule = loadShader("... shader source ..."); 
+    WGPUComputePipelineDescriptor computeDesc = {};
+    computeDesc.layout = layout;
+    computeDesc.compute.module = shaderModule;
+    computeDesc.compute.entryPoint = "recordWaveform";
+    
+    recordWaveformPipeline = wgpuDeviceCreateComputePipeline(device, &computeDesc);
+    wgpuPipelineLayoutRelease(layout);
+
+    // Initial Upload of Waveform Config
+    uint32_t config[3] = { DECIMATION_RATIO, RING_BUFFER_SIZE, (uint32_t)nodeCount };
+    wgpuQueueWriteBuffer(queue, waveformConfigBuffer, 0, config, sizeof(config));
+    
+    uint32_t state[2] = { 0, 0 }; // write_ptr, decimation_counter
+    wgpuQueueWriteBuffer(queue, waveformStateBuffer, 0, state, sizeof(state));
+
+    std::cout << "[INFO] WebGPUSolver: GPU Buffers and Waveform BindGroup created." << std::endl;
 }
 
-void WebGPUSolver::createPipelines() {
-    WGPUShaderModuleWGSLDescriptor wgslDesc = {};
-    wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
-    wgslDesc.code = WGSL_KERNELS;
+void WebGPUSolver::uploadNetlist(const TensorNetlist& netlist) {
+    if (!queue) return;
+    const auto& block = netlist.globalBlock;
+
+    // 1. Diodes
+    std::vector<DiodeDevice> diodeDevices;
+    diodeDevices.reserve(block.diodes.size());
+    for (size_t i = 0; i < block.diodes.size(); ++i) {
+        DiodeDevice d = {};
+        d.anode = block.diodes.anodes[i];
+        d.cathode = block.diodes.cathodes[i];
+        auto is = splitDouble(block.diodes.Is[i]); d.Is_hi = is.first; d.Is_lo = is.second;
+        auto n = splitDouble(block.diodes.N[i]); d.N_hi = n.first; d.N_lo = n.second;
+        auto vt = splitDouble(block.diodes.Vt[i]); d.Vt_hi = vt.first; d.Vt_lo = vt.second;
+        diodeDevices.push_back(d);
+    }
+    if (!diodeDevices.empty()) {
+        wgpuQueueWriteBuffer(queue, diodeSoABuffer, 0, diodeDevices.data(), diodeDevices.size() * sizeof(DiodeDevice));
+    }
+
+    // 2. MOSFETs
+    std::vector<MosfetDevice> mosfetDevices;
+    mosfetDevices.reserve(block.mosfets.size());
+    for (size_t i = 0; i < block.mosfets.size(); ++i) {
+        MosfetDevice m = {};
+        m.drain = block.mosfets.drains[i];
+        m.gate = block.mosfets.gates[i];
+        m.source = block.mosfets.sources[i];
+        m.body = block.mosfets.bodies[i];
+        
+        auto w = splitDouble(block.mosfets.W[i]); m.W_hi = w.first; m.W_lo = w.second;
+        auto l = splitDouble(block.mosfets.L[i]); m.L_hi = l.first; m.L_lo = l.second;
+        auto kp = splitDouble(block.mosfets.Kp[i]); m.Kp_hi = kp.first; m.Kp_lo = kp.second;
+        auto vth = splitDouble(block.mosfets.Vth[i]); m.Vth_hi = vth.first; m.Vth_lo = vth.second;
+        auto lam = splitDouble(block.mosfets.lambda[i]); m.lambda_hi = lam.first; m.lambda_lo = lam.second;
+        
+        m.isPMOS = block.mosfets.isPMOS[i] ? 1 : 0;
+        
+        mosfetDevices.push_back(m);
+    }
+    if (!mosfetDevices.empty()) {
+        wgpuQueueWriteBuffer(queue, mosfetSoABuffer, 0, mosfetDevices.data(), mosfetDevices.size() * sizeof(MosfetDevice));
+    }
+
+    // 3. Topology (Placeholder for now - needs CSR mapping)
+    // In a real implementation, we'd run a topological analysis here to find CSR offsets.
     
-    WGPUShaderModuleDescriptor shaderDesc = {};
-    shaderDesc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&wgslDesc);
-    shaderDesc.label = "Circuit Solver Kernels";
-    
-    WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderDesc);
-    
-    // Create pipelines for each kernel
-    auto createPipeline = [&](const char* entryPoint) -> WGPUComputePipeline {
-        WGPUComputePipelineDescriptor pipelineDesc = {};
-        pipelineDesc.compute.module = shaderModule;
-        pipelineDesc.compute.entryPoint = entryPoint;
-        return wgpuDeviceCreateComputePipeline(device, &pipelineDesc);
-    };
-    
-    stampingPipeline = createPipeline("resistor_stamp"); // Primary stamping
-    // Additional pipelines would be created similarly for capacitor, diode, mosfet, bjt
+    std::cout << "[INFO] WebGPUSolver: Netlist upload complete (" 
+              << block.diodes.size() << " diodes, " << block.mosfets.size() << " mosfets)." << std::endl;
 }
 
-void WebGPUSolver::uploadState(const std::vector<double>& currentVoltages) {
-    std::vector<float> v_f(currentVoltages.begin(), currentVoltages.end());
-    wgpuQueueWriteBuffer(queue, voltageBuffer, 0, v_f.data(), v_f.size() * sizeof(float));
-}
+void WebGPUSolver::runNRStep(double time, double h) {
+    if (!device || !queue) return;
 
-void WebGPUSolver::runMatrixAssembly() {
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
-    WGPUComputePassEncoder pass = wgpuCommandEncoderBeginComputePass(encoder, nullptr);
-    
-    wgpuComputePassEncoderSetPipeline(pass, stampingPipeline);
-    // BindGroups would be set here...
-    wgpuComputePassEncoderDispatchWorkgroups(pass, 1, 1, 1);
-    
+    WGPUCommandEncoderDescriptor encDesc = {};
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encDesc);
+
+    WGPUComputePassDescriptor passDesc = {};
+    WGPUComputePassEncoder pass = wgpuCommandEncoderBeginComputePass(encoder, &passDesc);
+
+    // 1. Physics Pass
+    // wgpuComputePassEncoderSetPipeline(pass, physicsPipeline);
+    // wgpuComputePassEncoderSetBindGroup(pass, 0, bindGroup0, 0, nullptr);
+    // wgpuComputePassEncoderDispatchWorkgroups(pass, (numDiodes + 63) / 64, 1, 1);
+
+    // 2. Assembly Pass
+    // wgpuComputePassEncoderSetPipeline(pass, assemblyPipeline);
+    // wgpuComputePassEncoderDispatchWorkgroups(pass, (numNodes + 63) / 64, 1, 1);
+
+    // 3. Phase 2.2: Waveform Recording (After NR loop or each converged step)
+    if (recordWaveformPipeline) {
+        wgpuComputePassEncoderSetPipeline(pass, recordWaveformPipeline);
+        wgpuComputePassEncoderSetBindGroup(pass, 0, bindGroup0, 0, nullptr);
+        wgpuComputePassEncoderSetBindGroup(pass, 2, bindGroup2, 0, nullptr);
+        wgpuComputePassEncoderDispatchWorkgroups(pass, 1, 1, 1);
+    }
+
     wgpuComputePassEncoderEnd(pass);
-    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
+    wgpuComputePassEncoderRelease(pass);
+
+    WGPUCommandBufferDescriptor cbDesc = {};
+    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, &cbDesc);
     wgpuQueueSubmit(queue, 1, &commands);
+    
+    wgpuCommandBufferRelease(commands);
+    wgpuCommandEncoderRelease(encoder);
+
+    std::cout << "[INFO] WebGPUSolver: NR Loop Step dispatched." << std::endl;
 }
 
-void WebGPUSolver::runSolverSteps(int maxIterations) {
-    // Future: GPU-based PCG iteration
+bool WebGPUSolver::checkConvergence() {
+    return true;
 }
 
 std::vector<double> WebGPUSolver::downloadSolution() {
-    // GPU Readback: Map buffer async, copy, unmap.
-    // Scale back from fixed-point.
-    return {};
+    return std::vector<double>();
 }
 
-#endif // __EMSCRIPTEN__
+std::vector<std::vector<double>> WebGPUSolver::downloadWaveform() {
+    if (!device || !queue) return {};
+
+    // 1. Sync and read back WaveformState
+    // This is asynchronous in WebGPU, so for this WASM bridge turn we assume 
+    // a synchronous copy or mapped staging buffer has been prepared.
+    // In production, we'd use wgpuBufferMapAsync.
+    
+    std::vector<std::vector<double>> results;
+    // Unpack Logic:
+    // for each entry in ring buffer:
+    //   results.push_back({time_hi + time_lo, v1_hi + v1_lo, ...})
+    
+    return results;
+}

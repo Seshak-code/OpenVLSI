@@ -94,6 +94,7 @@ struct MosfetTensor {
     std::vector<double> Kp;      // Transconductance parameter [A/V²]
     std::vector<double> Vth;     // Threshold voltage [V]
     std::vector<double> lambda;  // Channel length modulation [1/V]
+    std::vector<bool> isPMOS; 
     
     // Thermal parameters
     std::vector<double> Temp;    // Operating temperature [K]
@@ -118,6 +119,7 @@ struct MosfetTensor {
     void reserve(size_t n) {
         drains.reserve(n); gates.reserve(n); sources.reserve(n); bodies.reserve(n);
         W.reserve(n); L.reserve(n); Kp.reserve(n); Vth.reserve(n); lambda.reserve(n);
+        isPMOS.reserve(n);
         Temp.reserve(n);
         vgs.reserve(n); vds.reserve(n); ids.reserve(n); gm.reserve(n); gmb.reserve(n); gds.reserve(n);
         dr_validity.reserve(n);
@@ -126,13 +128,15 @@ struct MosfetTensor {
     void clear() {
         drains.clear(); gates.clear(); sources.clear(); bodies.clear();
         W.clear(); L.clear(); Kp.clear(); Vth.clear(); lambda.clear();
+        isPMOS.clear();
         Temp.clear();
         vgs.clear(); vds.clear(); ids.clear(); gm.clear(); gmb.clear(); gds.clear();
         dr_validity.clear();
     }
     
     void push(int d, int g, int s, int b, double w, double l, 
-              double kp = 200e-6, double vth = 0.7, double lam = 0.02, double temp = 300.0) {
+              double kp = 200e-6, double vth = 0.7, double lam = 0.02, 
+              bool pmos = false, double temp = 300.0) {
         drains.push_back(d);
         gates.push_back(g);
         sources.push_back(s);
@@ -142,6 +146,7 @@ struct MosfetTensor {
         Kp.push_back(kp);
         Vth.push_back(vth);
         lambda.push_back(lam);
+        isPMOS.push_back(pmos);
         Temp.push_back(temp);
         vgs.push_back(0.0);
         vds.push_back(0.0);
@@ -316,6 +321,46 @@ struct InductorTensor {
 };
 
 // ============================================================================
+// SOURCE TENSORS
+// ============================================================================
+
+struct VoltageSourceTensor {
+    std::vector<int> nodesPos;
+    std::vector<int> nodesNeg;
+    std::vector<double> voltages; // Nominal DC value
+    
+    size_t size() const { return nodesPos.size(); }
+    
+    void push(int np, int nn, double v) {
+        nodesPos.push_back(np);
+        nodesNeg.push_back(nn);
+        voltages.push_back(v);
+    }
+    
+    void clear() {
+        nodesPos.clear(); nodesNeg.clear(); voltages.clear();
+    }
+};
+
+struct CurrentSourceTensor {
+    std::vector<int> nodesPos;
+    std::vector<int> nodesNeg;
+    std::vector<double> currents;
+    
+    size_t size() const { return nodesPos.size(); }
+    
+    void push(int np, int nn, double i) {
+        nodesPos.push_back(np);
+        nodesNeg.push_back(nn);
+        currents.push_back(i);
+    }
+    
+    void clear() {
+        nodesPos.clear(); nodesNeg.clear(); currents.clear();
+    }
+};
+
+// ============================================================================
 // UNIFIED TENSOR BLOCK
 // ============================================================================
 
@@ -327,6 +372,8 @@ struct TensorizedBlock {
     ResistorTensor resistors;
     CapacitorTensor capacitors;
     InductorTensor inductors;
+    VoltageSourceTensor voltageSources;
+    CurrentSourceTensor currentSources;
     DiodeTensor diodes;
     MosfetTensor mosfets;
     BJTTensor bjts;
@@ -335,6 +382,8 @@ struct TensorizedBlock {
         resistors.clear();
         capacitors.clear();
         inductors.clear();
+        voltageSources.clear();
+        currentSources.clear();
         diodes.clear();
         mosfets.clear();
         bjts.clear();
@@ -353,6 +402,12 @@ struct TensorBlock;
  * This enables efficient batch processing on the solver side.
  */
 TensorizedBlock tensorizeBlock(const struct TensorBlock& block);
+
+/**
+ * Convert a full TensorNetlist (Hierarchical) to a single TensorizedBlock (Flat SoA).
+ * All hierarchy is flattened into global node indices.
+ */
+TensorizedBlock tensorizeNetlist(const class TensorNetlist& netlist);
 
 // ============================================================================
 // BATCH PHYSICS KERNELS (Vectorizable)

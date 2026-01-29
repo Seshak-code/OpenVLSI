@@ -64,6 +64,7 @@ inline SubCircuitDefinition createGenericDarlington() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "DARLINGTON_INTERNAL";
+    block.pinNames = def.pinNames; // Maps pins to internal nodes 1, 2, 3
     
     // External Pin Mapping
     // 0: Base
@@ -124,6 +125,7 @@ inline SubCircuitDefinition createResistiveDivider() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "DIVIDER_INTERNAL";
+    block.pinNames = def.pinNames;
     block.addResistor("R1", 1, 2, 10000.0);
     block.addResistor("R2", 2, 0, 10000.0);
     
@@ -149,6 +151,7 @@ inline SubCircuitDefinition createHalfWaveRectifier() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "RECTIFIER_INTERNAL";
+    block.pinNames = def.pinNames;
     block.addDiode(1, 2, 1e-12); // D1: VIN -> VOUT
     block.diodes.back().modelName = "diode_pw2dw"; // Generic PDK diode
     block.addResistor(2, 0, 100000.0); // R_LOAD: 100k
@@ -177,6 +180,7 @@ inline SubCircuitDefinition createCMOSInverter() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "INVERTER_INTERNAL";
+    block.pinNames = def.pinNames;
     
     // NMOS: VOUT pulled to GND when VIN is High
     // D=2, G=1, S=0, B=0
@@ -219,6 +223,7 @@ inline SubCircuitDefinition createDifferentialPair() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "DIFFPAIR_INTERNAL";
+    block.pinNames = def.pinNames;
     
     // Q1 (Left): C=3, B=1, E=5
     block.addBJT("Q1", 3, 1, 5, "npn_generic", true, 100.0, 1.0, 1e-14);
@@ -259,6 +264,7 @@ inline SubCircuitDefinition createRCLowPass() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "RC_INTERNAL";
+    block.pinNames = def.pinNames;
     
     block.addResistor("R1", 1, 2, 10000.0);
     block.resistors.back().model_name = "poly_res";
@@ -288,6 +294,7 @@ inline SubCircuitDefinition createBiCMOSBuffer() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "BICMOS_INTERNAL";
+    block.pinNames = def.pinNames;
     
     // M1 (NMOS Input): D=2, G=1, S=0
     block.addMosfet("M1", 2, 1, 0, 0, "nmos_generic", 10e-6, 0.5e-6);
@@ -325,6 +332,7 @@ inline SubCircuitDefinition createPDK_NFET() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "PDK_NFET_INTERNAL";
+    block.pinNames = def.pinNames;
     block.addMosfet("M1", 1, 2, 3, 4, "nmos_generic", 1.0e-6, 0.18e-6);
     
     block.numInternalNodes = 4;
@@ -350,6 +358,7 @@ inline SubCircuitDefinition createPDK_PFET() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "PDK_PFET_INTERNAL";
+    block.pinNames = def.pinNames;
     block.addMosfet("M1", 1, 2, 3, 4, "pmos_generic", 1.0e-6, 0.18e-6);
     
     block.numInternalNodes = 4;
@@ -374,6 +383,7 @@ inline SubCircuitDefinition createPDK_Resistor_Poly() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "PDK_RES_POLY_INTERNAL";
+    block.pinNames = def.pinNames;
     block.addResistor("R1", 1, 2, 1000.0);
     block.resistors.back().model_name = "poly_res_generic";
     block.resistors.back().width_m = 1.0e-6;
@@ -404,6 +414,7 @@ inline SubCircuitDefinition createPDK_Capacitor_MIM() {
     
     TensorBlock& block = def.internalBlock;
     block.name = "PDK_CAP_MIM_INTERNAL";
+    block.pinNames = def.pinNames;
     block.addCapacitor(1, 2, 1e-12); // 1pF Default
     block.capacitors.back().model_name = "mim_cap_generic";
     block.capacitors.back().width_m = 10.0e-6;

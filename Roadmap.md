@@ -1677,6 +1677,19 @@ service Orchestrator {
 
 ---
 
+## ⚡ GPU-ACCELERATED RF & MIXED-SIGNAL (DAWN-NATIVE)
+### 5.3 RF & Frequency Domain Analysis
+*   **wgpuFFT**: High-performance "cuFFT-equivalent" library in WGSL. Optimized for parallel spectral analysis of transient traces.
+*   **wgpuHB (Harmonic Balance)**: GPU-resident steady-state solver for large RF circuits.
+*   **S-Parameter Modeling**: Parallel interpolation of Touchstone files on the GPU for frequency-domain analysis.
+
+### 5.4 Mixed-Signal (AMS) Acceleration
+*   **wgpuAMS Core**: Integration of Real-Valued Modeling (RVM) and event-driven signals directly into the Tensor MNA kernels.
+*   **Parallel XA**: Distributed simulation of analog blocks and digital control loops using the same persistent GPU buffers.
+*   **Zero-Latency Handover**: Direct feedback between logic gates (digital) and transistor physics (analog) inside a single compute pass.
+
+---
+
 ## 🧪 FLOW-LEVEL REGRESSION SUITE
 ### 6.1 End-to-End Benchmarks
 *   **Designs**: `Inverter`, `OpAmp`, `PLL`, `RISC-V Core`.

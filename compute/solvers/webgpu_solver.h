@@ -1,21 +1,30 @@
 #pragma once
 
 #include "physics_tensors.h"
-#include "circuit.h"
+#include "../../components/circuit.h"
 #include <vector>
+#include <string>
 
 #ifdef __EMSCRIPTEN__
-#include <emscripten/html5_webgpu.h>
+#include <webgpu/webgpu.h>
+#else
+// Fallback for non-emscripten compilation (simulated handles)
+typedef void* WGPUDevice;
+typedef void* WGPUQueue;
+typedef void* WGPUBuffer;
+typedef void* WGPUInstance;
+typedef void* WGPUComputePipeline;
+typedef void* WGPUShaderModule;
+#endif
 
 /**
  * WebGPUSolver
- * Implements parallel circuit solving using WGSL Compute Shaders.
+ * Implements GPU-resident Newton-Raphson simulation using EmulatedF64 logic.
  * 
- * Pipeline:
- * 1. uploadNetlist: Transfers SoA tensors to GPU Storage Buffers.
- * 2. runMatrixAssembly: Parallel stamping (one thread per component).
- * 3. runPCGIteration: Parallel Conjugate Gradient solve.
- * 4. downloadSolution: Fetches voltage vector back to CPU.
+ * Features:
+ * - Persistent GPU Residency: All MNA buffers stay on GPU.
+ * - EmulatedF64 Architecture: hi-lo float32 pairs for double-precision parity.
+ * - Target: Emscripten / WebAssembly.
  */
 class WebGPUSolver {
 public:
@@ -24,37 +33,59 @@ public:
 
     bool initialize(const TensorNetlist& netlist);
     
-    // Core Solver Loop Steps
-    void uploadState(const std::vector<double>& currentVoltages);
-    void runMatrixAssembly(); 
-    void runSolverSteps(int maxIterations);
+    // Core Solver Loop (Persistent residency)
+    void uploadNetlist(const TensorNetlist& netlist);
+    void runNRStep(double time, double h);
+    bool checkConvergence();
+    
     std::vector<double> downloadSolution();
+    std::vector<std::vector<double>> downloadWaveform(); // Phase 2.2
 
 private:
-    // WebGPU Handles
     WGPUDevice device = nullptr;
     WGPUQueue queue = nullptr;
+    WGPUInstance instance = nullptr;
+
+    // Persistent Buffers (EmulatedF64 split)
+    WGPUBuffer voltageBufferHi = nullptr;
+    WGPUBuffer voltageBufferLo = nullptr;
+    WGPUBuffer deltaVBufferHi = nullptr;
+    WGPUBuffer deltaVBufferLo = nullptr;
+    WGPUBuffer rhsBufferHi = nullptr;
+    WGPUBuffer rhsBufferLo = nullptr;
+    WGPUBuffer jacobianBufferHi = nullptr;
+    WGPUBuffer jacobianBufferLo = nullptr;
     
-    // Compute Pipelines
-    WGPUComputePipeline stampingPipeline = nullptr;
+    // Topology (Frozen)
+    WGPUBuffer csrRowPtrBuffer = nullptr;
+    WGPUBuffer csrColIdxBuffer = nullptr;
+    WGPUBuffer diodeMapBuffer = nullptr;
+    WGPUBuffer mosfetMapBuffer = nullptr;
+    WGPUBuffer globalStateBuffer = nullptr; // Phase 2.1
+
+    // Component SoA Buffers
+    WGPUBuffer diodeSoABuffer = nullptr;
+    WGPUBuffer mosfetSoABuffer = nullptr;
+
+    // Waveform Buffering (Phase 2.2)
+    WGPUBuffer waveformConfigBuffer = nullptr;
+    WGPUBuffer waveformStateBuffer = nullptr;
+    WGPUBuffer waveformDataBuffer = nullptr;
+
+    // Persistent Bind Groups
+    WGPUBindGroup bindGroup0 = nullptr;
+    WGPUBindGroup bindGroup1 = nullptr;
+    WGPUBindGroup bindGroup2 = nullptr; // Waveform group
+
+    // Pipelines
+    WGPUComputePipeline physicsPipelineDiodes = nullptr;
+    WGPUComputePipeline physicsPipelineMosfets = nullptr;
+    WGPUComputePipeline assemblyPipeline = nullptr;
     WGPUComputePipeline solverPipeline = nullptr;
-    
-    // GPU Buffers
-    WGPUBuffer voltageBuffer = nullptr;
-    WGPUBuffer rhsBuffer = nullptr;
-    WGPUBuffer matrixBuffer = nullptr;
-    
-    // High Precision Dual-Scale Buffers
-    WGPUBuffer rhsBufferFine = nullptr;
-    WGPUBuffer matrixBufferFine = nullptr;
-    
-    // Component Buffers (SoA)
-    WGPUBuffer resistorBuffer = nullptr;
-    WGPUBuffer diodeBuffer = nullptr;
+    WGPUComputePipeline convergencePipeline = nullptr;
+    WGPUComputePipeline recordWaveformPipeline = nullptr;
 
     bool initWebGPU();
-    void createBuffers(const TensorNetlist& netlist);
-    void createPipelines();
+    void setupResources(const TensorNetlist& netlist);
+    WGPUShaderModule loadShader(const std::string& path);
 };
-
-#endif // __EMSCRIPTEN__

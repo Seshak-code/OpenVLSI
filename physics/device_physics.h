@@ -283,14 +283,14 @@ inline BJTCurrents<T> bjt_ebers_moll(T v_c, T v_b, T v_e, bool isNPN, const BJTP
         T exp_val = exp(arg_clamped);
         T i_base = p.Is * (exp_val - T(1.0));
         T g_base = (p.Is / p.Vt) * exp_val;
+        T g_clamped = (g_base > GMIN) ? g_base : GMIN;
         
         T delta = (v_j > Vcrit) ? (v_j - Vcrit) : T(0.0);
-        T i_ext = g_base * delta;
+        T i_ext = g_clamped * delta; // Use clamped slope
         
         T i_total = i_base + i_ext;
-        T g_total = (g_base > GMIN) ? g_base : GMIN;
         
-        return {i_total, g_total};
+        return {i_total, g_clamped};
     };
     
     auto [i_f, g_f] = linear_continuation_diode(v_be);

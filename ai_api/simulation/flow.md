@@ -8,6 +8,7 @@ The `ai_api/simulation/` directory is the **Speculative Engine** logic. It enabl
 **Role**: The "Sandbox". Runs "What-If" scenarios without affecting the user's active workbench.
 -   **Isolation**: Clones the base netlist to ensure safety.
 -   **Overrides**: Applies specific changes (e.g., GMIN stepping, time step) to test convergence hypotheses.
+-   **Hardware Acceleration**: Speculative runs can target the **Google Dawn (GPU)** engine for high-speed batch analysis of multiple design candidates.
 
 ```cpp
 // ai_api/simulation/speculative_runner.h

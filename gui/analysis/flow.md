@@ -50,6 +50,7 @@ public:
 class SimulationWorkspace : public QWidget {
 public:
     void selectProfile(const QString& profileId);
+    void selectComputeEngine(CircuitSim::ExecMode mode); // Legacy, SoA, SIMD, GPU (Dawn)
     void onTopologyChanged(size_t newHash);
     
 public slots:

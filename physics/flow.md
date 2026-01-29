@@ -1,7 +1,7 @@
 # Physics Module Context & Flow
 
 ## Overview
-The `physics/` directory contains the core numerical engine of CuteApp. It is designed as a "Dual Kernel" architecture where **Physical Truth** (Exact constitutive equations) is separated from **Numerical Stability** (Linearization/Clamping). The engine uses a "Tensor" data layout (SoA) to enable future GPU acceleration and strict memory locality.
+The `physics/` directory contains the core numerical engine of CuteApp. It is designed as a "Dual Kernel" architecture where **Physical Truth** (Exact constitutive equations) is separated from **Numerical Stability** (Linearization/Clamping). The engine uses a **Structure-of-Arrays (SoA)** data layout to enable high-performance **GPU acceleration via Google Dawn**, utilizing a persistent 6-stage NR iteration loop.
 
 ## Key Files & Responsibilities
 

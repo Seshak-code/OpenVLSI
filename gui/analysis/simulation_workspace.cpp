@@ -101,22 +101,9 @@ void SimulationWorkspace::setupToolbar() {
     QHBoxLayout* layout = new QHBoxLayout(toolbar_);
     layout->setContentsMargins(8, 4, 8, 4);
     
-    // Profile selector
-    QLabel* profileLabel = new QLabel("Profile:", toolbar_);
-    profileLabel->setStyleSheet("color: #888;");
-    layout->addWidget(profileLabel);
+    /* profileCombo_ removed (redundant with sidebar/explorer) */
     
-    profileCombo_ = new QComboBox(toolbar_);
-    profileCombo_->addItem("Quick DC", "quick_dc");
-    profileCombo_->addItem("Transient", "transient_default");
-    profileCombo_->addItem("AC Sweep", "ac_sweep_default");
-    profileCombo_->setMinimumWidth(120);
-    layout->addWidget(profileCombo_);
-    
-    connect(profileCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
-        QString id = profileCombo_->itemData(idx).toString();
-        selectProfile(id);
-    });
+    layout->addSpacing(10);
     
     layout->addSpacing(10);
     
@@ -157,7 +144,24 @@ void SimulationWorkspace::setupToolbar() {
     connect(configCornersBtn, &QPushButton::clicked, this, &SimulationWorkspace::configureCorners);
     layout->addWidget(configCornersBtn);
     
-    layout->addSpacing(10);
+    layout->addSpacing(15);
+
+    // Compute Engine Selector (Phase 2.1)
+    QLabel* engineLabel = new QLabel("Engine:", toolbar_);
+    engineLabel->setStyleSheet("color: #888;");
+    layout->addWidget(engineLabel);
+
+    computeEngineCombo_ = new QComboBox(toolbar_);
+    computeEngineCombo_->addItem("CPU (Legacy)", static_cast<int>(ComputeEngine::LEGACY));
+    computeEngineCombo_->addItem("CPU (SoA Scalar)", static_cast<int>(ComputeEngine::SOA_SCALAR));
+    computeEngineCombo_->addItem("CPU (SIMD)", static_cast<int>(ComputeEngine::CPU_SIMD));
+    computeEngineCombo_->addItem("GPU", static_cast<int>(ComputeEngine::GPU));
+    computeEngineCombo_->addItem("GPU (Debug)", static_cast<int>(ComputeEngine::GPU_DEBUG));
+    computeEngineCombo_->setMinimumWidth(130);
+    computeEngineCombo_->setCurrentIndex(static_cast<int>(ComputeEngine::LEGACY)); 
+    layout->addWidget(computeEngineCombo_);
+
+    layout->addSpacing(15);
     
     // Run button
     runBtn_ = new QPushButton("Run", toolbar_);
@@ -349,13 +353,7 @@ void SimulationWorkspace::selectProfile(const QString& profileId) {
     currentProfileId_ = profileId;
     updateProfileEditor();
     
-    // Update combo
-    for (int i = 0; i < profileCombo_->count(); ++i) {
-        if (profileCombo_->itemData(i).toString() == profileId) {
-            profileCombo_->setCurrentIndex(i);
-            break;
-        }
-    }
+    /* profileCombo_ removed */
     
     // Notify profile change (explorer removed - UI simplified)
     // emit explorer_->profileSelected(profileId);
@@ -578,8 +576,14 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     // Create run object
     currentRun_ = Simulation::SimulationRun();
     currentRun_.runId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    // Set execution mode based on selector
+    if (computeEngineCombo_) {
+        sim_.execMode = static_cast<CircuitSim::ExecutionMode>(computeEngineCombo_->currentData().toInt());
+    }
+
     currentRun_.profileId = profileId;
     currentRun_.topologyHash = currentTopologyHash_;
+    
     if (runModeCombo_) {
         currentRun_.runMode = static_cast<acutesim::physics::RunMode>(runModeCombo_->currentData().toInt());
     }

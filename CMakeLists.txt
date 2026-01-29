@@ -460,6 +460,29 @@ target_include_directories(test_superposition PRIVATE
 target_link_libraries(test_superposition PRIVATE Qt6::Core)
 target_compile_features(test_superposition PUBLIC cxx_std_17)
 
+# Mode Ladder Regression Test
+add_executable(test_mode_ladder 
+    tests/test_mode_ladder.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_mode_ladder PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_mode_ladder PRIVATE Qt6::Core)
+target_compile_features(test_mode_ladder PUBLIC cxx_std_17)
+
 # Auto-Validation Harness Test (ERC + AI API)
 if(NOT EMSCRIPTEN)
     add_executable(test_auto_harness
@@ -799,6 +822,41 @@ add_executable(test_dependent_simulation
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
+target_include_directories(test_dependent_simulation PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_link_libraries(test_dependent_simulation PRIVATE Qt6::Core)
+target_compile_features(test_dependent_simulation PUBLIC cxx_std_17)
+
+# SOA Bridge Consistency Test
+add_executable(test_soa_bridge 
+    tests/test_soa_bridge.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_soa_bridge PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(test_soa_bridge PRIVATE Qt6::Core)
+target_compile_features(test_soa_bridge PUBLIC cxx_std_17)
 target_include_directories(test_dependent_simulation PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/compute

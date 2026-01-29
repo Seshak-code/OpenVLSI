@@ -34,10 +34,15 @@ public:
     
     static int cmd_place_next_to(void* clientData, Tcl_Interp* interp, int argc, const char** argv);
     
+    // Phase 2.1: Simulation Results Commands
+    static int cmd_get_voltage(void* clientData, Tcl_Interp* interp, int argc, const char** argv);
+    static int cmd_list_probes(void* clientData, Tcl_Interp* interp, int argc, const char** argv);
+
     // DesignDb Access
     void setDesignDb(acutesim::components::DesignDb* db) { db_ = db; }
     void setSchematicEditor(void* editor) { editor_ = editor; } // void* to avoid circular include in header
-    
+    void setLastResults(const std::string& json) { lastResultsJson_ = json; }
+
     // Accessor for the internal interpreter (if managed internally)
     // For now we assume init() is called with an external one, OR we create one lazily.
     // Let's store the interp.
@@ -48,6 +53,7 @@ private:
     acutesim::components::DesignDb* db_ = nullptr;
     void* editor_ = nullptr; // Actually SchematicEditor*
     Tcl_Interp* interp_ = nullptr;
+    std::string lastResultsJson_; // Cache for simulation results
 };
 
 } // namespace scripting

@@ -57,32 +57,44 @@ void batchMosfetPhysics_generic(MosfetTensor& tensor, const std::vector<double>&
         int nG = tensor.gates[i];
         int nS = tensor.sources[i];
         
-        double v_d = (nD > 0 && nD <= (int)voltages.size()) ? voltages[nD - 1] : 0.0;
-        double v_g = (nG > 0 && nG <= (int)voltages.size()) ? voltages[nG - 1] : 0.0;
-        double v_s = (nS > 0 && nS <= (int)voltages.size()) ? voltages[nS - 1] : 0.0;
+        double v_d_orig = (nD > 0 && nD <= (int)voltages.size()) ? voltages[nD - 1] : 0.0;
+        double v_g_orig = (nG > 0 && nG <= (int)voltages.size()) ? voltages[nG - 1] : 0.0;
+        double v_s_orig = (nS > 0 && nS <= (int)voltages.size()) ? voltages[nS - 1] : 0.0;
         
+        bool isPMOS = tensor.isPMOS[i];
+        double sign = isPMOS ? -1.0 : 1.0;
+        
+        // PMOS equivalent: flip all voltages relative to source?
+        // Actually legacy flips: Vgs'=-Vgs, Vds'=-Vds, Vth'=-Vth
+        double v_g = isPMOS ? v_g_orig : v_g_orig;
+        double v_s = isPMOS ? v_s_orig : v_s_orig;
+        double v_d = isPMOS ? v_d_orig : v_d_orig;
+
         tensor.vgs[i] = v_g - v_s;
         tensor.vds[i] = v_d - v_s;
         
+        double local_vgs = sign * tensor.vgs[i];
+        double local_vds = sign * tensor.vds[i];
+        double local_vth = sign * tensor.Vth[i];
+        
         double K = 0.5 * tensor.Kp[i] * (tensor.W[i] / tensor.L[i]);
-        double vov = tensor.vgs[i] - tensor.Vth[i];
+        double vov = local_vgs - local_vth;
         
         if (vov <= 0.0) {
             // Cutoff
             tensor.ids[i] = 0.0;
             tensor.gm[i] = 0.0;
             tensor.gds[i] = 1e-12; // GMIN
-        } else if (tensor.vds[i] < vov) {
+        } else if (local_vds < vov) {
             // Linear region
-            double vds = tensor.vds[i];
-            tensor.ids[i] = K * (2.0 * vov * vds - vds * vds);
-            tensor.gm[i] = 2.0 * K * vds;
-            tensor.gds[i] = 2.0 * K * (vov - vds);
+            tensor.ids[i] = sign * K * (2.0 * vov * local_vds - local_vds * local_vds);
+            tensor.gm[i] = 2.0 * K * local_vds;
+            tensor.gds[i] = 2.0 * K * (vov - local_vds);
         } else {
             // Saturation
             double lam = tensor.lambda[i];
-            tensor.ids[i] = K * vov * vov * (1.0 + lam * tensor.vds[i]);
-            tensor.gm[i] = 2.0 * K * vov * (1.0 + lam * tensor.vds[i]);
+            tensor.ids[i] = sign * K * vov * vov * (1.0 + lam * local_vds);
+            tensor.gm[i] = 2.0 * K * vov * (1.0 + lam * local_vds);
             tensor.gds[i] = K * vov * vov * lam;
         }
         
@@ -121,11 +133,12 @@ void batchBJTPhysics_generic(BJTTensor& tensor, const std::vector<double>& volta
             double exp_val = std::exp(arg_clamped);
             double i_base = Is * (exp_val - 1.0);
             double g_base = (Is / Vt) * exp_val;
+            double g_clamped = std::max(GMIN, g_base);
             
             double delta = std::max(0.0, v_j - Vcrit);
-            double i_ext = g_base * delta;
+            double i_ext = g_clamped * delta; // Use clamped slope
             
-            return {i_base + i_ext, std::max(GMIN, g_base)};
+            return {i_base + i_ext, g_clamped};
         };
         
         auto [i_f, g_f] = linear_continuation_diode(v_be);
@@ -237,11 +250,13 @@ TensorizedBlock tensorizeBlock(const TensorBlock& block) {
     // Convert MOSFETs
     result.mosfets.reserve(block.mosfets.size());
     for (const auto& m : block.mosfets) {
-        // Defaults: Kp=200e-6, Vth=0.7, Labmda=0.02, Temp=passed
+        bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
+        double kp = isPMOS ? 100e-6 : 200e-6;
+        double vth = isPMOS ? -0.7 : 0.7;
         result.mosfets.push(m.drain, m.gate, m.source, m.body, 
                            m.w, m.l,
-                           200e-6, 0.7, 0.02, 
-                           m.temperature_K);
+                           kp, vth, 0.02, 
+                           isPMOS, m.temperature_K);
     }
     
     // Convert BJTs
@@ -253,6 +268,86 @@ TensorizedBlock tensorizeBlock(const TensorBlock& block) {
                         q.thermalVoltage_V_T_V,
                         q.isNPN,
                         q.temperature_K);
+    }
+
+    // Convert Sources
+    for (const auto& v : block.voltageSources) {
+        result.voltageSources.push(v.nodePositive, v.nodeNegative, v.voltage_V);
+    }
+    for (const auto& i : block.currentSources) {
+        result.currentSources.push(i.nodePositive, i.nodeNegative, i.current_A);
+    }
+    
+    return result;
+}
+
+TensorizedBlock tensorizeNetlist(const TensorNetlist& netlist) {
+    // 1. Start with the flattened global block
+    TensorizedBlock result = tensorizeBlock(netlist.globalBlock);
+    
+    // 2. Add all instances, remapping local nodes to global nodes
+    for (size_t i = 0; i < netlist.instances.size(); ++i) {
+        const auto& instance = netlist.instances[i];
+        
+        auto it = netlist.blockDefinitions.find(instance.blockName);
+        if (it == netlist.blockDefinitions.end()) continue;
+        
+        const TensorBlock& block = it->second;
+        const auto& nodeMap = instance.nodeMapping;
+        
+        auto remap = [&](int localNode) -> int {
+            if (localNode <= 0) return 0; // Ground or invalid
+            if (localNode > (int)nodeMap.size()) return 0;
+            return nodeMap[localNode - 1];
+        };
+        
+        // Append Resistors
+        for (const auto& r : block.resistors) {
+            result.resistors.push(remap(r.nodeTerminal1), remap(r.nodeTerminal2), r.resistance_ohms);
+        }
+        
+        // Append Capacitors
+        for (const auto& c : block.capacitors) {
+            result.capacitors.push(remap(c.nodePlate1), remap(c.nodePlate2), c.capacitance_farads);
+        }
+        
+        // Append Inductors
+        for (const auto& ind : block.inductors) {
+            result.inductors.push(remap(ind.nodeCoil1), remap(ind.nodeCoil2), ind.inductance_henries);
+        }
+        
+        // Append Diodes
+        for (const auto& d : block.diodes) {
+            double vt_scaled = d.thermalVoltage_V_T_V * (netlist.environment.ambient_temp_K / 300.15);
+            result.diodes.push(remap(d.anode), remap(d.cathode), 
+                              d.saturationCurrent_I_S_A, d.emissionCoefficient_N, vt_scaled,
+                              0.0, netlist.environment.ambient_temp_K);
+        }
+        
+        // Append MOSFETs
+        for (const auto& m : block.mosfets) {
+            bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
+            double kp = isPMOS ? 100e-6 : 200e-6;
+            double vth = isPMOS ? -0.7 : 0.7;
+            result.mosfets.push(remap(m.drain), remap(m.gate), remap(m.source), remap(m.body),
+                               m.w, m.l, kp, vth, 0.02, isPMOS, netlist.environment.ambient_temp_K);
+        }
+        
+        // Append BJTs
+        for (const auto& q : block.bjts) {
+            double vt_scaled = q.thermalVoltage_V_T_V * (netlist.environment.ambient_temp_K / 300.15);
+            result.bjts.push(remap(q.nodeCollector), remap(q.base), remap(q.emitter),
+                            q.saturationCurrent_I_S_A, q.betaF, q.betaR, vt_scaled,
+                            q.isNPN, netlist.environment.ambient_temp_K);
+        }
+
+        // Append Sources
+        for (const auto& v : block.voltageSources) {
+            result.voltageSources.push(remap(v.nodePositive), remap(v.nodeNegative), v.voltage_V);
+        }
+        for (const auto& i : block.currentSources) {
+            result.currentSources.push(remap(i.nodePositive), remap(i.nodeNegative), i.current_A);
+        }
     }
     
     return result;

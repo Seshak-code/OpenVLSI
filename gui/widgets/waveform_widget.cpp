@@ -82,6 +82,8 @@ void WaveformWidget::appendDataPoints(double time, const QVector<double>& values
 
 void WaveformWidget::clear() {
     traceData_.clear();
+    traceNames_.clear();      // Phase 2.1: Clear names
+    netTraceMap_.clear();     // Phase 2.1: Clear node mappings
     if (view_) {
         view_->clearAll();
     }

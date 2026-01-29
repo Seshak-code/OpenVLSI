@@ -67,33 +67,33 @@ graph TD
 ## 🔌 Functional Interconnections
 
 ### 1. The Design-to-Simulation Loop
-*   **Editor → Substrate**: `gui/editors/schematic_editor.cpp` populates the **Unified DesignDb** (`components/design_db.h`), which acts as the persistent, object-oriented source of truth for connectivity.
+*   **Editor → Substrate**: [schematic_editor.cpp](file:///Users/seshak/Desktop/CuteApp/gui/editors/schematic_editor.cpp) populates the **Unified DesignDb** ([design_db.h](file:///Users/seshak/Desktop/CuteApp/components/design_db.h)), which acts as the persistent, object-oriented source of truth for connectivity.
 *   **Substrate → Snapshot**: `DesignDb` generates an immutable `TensorBlock` snapshot (SoA-ready).
-*   **AoS → SoA**: `compute/tensors/physics_tensors.cpp` consumes this snapshot to initialize the `TensorizedBlock` (Structure-of-Arrays).
-*   **Stamping & Solving**: `compute/solvers/circuitsim_solver.cpp` orchestrates the Newton-Raphson loop. It calls `physics/circuitsim.h` to stamp the MNA matrix using `physics/stamps.h` and pure kernels from `physics/device_physics.h`. Numerical solving is performed by `compute/math/linalg.h`.
-*   **Trace → Visualization**: Results are captured in a `SimulationTrace` (`ai_api/simulation/simulation_trace.h`) and rendered by the `WaveformViewer` or standard Qt widgets in `gui/widgets/`.
+*   **AoS → SoA**: [physics_tensors.cpp](file:///Users/seshak/Desktop/CuteApp/compute/tensors/physics_tensors.cpp) consumes this snapshot to initialize the `TensorizedBlock` (Structure-of-Arrays) in the `compute/tensors/` layer.
+*   **Stamping & Solving**: [circuitsim_solver.cpp](file:///Users/seshak/Desktop/CuteApp/compute/solvers/circuitsim_solver.cpp) orchestrates the Newton-Raphson loop. It calls [circuitsim.h](file:///Users/seshak/Desktop/CuteApp/physics/circuitsim.h) to stamp the MNA matrix using [stamps.h](file:///Users/seshak/Desktop/CuteApp/physics/stamps.h) and pure kernels from [device_physics.h](file:///Users/seshak/Desktop/CuteApp/physics/device_physics.h). Numerical solving is performed by [linalg.h](file:///Users/seshak/Desktop/CuteApp/compute/math/linalg.h).
+*   **Trace → Visualization**: Results are captured in a `SimulationTrace` ([simulation_trace.h](file:///Users/seshak/Desktop/CuteApp/ai_api/simulation/simulation_trace.h)) and rendered by the `WaveformViewer` or standard Qt widgets in `gui/widgets/`.
 
 ### 2. The AI Cognitive Loop (The "Artificial Engineer")
-*   **Perception**: `ai_api/analysis/topology_analyzer.h` examines the netlist to identify functional blocks (e.g., "Differential Pair").
-*   **Memory**: `ai_api/context/rag_context.h` provides the LLM with relevant snippets from past simulations or documentation.
-*   **Action**: `ai_api/system/schema_api.h` allows the AI to programmatically place components or route wires in the `SchematicEditor`.
-*   **Conscience**: `ai_api/policy/ai_policy.h` enforces that every AI suggestion must be grounded in raw solver data (residuals, conservation laws).
+*   **Perception**: [topology_analyzer.h](file:///Users/seshak/Desktop/CuteApp/ai_api/analysis/topology_analyzer.h) examines the netlist to identify functional blocks (e.g., "Differential Pair").
+*   **Memory**: [rag_context.h](file:///Users/seshak/Desktop/CuteApp/ai_api/context/rag_context.h) provides the LLM with relevant snippets from past simulations or documentation.
+*   **Action**: [schema_api.h](file:///Users/seshak/Desktop/CuteApp/ai_api/system/schema_api.h) allows the AI to programmatically place components or route wires in the `SchematicEditor`.
+*   **Imagination**: [speculative_runner.h](file:///Users/seshak/Desktop/CuteApp/ai_api/simulation/speculative_runner.h) runs "What-If" simulations to validate AI suggestions before they are committed.
+*   **Conscience**: [ai_policy.h](file:///Users/seshak/Desktop/CuteApp/ai_api/policy/ai_policy.h) enforces that every AI suggestion must be grounded in raw solver data (residuals, conservation laws).
 
 ### 3. The Orchestration Layer (RTL-to-GDS Flow)
-*   **Drivers**: `compute/orchestration/drivers/` (e.g., `yosys_task.cpp`, `openroad_task.cpp`) translate high-level design goals into tool-specific TCL/Shell scripts.
-*   **Client**: `compute/orchestration/grpc_worker_client.cpp` dispatches these tasks to local or remote workers using gRPC (`worker_service.proto`).
-*   **GUI Bridge**: `gui/orchestration/worker_manager.cpp` manages the connection and streams real-time logs back to the user console.
+*   **Drivers**: `compute/orchestration/drivers/` (e.g., [yosys_task.cpp](file:///Users/seshak/Desktop/CuteApp/compute/orchestration/drivers/yosys_task.cpp), [openroad_task.cpp](file:///Users/seshak/Desktop/CuteApp/compute/orchestration/drivers/openroad_task.cpp)) translate high-level design goals into tool-specific TCL/Shell scripts.
+*   **Client**: [grpc_worker_client.cpp](file:///Users/seshak/Desktop/CuteApp/compute/orchestration/grpc_worker_client.cpp) dispatches these tasks to local or remote workers using gRPC ([worker_service.proto](file:///Users/seshak/Desktop/CuteApp/compute/orchestration/proto/worker_service.proto)).
+*   **GUI Bridge**: [worker_manager.cpp](file:///Users/seshak/Desktop/CuteApp/gui/orchestration/worker_manager.cpp) manages the connection and streams real-time logs back to the user console.
 
 ### 4. PDK & Standard Cell Integration
-*   **Standard Cells**: `components/standard_cells.h` defines complex gates (and Darlington pairs, OpAmps) as transistor-level subcircuits.
-*   **PDK Primitives**: These subcircuits are composed of `PDK_NFET`, `PDK_PFET`, etc., which map to foundry-specific models (e.g., `nfet_01v8`).
-*   **Compliance**: `components/pdk_compliance.h` audits the schematic to ensure all components and parameters align with the target process design kit.
+*   **Standard Cells**: [standard_cells.h](file:///Users/seshak/Desktop/CuteApp/components/standard_cells.h) defines complex gates (and Darlington pairs, OpAmps) as transistor-level subcircuits.
+*   **PDK Primitives**: These subcircuits are composed of `PDK_NFET`, `PDK_PFET`, etc., which map to foundry-specific models (e.g., `nfet_01v8`) managed by [pdk_manager.h](file:///Users/seshak/Desktop/CuteApp/components/pdk_manager.h).
+*   **Compliance**: [pdk_compliance.h](file:///Users/seshak/Desktop/CuteApp/components/pdk_compliance.h) audits the schematic to ensure all components and parameters align with the target process design kit.
 
 ### 5. Numerical Authority & Trust
-*   **Canonicalization**: `components/graph_canonical.h` generates a unique hash based on circuit topology (BFS from ground), ensuring that identical circuits produce identical results, regardless of visual layout.
-*   **Canonicalization**: `components/graph_canonical.h` generates a unique hash based on circuit topology (BFS from ground), ensuring that identical circuits produce identical results, regardless of visual layout.
+*   **Canonicalization**: [graph_canonical.h](file:///Users/seshak/Desktop/CuteApp/components/graph_canonical.h) generates a unique hash based on circuit topology (BFS from ground), ensuring that identical circuits produce identical results, regardless of visual layout.
 *   **Trust Surface**: The UI exposes the **KCL Residual Audit** (`calculatePhysicalResiduals`), providing mathematical proof that the simulation converged to a physically valid state.
-*   **Paradigm Bridge**: `gui/core/crossprobe_manager.h` maintains a bidirectional map between `DesignDb` UUIDs, GUI elements, and simulation traces, enabling features like cross-probing and Tcl-driven highlighting.
+*   **Identity**: [netlist_diff.h](file:///Users/seshak/Desktop/CuteApp/components/netlist_diff.h) performs semantic diffing to determine the impact of design changes on simulation validity.
 
 ---
 

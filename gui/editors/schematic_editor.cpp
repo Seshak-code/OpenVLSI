@@ -938,6 +938,25 @@ TensorNetlist GridScene::generateNetlist() {
         }
     }
     
+    // Phase 2.1: Extract names from Pin components (I/O Terminals)
+    // This provides intuitive net naming for schematic ports.
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->type == ComponentType::Pin && !c->name.isEmpty()) {
+                QVector<QPointF> terms = c->getTerminals();
+                if (!terms.isEmpty()) {
+                    QPointF termPos = c->mapToScene(terms[0]);
+                    int rootID = findSet(getNetID(termPos));
+                    // Pins take precedence only if no wire label exists
+                    if (!spatialToName.contains(rootID)) {
+                        spatialToName[rootID] = c->name;
+                        emit messageLogged(QString("DEBUG: Pin '%1' names net (Root %2)").arg(c->name).arg(rootID));
+                    }
+                }
+            }
+        }
+    }
+    
     auto getDbNet = [&](QPointF p) -> NetUUID {
         int rawID = getNetID(p);
         int rootID = findSet(rawID);

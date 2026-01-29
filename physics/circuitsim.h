@@ -18,6 +18,7 @@
 
 #include "../autodiff/dual.h"
 #include "device_physics.h"
+#include "physics_constants.h"
 #include "physics_tensors.h"
 #include "stamps.h"
 
@@ -281,9 +282,18 @@ public:
 
 class CircuitSim {
 public:
+  enum class ExecutionMode {
+      LEGACY_AOS = 0,
+      TENSOR_SOA_SCALAR = 1,
+      TENSOR_SOA_SIMD = 2,
+      GPU = 3,
+      GPU_DEBUG = 4
+  };
+
   IntegratorArbiter arbiter;
   bool arbiterInitialized = false;
   std::unique_ptr<IIntegrationMethod> integrator;
+  ExecutionMode execMode = ExecutionMode::LEGACY_AOS;
 
   CircuitSim() {
     integrator = std::make_unique<TrapezoidalIntegration>();
@@ -773,7 +783,7 @@ private:
    * applyPnJunctionLimits - Apply SPICE-style pnjlim to prevent NR overshoot.
    * Modifies v_new in-place based on v_old.
    */
-  void applyPnJunctionLimits(const TensorNetlist& netlist,
+  void applyPnJunctionLimits(const TensorizedBlock& block,
                               std::vector<double>& v_new,
                               const std::vector<double>& v_old);
 
@@ -781,8 +791,8 @@ private:
   // Note: Kept as local constexpr for backward compatibility; prefer PhysicsConstants::
   static constexpr double RELTOL = 1e-3;
   static constexpr double VNTOL = 1e-6;
-  static constexpr double ABSTOL = 1e-12; // 1 pico-Ampere resolution
-  static constexpr int MAX_NR_ITER = 50;
+  static constexpr double ABSTOL = PhysicsConstants::ABSTOL; 
+  static constexpr int MAX_NR_ITER = PhysicsConstants::MAX_NR_ITER;
   static constexpr double PCG_TOL = 1e-10;
   static constexpr int PCG_MAX_ITER = 1000;
 
@@ -952,34 +962,83 @@ public:
         params.BetaR = q.betaR;
         params.Vt = q.thermalVoltage_V_T_V;
         
-        // Use CLAMPED physics for consistent residual auditing
-        // bjt_ebers_moll uses "linear_continuation_diode" internally which we clamped to 30.0
         BJTCurrents currents = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
-        
-        // KCL: Sum of currents entering node must be zero
-        // bjt_ebers_moll returns currents INTO terminal
-        // So we add -currents.Ic (leaving node in residual definition?)
-        // Residual = Sum(I_entering_node)
-        // bjt_ebers_moll returns I_C (into collector), I_B (into base)...
-        // Note: Resistors add (-I) to node 1 because I flows 1->2 (leaving 1).
-        // If I_entering > 0, we should add +I?
-        // Let's check resistor: I = V1-V2 / R. Flows 1->2.
-        // Node 1: Leaking I. Residual += -I. Correct.
-        // Node 2: Entering I. Residual += +I. Correct.
-        // BJT currents are DEFINED as flowing INTO the terminal.
-        // So we should add +I to the node residual.
         
         addRes(q.nodeCollector, -currents.Ic);
         addRes(q.base, -currents.Ib);
         addRes(q.emitter, -currents.Ie);
     }
 
-    // 3.6 JFET Audit (Shichman-Hodges)
-    for (const auto &jfet_inst : netlist.globalBlock.jfets) { // Renamed 'j' to 'jfet_inst' to avoid confusion if any
+    // 3.55 MOSFET Audit
+    for (const auto &m : netlist.globalBlock.mosfets) {
+        double v_d = getV(m.drain);
+        double v_g = getV(m.gate);
+        double v_s = getV(m.source);
+        
+        MosfetParams<double> p;
+        p.Kp = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos) ? 100e-6 : 200e-6;
+        p.Vth = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos) ? -0.7 : 0.7;
+        p.lambda = 0.02;
+        p.W = m.w;
+        p.L = m.l;
+        
+        bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
+        double sign = isPMOS ? -1.0 : 1.0;
+        
+        double ids = sign * mosfet_ids(sign * (v_g - v_s), sign * (v_d - v_s), p);
+        
+        addRes(m.drain, -ids);
+        addRes(m.source, ids);
+    }
+    
+    // 3.7 Hierarchical Instances (Audit internal branches)
+    for (const auto &inst : netlist.instances) {
+        auto it = netlist.blockDefinitions.find(inst.blockName);
+        if (it == netlist.blockDefinitions.end()) continue;
+        const auto &block = it->second;
+        auto mapNode = [&](int local) { return (local == 0 ? 0 : inst.nodeMapping[local-1]); };
+        
+        // Audit Block Resistors
+        for (const auto &r : block.resistors) {
+            double v1 = getV(mapNode(r.nodeTerminal1));
+            double v2 = getV(mapNode(r.nodeTerminal2));
+            double i_r = (v1 - v2) / r.resistance_ohms;
+            addRes(mapNode(r.nodeTerminal1), -i_r);
+            addRes(mapNode(r.nodeTerminal2), i_r);
+        }
+        // Audit Block BJTs
+        for (const auto &q : block.bjts) {
+            double vc = getV(mapNode(q.nodeCollector));
+            double vb = getV(mapNode(q.base));
+            double ve = getV(mapNode(q.emitter));
+            BJTParams<double> params = {q.saturationCurrent_I_S_A, q.betaF, q.betaR, q.thermalVoltage_V_T_V};
+            BJTCurrents currents = bjt_ebers_moll(vc, vb, ve, q.isNPN, params);
+            addRes(mapNode(q.nodeCollector), -currents.Ic);
+            addRes(mapNode(q.base), -currents.Ib);
+            addRes(mapNode(q.emitter), -currents.Ie);
+        }
+        // Audit Block MOSFETs
+        for (const auto &m : block.mosfets) {
+            double vd = getV(mapNode(m.drain));
+            double vg = getV(mapNode(m.gate));
+            double vs = getV(mapNode(m.source));
+            MosfetParams<double> p;
+            p.Kp = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos) ? 100e-6 : 200e-6;
+            p.Vth = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos) ? -0.7 : 0.7;
+            p.lambda = 0.02; p.W = m.w; p.L = m.l;
+            bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
+            double sign = isPMOS ? -1.0 : 1.0;
+            double ids = sign * mosfet_ids(sign*(vg-vs), sign*(vd-vs), p);
+            addRes(mapNode(m.drain), -ids);
+            addRes(mapNode(m.source), ids);
+        }
+    }
+    
+    // 3.8 JFET Audit (Shichman-Hodges)
+    for (const auto &jfet_inst : netlist.globalBlock.jfets) {
         double v_d = getV(jfet_inst.drain);
         double v_g = getV(jfet_inst.gate);
         double v_s = getV(jfet_inst.source);
-        
         double vgs = v_g - v_s;
         double vds = v_d - v_s;
         
@@ -1157,6 +1216,41 @@ public:
             double i_cccs = cccs.alpha * i_sense;
             addResAtomic(mapNode(cccs.outPos), -i_cccs);
             addResAtomic(mapNode(cccs.outNeg), i_cccs);
+        }
+
+        // MOSFETs (Instance)
+        for (const auto &m : block.mosfets) {
+            double v_d = getV(mapNode(m.drain));
+            double v_g = getV(mapNode(m.gate));
+            double v_s = getV(mapNode(m.source));
+            
+            MosfetParams<double> p;
+            bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
+            p.Kp = isPMOS ? 100e-6 : 200e-6;
+            p.Vth = isPMOS ? -0.7 : 0.7;
+            p.lambda = 0.02;
+            p.W = m.w;
+            p.L = m.l;
+            
+            double sign = isPMOS ? -1.0 : 1.0;
+            double ids = sign * mosfet_ids(sign * (v_g - v_s), sign * (v_d - v_s), p);
+            
+            addResAtomic(mapNode(m.drain), -ids);
+            addResAtomic(mapNode(m.source), ids);
+        }
+
+        // BJTs (Instance)
+        for (const auto &q : block.bjts) {
+            double v_c = getV(mapNode(q.nodeCollector));
+            double v_b = getV(mapNode(q.base));
+            double v_e = getV(mapNode(q.emitter));
+            
+            BJTParams<double> params = {q.saturationCurrent_I_S_A, q.betaF, q.betaR, q.thermalVoltage_V_T_V};
+            BJTCurrents currents = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
+            
+            addResAtomic(mapNode(q.nodeCollector), -currents.Ic);
+            addResAtomic(mapNode(q.base), -currents.Ib);
+            addResAtomic(mapNode(q.emitter), -currents.Ie);
         }
 
         // Capacitors (Transient)
@@ -1681,7 +1775,127 @@ public:
    * Uses Structure-of-Arrays (SoA) tensors for batch processing.
    * Calls specialized SIMD-friendly physics kernels and then stamps the results.
    */
-  void stampSoABlock(TensorizedBlock& block, const std::vector<double>& v_guess) {
+  void stampSoABlock(TensorizedBlock& block, const std::vector<double>& v_guess, double h = 0.0) {
+    // 0. Linear Components
+    
+    // Resistors
+    size_t nR = block.resistors.size();
+    if (nR > 0) {
+        std::vector<int> rows, cols;
+        std::vector<double> vals;
+        rows.reserve(nR * 4); cols.reserve(nR * 4); vals.reserve(nR * 4);
+        for (size_t i = 0; i < nR; ++i) {
+            int n1 = block.resistors.nodes1[i];
+            int n2 = block.resistors.nodes2[i];
+            double g = 1.0 / block.resistors.R[i];
+            if (n1 != 0 && n2 != 0) {
+                rows.push_back(n1-1); cols.push_back(n1-1); vals.push_back(g);
+                rows.push_back(n2-1); cols.push_back(n2-1); vals.push_back(g);
+                rows.push_back(n1-1); cols.push_back(n2-1); vals.push_back(-g);
+                rows.push_back(n2-1); cols.push_back(n1-1); vals.push_back(-g);
+            } else if (n1 != 0) {
+                rows.push_back(n1-1); cols.push_back(n1-1); vals.push_back(g);
+            } else if (n2 != 0) {
+                rows.push_back(n2-1); cols.push_back(n2-1); vals.push_back(g);
+            }
+        }
+        matrixBuilder.addBatch(rows, cols, vals);
+    }
+
+    // Voltage Sources (Norton Equivalent)
+    size_t nVS = block.voltageSources.size();
+    if (nVS > 0) {
+        std::vector<int> rows, cols;
+        std::vector<double> vals;
+        rows.reserve(nVS * 4); cols.reserve(nVS * 4); vals.reserve(nVS * 4);
+        for (size_t i = 0; i < nVS; ++i) {
+            int nP = block.voltageSources.nodesPos[i];
+            int nN = block.voltageSources.nodesNeg[i];
+            double V = block.voltageSources.voltages[i];
+            double g_int = 1.0e3; // 1mOhm series
+            double i_eq = V * g_int;
+            
+            if (nP != 0 && nN != 0) {
+                rows.push_back(nP-1); cols.push_back(nP-1); vals.push_back(g_int);
+                rows.push_back(nN-1); cols.push_back(nN-1); vals.push_back(g_int);
+                rows.push_back(nP-1); cols.push_back(nN-1); vals.push_back(-g_int);
+                rows.push_back(nN-1); cols.push_back(nP-1); vals.push_back(-g_int);
+            } else if (nP != 0) {
+                rows.push_back(nP-1); cols.push_back(nP-1); vals.push_back(g_int);
+            } else if (nN != 0) {
+                rows.push_back(nN-1); cols.push_back(nN-1); vals.push_back(g_int);
+            }
+            if (nP != 0) rhsVector[nP-1] += i_eq;
+            if (nN != 0) rhsVector[nN-1] -= i_eq;
+        }
+        matrixBuilder.addBatch(rows, cols, vals);
+    }
+
+    // Current Sources
+    size_t nIS = block.currentSources.size();
+    for (size_t i = 0; i < nIS; ++i) {
+        int nP = block.currentSources.nodesPos[i];
+        int nN = block.currentSources.nodesNeg[i];
+        double I = block.currentSources.currents[i];
+        if (nP != 0) rhsVector[nP-1] -= I;
+        if (nN != 0) rhsVector[nN-1] += I;
+    }
+
+    // Capacitors (Transient)
+    size_t nC = block.capacitors.size();
+    if (nC > 0 && h > 0.0) {
+        std::vector<int> rows, cols;
+        std::vector<double> vals;
+        rows.reserve(nC * 4); cols.reserve(nC * 4); vals.reserve(nC * 4);
+        for (size_t i = 0; i < nC; ++i) {
+            int n1 = block.capacitors.plates1[i];
+            int n2 = block.capacitors.plates2[i];
+            double g_eq = (2.0 * block.capacitors.C[i]) / h; // Trapezoidal
+            double i_hist = g_eq * block.capacitors.v_prev[i] + block.capacitors.i_prev[i];
+
+            if (n1 != 0 && n2 != 0) {
+                rows.push_back(n1-1); cols.push_back(n1-1); vals.push_back(g_eq);
+                rows.push_back(n2-1); cols.push_back(n2-1); vals.push_back(g_eq);
+                rows.push_back(n1-1); cols.push_back(n2-1); vals.push_back(-g_eq);
+                rows.push_back(n2-1); cols.push_back(n1-1); vals.push_back(-g_eq);
+            } else if (n1 != 0) {
+                rows.push_back(n1-1); cols.push_back(n1-1); vals.push_back(g_eq);
+            } else if (n2 != 0) {
+                rows.push_back(n2-1); cols.push_back(n2-1); vals.push_back(g_eq);
+            }
+            if (n1 != 0) rhsVector[n1-1] += i_hist;
+            if (n2 != 0) rhsVector[n2-1] -= i_hist;
+        }
+        matrixBuilder.addBatch(rows, cols, vals);
+    }
+    // Inductors (Transient)
+    size_t nL = block.inductors.size();
+    if (nL > 0 && h > 0.0) {
+        std::vector<int> rows, cols;
+        std::vector<double> vals;
+        rows.reserve(nL * 4); cols.reserve(nL * 4); vals.reserve(nL * 4);
+        for (size_t i = 0; i < nL; ++i) {
+            int n1 = block.inductors.coil1[i];
+            int n2 = block.inductors.coil2[i];
+            double g_eq = h / (2.0 * block.inductors.L[i]); // Trapezoidal
+            double i_hist = block.inductors.i_prev[i] + g_eq * block.inductors.v_prev[i];
+
+            if (n1 != 0 && n2 != 0) {
+                rows.push_back(n1-1); cols.push_back(n1-1); vals.push_back(g_eq);
+                rows.push_back(n2-1); cols.push_back(n2-1); vals.push_back(g_eq);
+                rows.push_back(n1-1); cols.push_back(n2-1); vals.push_back(-g_eq);
+                rows.push_back(n2-1); cols.push_back(n1-1); vals.push_back(-g_eq);
+            } else if (n1 != 0) {
+                rows.push_back(n1-1); cols.push_back(n1-1); vals.push_back(g_eq);
+            } else if (n2 != 0) {
+                rows.push_back(n2-1); cols.push_back(n2-1); vals.push_back(g_eq);
+            }
+            if (n1 != 0) rhsVector[n1-1] -= i_hist; // Out of n1
+            if (n2 != 0) rhsVector[n2-1] += i_hist; // Into n2
+        }
+        matrixBuilder.addBatch(rows, cols, vals);
+    }
+
     // 1. Batch Compute Physics (Updates internal state: v_d, i_d, g_d, etc.)
     batchDiodePhysics(block.diodes, v_guess);
     batchMosfetPhysics(block.mosfets, v_guess);
@@ -1819,16 +2033,16 @@ public:
 
     
     // BJTs
+    // MOSFETs (Omitted for brevity in previous view, following same pattern...)
+    
     // BJTs
-    size_t nQ = block.bjts.size();
-    if (nQ > 0) {
+    size_t nB = block.bjts.size();
+    if (nB > 0) {
         std::vector<int> rows, cols;
         std::vector<double> vals;
-        rows.reserve(nQ * 9);
-        cols.reserve(nQ * 9);
-        vals.reserve(nQ * 9);
+        rows.reserve(nB * 9); cols.reserve(nB * 9); vals.reserve(nB * 9);
         
-        for (size_t i = 0; i < nQ; ++i) {
+        for (size_t i = 0; i < nB; ++i) {
             int nC = block.bjts.collectors[i];
             int nB = block.bjts.bases[i];
             int nE = block.bjts.emitters[i];
@@ -2043,26 +2257,29 @@ public:
    */
   void stampAllElements(const TensorNetlist &netlist, double h,
                         const std::vector<double> &v_guess, double time) {
-    // A. Global Block
-    auto identityMap = [](int n) { return n; };
-    stampBlockLinear(netlist.globalBlock, netlist.globalState, identityMap, h, time, v_guess, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
-    // stampBlockNonLinear(netlist.globalBlock, identityMap, v_guess); 
-    stampSoABlock(soaBlock, v_guess); // SoA for Global Block - TODO: Pass PVT to SoA
+    if (execMode == ExecutionMode::LEGACY_AOS) {
+        // A. Global Block
+        auto identityMap = [](int n) { return n; };
+        stampBlockLinear(netlist.globalBlock, netlist.globalState, identityMap, h, time, v_guess, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
+        stampBlockNonLinear(netlist.globalBlock, identityMap, v_guess, netlist.environment.ambient_temp_K);
 
-    // B. Hierarchical Batches
-    for (const auto &job : scheduler.jobs) {
-      const TensorBlock &block = *job.blockTmpl;
-      for (int instanceIdx : job.instanceIds) {
-        const auto &instance = netlist.instances[instanceIdx];
-        const auto &instState = netlist.instanceStates[instanceIdx];
-        auto mapNode = [&](int localNode) {
-          return (localNode == 0) ? 0 : instance.nodeMapping[localNode - 1];
-        };
-        stampBlockLinear(block, instState, mapNode, h, time, v_guess, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
-        stampBlockNonLinear(block, mapNode, v_guess, netlist.environment.ambient_temp_K);
-      }
+        // B. Hierarchical Batches
+        for (const auto &job : scheduler.jobs) {
+          const TensorBlock &block = *job.blockTmpl;
+          for (int instanceIdx : job.instanceIds) {
+            const auto &instance = netlist.instances[instanceIdx];
+            const auto &instState = netlist.instanceStates[instanceIdx];
+            auto mapNode = [&](int localNode) {
+              return (localNode <= 0) ? 0 : instance.nodeMapping[localNode - 1]; // NodeMapping check: 0->0, 1->mapping[0]
+            };
+            stampBlockLinear(block, instState, mapNode, h, time, v_guess, netlist.environment.global_voltage_scale, netlist.environment.monte_carlo_seed);
+            stampBlockNonLinear(block, mapNode, v_guess, netlist.environment.ambient_temp_K);
+          }
+        }
+    } else {
+        // SoA Pathway (Flattened)
+        stampSoABlock(soaBlock, v_guess, h);
     }
-
   }
 
 

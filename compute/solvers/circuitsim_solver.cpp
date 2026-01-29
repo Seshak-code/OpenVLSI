@@ -70,14 +70,14 @@ void CircuitSim::seedInitialGuess(const TensorNetlist& netlist,
         }
     }
     
-    // 5. BJT Multi-Pass Seeding (Darlington propagation)
+    // 5. BJT Multi-Pass Seeding (Darlington propagation) - Flattened
     for (int pass = 0; pass < 3; ++pass) {
-        for (const auto& bjt : netlist.globalBlock.bjts) {
-            int nB = SafeUtils::safe_idx(bjt.base, N, "BJT base");
-            int nE = SafeUtils::safe_idx(bjt.emitter, N, "BJT emitter");
-            int nC = SafeUtils::safe_idx(bjt.nodeCollector, N, "BJT collector");
+        for (size_t i = 0; i < soaBlock.bjts.size(); ++i) {
+            int nB = soaBlock.bjts.bases[i] - 1;
+            int nE = soaBlock.bjts.emitters[i] - 1;
+            int nC = soaBlock.bjts.collectors[i] - 1;
             
-            if (bjt.isNPN) {
+            if (soaBlock.bjts.isNPN[i]) {
                 if (nE >= 0 && nB >= 0) {
                     voltageEstimate[nB] = std::max(voltageEstimate[nB], 
                         voltageEstimate[nE] + PhysicsConstants::V_BE_SEED);
@@ -100,16 +100,20 @@ void CircuitSim::seedInitialGuess(const TensorNetlist& netlist,
     }
 }
 
-void CircuitSim::applyPnJunctionLimits(const TensorNetlist& netlist,
+void CircuitSim::applyPnJunctionLimits(const TensorizedBlock& block,
                                         std::vector<double>& v_new,
                                         const std::vector<double>& v_old) {
+    if (v_new.empty()) return;
     const size_t N = v_new.size();
-    const double Vt = PhysicsConstants::V_THERMAL_300K;
+    const double Vt_ref = PhysicsConstants::V_THERMAL_300K;
     
     // Helper lambda for limiting a single junction
-    auto limitJunction = [&](int p_node, int n_node, double Is) {
-        int p = SafeUtils::safe_idx(p_node, N, "pnjlim p");
-        int n = SafeUtils::safe_idx(n_node, N, "pnjlim n");
+    auto limitJunction = [&](int p_node, int n_node, double Is, double Vt) {
+        int p = p_node - 1; // 1-based to 0-based
+        int n = n_node - 1; // 1-based to 0-based
+        
+        if (p < 0 && n < 0) return;
+        if (p >= (int)N || n >= (int)N) return;
         
         double vcrit = compute_vcrit(Vt, Is);
         double v_junction_old = (p >= 0 ? v_old[p] : 0.0) - (n >= 0 ? v_old[n] : 0.0);
@@ -118,7 +122,7 @@ void CircuitSim::applyPnJunctionLimits(const TensorNetlist& netlist,
         double v_limited = pnjlim(v_junction_new, v_junction_old, Vt, vcrit);
         double corr = v_junction_new - v_limited;
         
-        if (std::abs(corr) > PhysicsConstants::ABSTOL) {
+        if (std::abs(corr) > 1e-12) {
             if (p >= 0 && n >= 0) {
                 v_new[p] -= corr * 0.5;
                 v_new[n] += corr * 0.5;
@@ -130,15 +134,18 @@ void CircuitSim::applyPnJunctionLimits(const TensorNetlist& netlist,
         }
     };
     
-    // 1. Diode Limiting
-    for (const auto& d : netlist.globalBlock.diodes) {
-        limitJunction(d.anode, d.cathode, d.saturationCurrent_I_S_A);
+    // 1. Diode Limiting (Flattened)
+    for (size_t i = 0; i < block.diodes.size(); ++i) {
+        limitJunction(block.diodes.anodes[i], block.diodes.cathodes[i], 
+                      block.diodes.Is[i], block.diodes.Vt[i]);
     }
     
-    // 2. BJT Junction Limiting (Vbe and Vbc)
-    for (const auto& q : netlist.globalBlock.bjts) {
-        limitJunction(q.base, q.emitter, q.saturationCurrent_I_S_A);
-        limitJunction(q.base, q.nodeCollector, q.saturationCurrent_I_S_A);
+    // 2. BJT Junction Limiting (Flattened)
+    for (size_t i = 0; i < block.bjts.size(); ++i) {
+        limitJunction(block.bjts.bases[i], block.bjts.emitters[i], 
+                      block.bjts.Is[i], block.bjts.Vt[i]);
+        limitJunction(block.bjts.bases[i], block.bjts.collectors[i], 
+                      block.bjts.Is[i], block.bjts.Vt[i]);
     }
 }
 
@@ -155,7 +162,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   netlist.globalBlock.computeTopologyHash();
 
   // Initialize SoA Block for this solve
-  soaBlock = tensorizeBlock(netlist.globalBlock);
+  soaBlock = tensorizeNetlist(netlist);
 
   std::vector<double> voltageEstimate(netlist.numGlobalNodes, 0.0);
 
@@ -224,7 +231,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     SafeUtils::sanitize_vector(v_new, 0.0);
     
     // Phase 1 Hardening: Use extracted helper for PN junction limiting
-    applyPnJunctionLimits(netlist, v_new, voltageEstimate);
+    applyPnJunctionLimits(soaBlock, v_new, voltageEstimate);
 
     // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
     double kcl_error = calculatePhysicalResiduals(netlist, v_new);
@@ -323,6 +330,9 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
            return {currentTime, {}, {0, 0.0, false}};
       }
     }
+
+    // Initialize SoA Block for transient steps
+    soaBlock = tensorizeNetlist(netlist);
 
     double actualTimeStep = timeStep;
     int attempt = 0;

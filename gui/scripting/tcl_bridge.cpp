@@ -6,6 +6,10 @@
 #include <tcl.h> // Assumes system Tcl is available.
 #endif
 #include "../editors/schematic_editor.h" // Include full definition for casting
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QDebug>
 
 namespace acutesim {
 namespace gui {
@@ -45,6 +49,10 @@ void TclBridge::init(Tcl_Interp* interp) {
     Tcl_CreateCommand(interp_, "db_undo", cmd_undo, (ClientData)this, NULL);
     Tcl_CreateCommand(interp_, "db_redo", cmd_redo, (ClientData)this, NULL);
     Tcl_CreateCommand(interp_, "place_next_to", cmd_place_next_to, (ClientData)this, NULL);
+    
+    // Phase 2.1: Simulation Commands
+    Tcl_CreateCommand(interp_, "get_voltage", cmd_get_voltage, (ClientData)this, NULL);
+    Tcl_CreateCommand(interp_, "list_probes", cmd_list_probes, (ClientData)this, NULL);
 }
 
 std::string TclBridge::execute(const std::string& cmd) {
@@ -212,6 +220,83 @@ int TclBridge::cmd_set_param(void* clientData, Tcl_Interp* interp, int argc, con
     double val = atof(argv[3]);
     
     self->db_->setParam(instId, key, val);
+    
+    return TCL_OK;
+}
+
+// get_voltage <name_or_index>
+int TclBridge::cmd_get_voltage(void* clientData, Tcl_Interp* interp, int argc, const char** argv) {
+    TclBridge* self = (TclBridge*)clientData;
+    if (argc != 2) {
+        Tcl_SetResult(interp, (char*)"Usage: get_voltage <name_or_index>", TCL_STATIC);
+        return TCL_ERROR;
+    }
+    
+    if (self->lastResultsJson_.empty()) {
+        Tcl_SetResult(interp, (char*)"Error: No simulation results available", TCL_STATIC);
+        return TCL_ERROR;
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(self->lastResultsJson_));
+    QJsonObject obj = doc.object();
+    
+    std::string query = argv[1];
+    
+    // Check Probes first
+    if (obj.contains("probes")) {
+        QJsonObject probes = obj["probes"].toObject();
+        if (probes.contains(QString::fromStdString(query))) {
+            double val = probes[QString::fromStdString(query)].toDouble();
+            Tcl_SetObjResult(interp, Tcl_NewDoubleObj(val));
+            return TCL_OK;
+        }
+    }
+    
+    // Check Voltages (by index or V(n) format)
+    if (obj.contains("voltages")) {
+        QJsonArray volts = obj["voltages"].toArray();
+        int idx = -1;
+        
+        if (isdigit(query[0])) {
+            idx = atoi(query.c_str()) - 1; // 1-based to 0-based
+        } else if (query.size() > 2 && query.substr(0, 2) == "V(" && query.back() == ')') {
+            std::string num = query.substr(2, query.size() - 3);
+            idx = atoi(num.c_str()) - 1;
+        }
+        
+        if (idx >= 0 && idx < volts.size()) {
+            double val = volts[idx].toDouble();
+            Tcl_SetObjResult(interp, Tcl_NewDoubleObj(val));
+            return TCL_OK;
+        }
+    }
+    
+    Tcl_SetResult(interp, (char*)"Error: Node/Probe not found", TCL_STATIC);
+    return TCL_ERROR;
+}
+
+// list_probes
+int TclBridge::cmd_list_probes(void* clientData, Tcl_Interp* interp, int argc, const char** argv) {
+    TclBridge* self = (TclBridge*)clientData;
+    if (self->lastResultsJson_.empty()) {
+        Tcl_SetResult(interp, (char*)"", TCL_STATIC);
+        return TCL_OK;
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(self->lastResultsJson_));
+    QJsonObject obj = doc.object();
+    
+    if (obj.contains("probes")) {
+        QJsonObject probes = obj["probes"].toObject();
+        std::string result;
+        for (auto it = probes.begin(); it != probes.end(); ++it) {
+            if (!result.empty()) result += " ";
+            result += it.key().toStdString();
+        }
+        Tcl_SetResult(interp, (char*)result.c_str(), TCL_VOLATILE);
+    } else {
+        Tcl_SetResult(interp, (char*)"", TCL_STATIC);
+    }
     
     return TCL_OK;
 }

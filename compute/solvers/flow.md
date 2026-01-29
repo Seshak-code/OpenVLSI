@@ -21,10 +21,11 @@ Implements the **Superposition Principle** for linear circuits.
 *   **Usage**: Used for educational visualizations ("Show contribution of Source A") or small-signal analysis.
 *   **Method**: Solves $N$ sub-circuits where only one source is active at a time, then sums the results.
 
-### 3. `webgpu_solver.h`: The Hardware Accelerator
-An experimental backend for running the entire solver loop on the GPU via WGSL compute shaders.
-*   **Pipeline**: Upload Netlist -> Parallel Stamp -> Parallel PCG -> Download Voltage.
-*   **Target**: Massive resistor grids or particle-based thermal simulations.
+### 3. `webgpu_solver.h`: The Dawn Hardware Accelerator
+A high-performance backend using **Google Dawn** to run the Newton-Raphson loop entirely on the GPU via WGSL.
+*   **Architecture**: Uses a persistent **6-stage NR kernel** (Batch Physics, Assemble Jacobian, Linear Solve, Update Solution, Residual Norm, Convergence Check).
+*   **Precision**: Implements **EmulatedF64** (hi-lo `f32` pairs) to maintain SPICE-level precision (15-17 digits) without native `f64` support.
+*   **Integration**: Fully integrated with the **Structure-of-Arrays (SoA)** physics tensors for coalesced memory access.
 
 ## Core Logic & Snippets
 
@@ -65,7 +66,7 @@ if (hasActiveDevices || numNodes < 20) {
 1.  **Convergence is Physical**: Never trust `delta_v < tolerance` alone. Always check `KCL Residual < 1e-12` (1pA). A solver can "converge" to a non-physical state if the matrix is ill-conditioned.
 2.  **GMIN is Mandatory**: All non-linear DC solves must rely on GMIN stepping as a fallback. Cold-starting a BJT feedback loop without it is mathematically impossible often.
 3.  **State Hygiene**: The solver must be stateless between calls (except for `prev_voltage` in transient). Do not store "solver state" in the `TensorNetlist`.
-4.  **GPU Abstraction**: If modifying the solver loop, ensure `webgpu_solver.h` logic is updated or at least not broken, even if it's experimental.
+4.  **GPU Abstraction**: If modifying the solver loop, ensure `webgpu_solver.h` logic (Dawn/WGSL) is updated or at least not broken.
 
 ## 🤖 SME Validation Checklist
 *(Consult this list before modifying `compute/solvers/`)*

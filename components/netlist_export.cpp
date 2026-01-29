@@ -9,109 +9,57 @@ namespace NetlistExporter {
 
     // Helper: Canonical Net Name
     static std::string getNetName(int nodeID, const NetlistExporter::ExportOptions& options) {
-        if (nodeID == 0) return "n0"; // Standardizing to n0 for ground to match sync.cpp
+        if (nodeID == 0) return "VSS"; // Map Ground to physical VSS
         return "n" + std::to_string(nodeID);
     }
 
-    struct PortInfo {
-        std::string name;
-        int nodeID;
-        // Inferred direction: 0=Unknown/BiDir, 1=Input, 2=Output
-        int direction = 0; 
-    };
-
-    std::string toVerilog(const TensorNetlist& netlist, const ExportOptions& options) {
-        std::stringstream ss;
-        const auto& block = netlist.globalBlock;
-
+    static void exportBlock(std::stringstream& ss, const TensorBlock& block, const std::string& moduleName, const ExportOptions& options) {
         // 1. Module Header
-        ss << "// Auto-Generated from Schematic via NetlistExporter\n";
-        ss << "module " << options.topModuleName << " ();\n\n";
+        ss << "module " << moduleName << " (";
+        for (size_t i = 0; i < block.pinNames.size(); ++i) {
+            ss << block.pinNames[i];
+            if (i < block.pinNames.size() - 1) ss << ", ";
+        }
+        ss << ");\n\n";
 
-        // 2. Wire Declarations
+        // 2. Wire Declarations (exclude pins which are ports)
         std::set<int> allNodes;
         auto collect = [&](int n) { if (n >= 0) allNodes.insert(n); };
 
         for (const auto& r : block.resistors) { collect(r.nodeTerminal1); collect(r.nodeTerminal2); }
         for (const auto& c : block.capacitors) { collect(c.nodePlate1); collect(c.nodePlate2); }
         for (const auto& l : block.inductors) { collect(l.nodeCoil1); collect(l.nodeCoil2); }
-        for (const auto& v : block.voltageSources) { collect(v.nodePositive); collect(v.nodeNegative); }
-        for (const auto& i : block.currentSources) { collect(i.nodePositive); collect(i.nodeNegative); }
         for (const auto& d : block.diodes) { collect(d.anode); collect(d.cathode); }
         for (const auto& m : block.mosfets) { collect(m.drain); collect(m.gate); collect(m.source); collect(m.body); }
         for (const auto& b : block.bjts) { collect(b.nodeCollector); collect(b.base); collect(b.emitter); }
 
-        ss << "  // Nets\n";
+        std::set<int> pinNodes;
+        for (size_t i = 0; i < block.pinNames.size(); ++i) pinNodes.insert((int)i + 1);
+
+        ss << "  // Internal Nets\n";
         for (int n : allNodes) {
-             std::string name = getNetName(n, options);
-             if (options.flavor == ExportFlavor::AnalogMixedSignal) {
-                 ss << "  electrical " << name << ";\n";
-             } else {
-                 ss << "  wire " << name << ";\n";
-             }
+             if (n == 0 || pinNodes.count(n) > 0) continue; // Skip VSS and Pins
+             ss << "  wire " << getNetName(n, options) << ";\n";
         }
         ss << "\n";
 
         // 3. Component Instantiations
-        ss << "  // Component Instantiations\n";
-
         // Resistors
         for (size_t i = 0; i < block.resistors.size(); ++i) {
             const auto& comp = block.resistors[i];
-            std::string name = comp.name.empty() ? ("R" + std::to_string(i)) : comp.name;
-            ss << "  resistor #(.r(" << comp.resistance_ohms << ")) " << name 
+            ss << "  resistor #(.r(" << comp.resistance_ohms << ")) " << (comp.name.empty() ? ("R" + std::to_string(i)) : comp.name) 
                << " (.p(" << getNetName(comp.nodeTerminal1, options) << "), .n(" << getNetName(comp.nodeTerminal2, options) << "));\n";
-        }
-
-        // Capacitors
-        for (size_t i = 0; i < block.capacitors.size(); ++i) {
-            const auto& comp = block.capacitors[i];
-            std::string name = comp.name.empty() ? ("C" + std::to_string(i)) : comp.name;
-            ss << "  capacitor #(.c(" << comp.capacitance_farads << ")) " << name 
-               << " (.p(" << getNetName(comp.nodePlate1, options) << "), .n(" << getNetName(comp.nodePlate2, options) << "));\n";
-        }
-
-        // Inductors
-        for (size_t i = 0; i < block.inductors.size(); ++i) {
-            const auto& comp = block.inductors[i];
-            std::string name = comp.name.empty() ? ("L" + std::to_string(i)) : comp.name;
-            ss << "  inductor #(.l(" << comp.inductance_henries << ")) " << name 
-               << " (.p(" << getNetName(comp.nodeCoil1, options) << "), .n(" << getNetName(comp.nodeCoil2, options) << "));\n";
-        }
-
-        // Voltage Sources
-        for (size_t i = 0; i < block.voltageSources.size(); ++i) {
-            const auto& comp = block.voltageSources[i];
-            std::string name = "V" + std::to_string(i); 
-            ss << "  vsource #(.v(" << comp.voltage_V << ")) " << name 
-               << " (.p(" << getNetName(comp.nodePositive, options) << "), .n(" << getNetName(comp.nodeNegative, options) << "));\n";
-        }
-
-        // Current Sources
-        for (size_t i = 0; i < block.currentSources.size(); ++i) {
-            const auto& comp = block.currentSources[i];
-            std::string name = "I" + std::to_string(i);
-            ss << "  isource #(.i(" << comp.current_A << ")) " << name 
-               << " (.p(" << getNetName(comp.nodePositive, options) << "), .n(" << getNetName(comp.nodeNegative, options) << "));\n";
-        }
-
-        // Diodes
-        for (size_t i = 0; i < block.diodes.size(); ++i) {
-            const auto& comp = block.diodes[i];
-            std::string name = "D" + std::to_string(i);
-            ss << "  diode #(.is(" << comp.saturationCurrent_I_S_A << "), .n(" << comp.emissionCoefficient_N << ")) " << name 
-               << " (.a(" << getNetName(comp.anode, options) << "), .c(" << getNetName(comp.cathode, options) << "));\n";
         }
 
         // MOSFETs
         for (size_t i = 0; i < block.mosfets.size(); ++i) {
             const auto& comp = block.mosfets[i];
             std::string name = comp.instanceName.empty() ? ("M" + std::to_string(i)) : comp.instanceName;
-            std::string type = comp.modelName.find("PMOS") != std::string::npos ? "pmos" : "nmos";
+            std::string type = comp.modelName.find("PMOS") != std::string::npos || comp.modelName.find("pfet") != std::string::npos ? "pfet_01v8" : "nfet_01v8";
             
-            ss << "  " << type << " #(.w(" << comp.w << "), .l(" << comp.l << ")) " << name 
-               << " (.d(" << getNetName(comp.drain, options) << "), .g(" << getNetName(comp.gate, options) << "), "
-               << ".s(" << getNetName(comp.source, options) << "), .b(" << getNetName(comp.body, options) << "));\n";
+            ss << "  " << type << " " << name 
+               << " (.D(" << getNetName(comp.drain, options) << "), .G(" << getNetName(comp.gate, options) << "), "
+               << ".S(" << getNetName(comp.source, options) << "), .B(" << getNetName(comp.body, options) << "));\n";
         }
 
         // BJTs
@@ -119,28 +67,99 @@ namespace NetlistExporter {
             const auto& comp = block.bjts[i];
             std::string name = comp.instanceName.empty() ? ("Q" + std::to_string(i)) : comp.instanceName;
             std::string type = comp.isNPN ? "npn" : "pnp";
-            
-            ss << "  " << type << " #(.bf(" << comp.betaF << "), .is(" << comp.saturationCurrent_I_S_A << ")) " << name 
-               << " (.c(" << getNetName(comp.nodeCollector, options) << "), .b(" << getNetName(comp.base, options) << "), "
-               << ".e(" << getNetName(comp.emitter, options) << "));\n";
+            ss << "  " << type << " #(.bf(" << comp.betaF << ")) " << name 
+               << " (.C(" << getNetName(comp.nodeCollector, options) << "), .B(" << getNetName(comp.base, options) << "), "
+               << ".E(" << getNetName(comp.emitter, options) << "));\n";
+        }
+
+        ss << "\nendmodule\n\n";
+    }
+
+    std::string toVerilog(const TensorNetlist& netlist, const ExportOptions& options) {
+        std::stringstream ss;
+        
+        ss << "// Auto-Generated from Schematic via NetlistExporter\n";
+        ss << "// Target Flavor: " << (options.flavor == ExportFlavor::AnalogMixedSignal ? "Verilog-AMS" : "Structural Verilog") << "\n\n";
+
+        // 1. Export Sub-Module Definitions
+        std::set<std::string> exportedBlocks;
+        for (const auto& inst : netlist.instances) {
+            if (exportedBlocks.count(inst.blockName) == 0) {
+                auto it = netlist.blockDefinitions.find(inst.blockName);
+                if (it != netlist.blockDefinitions.end()) {
+                    exportBlock(ss, it->second, inst.blockName, options);
+                    exportedBlocks.insert(inst.blockName);
+                }
+            }
+        }
+
+        // 2. Export Top Module
+        ss << "module " << options.topModuleName << " ();\n";
+
+        // Collect all global nets
+        std::set<int> allNodes;
+        auto collect = [&](int n) { if (n >= 0) allNodes.insert(n); };
+
+        const auto& block = netlist.globalBlock;
+        for (const auto& r : block.resistors) { collect(r.nodeTerminal1); collect(r.nodeTerminal2); }
+        for (const auto& m : block.mosfets) { collect(m.drain); collect(m.gate); collect(m.source); collect(m.body); }
+        for (const auto& b : block.bjts) { collect(b.nodeCollector); collect(b.base); collect(b.emitter); }
+        for (const auto& inst : netlist.instances) {
+            for (int n : inst.nodeMapping) collect(n);
+        }
+
+        ss << "  // Global Nets\n";
+        for (int n : allNodes) {
+             if (n == 0) continue; // Skip physical ground
+             ss << "  wire " << getNetName(n, options) << ";\n";
+        }
+        ss << "\n";
+
+        // 3. Top-Level Components
+        // Resistors
+        for (const auto& r : block.resistors) {
+            ss << "  resistor #(.r(" << r.resistance_ohms << ")) " << (r.name.empty() ? "R_top" : r.name) 
+               << " (.p(" << getNetName(r.nodeTerminal1, options) << "), .n(" << getNetName(r.nodeTerminal2, options) << "));\n";
+        }
+        
+        // Voltage Sources
+        for (size_t i = 0; i < block.voltageSources.size(); ++i) {
+            const auto& v = block.voltageSources[i];
+            ss << "  vsource #(.v(" << v.voltage_V << ")) V" << i 
+               << " (.p(" << getNetName(v.nodePositive, options) << "), .n(" << getNetName(v.nodeNegative, options) << "));\n";
+        }
+
+        for (const auto& m : block.mosfets) {
+            std::string type = m.modelName.find("pfet") != std::string::npos ? "pfet_01v8" : "nfet_01v8";
+            ss << "  " << type << " " << m.instanceName 
+               << " (.D(" << getNetName(m.drain, options) << "), .G(" << getNetName(m.gate, options) << "), "
+               << ".S(" << getNetName(m.source, options) << "), .B(" << getNetName(m.body, options) << "));\n";
+        }
+
+        // BJTs
+        for (const auto& b : block.bjts) {
+            std::string type = b.isNPN ? "npn" : "pnp";
+            ss << "  " << type << " " << b.instanceName 
+               << " (.C(" << getNetName(b.nodeCollector, options) << "), .B(" << getNetName(b.base, options) << "), "
+               << ".E(" << getNetName(b.emitter, options) << "));\n";
         }
 
         // Hierarchical Instances
         for (size_t i = 0; i < netlist.instances.size(); ++i) {
             const auto& inst = netlist.instances[i];
-            std::string name = "U" + std::to_string(i);
-            std::string type = inst.blockName;
-            
-            ss << "  " << type << " " << name << " (";
-            for (size_t j = 0; j < inst.nodeMapping.size(); ++j) {
-                ss << ".p" << (j+1) << "(" << getNetName(inst.nodeMapping[j], options) << ")";
-                if (j < inst.nodeMapping.size() - 1) ss << ", ";
+            auto it = netlist.blockDefinitions.find(inst.blockName);
+            ss << "  " << inst.blockName << " U" << i << " (";
+            if (it != netlist.blockDefinitions.end()) {
+                for (size_t j = 0; j < it->second.pinNames.size(); ++j) {
+                    int globalNode = (j < inst.nodeMapping.size()) ? inst.nodeMapping[j] : 0;
+                    ss << "." << it->second.pinNames[j] << "(" << getNetName(globalNode, options) << ")";
+                    if (j < it->second.pinNames.size() - 1) ss << ", ";
+                }
             }
             ss << ");\n";
         }
 
         ss << "\nendmodule\n";
-
         return ss.str();
     }
 

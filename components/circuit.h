@@ -340,7 +340,7 @@ struct BusProbe {
  * Global context for the simulation run.
  */
 struct SimulationEnvironment {
-    double ambient_temp_K = 300.0;    // 27°C
+    double ambient_temp_K = 300.15;   // 27°C
     double temp_ramp_K_per_s = 0.0;   // For thermal cycling
     
     // Process Corners (Monte Carlo)
@@ -575,6 +575,7 @@ struct Probe {
 struct TensorBlock {
     std::string name;
     int numInternalNodes = 0;
+    std::vector<std::string> pinNames; // Metadata for Verilog-A port naming
     
     // Passive Components
     std::vector<Resistor> resistors;
@@ -1322,6 +1323,7 @@ inline SubCircuitDefinition extractSubCircuit(
     TensorBlock& out = result.internalBlock;
     out.name = name + "_internal";
     out.numInternalNodes = nextLocalNode - 1;
+    out.pinNames = block.pinNames; // Copy pin metadata
     
     // Resistors
     for (const auto& r : block.resistors) {

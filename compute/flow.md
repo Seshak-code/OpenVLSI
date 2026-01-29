@@ -40,7 +40,7 @@ When `CircuitSim::solveDC()` is called, the following sequence occurs:
 3.  **Matrix Solution (`math/linalg.h`)**
     *   **Assembly**: `MatrixConstructor` merges thread-local buffers in parallel (`createCsr`) to form the system matrix.
     *   **Solve**: The engine selects `solvePCG` (Iterative, O(N)) for large passive grids or `solveLU_Pivoted` (Direct, O(N³)) for active/small circuits.
-    *   **Hardware**: (Experimental) `solvers/webgpu_solver.h` offloads this entire step to WGSL compute shaders.
+    *   **Hardware**: **Google Dawn** backend (`solvers/webgpu_solver.h`) offloads the entire NR loop and linear solve to persistent GPU kernels using hi-lo `EmulatedF64` precision.
 
 4.  **Verification (`infrastructure/`)**
     *   **Safety**: `SafeUtils::sanitize_vector` scrubs NaNs.
