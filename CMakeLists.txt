@@ -814,8 +814,10 @@ add_executable(test_pdk_swap
     tests/test_pdk_swap.cpp 
     components/pdk_manager.cpp 
     components/pdk_compliance.cpp 
-    components/design_db.cpp
+    components/netlist_export.cpp
+    
     gui/components/visual_component.cpp
+
     gui/components/probe_tip.cpp
     gui/styling/theme_manager.cpp
     gui/styling/theme_manager.h
@@ -1128,6 +1130,23 @@ target_include_directories(test_docking_interaction PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/styling
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+# Netlist Export Tests
+add_executable(test_verilog_export tests/test_verilog_export.cpp components/netlist_export.cpp)
+target_link_libraries(test_verilog_export PRIVATE Qt6::Core) # Utils only
+target_include_directories(test_verilog_export PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_spef_export tests/test_spef_export.cpp components/netlist_export.cpp)
+target_link_libraries(test_spef_export PRIVATE Qt6::Core)
+target_include_directories(test_spef_export PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_export_consistency tests/test_export_consistency.cpp components/netlist_export.cpp)
+target_link_libraries(test_export_consistency PRIVATE Qt6::Core)
+target_include_directories(test_export_consistency PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_multi_domain_power tests/test_multi_domain_power.cpp components/netlist_export.cpp)
+target_link_libraries(test_multi_domain_power PRIVATE Qt6::Core)
+target_include_directories(test_multi_domain_power PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(test_docking_interaction PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
 add_test(NAME test_docking_interaction COMMAND test_docking_interaction)
 
