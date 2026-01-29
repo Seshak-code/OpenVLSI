@@ -1,8 +1,8 @@
 #pragma once
 #include <QString>
 #include <QSet>
-#include <QJsonObject>
-#include <QJsonArray>
+#include <QVariantMap>
+#include <QVariantList>
 #include <QList>
 #include <QDateTime>
 
@@ -99,19 +99,19 @@ inline FailureSeverity getFailureSeverity(FailureType type) {
     }
 }
 
-/**
- * FailureLabel - A tagged failure instance with context.
- */
 struct FailureLabel {
     FailureType type = FailureType::NONE;
     FailureSeverity severity = FailureSeverity::INFO;
-    QString nodeOrComponent;   // e.g., "Node 5" or "Q1"
-    QString message;           // Human-readable explanation
-    int iteration = -1;        // Newton iteration when detected (-1 = N/A)
-    double residual = 0.0;     // KCL residual at failure point
-    
-    QJsonObject toJson() const {
-        QJsonObject obj;
+    QString nodeOrComponent;
+    QString message;
+    int iteration = -1;
+    double residual = 0.0;
+    double timestamp = 0.0;
+    QVector<QString> involvedNodes;
+    QVariantMap debugContext;  // Changed from QJsonObject
+
+    QVariantMap toMap() const {
+        QVariantMap obj;
         obj["type"] = static_cast<int>(type);
         obj["typeString"] = failureTypeToString(type);
         obj["severity"] = static_cast<int>(severity);
@@ -119,70 +119,48 @@ struct FailureLabel {
         obj["message"] = message;
         obj["iteration"] = iteration;
         obj["residual"] = residual;
+        obj["timestamp"] = timestamp;
+        obj["debugContext"] = debugContext;
+        
+        QVariantList nodesList;
+        for(const auto& n : involvedNodes) nodesList.append(n);
+        obj["involvedNodes"] = nodesList;
+        
         return obj;
     }
     
-    static FailureLabel fromJson(const QJsonObject& obj) {
+    static FailureLabel fromMap(const QVariantMap& obj) {
         FailureLabel label;
         label.type = static_cast<FailureType>(obj["type"].toInt());
         label.severity = static_cast<FailureSeverity>(obj["severity"].toInt());
         label.nodeOrComponent = obj["nodeOrComponent"].toString();
         label.message = obj["message"].toString();
-        label.iteration = obj["iteration"].toInt(-1);
-        label.residual = obj["residual"].toDouble(0.0);
+        label.iteration = obj.value("iteration", -1).toInt();
+        label.residual = obj.value("residual", 0.0).toDouble();
+        label.timestamp = obj.value("timestamp", 0.0).toDouble();
+        label.debugContext = obj["debugContext"].toMap();
+        
+        QVariantList nodesArr = obj["involvedNodes"].toList();
+        for(const auto& val : nodesArr) label.involvedNodes.append(val.toString());
+        
         return label;
     }
+    
+    // Legacy support/helper if needed (but removing JSON dependency is key)
 };
 
-/**
- * FailureLabeler - Heuristic-based failure detection and labeling.
- */
 class FailureLabeler {
 public:
-    /**
-     * Analyze solver stats and netlist to detect failure patterns.
-     */
-    static QList<FailureLabel> labelFailures(const QJsonObject& solverStats,
-                                              const QJsonObject& netlistState);
+    static QList<FailureLabel> labelFailures(const QVariantMap& solverStats,
+                                              const QVariantMap& netlistState);
     
-    /**
-     * Convert a list of labels to a JSON array for AI context.
-     */
-    static QJsonArray toJsonArray(const QList<FailureLabel>& labels) {
-        QJsonArray arr;
+    static QVariantList toVariantList(const QList<FailureLabel>& labels) {
+        QVariantList arr;
         for (const auto& label : labels) {
-            arr.append(label.toJson());
+            arr.append(label.toMap());
         }
         return arr;
     }
 };
-
-// ============================================================================
-// LEGACY STRING-BASED MODES (for backward compatibility)
-// ============================================================================
-
-namespace FailureModes {
-    const QString SINGULAR_JACOBIAN = "Singular Jacobian";
-    const QString FLOATING_NODE = "Floating Node";
-    const QString CUTSET_VIOLATION = "Cutset Violation";
-    const QString ZERO_DIAGONAL = "Zero Diagonal";
-    const QString NON_CONVERGENCE = "Non-Convergence";
-    const QString GMIN_FALLBACK = "GMIN Stepping Fallback";
-    const QString SOURCE_STEPPING_FALLBACK = "Source Stepping Fallback";
-    const QString NO_DC_PATH = "No DC Path to Ground";
-    const QString STIFF_TRANSIENT = "Stiff Transient";
-    const QString TIMESTEP_REBOUND = "Time-step Rebound";
-    const QString ENERGY_GROWTH = "Energy Growth Violation";
-    const QString NAN_DETECTED = "NaN/Inf Detected";
-
-    inline bool isKnownFailure(const QString& type) {
-        static const QSet<QString> known = {
-            SINGULAR_JACOBIAN, FLOATING_NODE, CUTSET_VIOLATION, ZERO_DIAGONAL,
-            NON_CONVERGENCE, GMIN_FALLBACK, SOURCE_STEPPING_FALLBACK, NO_DC_PATH,
-            STIFF_TRANSIENT, TIMESTEP_REBOUND, ENERGY_GROWTH, NAN_DETECTED
-        };
-        return known.contains(type);
-    }
-}
 
 } // namespace AIAPI

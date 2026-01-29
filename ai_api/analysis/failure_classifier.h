@@ -13,7 +13,7 @@ namespace AIAPI {
 class FailureClassifier {
 public:
     // Main entry point: Analyze a failed simulation step and return failure tags
-    static QVector<TraceFailure> analyzeConvergenceFailure(
+    static QVector<FailureLabel> analyzeConvergenceFailure(
         const Csr_matrix& matrix,
         const std::vector<double>& rhs,
         const std::vector<double>& solution,
@@ -21,7 +21,7 @@ public:
         double currentTime
     );
 
-    static QVector<TraceFailure> analyzeTransientFailure(
+    static QVector<FailureLabel> analyzeTransientFailure(
         double timeStep,
         int attemptCount,
         bool energyViolation

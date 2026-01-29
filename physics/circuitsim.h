@@ -192,7 +192,7 @@ public:
           if (c.capacitance_farads < 0.0) return false;
       }
       for (const auto &m : block.mosfets) {
-          if (m.channelWidth_m <= 0.0 || m.channelLength_m <= 0.0) return false;
+          if (m.w <= 0.0 || m.l <= 0.0) return false;
       }
       return true;
   }
@@ -536,8 +536,8 @@ public:
          
          MosfetParams<double> p;
          // Default params
-         p.W = m.channelWidth_m; 
-         p.L = m.channelLength_m; 
+         p.W = m.w; 
+         p.L = m.l; 
          p.lambda = 0.01; // Non-zero lambda required for dense solver uniqueness
          
          bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
@@ -1291,8 +1291,8 @@ public:
               p.Kp = Dual<double>(200e-6); 
               p.Vth = Dual<double>(0.7, (paramName == "Vth" ? 1.0 : 0.0));
               p.lambda = Dual<double>(0.02);
-              p.W = Dual<double>(m.channelWidth_m, (paramName == "W" ? 1.0 : 0.0));
-              p.L = Dual<double>(m.channelLength_m, (paramName == "L" ? 1.0 : 0.0));
+              p.W = Dual<double>(m.w, (paramName == "W" ? 1.0 : 0.0));
+              p.L = Dual<double>(m.l, (paramName == "L" ? 1.0 : 0.0));
               
               Dual<double> ids = mosfet_ids(Dual<double>(vgs), Dual<double>(vds), p);
               double didp = ids.grad; // dIds / dp
@@ -1981,8 +1981,8 @@ public:
       p.Kp = 200e-6;
       p.Vth = 0.7; // TODO: Parse from model name (PMOS vs NMOS)
       p.lambda = 0.02;
-      p.W = m.channelWidth_m;
-      p.L = m.channelLength_m;
+      p.W = m.w;
+      p.L = m.l;
       
       // Simple Hack for PMOS detection based on name/model
       if (m.modelName.find("P") != std::string::npos || m.modelName.find("p") != std::string::npos) {

@@ -85,8 +85,7 @@ void ComponentLibrary::setupUi() {
         connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem* item){
             ComponentType type = (ComponentType)item->data(Qt::UserRole).toInt();
             QString subName = item->data(Qt::UserRole + 1).toString();
-            emit componentSelected(type); // Legacy
-            emit componentSelected(type, subName); // New
+            emit componentSelected(type, subName);
         });
     };
     

@@ -182,8 +182,8 @@ bool testCompleteFlow() {
     m.gate = 1;
     m.source = 0;
     m.body = 0;
-    m.channelWidth_m = 10e-6;
-    m.channelLength_m = 0.18e-6;
+    m.w = 10e-6;
+    m.l = 0.18e-6;
     net.globalBlock.mosfets.push_back(m);
     
     // Get state

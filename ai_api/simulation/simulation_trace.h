@@ -6,6 +6,8 @@
 #include <vector>
 #include <string>
 
+#include "../analysis/failure_taxonomy.h"
+
 namespace AIAPI {
 
 /**
@@ -13,13 +15,7 @@ namespace AIAPI {
  * Represents a discrete simulation run as a queryable knowledge object.
  */
 
-struct TraceFailure {
-    QString failureType;     // e.g., "Singular Jacobian", "Floating Node"
-    QString description;     // Human-readable cause
-    double timestamp;        // Simulation time at failure
-    QVector<QString> involvedNodes; // Nodes implicated in the divergence
-    QJsonObject debugContext; // Additional solver state (residues, pivot indices)
-};
+// TraceFailure removed - use FailureLabel from failure_taxonomy.h
 
 struct TraceConfig {
     QString solverType;      // "PCG", "LU", "GMRES"
@@ -50,7 +46,7 @@ struct SimulationTrace {
     QString topologyHash;    // Canonical ID of the circuit structure
     QMap<QString, int> deviceMix; // e.g., {"NMOS": 12, "Resistor": 5, "BJT": 2}
     
-    QVector<TraceFailure> failureModes; // If empty, simulation was successful
+    QVector<FailureLabel> failureModes; // If empty, simulation was successful
     
     // Raw Data (for regeneration or detailed analysis)
     // Map: NodeName -> TimeSeries [v(t0), v(t1), ...]

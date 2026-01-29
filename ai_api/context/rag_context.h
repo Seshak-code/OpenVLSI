@@ -32,7 +32,7 @@ struct SimulationKnowledgeObject {
         obj["traceId"] = traceId;
         obj["topologyHash"] = topologyHash;
         obj["deviceMix"] = deviceMix;
-        obj["failures"] = FailureLabeler::toJsonArray(failures);
+        obj["failures"] = QJsonArray::fromVariantList(FailureLabeler::toVariantList(failures));
         obj["waveformSummary"] = waveformSummary;
         obj["config"] = configSnapshot;
         obj["timestamp"] = timestamp.toString(Qt::ISODate);

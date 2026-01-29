@@ -180,8 +180,8 @@ bool testFloatingGateDetection() {
     m.gate = 3;      // Node 3 has no DC path
     m.source = 0;
     m.body = 0;
-    m.channelWidth_m = 10e-6;
-    m.channelLength_m = 1e-6;
+    m.w = 10e-6;
+    m.l = 1e-6;
     circuit.mosfets.push_back(m);
     
     // Add resistor load
@@ -419,8 +419,8 @@ bool testCMOSInverterBlock() {
     nmos.gate = 1;       // Input
     nmos.source = 0;     // GND
     nmos.body = 0;
-    nmos.channelWidth_m = 2e-6;
-    nmos.channelLength_m = 0.18e-6;
+    nmos.w = 2e-6;
+    nmos.l = 0.18e-6;
     inverter.mosfets.push_back(nmos);
     
     // PMOS (M2): pulls output to VDD when input is low
@@ -430,8 +430,8 @@ bool testCMOSInverterBlock() {
     pmos.gate = 1;       // Input
     pmos.source = 3;     // VDD (node 3)
     pmos.body = 3;
-    pmos.channelWidth_m = 4e-6;  // 2x NMOS for symmetric drive
-    pmos.channelLength_m = 0.18e-6;
+    pmos.w = 4e-6;  // 2x NMOS for symmetric drive
+    pmos.l = 0.18e-6;
     inverter.mosfets.push_back(pmos);
     
     // Bias resistors for gates (ensure DC path)
@@ -711,8 +711,8 @@ bool testMixedBJTMOSFET() {
     m1.gate = 1;
     m1.source = 0;
     m1.body = 0;
-    m1.channelWidth_m = 10e-6;
-    m1.channelLength_m = 0.5e-6;
+    m1.w = 10e-6;
+    m1.l = 0.5e-6;
     bicmos.mosfets.push_back(m1);
     
     // BJT output stage

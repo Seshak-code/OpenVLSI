@@ -58,9 +58,9 @@ private slots:
         trace.deviceMix["Resistor"] = 1;
         
         // Add a failure
-        AIAPI::TraceFailure failure;
-        failure.failureType = "Singular Jacobian";
-        failure.description = "Matrix is singular at node 5";
+        AIAPI::FailureLabel failure;
+        failure.type = AIAPI::FailureType::SINGULAR_JACOBIAN;
+        failure.message = "Matrix is singular at node 5";
         failure.timestamp = 0.0;
         failure.involvedNodes.append("Node5");
         trace.failureModes.append(failure);
@@ -99,7 +99,7 @@ private slots:
         AIAPI::SimulationTrace failedTrace;
         failedTrace.traceId = "query-test-001";
         failedTrace.topologyHash = "0xFAIL";
-        AIAPI::TraceFailure f; f.failureType = "Convergence"; f.description = "Failed";
+        AIAPI::FailureLabel f; f.type = AIAPI::FailureType::CONVERGENCE_FAILED; f.message = "Failed";
         failedTrace.failureModes.append(f);
         store.upsertTrace(failedTrace);
         

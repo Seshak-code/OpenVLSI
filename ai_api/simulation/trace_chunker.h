@@ -153,12 +153,12 @@ private:
             chunk.contentType = "FailureLog";
             
             chunk.textContent = QString("Failure: %1. %2 Involved nodes: %3. Time: %4s.")
-                                    .arg(failure.failureType)
-                                    .arg(failure.description)
+                                    .arg(failureTypeToString(failure.type))
+                                    .arg(failure.message)
                                     .arg(failure.involvedNodes.join(", "))
                                     .arg(failure.timestamp, 0, 'e', 3);
             
-            chunk.metadata["failureType"] = failure.failureType;
+            chunk.metadata["failureType"] = failureTypeToString(failure.type);
             chunk.metadata["topology"] = trace.topologyHash;
             
             chunks.append(chunk);

@@ -239,7 +239,7 @@ TensorizedBlock tensorizeBlock(const TensorBlock& block) {
     for (const auto& m : block.mosfets) {
         // Defaults: Kp=200e-6, Vth=0.7, Labmda=0.02, Temp=passed
         result.mosfets.push(m.drain, m.gate, m.source, m.body, 
-                           m.channelWidth_m, m.channelLength_m,
+                           m.w, m.l,
                            200e-6, 0.7, 0.02, 
                            m.temperature_K);
     }

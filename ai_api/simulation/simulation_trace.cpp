@@ -22,8 +22,8 @@ QString SimulationTrace::getSummary() const {
         summary += "Result: FAILED\nFailure Modes:\n";
         for (const auto& fail : failureModes) {
             summary += QString(" - %1: %2 (at t=%3)\n")
-                           .arg(fail.failureType)
-                           .arg(fail.description)
+                           .arg(failureTypeToString(fail.type))
+                           .arg(fail.message)
                            .arg(fail.timestamp);
         }
     }

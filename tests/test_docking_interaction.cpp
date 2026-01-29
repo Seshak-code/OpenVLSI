@@ -263,7 +263,7 @@ private slots:
     
     // 8. Verify Waveform Logic (Isolated)
     void testWaveformWidgetLogic() {
-        WaveformWidget wf;
+        acutesim::gui::widgets::WaveformWidget wf;
         
         // 1. Initial State
         QVERIFY(!wf.isFloatingTab());
@@ -275,7 +275,7 @@ private slots:
         QCOMPARE(wf.dataPointCount(), 2);
         
         // 3. Mode Toggle Request
-        QSignalSpy spyPromote(&wf, &WaveformWidget::promoteToTabRequested);
+        QSignalSpy spyPromote(&wf, &acutesim::gui::widgets::WaveformWidget::promoteToTabRequested);
         wf.setFloatingMode(false); // Ensure docked
         // Trigger action programmatically via slot (simulating button)
         // We can't access private slot easily, but we can verify public API

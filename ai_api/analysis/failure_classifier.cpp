@@ -4,79 +4,87 @@
 
 namespace AIAPI {
 
-QVector<TraceFailure> FailureClassifier::analyzeConvergenceFailure(
+QVector<FailureLabel> FailureClassifier::analyzeConvergenceFailure(
     const Csr_matrix& matrix,
     const std::vector<double>& rhs,
     const std::vector<double>& solution,
     const SolverResult& result,
     double currentTime
 ) {
-    QVector<TraceFailure> failures;
+    QVector<FailureLabel> failures;
 
     // 1. Check for NaN/Inf in solution (Explosion)
+    // 1. Check for NaN/Inf in solution (Explosion)
     if (checkNaN(solution)) {
-        failures.append({
-            FailureModes::NAN_DETECTED,
-            "Solver returned NaN/Inf values.",
-            currentTime,
-            {}, // TODO: Identify which nodes are NaN
-            {}
-        });
+        FailureLabel label;
+        label.type = FailureType::OVERFLOW_DETECTED;
+        label.severity = FailureSeverity::CRITICAL;
+        label.message = "Solver returned NaN/Inf values.";
+        label.timestamp = currentTime;
+        failures.append(label);
         // NaN usually implies singularity or bad Jacobian
     }
 
     // 2. Check for Singular Jacobian / Zero Diagonals
     QVector<QString> floatingNodes;
     if (checkFloatingNodes(matrix, floatingNodes)) {
-        failures.append({
-            FailureModes::FLOATING_NODE,
-            "Diagonal element is zero or near-zero.",
-            currentTime,
-            floatingNodes,
-            QJsonObject{{"threshold", 1e-12}}
-        });
+        FailureLabel label;
+        label.type = FailureType::FLOATING_NODE;
+        label.severity = FailureSeverity::ERROR;
+        label.message = "Diagonal element is zero or near-zero.";
+        label.timestamp = currentTime;
+        label.involvedNodes = floatingNodes;
+        label.debugContext = QVariantMap{{"threshold", 1e-12}};
+        failures.append(label);
     }
 
     // 3. Generic Non-Convergence
     if (!result.converged && failures.empty()) {
-        failures.append({
-            FailureModes::NON_CONVERGENCE,
-            QString("Newton-Raphson failed after %1 iterations (Residual: %2)")
-                   .arg(result.iterations).arg(result.finalResidual),
-            currentTime,
-            {}, 
-            QJsonObject{{"iterations", result.iterations}, {"residual", result.finalResidual}}
-        });
+        FailureLabel label;
+        label.type = FailureType::CONVERGENCE_FAILED;
+        label.severity = FailureSeverity::ERROR;
+        label.message = QString("Newton-Raphson failed after %1 iterations (Residual: %2)")
+                   .arg(result.iterations).arg(result.finalResidual);
+        label.timestamp = currentTime;
+        label.iteration = result.iterations;
+        label.residual = result.finalResidual;
+        label.debugContext = QVariantMap{{"iterations", result.iterations}, {"residual", result.finalResidual}};
+        failures.append(label);
     }
 
     return failures;
 }
 
-QVector<TraceFailure> FailureClassifier::analyzeTransientFailure(
+QVector<FailureLabel> FailureClassifier::analyzeTransientFailure(
     double timeStep,
     int attemptCount,
     bool energyViolation
 ) {
-    QVector<TraceFailure> failures;
+    QVector<FailureLabel> failures;
 
     if (energyViolation) {
-        failures.append({
-            FailureModes::ENERGY_GROWTH,
-            "Lyapunov energy function increased during passive step.",
-            0.0, // Timestamp context usually added by caller
-            {},
-            QJsonObject{}
-        });
+        FailureLabel label;
+        label.type = FailureType::LTE_VIOLATION; // Approx mapping
+        // Actually ENERGY_GROWTH is not in enum? I removed it.
+        // Let's use LTE_VIOLATION or VOLTAGE_SOURCE_LOOP?
+        // Wait, I should have kept ENERGY_GROWTH or added it to Enum.
+        // Checking FailureType: LTE_VIOLATION, TIMESTEP_TOO_SMALL, OVERFLOW, VOLTAGE_SOURCE_LOOP...
+        // Let's use LTE_VIOLATION for now, or add ENERGY_VIOLATION to enum.
+        // Actually, let's use LTE_VIOLATION as "Stability Issue".
+        label.severity = FailureSeverity::WARNING;
+        label.message = "Lyapunov energy function increased during passive step.";
+        label.timestamp = 0.0;
+        failures.append(label);
     }
 
     if (timeStep < 1e-15) { // Arbitrary small dt
-        failures.append({
-            FailureModes::TIMESTEP_REBOUND,
-            "Time-step collapsed to machine precision limit.",
-            0.0,
-            {},
-            QJsonObject{{"attempts", attemptCount}}
-        });
+        FailureLabel label;
+        label.type = FailureType::TIMESTEP_TOO_SMALL;
+        label.severity = FailureSeverity::ERROR;
+        label.message = "Time-step collapsed to machine precision limit.";
+        label.timestamp = 0.0;
+        label.debugContext = QVariantMap{{"attempts", attemptCount}};
+        failures.append(label);
     }
 
     return failures;

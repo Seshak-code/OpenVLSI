@@ -208,8 +208,8 @@ inline std::string serializeMosfets(const std::vector<Mosfet>& mosfets) {
            << "\"S\":" << m.source << ","
            << "\"B\":" << m.body << ","
            << "\"model\":\"" << escape(m.modelName) << "\","
-           << "\"W\":" << m.channelWidth_m << ","
-           << "\"L\":" << m.channelLength_m << "}";
+           << "\"W\":" << m.w << ","
+           << "\"L\":" << m.l << "}";
         if (i < mosfets.size() - 1) ss << ",";
     }
     ss << "]";

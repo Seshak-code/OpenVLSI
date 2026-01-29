@@ -105,6 +105,16 @@ test_statistical_interactivity
 test_superposition
 test_pdk_manager
 test_pdk_swap
+test_introspection
+test_copilot_validate
+test_auto_harness
+test_docking_interaction
+test_verilog_export
+test_spef_export
+test_export_consistency
+test_multi_domain_power
+test_verification_harness
+test_kernel_dispatch
 
 # ============================================
 # Qt Auto-Generated Files

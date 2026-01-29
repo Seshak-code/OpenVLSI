@@ -467,9 +467,7 @@ struct Mosfet {
     double w = 1e-6;                      // Channel Width [m]
     double l = 1e-6;                      // Channel Length [m]
     
-    // Legacy mapping (Deprecated, synced with w/l)
-    double channelWidth_m = 1e-6;
-    double channelLength_m = 1e-6;
+
 
     // Layout Parasitics (Geometry)
     struct Geometry {
@@ -794,8 +792,6 @@ struct TensorBlock {
         m.drain = D; m.gate = G; m.source = S; m.body = B;
         m.modelName = model;
         m.w = W; m.l = L;
-        // Sync legacy fields
-        m.channelWidth_m = W; m.channelLength_m = L;
         
         mosfets.push_back(m);
         updateNodeCount(D); updateNodeCount(G); updateNodeCount(S); updateNodeCount(B);

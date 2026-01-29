@@ -748,10 +748,6 @@ void GridScene::drawViolationMarkers(QPainter* painter) {
             case ERC::ViolationType::MULTIPLE_DRIVERS: icon = "CNF"; break; // Was ⚔ (Conflict)
             case ERC::ViolationType::NEAR_MISS:      icon = "GAP"; break; // Was ↔
             case ERC::ViolationType::OPEN_DRAIN:     icon = "OD"; break;  // Was ⏒
-            case ERC::ViolationType::ILLEGAL_SOURCE: icon = "BAD"; break; // Was 🚫
-            case ERC::ViolationType::MISSING_PORTS:  icon = "P"; break;   // P represents Port
-            case ERC::ViolationType::ILLEGAL_DRIVER: icon = "PWR"; break; // Was 🔋
-            case ERC::ViolationType::MIXED_MODES:    icon = "MOD"; break; // Was !
             default:                                 icon = "?"; break;
         }
         

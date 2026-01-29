@@ -555,7 +555,7 @@ void MainWindow::createLibraryDock() {
     libraryPanel = new ComponentLibrary(this);
     
     // Connect Selection
-    connect(libraryPanel, qOverload<ComponentType, const QString&>(&ComponentLibrary::componentSelected), 
+    connect(libraryPanel, &ComponentLibrary::componentSelected, 
         this, [this](ComponentType type, const QString& name){
         if (schematicEditor) {
             schematicEditor->setTool(type, name);

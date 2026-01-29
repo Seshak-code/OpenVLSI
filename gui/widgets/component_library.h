@@ -20,7 +20,6 @@ public:
     // Unified library - no modes
     
 signals:
-    void componentSelected(ComponentType type);
     void componentSelected(ComponentType type, const QString& name);
 
 private slots:

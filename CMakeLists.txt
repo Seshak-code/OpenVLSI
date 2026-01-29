@@ -131,6 +131,7 @@ add_executable(${PROJECT_NAME}
     resources/icons.qrc
     gui/editors/schematic_editor.cpp
     gui/editors/schematic_editor_sync.cpp
+    components/netlist_export.cpp
     gui/editors/schematic_editor.h
     gui/editors/schematic_view.cpp
     gui/editors/schematic_view.h
@@ -478,6 +479,12 @@ if(NOT EMSCRIPTEN)
         gui/editors/hdl_editor.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
+        components/design_db.cpp
+        components/pdk_manager.cpp
+    gui/scripting/tcl_bridge.cpp
+    components/pdk_compliance.cpp
+    gui/widgets/compliance_report_dialog.cpp
+        components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -553,7 +560,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
     )
-    target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
+    target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_auto_harness PUBLIC cxx_std_17)
 endif()
 
@@ -575,7 +582,13 @@ if(NOT EMSCRIPTEN)
         gui/analysis/logic_analyzer.cpp
         gui/editors/hdl_editor.cpp
         gui/core/mainwindow.cpp
+    gui/scripting/tcl_bridge.cpp
+    components/pdk_compliance.cpp
+    gui/widgets/compliance_report_dialog.cpp
         gui/core/welcome_widget.cpp
+        components/design_db.cpp
+        components/pdk_manager.cpp
+        components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -651,7 +664,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
     )
-    target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent)
+    target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_copilot_validate PUBLIC cxx_std_17)
 endif()
 
@@ -822,6 +835,7 @@ add_executable(test_pdk_swap
     gui/styling/theme_manager.cpp
     gui/styling/theme_manager.h
     tests/stubs/grid_scene_stub.cpp # Stub implementation
+    components/design_db.cpp
     gui/editors/schematic_editor.h # Triggers MOC for GridScene
 )
 target_include_directories(test_pdk_swap PRIVATE 
@@ -871,6 +885,9 @@ if(NOT EMSCRIPTEN)
         gui/editors/hdl_editor.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
+        components/design_db.cpp
+        components/pdk_manager.cpp
+        components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -1018,6 +1035,8 @@ if(NOT EMSCRIPTEN)
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
         components/design_db.cpp
+        components/pdk_manager.cpp
+        components/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
     )
     target_include_directories(test_hierarchical_sim PRIVATE
@@ -1071,6 +1090,8 @@ if(NOT EMSCRIPTEN)
         gui/styling/theme_manager.cpp
         gui/widgets/compliance_report_dialog.cpp
         components/design_db.cpp
+        components/pdk_manager.cpp
+        components/netlist_export.cpp
         components/pdk_compliance.cpp
         gui/scripting/tcl_bridge.cpp
     )
@@ -1263,3 +1284,56 @@ target_include_directories(test_std_cells PRIVATE
 )
 target_compile_features(test_std_cells PUBLIC cxx_std_17)
 target_link_libraries(test_std_cells PRIVATE Qt6::Core)
+
+# Validating flow tests
+add_executable(test_flow tests/test_flow.cpp)
+target_link_libraries(test_flow PRIVATE Qt6::Core)
+target_include_directories(test_flow PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/components 
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Validating introspection tests
+add_executable(test_introspection 
+    tests/test_introspection.cpp 
+    gui/components/visual_component.cpp 
+    gui/styling/theme_manager.cpp 
+    gui/core/platform_helper.cpp
+    gui/components/probe_tip.cpp
+    gui/editors/schematic_editor.cpp
+    gui/editors/schematic_editor_api.cpp
+    gui/editors/component_wizard.cpp
+    gui/widgets/compliance_report_dialog.cpp
+    gui/editors/schematic_view.cpp
+    components/design_db.cpp
+    components/pdk_manager.cpp
+    components/netlist_export.cpp
+    components/pdk_compliance.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+)
+target_link_libraries(test_introspection PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+target_include_directories(test_introspection PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_include_directories(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/math)
+target_include_directories(test_introspection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/math)
+target_include_directories(test_flow PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+)
+target_include_directories(test_introspection PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+)
+target_sources(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
+target_sources(test_introspection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
+target_include_directories(test_introspection PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+)

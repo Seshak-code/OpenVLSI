@@ -37,13 +37,6 @@ enum class ViolationType {
     NEAR_MISS,           // Terminal almost connected (within 1-2 grid)
     OPEN_DRAIN,          // Output without load path
 
-    // DEPRECATED: Mode violations removed - unified component library
-    // Kept for backwards compatibility but no longer generated
-    ILLEGAL_SOURCE,      // (Deprecated) Was: Source component used in Block mode
-    MISSING_PORTS,       // (Deprecated) Was: Block mode requires ports
-    ILLEGAL_DRIVER,      // (Deprecated) Was: System mode requires RailDrivers
-    MIXED_MODES,         // (Deprecated) Was: Components from wrong mode
-
     // Solver Violations (Dynamic)
     SOLVER_SINGULAR_MATRIX,  // LU decomposition failed (rank deficiency)
     SOLVER_DIVERGENCE,       // Newton-Raphson failed to converge
@@ -67,12 +60,6 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::SOLVER_SINGULAR_MATRIX:
         case ViolationType::SOLVER_DIVERGENCE:
              return Severity::ERROR;
-        // Deprecated mode violations - kept for compatibility but treated as warnings
-        case ViolationType::ILLEGAL_SOURCE:
-        case ViolationType::MISSING_PORTS:
-        case ViolationType::ILLEGAL_DRIVER:
-        case ViolationType::MIXED_MODES:
-             return Severity::WARNING;  // Downgraded from ERROR
         case ViolationType::FLOATING_NODE:
         case ViolationType::MULTIPLE_DRIVERS:
         case ViolationType::OPEN_DRAIN:
@@ -95,10 +82,6 @@ inline QString typeToString(ViolationType type) {
         case ViolationType::MULTIPLE_DRIVERS: return "Multiple Drivers";
         case ViolationType::NEAR_MISS: return "Near Miss";
         case ViolationType::OPEN_DRAIN: return "Open Drain";
-        case ViolationType::ILLEGAL_SOURCE: return "Illegal Source (Block Mode)";
-        case ViolationType::MISSING_PORTS: return "Missing Ports";
-        case ViolationType::ILLEGAL_DRIVER: return "Illegal Driver (System Mode)";
-        case ViolationType::MIXED_MODES: return "Mixed Mode Violation";
         case ViolationType::SOLVER_SINGULAR_MATRIX: return "Singular Matrix (Solver)";
         case ViolationType::SOLVER_DIVERGENCE: return "Divergence (Solver)";
         case ViolationType::SOLVER_TIMEOUT: return "Timeout (Solver)";

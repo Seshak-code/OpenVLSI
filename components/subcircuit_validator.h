@@ -174,7 +174,7 @@ inline ValidationResult validateSubCircuit(const SubCircuitDefinition& def) {
         connectedNodes.insert(m.source);
         connectedNodes.insert(m.body);
         
-        if (m.channelWidth_m <= 0.0 || m.channelLength_m <= 0.0) {
+        if (m.w <= 0.0 || m.l <= 0.0) {
             result.issues.push_back({
                 ValidationIssue::Severity::ERROR,
                 "INVALID_MOSFET_GEOMETRY",

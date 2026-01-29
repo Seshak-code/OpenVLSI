@@ -138,7 +138,7 @@ SimulationKnowledgeObject RAGContextBuilder::buildFromCurrentState(
     obj.traceId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
     obj.topologyHash = circuitState["topologyHash"].toString();
     obj.timestamp = QDateTime::currentDateTime();
-    obj.configSnapshot = solverStats;
+    obj.configSnapshot = QJsonObject::fromVariantMap(solverStats.toVariantMap());
     
     // Build device mix
     QMap<QString, int> deviceCounts;
@@ -158,7 +158,7 @@ SimulationKnowledgeObject RAGContextBuilder::buildFromCurrentState(
     obj.deviceMix = mixArr;
     
     // Label failures
-    obj.failures = FailureLabeler::labelFailures(solverStats, circuitState);
+    obj.failures = FailureLabeler::labelFailures(solverStats.toVariantMap(), circuitState.toVariantMap());
     
     // Waveform summary (if available)
     if (probeValues.contains("waveforms")) {
@@ -182,7 +182,7 @@ QJsonObject RAGContextBuilder::compressContext(
     compressed["deviceMix"] = fullContext.deviceMix;
     
     // Include failures (critical for debugging)
-    compressed["failures"] = FailureLabeler::toJsonArray(fullContext.failures);
+    compressed["failures"] = QJsonArray::fromVariantList(FailureLabeler::toVariantList(fullContext.failures));
     
     // Conditionally include waveform summary based on token budget
     QJsonDocument doc(fullContext.waveformSummary);
@@ -407,13 +407,13 @@ bool ReferenceDesignProvider::isStale(const QString& designType, const QString& 
 // ============================================================================
 
 QList<FailureLabel> FailureLabeler::labelFailures(
-    const QJsonObject& solverStats,
-    const QJsonObject& netlistState
+    const QVariantMap& solverStats,
+    const QVariantMap& netlistState
 ) {
     QList<FailureLabel> labels;
     
     // Check for convergence failure
-    if (!solverStats["converged"].toBool(true)) {
+    if (!solverStats.value("converged", true).toBool()) {
         FailureLabel label;
         label.type = FailureType::CONVERGENCE_FAILED;
         label.severity = getFailureSeverity(label.type);
@@ -425,7 +425,7 @@ QList<FailureLabel> FailureLabeler::labelFailures(
     }
     
     // Check for GMIN fallback
-    if (solverStats["gminSteppingUsed"].toBool(false)) {
+    if (solverStats.value("gminSteppingUsed", false).toBool()) {
         FailureLabel label;
         label.type = FailureType::GMIN_FALLBACK;
         label.severity = getFailureSeverity(label.type);
@@ -434,7 +434,7 @@ QList<FailureLabel> FailureLabeler::labelFailures(
     }
     
     // Check for source stepping
-    if (solverStats["sourceSteppingUsed"].toBool(false)) {
+    if (solverStats.value("sourceSteppingUsed", false).toBool()) {
         FailureLabel label;
         label.type = FailureType::SOURCE_STEPPING;
         label.severity = getFailureSeverity(label.type);
@@ -453,9 +453,9 @@ QList<FailureLabel> FailureLabeler::labelFailures(
     }
     
     // Check for floating nodes in netlist
-    QJsonArray ercViolations = netlistState["ercViolations"].toArray();
+    QVariantList ercViolations = netlistState["ercViolations"].toList();
     for (const auto& viol : ercViolations) {
-        QJsonObject v = viol.toObject();
+        QVariantMap v = viol.toMap();
         if (v["type"].toString() == "FLOATING_NODE") {
             FailureLabel label;
             label.type = FailureType::FLOATING_NODE;
