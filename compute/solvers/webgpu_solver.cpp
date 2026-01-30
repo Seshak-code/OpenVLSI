@@ -1,10 +1,19 @@
 #include "webgpu_solver.h"
 #include <iostream>
 #include <vector>
+#include <cstring>
+
+// Helper for Dawn's new WGPUStringView API
+#define WGPU_SV(str) { str, strlen(str) }
 
 #ifdef __EMSCRIPTEN__
 #include <webgpu/webgpu.h>
 #include <emscripten.h>
+#else
+#include <webgpu/webgpu.h>
+#include <dawn/native/DawnNative.h>
+#include <dawn/webgpu_cpp.h>
+#include <dawn/dawn_proc.h>
 #endif
 
 // --- Device Structs matching WGSL AoS format ---
@@ -83,34 +92,74 @@ WebGPUSolver::~WebGPUSolver() {
     
     if (queue) wgpuQueueRelease(queue);
     if (device) wgpuDeviceRelease(device);
+    if (instance) wgpuInstanceRelease(instance);
 }
 
 bool WebGPUSolver::initWebGPU() {
 #ifdef __EMSCRIPTEN__
-    // In CuteApp's Emscripten environment, we expect the device to be already requested 
-    // or we use a synchronous-looking wrapper if available.
-    // For now, we'll use placeholder logic or assume 'device' is injected.
     std::cout << "[INFO] WebGPUSolver: Initializing for Emscripten/WASM..." << std::endl;
-    if (!device) {
-        // FIXME: Proper device acquisition via navigator.gpu
-        // For development, we return false if not found.
-        return false;
-    }
+    if (!device) return false;
     queue = wgpuDeviceGetQueue(device);
     return true;
 #else
-    return false;
+    std::cout << "[INFO] WebGPUSolver: Initializing Native Google Dawn (Metal)..." << std::endl;
+    
+    // 1. Initialize Dawn Proc Table
+    dawnProcSetProcs(&dawn::native::GetProcs());
+
+    // 2. Create Instance
+    instance = wgpuCreateInstance(nullptr);
+    if (!instance) {
+        std::cerr << "[ERROR] Failed to create WGPU Instance." << std::endl;
+        return false;
+    }
+
+    // 2. Discover Adapters & Request Device
+    static auto nativeInstance = new dawn::native::Instance();
+    auto adapters = nativeInstance->EnumerateAdapters();
+    
+    dawn::native::Adapter selectedAdapter;
+    for (auto& adapter : adapters) {
+        WGPUAdapterInfo info = {};
+        wgpuAdapterGetInfo(adapter.Get(), &info);
+        if (info.backendType == WGPUBackendType_Metal) {
+            selectedAdapter = adapter;
+            break;
+        }
+    }
+
+    if (!selectedAdapter && !adapters.empty()) {
+        selectedAdapter = adapters[0];
+    }
+
+    if (!selectedAdapter) {
+        std::cerr << "[ERROR] No suitable GPU adapter found." << std::endl;
+        return false;
+    }
+
+    device = selectedAdapter.CreateDevice();
+    if (!device) {
+        std::cerr << "[ERROR] Failed to create WGPU Device." << std::endl;
+        return false;
+    }
+
+    queue = wgpuDeviceGetQueue(device);
+    std::cout << "[INFO] WebGPUSolver: Native GPU initialization SUCCESS." << std::endl;
+    return true;
 #endif
 }
 
 WGPUShaderModule WebGPUSolver::loadShader(const std::string& source) {
-    WGPUShaderModuleWGSLDescriptor wgslDesc = {};
+    if (!device) return nullptr;
+
+    WGPUShaderSourceWGSL wgslDesc = {};
     wgslDesc.chain.next = nullptr;
-    wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
-    wgslDesc.code = source.c_str();
+    wgslDesc.chain.sType = WGPUSType_ShaderSourceWGSL;
+    wgslDesc.code = { source.data(), source.length() };
 
     WGPUShaderModuleDescriptor desc = {};
     desc.nextInChain = &wgslDesc.chain;
+    
     return wgpuDeviceCreateShaderModule(device, &desc);
 }
 
@@ -143,6 +192,7 @@ void WebGPUSolver::setupResources(const TensorNetlist& netlist) {
     size_t nodeCount = netlist.numGlobalNodes;
     
     WGPUBufferDescriptor desc = {};
+    desc.label = WGPU_SV("MNA_Buffers");
     desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
     desc.mappedAtCreation = false;
 
@@ -157,6 +207,7 @@ void WebGPUSolver::setupResources(const TensorNetlist& netlist) {
     
     // Jacobian (CSR - estimating 10 entries per node average)
     desc.size = nodeCount * 10 * sizeof(float); 
+    desc.label = WGPU_SV("Jacobian_Buffers");
     jacobianBufferHi = wgpuDeviceCreateBuffer(device, &desc);
     jacobianBufferLo = wgpuDeviceCreateBuffer(device, &desc);
 
@@ -243,6 +294,7 @@ void WebGPUSolver::setupResources(const TensorNetlist& netlist) {
     bgEntries2[2].binding = 2; bgEntries2[2].buffer = waveformDataBuffer;   bgEntries2[2].size = RING_BUFFER_SIZE * entryStride * sizeof(float);
 
     WGPUBindGroupDescriptor bgDesc2 = {};
+    bgDesc2.label = WGPU_SV("Waveform_BindGroup");
     bgDesc2.layout = bgl2;
     bgDesc2.entryCount = 3;
     bgDesc2.entries = bgEntries2;
@@ -261,9 +313,10 @@ void WebGPUSolver::setupResources(const TensorNetlist& netlist) {
 
     WGPUShaderModule shaderModule = loadShader("... shader source ..."); 
     WGPUComputePipelineDescriptor computeDesc = {};
+    computeDesc.label = WGPU_SV("Waveform_Pipeline");
     computeDesc.layout = layout;
     computeDesc.compute.module = shaderModule;
-    computeDesc.compute.entryPoint = "recordWaveform";
+    computeDesc.compute.entryPoint = WGPU_SV("recordWaveform");
     
     recordWaveformPipeline = wgpuDeviceCreateComputePipeline(device, &computeDesc);
     wgpuPipelineLayoutRelease(layout);
@@ -280,7 +333,9 @@ void WebGPUSolver::setupResources(const TensorNetlist& netlist) {
 
 void WebGPUSolver::uploadNetlist(const TensorNetlist& netlist) {
     if (!queue) return;
-    const auto& block = netlist.globalBlock;
+    
+    // Flatten hierarchy: Convert hierarchical TensorNetlist to flat TensorizedBlock (SoA)
+    TensorizedBlock block = tensorizeNetlist(netlist);
 
     // 1. Diodes
     std::vector<DiodeDevice> diodeDevices;

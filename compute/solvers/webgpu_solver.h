@@ -8,13 +8,10 @@
 #ifdef __EMSCRIPTEN__
 #include <webgpu/webgpu.h>
 #else
-// Fallback for non-emscripten compilation (simulated handles)
-typedef void* WGPUDevice;
-typedef void* WGPUQueue;
-typedef void* WGPUBuffer;
-typedef void* WGPUInstance;
-typedef void* WGPUComputePipeline;
-typedef void* WGPUShaderModule;
+#include <webgpu/webgpu.h>
+#include <dawn/native/DawnNative.h>
+#include <dawn/webgpu_cpp.h>
+#include <dawn/dawn_proc.h>
 #endif
 
 /**

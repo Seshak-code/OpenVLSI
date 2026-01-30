@@ -8,13 +8,15 @@ if(MSVC)
     add_compile_options(/fp:strict)
 else()
     add_compile_options(-ffloat-store -fno-fast-math -frounding-math)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error")
 endif()
 
 # Platform-aware default Qt prefix hints (can be overridden by CMAKE_PREFIX_PATH or Qt6_DIR)
 if(NOT DEFINED Qt6_DIR)
     if(APPLE)
-        set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt/lib/cmake")
-        message(STATUS "Mac-specific CMAKE_PREFIX_PATH forced to: ${CMAKE_PREFIX_PATH}")
+        set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qtbase/lib/cmake")
+        message(STATUS "Mac-specific CMAKE_PREFIX_PATH (qtbase) forced to: ${CMAKE_PREFIX_PATH}")
     elseif(WIN32 AND NOT DEFINED CMAKE_PREFIX_PATH)
         # On Windows, try to detect a Qt installation under C:/Qt and append likely cmake folders.
         set(_qt_root "C:/Qt")
@@ -92,15 +94,56 @@ else()
     find_package(Qt6 COMPONENTS Svg QUIET)
 endif()
 
-# Find OpenMP (Optional, for physics engine performance)
-# Due to security issues with OpenMP on Emscripten, we only find it when not building for Emscripten
 if(NOT EMSCRIPTEN)
     find_package(OpenMP)
     
-    # Phase 12: Orchestration Dependencies (Provided by vcpkg)
-    # Only search for these if not in WASM/Emscripten mode (WASM uses gRPC-Web via JS)
+    # Phase 12: Orchestration Dependencies (Provided by vcpkg or system)
     find_package(protobuf CONFIG REQUIRED)
     find_package(gRPC CONFIG REQUIRED)
+    find_package(absl CONFIG REQUIRED)
+
+    # Phase 1.1: Integrate Google Dawn (GPU Acceleration)
+    # Moved after gRPC to avoid Abseil target conflicts
+    include(FetchContent)
+    message(STATUS "Integrating Google Dawn (Native WebGPU Backend)...")
+    
+    set(DAWN_FETCH_DEPENDENCIES ON CACHE BOOL "" FORCE)
+    
+    FetchContent_Declare(
+        dawn
+        GIT_REPOSITORY https://dawn.googlesource.com/dawn
+        GIT_TAG        chromium/6943
+        GIT_SHALLOW    ON
+        GIT_PROGRESS   ON
+        GIT_SUBMODULES "" 
+    )
+    set(DAWN_WERROR OFF CACHE BOOL "" FORCE)
+    set(TINT_WERROR OFF CACHE BOOL "" FORCE)
+    set(DAWN_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+    set(DAWN_ENABLE_METAL ON CACHE BOOL "" FORCE)
+    set(DAWN_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(DAWN_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
+    set(DAWN_ENABLE_D3D12 OFF CACHE BOOL "" FORCE)
+    set(DAWN_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
+    set(DAWN_ENABLE_OPENGLES OFF CACHE BOOL "" FORCE)
+    set(DAWN_ENABLE_DESKTOP_GL OFF CACHE BOOL "" FORCE)
+    set(DAWN_WERROR OFF)
+    set(TINT_WERROR OFF)
+    
+    FetchContent_MakeAvailable(dawn)
+    
+    if(TARGET dawn_internal_config)
+        target_compile_options(dawn_internal_config INTERFACE -Wno-error)
+    endif()
+
+    set(DAWN_INTERNAL_INCLUDES 
+        ${dawn_SOURCE_DIR}
+        ${dawn_SOURCE_DIR}/src 
+        ${dawn_BINARY_DIR}/gen/src
+        ${dawn_SOURCE_DIR}/third_party/abseil-cpp
+        # Dawn's Instance.h uses partition_alloc
+        ${dawn_SOURCE_DIR}/third_party/partition_alloc
+    )
 endif()
 
 # qt_standard_project_setup()
@@ -274,6 +317,11 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(${PROJECT_NAME} PRIVATE 
         gRPC::grpc++ 
         protobuf::libprotobuf
+        absl::cord
+        absl::strings
+        absl::time
+        absl::synchronization
+        absl::status
     )
     
     # Enable defining the WorkerClient implementation
@@ -326,6 +374,17 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Gui
     Qt6::Widgets
 )
+
+# Link Google Dawn (Native)
+if(NOT EMSCRIPTEN)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        dawn_native 
+        dawn_proc
+        webgpu_cpp
+    )
+    # Main application should only use public Dawn headers
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ACUTESIM_HAS_DAWN_NATIVE)
+endif()
 
 # Optional: Link Qt6::Svg if available
 if(Qt6Svg_FOUND)
@@ -1395,3 +1454,28 @@ target_include_directories(test_introspection PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
 )
+
+# GPU Connectivity Verification (Native Dawn)
+if(NOT EMSCRIPTEN)
+    add_executable(test_gpu_connectivity 
+        tests/test_gpu_connectivity.cpp
+        compute/solvers/webgpu_solver.cpp
+        compute/tensors/physics_tensors.cpp
+        compute/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_gpu_connectivity PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${DAWN_INTERNAL_INCLUDES}
+    )
+    target_link_libraries(test_gpu_connectivity PRIVATE 
+        Qt6::Core 
+        dawn_native 
+        dawn_proc
+        webgpu_cpp
+    )
+    target_compile_definitions(test_gpu_connectivity PRIVATE ACUTESIM_HAS_DAWN_NATIVE)
+    target_compile_features(test_gpu_connectivity PUBLIC cxx_std_17)
+endif()
