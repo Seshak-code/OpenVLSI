@@ -25,20 +25,26 @@ It serves as the **Middleware** layer connecting two specialized sub-systems:
 ### 3. The Client Layer (`./`)
 *   **Key File**: `grpc_worker_client.h` / `.cpp`.
 *   **Role**: **Dispatcher**.
-*   **Behavior**:
-    *   Takes the Script from `drivers/`.
-    *   Wraps it in a `SynthesisRequest` protobuf.
-    *   Sends it to the `WorkerService` (Local Docker or Remote Cluster).
-    *   Streams logs back to the GUI via callbacks.
+*   **Behavior**: Dispatches tasks to the `WorkerService` and streams logs back to the GUI.
+
+### 4. The Worker Agent (`server/`)
+*   **Key File**: `worker_server_main.cpp`, `worker_service_impl.h`.
+*   **Role**: **Executor**.
+*   **Behavior**: A headless C++ executable (`acutesim-worker`) that listens for gRPC commands, manages sandboxed subprocesses, and streams execution telemetry.
+
+### 5. The Parity Harness (`./`)
+*   **Key File**: `parity_harness.py`.
+*   **Role**: **Verifier**.
+*   **Behavior**: Orchestrates cross-platform numerical validation, asserting 0-bit deviation between the local engine and the remote worker.
 
 ## The Execution Pipeline
 
-1.  **User Action**: User clicks "Synthesize" in GUI.
-2.  **Driver Step**: `YosysTask::generateTcl(config)` creates a 50-line optimization script.
-3.  **Client Step**: `WorkerClient::runSynthesis` bundles this script into a gRPC request.
-4.  **Transport**: Request travels to a Worker Container (running `acutesim-worker`).
-5.  **Execution**: Worker runs `yosys -s script.tcl`.
-6.  **Streaming**: Logs ("ABC: optimization...") flow back in real-time to the AcuteSim Console.
+1.  **User Action**: User clicks "Synthesize" or "Verify Parity".
+2.  **Driver Step**: `YosysTask::generateTcl` or `RegressionRequest` payload is prepared.
+3.  **Client Step**: `WorkerClient::runSynthesis` or `RunRegression` bundles the request.
+4.  **Transport**: Request travels to an `acutesim-worker` instance.
+5.  **Execution**: Worker runs the tool via the `Subprocess` utility.
+6.  **Streaming**: Logs and pass/fail verdicts flow back in real-time.
 
 ## Core Logic & Snippets
 

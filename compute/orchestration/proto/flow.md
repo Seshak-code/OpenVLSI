@@ -28,6 +28,9 @@ service WorkerService {
 
   // Place & Route (Netlist -> GDSII/DEF)
   rpc RunPlaceAndRoute (PnRRequest) returns (stream PnRLog);
+
+  // Parity Validation (Regression Harness)
+  rpc RunRegression (RegressionRequest) returns (stream RegressionLog);
 }
 ```
 

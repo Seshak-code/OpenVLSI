@@ -47,6 +47,11 @@ graph TD
         KL["Klayout (GDS)"]
     end
 
+    subgraph Worker ["Parity Worker (Phase 0)"]
+        ASW["acutesim-worker"]
+        PH["Parity Harness (Python)"]
+    end
+
     %% Interconnections
     SE -->|Generates| TB
     TB -->|Feeds| Tens
@@ -58,8 +63,10 @@ graph TD
     Sens -->|Manipulates| SE
     Imag -->|Runs| Solv
     Orch -->|Dispatches to| Yosys
-    Orch -->|Dispatches to| OR
-    Orch -->|Dispatches to| KL
+    Orch -->|Dispatches to| ASW
+    ASW -->|Executes| Yosys
+    PH -->|Validates| ASW
+    PH -->|Compares| TB
 ```
 
 ---

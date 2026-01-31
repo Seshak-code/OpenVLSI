@@ -8,15 +8,18 @@ if(MSVC)
     add_compile_options(/fp:strict)
 else()
     add_compile_options(-ffloat-store -fno-fast-math -frounding-math)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error -Wno-narrowing")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error")
 endif()
 
 # Platform-aware default Qt prefix hints (can be overridden by CMAKE_PREFIX_PATH or Qt6_DIR)
 if(NOT DEFINED Qt6_DIR)
     if(APPLE)
-        set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qtbase/lib/cmake")
-        message(STATUS "Mac-specific CMAKE_PREFIX_PATH (qtbase) forced to: ${CMAKE_PREFIX_PATH}")
+        set(CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt")
+        set(Qt6_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6")
+        set(CMAKE_BUILD_RPATH "/opt/homebrew/opt/qt/lib")
+        set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};/opt/homebrew/opt/qt/lib")
+        message(STATUS "Mac-specific CMAKE_PREFIX_PATH (unified qt 6.9.0) forced to: ${CMAKE_PREFIX_PATH}")
     elseif(WIN32 AND NOT DEFINED CMAKE_PREFIX_PATH)
         # On Windows, try to detect a Qt installation under C:/Qt and append likely cmake folders.
         set(_qt_root "C:/Qt")
@@ -90,8 +93,17 @@ if(EMSCRIPTEN)
     find_package(Qt6 COMPONENTS Core Gui Widgets Test REQUIRED)
     find_package(Qt6 COMPONENTS Svg QUIET)
 else()
-    find_package(Qt6 COMPONENTS Core Gui Widgets Test Concurrent REQUIRED)
-    find_package(Qt6 COMPONENTS Svg QUIET)
+    # Aggressively force use of full 'qt' installation to avoid qtbase 6.9.3 collisions
+    set(Qt6_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6")
+    set(Qt6Core_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6Core")
+    set(Qt6Gui_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6Gui")
+    set(Qt6Widgets_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6Widgets")
+    set(Qt6Test_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6Test")
+    set(Qt6Concurrent_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6Concurrent")
+    set(Qt6Svg_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6Svg")
+    set(Qt6Concurrent_DIR "/opt/homebrew/opt/qt/lib/cmake/Qt6Concurrent")
+    
+    find_package(Qt6 COMPONENTS Core Gui Widgets Test Concurrent Svg REQUIRED)
 endif()
 
 if(NOT EMSCRIPTEN)
@@ -1340,6 +1352,30 @@ target_include_directories(test_fpu_determinism PRIVATE
 target_link_libraries(test_fpu_determinism PRIVATE Qt6::Core)
 add_test(NAME test_fpu_determinism COMMAND test_fpu_determinism)
 
+# Determinism Replay Test
+add_executable(test_determinism 
+    tests/test_determinism.cpp
+    physics/quick_analysis.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+)
+target_include_directories(test_determinism PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+)
+target_compile_features(test_determinism PUBLIC cxx_std_17)
+target_link_libraries(test_determinism PRIVATE Qt6::Core)
+add_test(NAME test_determinism COMMAND test_determinism)
+
 # Test Kernel Dispatch
 add_executable(test_kernel_dispatch 
     tests/test_kernel_dispatch.cpp
@@ -1478,4 +1514,84 @@ if(NOT EMSCRIPTEN)
     )
     target_compile_definitions(test_gpu_connectivity PRIVATE ACUTESIM_HAS_DAWN_NATIVE)
     target_compile_features(test_gpu_connectivity PUBLIC cxx_std_17)
+endif()
+
+# [NEW] Worker Server Executable (Orchestration Backend)
+# Requires gRPC and only builds on non-WASM platforms
+if(NOT EMSCRIPTEN)
+    # 1. Find Protobuf & gRPC Compiler Tools
+    find_package(Protobuf REQUIRED)
+    find_package(gRPC REQUIRED)
+    
+    # 2. Define Proto/gRPC Generation Paths
+    set(PROTO_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/proto")
+    set(PROTO_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/compute/orchestration/proto")
+    file(MAKE_DIRECTORY ${PROTO_GEN_DIR})
+    
+    set(PROTO_FILES "${PROTO_SRC_DIR}/worker_service.proto")
+    set(PB_SRCS "${PROTO_GEN_DIR}/worker_service.pb.cc")
+    set(PB_HDRS "${PROTO_GEN_DIR}/worker_service.pb.h")
+    set(GRPC_SRCS "${PROTO_GEN_DIR}/worker_service.grpc.pb.cc")
+    set(GRPC_HDRS "${PROTO_GEN_DIR}/worker_service.grpc.pb.h")
+
+    # 3. Generate Sources
+    set(gRPC_CPP_PLUGIN_EXECUTABLE "/opt/homebrew/bin/grpc_cpp_plugin")
+    
+    add_custom_command(
+        OUTPUT ${PB_SRCS} ${PB_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
+        COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+        ARGS --grpc_out=${PROTO_GEN_DIR}
+             --cpp_out=${PROTO_GEN_DIR}
+             -I ${PROTO_SRC_DIR}
+             --plugin=protoc-gen-grpc=${gRPC_CPP_PLUGIN_EXECUTABLE}
+             ${PROTO_FILES}
+        DEPENDS ${PROTO_FILES}
+    )
+
+    # 4. Define Worker Executable
+    add_executable(acutesim-worker
+        compute/orchestration/server/worker_server_main.cpp
+        compute/orchestration/server/subprocess.cpp
+        compute/orchestration/server/subprocess.h
+        compute/orchestration/server/worker_service_impl.h
+        ${PB_SRCS}
+        ${GRPC_SRCS}
+        ${PB_HDRS}
+        ${GRPC_HDRS}
+    )
+    
+    # Enable C++17 filesystem
+    target_compile_features(acutesim-worker PRIVATE cxx_std_17)
+    
+    target_link_libraries(acutesim-worker PRIVATE 
+        gRPC::grpc++ 
+        protobuf::libprotobuf
+        # No Qt dependency for the worker - keep it lightweight
+    )
+    
+    # Include directories for proto headers
+    target_include_directories(acutesim-worker PRIVATE
+        ${PROTO_GEN_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+
+    # [NEW] Worker Connectivity Test
+    add_executable(test_worker_connectivity
+        tests/test_worker_connectivity.cpp
+        compute/orchestration/grpc_worker_client.cpp
+        ${PB_SRCS}
+        ${GRPC_SRCS}
+        ${PB_HDRS}
+        ${GRPC_HDRS}
+    )
+    target_compile_features(test_worker_connectivity PRIVATE cxx_std_17)
+    target_compile_definitions(test_worker_connectivity PRIVATE ACUTESIM_ENABLE_ORCHESTRATION)
+    target_link_libraries(test_worker_connectivity PRIVATE 
+        gRPC::grpc++ 
+        protobuf::libprotobuf
+    )
+    target_include_directories(test_worker_connectivity PRIVATE
+        ${PROTO_GEN_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
 endif()

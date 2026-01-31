@@ -115,6 +115,11 @@ test_export_consistency
 test_multi_domain_power
 test_verification_harness
 test_kernel_dispatch
+test_gpu_connectivity
+test_worker_connectivity
+acutesim-worker
+test_soa_bridge
+test_mode_ladder
 
 # ============================================
 # Qt Auto-Generated Files
@@ -137,6 +142,8 @@ qtlogo.svg
 !webapp/*.html
 *.svg
 server.pid
+worker.pid
+worker.log
 
 # ============================================
 # Python Artifacts
@@ -145,6 +152,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyc
+*_pb2.py
+*_pb2_grpc.py
 
 # ============================================
 # Temporary & Log Files

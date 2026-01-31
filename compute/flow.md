@@ -11,7 +11,7 @@ Dependencies flow **downwards**. A layer may only import from layers below it.
 
 | Layer | Directory | Responsibility | Key Abstraction |
 | :--- | :--- | :--- | :--- |
-| **5. Control** | `orchestration/` | External Tool Management | `WorkerClient` |
+| **5. Control** | `orchestration/` | External Tool & Worker Management | `WorkerClient`, `acutesim-worker` |
 | **4. Strategy** | `solvers/` | Physics Orchestration | `CircuitSim::solveDC` |
 | **3. Reliability** | `infrastructure/` | Safety & Tracing | `SafeUtils`, `SolverTrace` |
 | **2. Operations** | `math/` | Numerical Kernels | `solvePCG`, `solveLU`, `EmulatedF64` |

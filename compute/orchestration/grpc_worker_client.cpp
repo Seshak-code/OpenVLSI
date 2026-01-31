@@ -50,8 +50,8 @@ WorkerStatus WorkerClient::getStatus() {
 
     if (status.ok()) {
         std::vector<std::string> tools;
-        for (const auto& tool : response.supported_tools()) {
-            tools.push_back(tool);
+        for (const auto& [name, version] : response.tools()) {
+            tools.push_back(name + " (" + version + ")");
         }
         return {
             response.worker_id(),

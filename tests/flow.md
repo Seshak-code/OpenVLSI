@@ -22,6 +22,8 @@ The `tests/` directory contains the **Verification Framework**. It enforces the 
 ### 3. AI & Orchestration
 -   **`test_ai_simulation_intelligence.cpp`**: Validates `SpeculativeRunner` and `FailureTaxonomy`.
 -   **`test_copilot_validate.cpp`**: End-to-end flow from "Prompt" to "Circuit Change".
+-   **`parity_harness.py`**: A Python-based agent that connects to `acutesim-worker` via gRPC, dispatches the regression suite, and verifies 0-bit parity across platforms.
+-   **`test_worker_connectivity.cpp`**: Verifies gRPC transport and worker readiness.
 
 ## 🤖 SME Validation Checklist
 *(Consult this list before modifying `tests/`)*

@@ -17,6 +17,9 @@ service WorkerService {
 
   // Digital Simulation (Verilog/VHDL)
   rpc RunSimulation (SimulationRequest) returns (stream SimulationLog);
+
+  // Parity Validation (Regression Harness)
+  rpc RunRegression (RegressionRequest) returns (stream RegressionLog);
 }
 
 // ============================================================================
@@ -27,11 +30,12 @@ message StatusRequest {}
 
 message StatusResponse {
   string worker_id = 1;
-  string version = 2;
+  string version = 2; // e.g. "0.1.0"
   bool ready = 3;
   double cpu_usage = 4;
   double memory_usage = 5;
-  repeated string supported_tools = 6; // ["yosys", "openroad", "verilator"]
+  // Map of tool name to version string, e.g. {"yosys": "0.40", "openroad": "2.0"}
+  map<string, string> tools = 6; 
 }
 
 message FileData {
@@ -59,7 +63,7 @@ message SynthesisRequest {
 }
 
 message SynthesisLog {
-  string job_id = 1;
+  string job_id = 1; // Explicit job ID for multiplexing
   string log_line = 2;
   bool is_error = 3;
   bool is_finished = 4;
@@ -115,4 +119,26 @@ message SimulationLog {
   
   // VCD waveform data
   bytes vcd_chunk = 4;
+}
+
+// ============================================================================
+// REGRESSION (Parity Harness)
+// ============================================================================
+
+message RegressionRequest {
+  string job_id = 1;
+  string suite_name = 2; // e.g. "all", "fpu_determinism" -- maps to executable args
+  string solver_mode = 3; // "cpu", "cpu_simd", "gpu"
+  string precision = 4;   // "fp64", "fp64_emulated"
+}
+
+message RegressionLog {
+  string job_id = 1;
+  string log_line = 2;
+  bool is_error = 3;
+  bool is_finished = 4;
+  bool passed = 5;       // Only valid if is_finished=true
+  
+  // Optional result data (e.g. JSON summary)
+  string result_json = 6; 
 }

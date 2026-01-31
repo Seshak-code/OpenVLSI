@@ -52,6 +52,13 @@ int main(int argc, char *argv[]) {
     }
   }
 
+#ifndef __EMSCRIPTEN__
+  // Force use of matching 6.9.0 plugins BEFORE QApplication constructor loads the platform plugin
+  qputenv("QT_PLUGIN_PATH", "/opt/homebrew/opt/qt/share/qt/plugins");
+  // Specifically force the platform plugin search path to avoid picking up qtbase 6.9.3's cocoa plugin
+  qputenv("QT_QPA_PLATFORM_PLUGIN_PATH", "/opt/homebrew/opt/qt/share/qt/plugins/platforms");
+#endif
+
   QApplication app(argc, argv);
   
   // Explicit Version Log
