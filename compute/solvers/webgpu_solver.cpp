@@ -4,7 +4,11 @@
 #include <cstring>
 
 // Helper for Dawn's new WGPUStringView API
+#ifdef __EMSCRIPTEN__
+#define WGPU_SV(str) str
+#else
 #define WGPU_SV(str) { str, strlen(str) }
+#endif
 
 #ifdef __EMSCRIPTEN__
 #include <webgpu/webgpu.h>
@@ -152,10 +156,17 @@ bool WebGPUSolver::initWebGPU() {
 WGPUShaderModule WebGPUSolver::loadShader(const std::string& source) {
     if (!device) return nullptr;
 
+#ifdef __EMSCRIPTEN__
+    WGPUShaderModuleWGSLDescriptor wgslDesc = {};
+    wgslDesc.chain.next = nullptr;
+    wgslDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
+    wgslDesc.code = source.c_str();
+#else
     WGPUShaderSourceWGSL wgslDesc = {};
     wgslDesc.chain.next = nullptr;
     wgslDesc.chain.sType = WGPUSType_ShaderSourceWGSL;
     wgslDesc.code = { source.data(), source.length() };
+#endif
 
     WGPUShaderModuleDescriptor desc = {};
     desc.nextInChain = &wgslDesc.chain;

@@ -14,18 +14,26 @@
 #include <QGroupBox>
 #include <QMap>
 #include <QKeyEvent>
+#include "../core/editor_manager.h" // For IEditor
+#include "../core/hierarchy_path.h" // Phase 5: Hierarchical Navigation
 #include "../components/visual_component.h"
-#include "../../components/circuit.h" 
+#include "../../components/circuit.h"
 #include "schematic_view.h"
 
 
 #include <QJsonArray>
+#include <QJsonObject>
 #include "gui_types.h"
 #include "../analysis/erc_engine.h"
 #include "../analysis/erc_autofix.h"
 #include "../analysis/erc_autofix.h"
 #include "../../physics/simulation_profile.h"
 #include "../../components/design_db.h"
+
+// Forward declarations
+namespace acutesim::gui::widgets {
+    class BreadcrumbWidget;
+}
 
 // ============================================================================
 // DATA STRUCTURES
@@ -44,14 +52,30 @@ struct TerminalSnapResult {
 class GridScene : public QGraphicsScene, public acutesim::components::DesignDbObserver {
     Q_OBJECT
 public:
-    explicit GridScene(QObject* parent = nullptr);
-    ~GridScene() override { designDb.removeObserver(this); }
+    enum class Mode {
+        Interactive,
+        Headless
+    };
+
+    explicit GridScene(Mode mode = Mode::Interactive, QObject* parent = nullptr);
+    ~GridScene() override;
+
+    Mode mode() const { return m_mode; }
 
     void setTool(ComponentType t, const QString& subName = "");
     // setMode() removed - unified component library
     void setGridVisible(bool visible);
     void setSnappingEnabled(bool enabled);
     bool isSnappingEnabled() const { return snappingEnabled; }
+    
+    // Core Logic (moved from Editor to support Headless)
+    QString generateUniqueId(ComponentType type);
+    QString placeComponent(const QString& typeStr, QPointF pos, double rotation, const QJsonObject& params);
+    void loadState(const QJsonObject& state);
+    VisualComponent* findComponent(const QString& name) const;
+    QString resolveSubcircuitPath(const QString& name) const;
+    void setFilePath(const QString& path) { m_filePath = path; }
+    QString getFilePath() const { return m_filePath; }
     
     // Quick Preview
     void setQuickPreviewEnabled(bool enabled);
@@ -123,13 +147,15 @@ signals:
     void wireSelected(VisualWire* wire);
     void violationsChanged(const QList<ERC::Violation>& violations);
     void requestOpenSubcircuit(const QString& filePath); // Drill-Down Event
+    void requestAscend(); // Phase 5: Ascend Event
 
 private:
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
 
     bool gridVisible = true;
-    bool snappingEnabled = true;
-
+    bool snappingEnabled = true; // State
+    Mode m_mode;
+    QString m_filePath;
     ComponentType currentTool = ComponentType::Select;
     QString currentSubTool; // Name for SubCircuit
     
@@ -187,10 +213,19 @@ protected:
 // ============================================================================
 // MAIN EDITOR WIDGET
 // ============================================================================
-class SchematicEditor : public QWidget {
+// ============================================================================
+// MAIN EDITOR WIDGET
+// ============================================================================
+class SchematicEditor : public acutesim::gui::core::IEditor {
     Q_OBJECT
 public:
-    // setMode()/getMode() removed - unified component library
+    explicit SchematicEditor(const QString& filePath, QWidget* parent = nullptr);
+
+    // IEditor Interface
+    QString filePath() const override { return filePath_; }
+    QString title() const override;
+    bool isDirty() const override { return modified_; }
+    acutesim::gui::core::EditorCapabilities capabilities() const override;
 
     // Quick Preview
     void setQuickPreviewEnabled(bool enabled);
@@ -205,7 +240,6 @@ public:
     // Topology hash (for simulation state tracking)
     size_t getTopologyHash() const { return topologyHash_; }
 
-    explicit SchematicEditor(QWidget* parent = nullptr);
     TensorNetlist toNetlist() { return scene->generateNetlist(); }
     
     GridScene* getScene() const { return scene; }
@@ -311,14 +345,27 @@ public:
     bool loadFromFile(const QString& filePath);
     void createSubcircuitFromSelection();
 
+    // --- Phase 5: Hierarchical Drill-Down Navigation ---
+public:
+    acutesim::gui::core::HierarchyPath* hierarchyPath() { return hierarchyPath_; }
+    const acutesim::gui::core::HierarchyPath* hierarchyPath() const { return hierarchyPath_; }
+
+    void descendInto(const QString& filePath, const QString& instanceName);
+    void ascend();
+    void navigateToDepth(int depth);
+    bool canAscend() const;
+    QString rootFilePath() const { return rootFilePath_; }
+
 signals:
-    void itemSelected(VisualComponent* item); 
+    void itemSelected(VisualComponent* item);
     void wireSelected(VisualWire* wire);
     void requestOpenSubcircuit(const QString& filePath); // Drill-Down Event
+    void hierarchyChanged();  // Emitted when hierarchy navigation occurs
 
 private slots:
     void onGridToggled(bool checked);
     void onSnappingToggled(bool checked);
+    void onBreadcrumbNavigation(int depth);
 
 
 private:
@@ -326,21 +373,41 @@ private:
     GridScene* scene;
     SchematicView* view;
     QLabel* statusLabel;
-    
+
     // Per-file simulation profiles
     // State
     QMap<QString, Simulation::SimulationProfile> profiles_;
     QString currentProfileId_;
     Simulation::SimulationProfile* currentProfile_ = nullptr;
     size_t topologyHash_ = 0;
-    
+
     // Flags
     bool ercEnabled_ = true;
     bool quickPreviewEnabled_ = true; // Default: on
     bool modified_ = false;
-    
+
     void setupUi();
     QWidget* createRibbon();
     QPushButton* createToolButton(const QString& text, ComponentType type);
     QMap<ComponentType, QPushButton*> toolButtons;
+
+    QString filePath_;
+    QString rootFilePath_;  // Original file path (for hierarchy root tracking)
+
+    // --- Phase 5: Hierarchy Navigation State ---
+    acutesim::gui::core::HierarchyPath* hierarchyPath_ = nullptr;
+    acutesim::gui::widgets::BreadcrumbWidget* breadcrumbWidget_ = nullptr;
+
+    // Editor state stack for navigation restoration
+    struct EditorState {
+        QJsonObject sceneState;
+        QPointF viewportCenter;
+        qreal zoomLevel;
+        QString currentProfileId;
+    };
+    QVector<EditorState> stateStack_;
+
+    void saveCurrentState();
+    void restoreState(const EditorState& state);
+    void initializeHierarchy();
 };

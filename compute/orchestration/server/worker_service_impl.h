@@ -199,6 +199,41 @@ public:
         return Status::OK;
     }
 
+    Status RunHDLSimulation(ServerContext* context, const HDLSimulationRequest* request, ServerWriter<HDLSimulationLog>* writer) override {
+        std::string job_id = request->job_id();
+        
+        // Placeholder for Verilator / Icarus Verilog integration
+        HDLSimulationLog log;
+        log.set_job_id(job_id);
+        log.set_log_line("Launch HDL Simulation (Verilator/Icarus) - Pending Tool Integration");
+        writer->Write(log);
+        
+        HDLSimulationLog endLog;
+        endLog.set_job_id(job_id);
+        endLog.set_is_finished(true);
+        writer->Write(endLog);
+        
+        return Status::OK;
+    }
+
+    Status RunCircuitSimulation(ServerContext* context, const CircuitSimulationRequest* request, ServerWriter<CircuitSimulationLog>* writer) override {
+        std::string job_id = request->job_id();
+        
+        // This is the primary path for Tensor MNA
+        CircuitSimulationLog log;
+        log.set_job_id(job_id);
+        log.set_log_line("Launch Circuit Simulation (Tensor MNA) - Mode: " + request->solver_mode());
+        writer->Write(log);
+        
+        // Placeholder logic to run the core solver
+        CircuitSimulationLog endLog;
+        endLog.set_job_id(job_id);
+        endLog.set_is_finished(true);
+        writer->Write(endLog);
+        
+        return Status::OK;
+    }
+
 private:
     std::map<std::string, std::string> tools_;
 

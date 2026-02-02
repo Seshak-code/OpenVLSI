@@ -17,11 +17,11 @@
 #include <QTreeView>
 #include "schematic_editor.h"
 #include "../panels/ai_assistant_panel.h"
-#include "component_library.h"
-#include "simulation_workspace.h"
-#include "system_inspector.h"
-#include "design_flow.h"
-#include "hdl_editor.h"  // Phase 14.1
+#include "../widgets/component_library.h"
+#include "../analysis/simulation_workspace.h"
+#include "../analysis/system_inspector.h"
+#include "../widgets/design_flow.h"
+#include "editor_manager.h" // Phase: GUI Overhaul
 #include <QStackedWidget>
 #include <QSplitter>
 #include <QPointer>
@@ -32,7 +32,6 @@
 #include "../widgets/debug_suggestions_panel.h"
 #include "../widgets/command_palette.h"
 
-class HDLEditor;
 class WelcomeWidget;
 class DockingManager;
 namespace acutesim { namespace gui { namespace core { class ActivityBar; } } }
@@ -65,17 +64,16 @@ private:
     // Design Flow Management
     DesignFlowManager* flowManager;
     QTabWidget* stageTabs;           // Top-level stage tabs (RTL, Synthesis, Physical, Verification)
-    QTabWidget* rtlPageTabs;         // Sub-tabs within RTL stage (multi-page schematics)
+    QTabWidget* editorTabs;          // [NEW] Unified Code/Schematic Tabs
     
     // Core Components
+    acutesim::gui::core::EditorManager* editorManager; // [NEW] Central Editor Controller
     SchematicEditor* schematicEditor; // Active schematic editor (points to current RTL page)
-    HDLEditor* hdlEditor; // Phase 14: Code Editor
     SimulationWorkspace* simulationWorkspace; // Phase 1.7: VS Code-style simulation
     
     // Actions
     QAction* viewQuickPreviewAction; // Phase 1.7.7 Toggle
     QAction* hdlToggleAction;        // Phase 7: HDL Editor visibility
-    QSplitter* rtlSplitter_;         // Phase 7: Access for HDL toggle
     WelcomeWidget* welcomeWidget;
     
     // Docks
@@ -135,6 +133,7 @@ private slots:
     
     // Helpers
     void createProjectDock();
+    void populateProjectTree();
     void createLibraryDock();
     void createPropertiesDock();
     void createAiDock();
@@ -150,8 +149,6 @@ private slots:
 
     // File Operations
     void openFileFromExplorer(const QString& category, const QString& fileName, const QString& filePath);
-    void openSchematicFile(const QString& filePath, const QString& fileName);
-    void openHDLFile(const QString& filePath, const QString& fileName);
     // detectModeFromSchematic() removed - unified component library
 
     // Actions
@@ -162,17 +159,13 @@ private slots:
     // Stage Switching
     void setupStageToolbar();
     void onStageChanged(DesignStage stage);
-    void addRtlPage();
-    void createSchematicFromWelcome();
-    void onRtlTabChanged(int index);
+
     // modeLabel() removed - unified component library
 
 private:
     // currentMode removed - unified component library
     QToolBar* modeToolbar;
     QAction* toggleModeAction;
-    void syncSchematicToVerilog();
-    void syncVerilogToSchematic();
     
     // VS Code Style
     acutesim::gui::core::ActivityBar* activityBar_;

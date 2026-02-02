@@ -35,7 +35,9 @@ SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     
     // Initialize default profiles
     profiles_["quick_dc"] = Simulation::SimulationProfile::quickDC();
+
     profiles_["transient_default"] = Simulation::SimulationProfile::transient();
+
     profiles_["ac_sweep_default"] = Simulation::SimulationProfile::acSweep();
     
     currentProfileId_ = "quick_dc";
@@ -305,6 +307,27 @@ QString SimulationWorkspace::getAnalysisHelp(Simulation::AnalysisType type) cons
         default:
             return "Select an analysis type to see its description.";
     }
+}
+
+// Helper to get help text (moved down)
+
+void SimulationWorkspace::setContext(const acutesim::gui::core::SimulationContext& context) {
+    currentContext_ = context;
+    
+    // Adapt UI based on context
+    if (context.type == acutesim::gui::core::SimulationType::Digital_Verilog) {
+        // Hide analog specific widgets or change labels?
+        // For now, minimal adaptation
+        findChild<QLabel*>("statusLabel")->setText("Ready (Digital)");
+    } else if (context.type == acutesim::gui::core::SimulationType::Analog_SPICE) {
+         findChild<QLabel*>("statusLabel")->setText("Ready (Analog)");
+    } else {
+         findChild<QLabel*>("statusLabel")->setText("Ready");
+    }
+}
+
+void SimulationWorkspace::markTopologyChanged(size_t newHash) {
+    onTopologyChanged(newHash);
 }
 
 void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {

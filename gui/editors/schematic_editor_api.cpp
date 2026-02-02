@@ -7,13 +7,7 @@
 // ============================================================================
 
 VisualComponent* SchematicEditor::findComponent(const QString& id) const {
-    if (!scene) return nullptr;
-    for (auto* item : scene->items()) {
-        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if (c->name == id) return c;
-        }
-    }
-    return nullptr;
+    return scene ? scene->findComponent(id) : nullptr;
 }
 
 void SchematicEditor::highlightComponent(const QString& name) {
@@ -28,78 +22,11 @@ void SchematicEditor::highlightComponent(const QString& name) {
 }
 
 QString SchematicEditor::generateUniqueId(ComponentType type) {
-    QString prefix;
-    switch(type) {
-        case ComponentType::Resistor: prefix = "R"; break;
-        case ComponentType::Capacitor: prefix = "C"; break;
-        case ComponentType::Inductor: prefix = "L"; break;
-        case ComponentType::VoltageSource: prefix = "V"; break;
-
-        case ComponentType::Diode: prefix = "D"; break;
-        case ComponentType::Mosfet: prefix = "M"; break;
-        case ComponentType::Bjt: prefix = "Q"; break;
-        case ComponentType::Ground: prefix = "GND"; break; 
-        default: prefix = "U"; break;
-    }
-    
-    if (prefix == "GND") return "GND"; // Ground doesn't need unique ID usually? Or GND1, GND2.. keep standard 0 node.
-    
-    int maxIdx = 0;
-    // Scan existing
-    for (auto* item : scene->items()) {
-        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if (c->name.startsWith(prefix)) {
-                QString numPart = c->name.mid(prefix.length());
-                bool ok;
-                int idx = numPart.toInt(&ok);
-                if (ok) maxIdx = std::max(maxIdx, idx);
-            }
-        }
-    }
-    return QString("%1%2").arg(prefix).arg(maxIdx + 1);
+    return scene ? scene->generateUniqueId(type) : "";
 }
 
 QString SchematicEditor::placeComponent(const QString& typeStr, QPointF pos, double rotation, const QJsonObject& params) {
-    ComponentType type = stringToComponentType(typeStr);
-    
-    if (type == ComponentType::Select || type == ComponentType::Wire) {
-        qDebug() << "placeComponent: Unknown type:" << typeStr;
-        return "";
-    }
-    
-    VisualComponent* comp = new VisualComponent(type);
-    
-    // Auto-ID
-    comp->name = generateUniqueId(type);
-    
-    // Apply Params
-    if (params.contains("value")) comp->value = params["value"].toString();
-    
-    // Generic Params Map
-    for(auto it = params.begin(); it != params.end(); ++it) {
-        if (it.key() != "value" && it.key() != "rotation" && it.key() != "flipped") {
-             comp->params[it.key()] = it.value().toString();
-        }
-    }
-    
-    // Position
-    comp->setPos(pos);
-    comp->setRotation(rotation);
-    
-    // Apply Flip
-    if (params.contains("flipped")) {
-        // Can be boolean or string "true"
-        QJsonValue v = params["flipped"];
-        if (v.isBool() && v.toBool()) comp->flip();
-        else if (v.isString() && v.toString() == "true") comp->flip();
-    }
-    
-    scene->addItem(comp);
-    scene->triggerTopologyUpdate();
-    
-    qDebug() << "[SchematicEditor] Placed component:" << typeStr << "as" << comp->name << "at" << pos;
-    
-    return comp->name;
+    return scene ? scene->placeComponent(typeStr, pos, rotation, params) : "";
 }
 
 bool SchematicEditor::moveComponent(const QString& id, double x, double y) {
@@ -188,6 +115,11 @@ QString SchematicEditor::placeProbe(const QString& id, QPointF bodyPos, QPointF 
     comp->name = id.isEmpty() ? generateUniqueId(ComponentType::Probe) : id;
     comp->setPos(bodyPos);
     
+    // Capture hierarchical context for late-binding simulation traces
+    if (hierarchyPath_) {
+        comp->probeBinding.hierarchicalPath = hierarchyPath_->getInstancePath();
+    }
+
     scene->addItem(comp);
     
     // Set tips relative to body

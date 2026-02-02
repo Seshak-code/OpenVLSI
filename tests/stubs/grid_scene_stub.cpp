@@ -41,7 +41,10 @@ QJsonObject GridScene::getCircuitState() const { return {}; }
 void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {}
 
 // SchematicEditor Stubs (needed because MOC generates calls to these)
-SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {}
+SchematicEditor::SchematicEditor(const QString& filePath, QWidget* parent) : acutesim::gui::core::IEditor(parent), filePath_(filePath) {}
 void SchematicEditor::onGridToggled(bool) {}
 void SchematicEditor::onSnappingToggled(bool) {}
+acutesim::gui::core::EditorCapabilities SchematicEditor::capabilities() const { return {}; }
+QString SchematicEditor::title() const { return "Stub"; }
+
 

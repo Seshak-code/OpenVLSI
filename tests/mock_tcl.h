@@ -9,6 +9,10 @@ typedef struct Tcl_Interp {
     std::string result;
 } Tcl_Interp;
 
+typedef struct Tcl_Obj {
+    double doubleValue;
+} Tcl_Obj;
+
 typedef int (*Tcl_CmdProc) (void *clientData, Tcl_Interp *interp, int argc, const char *argv[]);
 typedef void *ClientData;
 
@@ -48,4 +52,16 @@ inline Tcl_Interp* Tcl_CreateInterp() {
 inline int Tcl_Eval(Tcl_Interp *interp, const char *script) {
     std::cout << "[Mock TCL] Eval: " << script << std::endl;
     return TCL_OK;
+}
+
+inline Tcl_Obj* Tcl_NewDoubleObj(double val) {
+    Tcl_Obj* obj = new Tcl_Obj();
+    obj->doubleValue = val;
+    return obj;
+}
+
+inline void Tcl_SetObjResult(Tcl_Interp* interp, Tcl_Obj* obj) {
+    if (interp && obj) {
+        interp->result = std::to_string(obj->doubleValue);
+    }
 }

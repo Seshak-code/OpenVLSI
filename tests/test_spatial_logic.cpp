@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
     
     qDebug() << "[Test] Spatial Intelligence Verification...";
     
-    SchematicEditor editor;
+    SchematicEditor editor("test.sch");
     GridScene* scene = editor.getScene();
     
     // 1. Collision Test

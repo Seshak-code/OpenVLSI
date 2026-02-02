@@ -181,13 +181,22 @@ add_executable(${PROJECT_NAME}
     gui/core/activity_bar.h
     gui/core/keybinding_manager.cpp
     gui/core/keybinding_manager.h
+    gui/core/keybinding_manager.h
     gui/core/icon_provider.cpp
     gui/core/icon_provider.h
+    gui/core/editor_manager.cpp
+    gui/core/editor_manager.h
+    gui/core/hierarchy_path.cpp
+    gui/core/hierarchy_path.h
     resources/icons.qrc
     gui/editors/schematic_editor.cpp
     gui/editors/schematic_editor_sync.cpp
     components/netlist_export.cpp
     gui/editors/schematic_editor.h
+    gui/editors/code_editor.cpp
+    gui/editors/code_editor.h
+    gui/core/sim_auto_detector.cpp
+    gui/core/sim_auto_detector.h
     gui/editors/schematic_view.cpp
     gui/editors/schematic_view.h
     gui/editors/component_wizard.cpp
@@ -199,6 +208,8 @@ add_executable(${PROJECT_NAME}
 
     gui/widgets/component_library.cpp
     gui/widgets/component_library.h
+    gui/widgets/breadcrumb_widget.cpp
+    gui/widgets/breadcrumb_widget.h
     gui/widgets/compliance_report_dialog.cpp
     gui/widgets/compliance_report_dialog.h
     gui/widgets/compliance_report_dialog.h
@@ -232,8 +243,6 @@ add_executable(${PROJECT_NAME}
     gui/ai/ai_action_history.cpp
     gui/ai/ai_action_history.h
     gui/ai/ai_action_envelope.h
-    gui/editors/hdl_editor.cpp
-    gui/editors/hdl_editor.h
     gui/core/welcome_widget.cpp
     gui/core/welcome_widget.h
     ai_api/system/schema_api.cpp
@@ -306,6 +315,8 @@ add_executable(${PROJECT_NAME}
     components/design_db.cpp
     gui/scripting/tcl_bridge.cpp
     gui/scripting/tcl_bridge.h
+    gui/core/subcircuit_resolver.cpp
+    gui/components/standard_cell_visualizer.cpp
 )
 
 # Phase 12: Orchestration Library (gRPC Worker Client)
@@ -427,7 +438,9 @@ if(EMSCRIPTEN)
         "-sEXIT_RUNTIME=1"
         "-sERROR_ON_UNDEFINED_SYMBOLS=0"
         "-sUSE_WEBGPU=1"
-        "-sEXPORTED_RUNTIME_METHODS=['specialHTMLTargets','UTF8ToString','stringToUTF8','ccall','cwrap','wasmMemory']"
+        "-sMODULARIZE=1"
+        "-sEXPORT_NAME=AcuteSim"
+        "-sEXPORTED_RUNTIME_METHODS=['specialHTMLTargets','UTF8ToString','stringToUTF8','ccall','cwrap','wasmMemory','FS','callMain','ENV']"
         "-sEXPORTED_FUNCTIONS=['_main','_dumpStorageFile','_malloc','_free']"
         "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/resources@/resources"
     )
@@ -560,6 +573,8 @@ if(NOT EMSCRIPTEN)
         tests/test_auto_harness.cpp
         gui/components/visual_component.cpp
         gui/components/probe_tip.cpp
+        gui/core/hierarchy_path.cpp
+        gui/widgets/breadcrumb_widget.cpp
         gui/editors/schematic_editor.cpp
         gui/editors/schematic_view.cpp
         gui/editors/component_wizard.cpp
@@ -570,7 +585,9 @@ if(NOT EMSCRIPTEN)
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
         gui/analysis/logic_analyzer.cpp
-        gui/editors/hdl_editor.cpp
+        gui/editors/code_editor.cpp
+        gui/core/editor_manager.cpp
+        gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
         components/design_db.cpp
@@ -664,6 +681,8 @@ if(NOT EMSCRIPTEN)
         tests/test_copilot_validate.cpp
         gui/components/visual_component.cpp
         gui/components/probe_tip.cpp
+        gui/core/hierarchy_path.cpp
+        gui/widgets/breadcrumb_widget.cpp
         gui/editors/schematic_editor.cpp
         gui/editors/schematic_view.cpp
         gui/editors/component_wizard.cpp
@@ -674,8 +693,11 @@ if(NOT EMSCRIPTEN)
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
         gui/analysis/logic_analyzer.cpp
-        gui/editors/hdl_editor.cpp
+        gui/editors/code_editor.cpp
+        gui/core/editor_manager.cpp
+        gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
+        gui/core/subcircuit_resolver.cpp
     gui/scripting/tcl_bridge.cpp
     components/pdk_compliance.cpp
     gui/widgets/compliance_report_dialog.cpp
@@ -952,20 +974,26 @@ target_link_libraries(test_pdk_manager PRIVATE Qt6::Core Qt6::Test)
 target_compile_features(test_pdk_manager PUBLIC cxx_std_17)
 
 # Test PDK Swap (Regression)
-add_executable(test_pdk_swap 
-    tests/test_pdk_swap.cpp 
-    components/pdk_manager.cpp 
-    components/pdk_compliance.cpp 
+add_executable(test_pdk_swap
+    tests/test_pdk_swap.cpp
+    components/pdk_manager.cpp
+    components/pdk_compliance.cpp
     components/netlist_export.cpp
-    
+
     gui/components/visual_component.cpp
 
     gui/components/probe_tip.cpp
     gui/styling/theme_manager.cpp
     gui/styling/theme_manager.h
+    gui/core/hierarchy_path.cpp
+    gui/widgets/breadcrumb_widget.cpp
     tests/stubs/grid_scene_stub.cpp # Stub implementation
     components/design_db.cpp
     gui/editors/schematic_editor.h # Triggers MOC for GridScene
+    gui/core/editor_manager.cpp
+    gui/core/sim_auto_detector.cpp
+    gui/editors/code_editor.cpp
+    gui/core/icon_provider.cpp
 )
 target_include_directories(test_pdk_swap PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/components
@@ -1001,6 +1029,8 @@ if(NOT EMSCRIPTEN)
         tests/test_pdk_compliance.cpp
         gui/components/visual_component.cpp
         gui/components/probe_tip.cpp
+        gui/core/hierarchy_path.cpp
+        gui/widgets/breadcrumb_widget.cpp
         gui/editors/schematic_editor.cpp
         gui/editors/schematic_view.cpp
         gui/editors/component_wizard.cpp
@@ -1010,8 +1040,9 @@ if(NOT EMSCRIPTEN)
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
-        gui/analysis/logic_analyzer.cpp
-        gui/editors/hdl_editor.cpp
+        gui/editors/code_editor.cpp
+        gui/core/editor_manager.cpp
+        gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
         components/design_db.cpp
@@ -1102,6 +1133,8 @@ if(NOT EMSCRIPTEN)
         tests/test_hierarchical_sim.cpp
         gui/components/visual_component.cpp
         gui/components/probe_tip.cpp
+        gui/core/hierarchy_path.cpp
+        gui/widgets/breadcrumb_widget.cpp
         gui/editors/schematic_editor.cpp
         gui/editors/schematic_view.cpp
         gui/editors/component_wizard.cpp
@@ -1112,7 +1145,9 @@ if(NOT EMSCRIPTEN)
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
         gui/analysis/logic_analyzer.cpp
-        gui/editors/hdl_editor.cpp
+        gui/editors/code_editor.cpp
+        gui/core/editor_manager.cpp
+        gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
         ai_api/system/schema_api.cpp
@@ -1192,6 +1227,20 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_hierarchical_sim COMMAND test_hierarchical_sim)
 endif()
 
+# Phase 5: Hierarchy Path Unit Test
+add_executable(test_hierarchy_path
+    tests/test_hierarchy_path.cpp
+    gui/core/hierarchy_path.cpp
+    gui/core/hierarchy_path.h
+)
+target_include_directories(test_hierarchy_path PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+)
+target_link_libraries(test_hierarchy_path PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_hierarchy_path PUBLIC cxx_std_17)
+add_test(NAME test_hierarchy_path COMMAND test_hierarchy_path)
+
 enable_testing()
 
 add_test(NAME test_safe_io COMMAND test_safe_io)
@@ -1217,6 +1266,12 @@ if(NOT EMSCRIPTEN)
         gui/components/visual_component.cpp
         gui/components/probe_tip.cpp
         gui/styling/theme_manager.cpp
+        gui/core/editor_manager.cpp
+        gui/core/sim_auto_detector.cpp
+        gui/core/hierarchy_path.cpp
+        gui/widgets/breadcrumb_widget.cpp
+        gui/editors/code_editor.cpp
+        gui/core/icon_provider.cpp
         gui/widgets/compliance_report_dialog.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
@@ -1438,58 +1493,135 @@ target_include_directories(test_std_cells PRIVATE
 target_compile_features(test_std_cells PUBLIC cxx_std_17)
 target_link_libraries(test_std_cells PRIVATE Qt6::Core)
 
-# Validating flow tests
-add_executable(test_flow tests/test_flow.cpp)
-target_link_libraries(test_flow PRIVATE Qt6::Core)
-target_include_directories(test_flow PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/components 
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
+if(NOT EMSCRIPTEN)
+    # Validating flow tests
+    add_executable(test_flow tests/test_flow.cpp)
+    target_link_libraries(test_flow PRIVATE Qt6::Core)
+    target_include_directories(test_flow PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}/components 
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
 
-# Validating introspection tests
-add_executable(test_introspection 
-    tests/test_introspection.cpp 
-    gui/components/visual_component.cpp 
-    gui/styling/theme_manager.cpp 
-    gui/core/platform_helper.cpp
-    gui/components/probe_tip.cpp
-    gui/editors/schematic_editor.cpp
-    gui/editors/schematic_editor_api.cpp
-    gui/editors/component_wizard.cpp
-    gui/widgets/compliance_report_dialog.cpp
-    gui/editors/schematic_view.cpp
-    components/design_db.cpp
-    components/pdk_manager.cpp
-    components/netlist_export.cpp
-    components/pdk_compliance.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-)
-target_link_libraries(test_introspection PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
-target_include_directories(test_introspection PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_include_directories(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/math)
-target_include_directories(test_introspection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/math)
-target_include_directories(test_flow PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-)
-target_include_directories(test_introspection PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-)
-target_sources(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
-target_sources(test_introspection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
-target_include_directories(test_introspection PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
-    ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
-)
+    # Validating introspection tests
+    add_executable(test_introspection
+        tests/test_introspection.cpp
+        gui/components/visual_component.cpp
+        gui/styling/theme_manager.cpp
+        gui/core/platform_helper.cpp
+        gui/components/probe_tip.cpp
+        gui/core/hierarchy_path.cpp
+        gui/widgets/breadcrumb_widget.cpp
+        gui/editors/schematic_editor.cpp
+        gui/editors/schematic_editor_api.cpp
+        gui/core/editor_manager.cpp
+        gui/components/visual_component.cpp
+        gui/components/probe_tip.cpp
+        gui/editors/schematic_editor.cpp
+        gui/editors/schematic_view.cpp
+        gui/editors/component_wizard.cpp
+        gui/editors/schematic_editor_api.cpp
+        gui/editors/schematic_editor_sync.cpp
+        gui/panels/ai_assistant_panel.cpp
+        gui/widgets/component_library.cpp
+        gui/widgets/design_flow.cpp
+        gui/analysis/system_inspector.cpp
+        gui/analysis/logic_analyzer.cpp
+        gui/editors/code_editor.cpp
+        gui/core/editor_manager.cpp
+        gui/core/sim_auto_detector.cpp
+        gui/core/mainwindow.cpp
+        gui/core/welcome_widget.cpp
+        ai_api/system/schema_api.cpp
+        ai_api/context/context_engine.cpp
+        ai_api/analysis/failure_classifier.cpp
+        ai_api/simulation/auto_harness.cpp
+        ai_api/simulation/speculative_runner.cpp
+        ai_api/context/prompt_builder.cpp
+        ai_api/context/rag_context.cpp
+        ai_api/analysis/topology_analyzer.cpp
+        ai_api/system/feedback_loop.cpp
+        ai_api/simulation/simulation_trace.cpp
+        compute/tensors/physics_tensors.cpp
+        compute/tensors/kernel_dispatch.cpp
+        compute/tensors/physics_kernels_avx512.cpp
+        compute/solvers/superposition.cpp
+        compute/solvers/circuitsim_solver.cpp
+        gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_explorer.cpp
+        gui/analysis/corner_setup_widget.cpp
+        gui/widgets/problems_panel.cpp
+        gui/widgets/debug_suggestions_panel.cpp
+        gui/widgets/trust_badge_widget.cpp
+        gui/orchestration/worker_status_panel.cpp
+        gui/orchestration/worker_manager.cpp
+        physics/quick_analysis.cpp
+        compute/orchestration/grpc_worker_client.cpp
+        gui/analysis/statistical_dashboard.cpp
+        gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/styling/theme_manager.cpp
+        gui/core/layout_manager.cpp
+        gui/core/storage_manager.cpp
+        gui/core/docking_manager.cpp
+        gui/widgets/waveform_widget.cpp
+        gui/widgets/output_dock_widget.cpp
+        gui/widgets/terminal_widget.cpp
+        gui/core/platform_helper.cpp
+        gui/core/activity_bar.cpp
+        gui/core/icon_provider.cpp
+        resources/icons.qrc
+        components/pdk_compliance.cpp
+        gui/widgets/compliance_report_dialog.cpp
+        gui/widgets/command_palette.cpp
+        gui/widgets/ghost_diff_viewer.cpp
+        gui/widgets/toast_manager.cpp
+        gui/core/keybinding_manager.cpp
+        gui/widgets/keybindings_dialog.cpp
+        gui/widgets/search_dock.cpp
+        gui/widgets/project_model.cpp
+        gui/widgets/project_explorer.cpp
+        components/design_db.cpp
+        components/pdk_manager.cpp
+        components/netlist_export.cpp
+        gui/scripting/tcl_bridge.cpp
+    )
+    target_include_directories(test_introspection PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+        ${TCL_INCLUDE_PATH}
+    )
+    target_link_libraries(test_introspection PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent Qt6::Test ${TCL_LIBRARY})
+    target_include_directories(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/math)
+    target_include_directories(test_introspection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/math)
+    target_include_directories(test_flow PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    )
+    target_include_directories(test_introspection PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    )
+    target_sources(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
+    target_sources(test_introspection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
+    target_include_directories(test_introspection PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+    )
+endif()
 
 # GPU Connectivity Verification (Native Dawn)
 if(NOT EMSCRIPTEN)

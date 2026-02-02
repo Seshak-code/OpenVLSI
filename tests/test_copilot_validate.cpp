@@ -18,7 +18,7 @@ private slots:
 
     void testValidateCommand() {
         // 1. Setup Mock Editor
-        SchematicEditor editor;
+        SchematicEditor editor("test.sch");
         // setMode() removed - unified component library
 
         // Add a simple circuit (Probe In + Resistor + Probe Out)

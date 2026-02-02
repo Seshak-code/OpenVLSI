@@ -122,10 +122,10 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     std::cout << "=== Running Hierarchical IO Tests ===" << std::endl;
     
-    SchematicEditor editor;
+    SchematicEditor editor("top.sch");
     test_load_inverter(editor);
     
-    SchematicEditor editor2;
+    SchematicEditor editor2("sub.sch");
     test_icpackage_hierarchical(editor2);
     
     std::cout << "=== All Tests Passed ===" << std::endl;

@@ -12,6 +12,8 @@
 #include <QStandardItemModel>
 #include "simulation_explorer.h"
 #include "simulation_profile.h"
+#include "../core/sim_auto_detector.h"
+
 #include "../editors/schematic_editor.h"
 #include "../analysis/erc_engine.h"
 #include "../widgets/problems_panel.h"
@@ -50,9 +52,13 @@ public:
         GPU_DEBUG = 4    // GPU compute + extra verification
     };
 
+
     explicit SimulationWorkspace(QWidget* parent = nullptr);
     
-    // Connection to schematic
+    // Set active simulation context
+    void setContext(const acutesim::gui::core::SimulationContext& context);
+    
+    // Connection to schematic (Legacy wrapper)
     void setSchematicEditor(SchematicEditor* editor);
     
     // Profile management
@@ -61,7 +67,9 @@ public:
     
     // Topology invalidation
     void onTopologyChanged(size_t newHash);
-    // onModeChanged() removed - unified component library
+    
+    // Mark topology changed manually (for Unified Editor)
+    void markTopologyChanged(size_t newHash);
     
 signals:
     void simulationStarted(const QString& profileId);
@@ -118,6 +126,7 @@ private:
     
     // State
     SchematicEditor* schematicEditor_ = nullptr;
+    acutesim::gui::core::SimulationContext currentContext_;
     QMap<QString, Simulation::SimulationProfile> profiles_;
     QString currentProfileId_;
     size_t currentTopologyHash_ = 0;

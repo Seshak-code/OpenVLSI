@@ -15,8 +15,11 @@ service WorkerService {
   // Place & Route (Netlist -> GDSII/DEF)
   rpc RunPlaceAndRoute (PnRRequest) returns (stream PnRLog);
 
-  // Digital Simulation (Verilog/VHDL)
-  rpc RunSimulation (SimulationRequest) returns (stream SimulationLog);
+  // Digital Logic Simulation (Verilator/Icarus)
+  rpc RunHDLSimulation (HDLSimulationRequest) returns (stream HDLSimulationLog);
+
+  // Analog/Mixed-Signal Circuit Simulation (Tensor MNA)
+  rpc RunCircuitSimulation (CircuitSimulationRequest) returns (stream CircuitSimulationLog);
 
   // Parity Validation (Regression Harness)
   rpc RunRegression (RegressionRequest) returns (stream RegressionLog);
@@ -103,22 +106,50 @@ message PnRLog {
 }
 
 // ============================================================================
-// SIMULATION (Verilator/Icarus)
+// HDL SIMULATION (Verilator/Icarus)
 // ============================================================================
 
-message SimulationRequest {
+message HDLSimulationRequest {
   string job_id = 1;
   repeated FileData source_files = 2;
   string testbench_module = 3;
 }
 
-message SimulationLog {
+message HDLSimulationLog {
   string job_id = 1;
   string log_line = 2;
   bool is_finished = 3;
   
   // VCD waveform data
   bytes vcd_chunk = 4;
+}
+
+// ============================================================================
+// CIRCUIT SIMULATION (Tensor MNA)
+// ============================================================================
+
+message CircuitSimulationRequest {
+  string job_id = 1;
+  FileData netlist_json = 2;       // The flattened TensorNetlist JSON
+  string solver_mode = 3;          // "cpu", "cpu_simd", "gpu"
+  string precision = 4;            // "fp64", "fp64_emulated"
+  
+  message Analysis {
+      string type = 1;             // "TRAN", "DC", "AC"
+      double t_start = 2;
+      double t_stop = 3;
+      double t_step = 4;
+  }
+  Analysis analysis = 5;
+}
+
+message CircuitSimulationLog {
+  string job_id = 1;
+  string log_line = 2;
+  bool is_finished = 3;
+  
+  // Streamed numerical results (JSON or binary format)
+  bytes result_chunk = 4; 
 }
 
 // ============================================================================

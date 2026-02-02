@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
 
     test_inverter_pdk_mapping();
     
-    SchematicEditor editor;
+    SchematicEditor editor("pdk_test.sch");
     // Ensure we start fresh
     editor.getScene()->clear();
     

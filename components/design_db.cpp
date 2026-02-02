@@ -1,8 +1,9 @@
 #include "design_db.h"
-#include "circuit.h" 
+#include "circuit.h"
 #include <iostream>
 #include <algorithm>
 #include <map>
+#include <set>
 
 namespace acutesim {
 namespace components {
@@ -300,4 +301,61 @@ acutesim::components::MutationResult acutesim::components::DesignDb::renameNet(c
         }
     }
     return MutationResult::NotFound;
+}
+
+// ============================================================================
+// HIERARCHICAL SNAPSHOT (Phase 5)
+// ============================================================================
+
+acutesim::components::HierarchicalSnapshot acutesim::components::DesignDb::recursiveSnapshot(
+    std::function<std::shared_ptr<TensorBlock>(const std::string& masterName, const std::map<std::string, double>& params)> resolver,
+    int maxDepth
+) const {
+    HierarchicalSnapshot result;
+
+    // 1. Snapshot the top-level block
+    result.topBlock = std::make_shared<TensorBlock>(snapshot());
+    result.maxDepthReached = 0;
+
+    if (maxDepth <= 0) {
+        return result;
+    }
+
+    // 2. Resolve sub-blocks recursively
+    std::function<void(const DesignDb&, int)> processDb = [&](const DesignDb& db, int depth) {
+        if (depth > maxDepth) return;
+        result.maxDepthReached = std::max(result.maxDepthReached, depth);
+
+        for (const auto& [id, inst] : db.instances_) {
+            const std::string& masterName = inst.masterName;
+
+            // Skip common primitives (Optimization)
+            if (masterName == "R" || masterName == "C" || masterName == "L" || 
+                masterName == "V" || masterName == "I" || masterName == "Mosfet" ||
+                masterName == "Bjt" || masterName == "Diode") {
+                continue;
+            }
+
+            // Check Cache
+            HierarchicalSnapshot::CacheKey key = {masterName, inst.parameters};
+            if (result.subBlockCache.count(key)) {
+                continue;
+            }
+
+            // Try to resolve
+            auto subBlock = resolver(masterName, inst.parameters);
+            if (subBlock) {
+                result.subBlockCache[key] = subBlock;
+                result.subBlocks[masterName] = subBlock; // For convenience
+                result.loadOrder.push_back(masterName);
+                
+                // Note: The resolver should handle the recursion for the sub-schematic's internal instances
+                // by calling its own generateNetlist() -> recursiveSnapshot().
+            }
+        }
+    };
+
+    processDb(*this, 1);
+
+    return result;
 }

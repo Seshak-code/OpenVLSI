@@ -1017,6 +1017,10 @@ public:
     std::vector<BlockInstance> instances;                // Placed block instances
     int numGlobalNodes = 0;
     
+    // Hierarchical Support
+    std::vector<std::pair<std::string, std::string>> probes; // Name, GlobalNodeString
+    std::map<std::string, std::shared_ptr<TensorBlock>> subBlocks; // Resolved sub-circuits
+
     // Global Simulation Context (Phase 2.9)
     SimulationEnvironment environment;
 

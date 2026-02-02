@@ -1,6 +1,7 @@
 #include "schematic_editor.h"
 #include "component_wizard.h"
 #include "../widgets/compliance_report_dialog.h"
+#include "../widgets/breadcrumb_widget.h"
 #include "../../components/pdk_compliance.h"
 #include "../../ai_api/system/crash_report.h"
 #include <QPainter>
@@ -12,6 +13,14 @@
 #include <QDebug>
 #include <QJsonDocument>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonObject>
+#include "gui_types.h"
+#include "../analysis/erc_engine.h"
+#include "../analysis/erc_autofix.h"
+#include "../../physics/simulation_profile.h"
+#include "../../components/design_db.h"
+#include "../components/standard_cell_visualizer.h" // Phase 14: Visualizer
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QMenu>
@@ -19,6 +28,7 @@
 #include <QDateTime>
 #include <QRegularExpression>
 #include "../../gui/styling/theme_manager.h"
+#include "../core/subcircuit_resolver.h" // Phase 14: Centralized Resolution
 
 // ============================================================================
 // WIRE COMPONENT
@@ -29,9 +39,84 @@
 // ============================================================================
 // GRID SCENE IMPLEMENTATION
 // ============================================================================
-GridScene::GridScene(QObject* parent) : QGraphicsScene(parent) {
-    setSceneRect(-5000, -5000, 10000, 10000);
+// ============================================================================
+// GRID SCENE IMPLEMENTATION
+// ============================================================================
+SchematicEditor::SchematicEditor(const QString& filePath, QWidget* parent)
+    : acutesim::gui::core::IEditor(parent), filePath_(filePath), rootFilePath_(filePath) {
+    scene = new GridScene(GridScene::Mode::Interactive, this);
+    view = new SchematicView(scene, this);
+
+    connect(scene, &GridScene::componentSelected, this, &SchematicEditor::itemSelected);
+    connect(scene, &GridScene::wireSelected, this, &SchematicEditor::wireSelected);
+
+    // Phase 5: Handle drill-down via in-place navigation instead of opening new tab
+    connect(scene, &GridScene::requestOpenSubcircuit, this, [this](const QString& path) {
+        // Find the instance name from selection if available
+        QString instanceName;
+        auto selected = scene->selectedItems();
+        if (!selected.isEmpty()) {
+            if (auto* vc = dynamic_cast<VisualComponent*>(selected.first())) {
+                instanceName = vc->name;
+            }
+        }
+        descendInto(path, instanceName.isEmpty() ? QFileInfo(path).baseName() : instanceName);
+    });
+    connect(scene, &GridScene::requestAscend, this, &SchematicEditor::ascend);
+
+    // Auto-update topology hash when scene changes
+    connect(scene, &GridScene::topologyChanged, this, [this](size_t hash){
+        topologyHash_ = hash;
+        if (!modified_) {
+            modified_ = true;
+            // Emit contentChanged signal from IEditor
+            emit contentChanged();
+        }
+        emit topologyChanged(hash);
+    });
+
+    // Connections from legacy constructor
+    connect(scene, &GridScene::mouseMoved, this, [this](int x, int y){
+        if(statusLabel) statusLabel->setText(QString("X: %1, Y: %2").arg(x).arg(y));
+    });
+    connect(scene, &GridScene::messageLogged, this, [this](const QString& msg){
+        if(statusLabel) statusLabel->setText(msg);
+    });
+    connect(scene, &GridScene::toolChanged, this, [this](ComponentType t){
+        if(toolButtons.contains(t)) {
+            toolButtons[t]->setChecked(true);
+            for(auto type : toolButtons.keys()) {
+                if(type != t && toolButtons[type]) toolButtons[type]->setChecked(false);
+            }
+            if (t == ComponentType::Select)
+                view->setDragMode(QGraphicsView::RubberBandDrag);
+            else
+                view->setDragMode(QGraphicsView::NoDrag);
+        }
+    });
+
+    // Forward ERC violations
+    connect(scene, &GridScene::violationsChanged, this, &SchematicEditor::violationsChanged);
+
+    setupUi();
+
+    // Initialize hierarchy path after UI is set up
+    initializeHierarchy();
+}
+
+GridScene::GridScene(Mode mode, QObject* parent) 
+    : QGraphicsScene(parent), m_mode(mode) {
     
+    if (m_mode == Mode::Interactive) {
+        setSceneRect(-2000, -2000, 4000, 4000);
+    } else {
+        // Headless: Minimal setup, no background rendering
+        setItemIndexMethod(QGraphicsScene::NoIndex);
+    }
+    
+    // Register as Observer for Backward Sync
+    designDb.addObserver(this);
+
     connect(this, &QGraphicsScene::selectionChanged, this, [this](){
         auto items = selectedItems();
         if (items.isEmpty()) {
@@ -48,9 +133,167 @@ GridScene::GridScene(QObject* parent) : QGraphicsScene(parent) {
             }
         }
     });
+}
 
-    // Register as Observer for Backward Sync
-    designDb.addObserver(this);
+GridScene::~GridScene() {
+    designDb.removeObserver(this);
+}
+
+VisualComponent* GridScene::findComponent(const QString& name) const {
+    for(auto* item : items()) {
+        if(auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if(c->name == name) return c;
+        }
+    }
+    return nullptr;
+}
+
+QString GridScene::generateUniqueId(ComponentType type) {
+    QString prefix;
+    switch(type) {
+        case ComponentType::Resistor: prefix = "R"; break;
+        case ComponentType::Capacitor: prefix = "C"; break;
+        case ComponentType::Inductor: prefix = "L"; break;
+        case ComponentType::VoltageSource: prefix = "V"; break;
+        case ComponentType::Diode: prefix = "D"; break;
+        case ComponentType::Mosfet: prefix = "M"; break;
+        case ComponentType::Bjt: prefix = "Q"; break;
+        case ComponentType::Ground: prefix = "GND"; break; 
+        default: prefix = "U"; break;
+    }
+    
+    if (prefix == "GND") return "GND";
+    
+    int maxIdx = 0;
+    for (auto* item : items()) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->name.startsWith(prefix)) {
+                int idx = c->name.mid(prefix.length()).toInt();
+                if (idx > maxIdx) maxIdx = idx;
+            }
+        }
+    }
+    return prefix + QString::number(maxIdx + 1);
+}
+
+QString GridScene::resolveSubcircuitPath(const QString& name) const {
+    // Phase 14: Centralized Resolution Strategy
+    // Delegates to SubcircuitResolver which handles:
+    // 1. Filesystem (Direct & Relative)
+    // 2. Standard Library (Code-defined)
+    // 3. Aliases (e.g. "CMOS Inverter" -> "inverter.sch")
+    
+    // We pass the current file's directory as context
+    QString contextDir;
+    if (!m_filePath.isEmpty()) {
+        contextDir = QFileInfo(m_filePath).absolutePath();
+    }
+    
+    auto result = acutesim::gui::core::SubcircuitResolver::resolve(name, contextDir);
+    
+    if (result.source == acutesim::gui::core::ResolvedSubcircuit::Source::FileSystem) {
+        return result.filePath;
+    }
+    
+    // Note: For code-only cells, we return a special URI so the editor knows
+    // to switch to the on-the-fly visualizer.
+    if (result.source == acutesim::gui::core::ResolvedSubcircuit::Source::StandardLibrary) {
+        return "std://" + name;
+    }
+    
+    return "";
+}
+
+QString GridScene::placeComponent(const QString& typeStr, QPointF pos, double rotation, const QJsonObject& params) {
+    ComponentType type = stringToComponentType(typeStr);
+    if (type == ComponentType::Select || type == ComponentType::Wire) return "";
+    
+    VisualComponent* comp = new VisualComponent(type);
+    comp->name = params.contains("name") ? params["name"].toString() : generateUniqueId(type);
+    if (params.contains("value")) comp->value = params["value"].toString();
+    
+    for(auto it = params.begin(); it != params.end(); ++it) {
+        if (it.key() != "value" && it.key() != "rotation" && it.key() != "flipped" && it.key() != "name") {
+             comp->params[it.key()] = it.value().toString();
+        }
+    }
+    
+    comp->setPos(pos);
+    comp->setRotation(rotation);
+    if (params.contains("flipped") && params["flipped"].toBool()) comp->flip();
+    
+    // SubCircuit/ICPackage Specific: Restore drill-down properties
+    if (comp->type == ComponentType::SubCircuit || comp->type == ComponentType::ICPackage) {
+        // Restore subCircuitName from "source" param
+        QString src = params.contains("source") ? params["source"].toString() :
+                      (params.contains("sourceFile") ? params["sourceFile"].toString() : comp->params["sourceFile"]);
+        if (!src.isEmpty()) {
+            comp->subCircuitName = src;
+            QString resolved = resolveSubcircuitPath(src);
+            if (!resolved.isEmpty()) {
+                comp->loadPinsFromSchematic(resolved);
+                comp->sourceFilePath = resolved;
+            }
+        }
+
+        // Direct sourceFilePath restoration (overrides resolved if present)
+        if (params.contains("sourceFilePath")) {
+            comp->sourceFilePath = params["sourceFilePath"].toString();
+        }
+
+        if (params.contains("displayName")) {
+            comp->displayName = params["displayName"].toString();
+        }
+    }
+    
+    addItem(comp);
+    triggerTopologyUpdate();
+    return comp->name;
+}
+
+void GridScene::loadState(const QJsonObject& state) {
+    clear();
+    
+    QJsonArray components = state["components"].toArray();
+    for(const auto& val : components) {
+        QJsonObject c = val.toObject();
+        QPointF pos(c["x"].toDouble(), c["y"].toDouble());
+        double rot = c["rotation"].toDouble();
+        QString type = c["type"].toString();
+        
+        QJsonObject params;
+        if (c.contains("properties")) {
+            params = c["properties"].toObject();
+        }
+        params["name"] = c["name"].toString();
+        
+        QString id = placeComponent(type, pos, rot, params);
+        
+        // Restore probe binding
+        if (VisualComponent* comp = findComponent(id)) {
+            if (comp->type == ComponentType::Probe && c.contains("probeBinding")) {
+                QJsonObject binding = c["probeBinding"].toObject();
+                comp->probeBinding.hierarchicalPath = binding["path"].toVariant().toStringList();
+                comp->probeBinding.localNetName = binding["localNetName"].toString();
+            }
+        }
+    }
+    
+    QJsonArray wires = state["wires"].toArray();
+    for(const auto& val : wires) {
+        QJsonObject w = val.toObject();
+        QJsonArray pointsArr = w["points"].toArray();
+        QVector<QPointF> points;
+        for(const auto& p : pointsArr) {
+            QJsonObject pt = p.toObject();
+            points.append(QPointF(pt["x"].toDouble(), pt["y"].toDouble()));
+        }
+        if (points.size() >= 2) {
+            placeWirePath(points);
+        }
+    }
+    
+    triggerTopologyUpdate();
 }
 
 
@@ -400,6 +643,35 @@ void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     emit mouseMoved((int)p.x(), (int)p.y());
 
     if (currentTool == ComponentType::Select) {
+        QGraphicsItem* item = itemAt(event->scenePos(), QTransform());
+        QGraphicsView* view = views().first();
+        bool drillable = false;
+
+        if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
+            bool hasPath = !comp->sourceFilePath.isEmpty();
+            if (!hasPath && (comp->type == ComponentType::SubCircuit || comp->type == ComponentType::ICPackage)) {
+                // Heuristic check (simplified for hover performance)
+                drillable = true; 
+            } else if (hasPath) {
+                drillable = true;
+            }
+
+            if (drillable) {
+                QString displayName = comp->sourceFilePath.isEmpty() ? comp->subCircuitName : QFileInfo(comp->sourceFilePath).baseName();
+                emit messageLogged(QString("Drill into: %1 (%2)").arg(comp->name).arg(displayName));
+                if (view) view->setCursor(Qt::PointingHandCursor);
+            }
+        }
+
+        if (!drillable) {
+            if (view && view->cursor().shape() == Qt::PointingHandCursor) {
+                view->setCursor(Qt::CrossCursor);
+            }
+            if(static_cast<SchematicEditor*>(parent())->isQuickPreviewEnabled() == false) {
+                 emit mouseMoved((int)p.x(), (int)p.y()); // Reset status bar
+            }
+        }
+
         QGraphicsScene::mouseMoveEvent(event);
         return;
     }
@@ -482,13 +754,21 @@ void GridScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 
 
 void GridScene::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
-        auto selection = selectedItems();
+    auto selection = selectedItems();
+    auto* editor = static_cast<SchematicEditor*>(parent());
+
+    if (event->key() == Qt::Key_Delete || (event->key() == Qt::Key_Backspace && !selection.isEmpty())) {
         for (auto* item : selection) {
             removeItem(item);
             delete item;
         }
         emit topologyChanged(QDateTime::currentMSecsSinceEpoch());
+    }
+    else if ((event->key() == Qt::Key_Backspace && selection.isEmpty()) || 
+             (event->key() == Qt::Key_Up && (event->modifiers() & Qt::AltModifier))) {
+        if (editor->canAscend()) {
+            emit requestAscend();
+        }
     }
     else if (event->key() == Qt::Key_Escape) {
         setTool(ComponentType::Select);
@@ -1043,14 +1323,85 @@ TensorNetlist GridScene::generateNetlist() {
         }
     }
     
-    // 3. Snapshot
-    TensorBlock block = designDb.snapshot();
+    // 3. Hierarchical Snapshot
+    // 3. Hierarchical Snapshot
+    auto resolver = [&](const std::string& masterName, const std::map<std::string, double>& params) -> std::shared_ptr<TensorBlock> {
+        // Phase 14: Use Centralized Resolver
+        QString qMasterName = QString::fromStdString(masterName);
+        QString contextDir;
+        if (!m_filePath.isEmpty()) {
+            contextDir = QFileInfo(m_filePath).absolutePath();
+        }
+        
+        auto result = acutesim::gui::core::SubcircuitResolver::resolve(qMasterName, contextDir);
+        
+        // CASE A: Standard Library (Code-Defined) - HIGHEST PRIORITY for Physics integrity
+        if (result.source == acutesim::gui::core::ResolvedSubcircuit::Source::StandardLibrary) {
+            // Return copy of the internal block definition from the library
+            return std::make_shared<TensorBlock>(result.stdCellDef->internalBlock);
+        }
+        
+        // CASE B: Filesystem (Schematic File)
+        if (result.source == acutesim::gui::core::ResolvedSubcircuit::Source::FileSystem) {
+            // Headless Scene for nested netlisting
+            GridScene subScene(GridScene::Mode::Headless);
+            subScene.setFilePath(result.filePath); 
+            
+            // Load the sub-circuit from its JSON source
+            QFile file(result.filePath);
+            if (file.open(QIODevice::ReadOnly)) {
+                QJsonObject state = QJsonDocument::fromJson(file.readAll()).object();
+                subScene.loadState(state);
+                
+                // RECURSIVE CALL via generateNetlist on the sub-scene
+                TensorNetlist subNet = subScene.generateNetlist();
+                return std::make_shared<TensorBlock>(subNet.globalBlock);
+            }
+        }
+        
+        // CASE C: Unresolved
+        emit messageLogged(QString("EROR: Could not resolve subcircuit '%1'").arg(qMasterName));
+        return nullptr;
+    };
+
+    HierarchicalSnapshot snapshot = designDb.recursiveSnapshot(resolver);
     
-    // Wrap in TensorNetlist
+    // 4. Wrap and resolve Probes
     TensorNetlist netlist;
-    netlist.globalBlock = block;
-    netlist.globalState.initialize(block); 
+    if (snapshot.topBlock) {
+        netlist.globalBlock = *snapshot.topBlock;
+    }
+    netlist.subBlocks = snapshot.subBlocks; // Register definitions for instantiation
     
+    // Late-bind Probes to unique TensorNetlist nodes
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->type == ComponentType::Probe) {
+                // Pin 0 of a probe is the "tip"
+                QPointF pArea = c->mapToScene(c->getTerminals()[0]);
+                int spatialId = findSet(getNetID(pArea)); 
+                NetUUID netId = spatialToDbNet.value(spatialId, NetUUID());
+                
+                std::string netName = "0";
+                if (netId != NetUUID()) {
+                    netName = designDb.getNetName(netId);
+                }
+                
+                HierNodeId probeNode;
+                for(const auto& p : c->probeBinding.hierarchicalPath) {
+                    probeNode.path.push_back(p.toStdString());
+                }
+                probeNode.localNodeName = netName;
+                
+                netlist.probes.push_back({
+                    c->name.toStdString(),
+                    probeNode.toGlobalString()
+                });
+            }
+        }
+    }
+
+    netlist.globalState.initialize(netlist.globalBlock); 
     return netlist;
 }
 // ============================================================================
@@ -1082,43 +1433,7 @@ QStringList GridScene::runERC() {
 // ============================================================================
 // EDITOR WIDGET
 // ============================================================================
-SchematicEditor::SchematicEditor(QWidget* parent) : QWidget(parent) {
-    scene = new GridScene(this);
-    view = new SchematicView(scene, this);
-    
-    setupUi();
-    
-    connect(scene, &GridScene::mouseMoved, this, [this](int x, int y){
-        statusLabel->setText(QString("X: %1, Y: %2").arg(x).arg(y));
-    });
-    connect(scene, &GridScene::messageLogged, this, [this](const QString& msg){
-        statusLabel->setText(msg);
-    });
-    connect(scene, &GridScene::toolChanged, this, [this](ComponentType t){
-        if(toolButtons.contains(t)) {
-            toolButtons[t]->setChecked(true);
-            for(auto type : toolButtons.keys()) {
-                if(type != t) toolButtons[type]->setChecked(false);
-            }
-             if (t == ComponentType::Select)
-                view->setDragMode(QGraphicsView::RubberBandDrag);
-            else
-                view->setDragMode(QGraphicsView::NoDrag);
-        }
-    });
 
-    connect(scene, &GridScene::componentSelected, this, &SchematicEditor::itemSelected);
-    connect(scene, &GridScene::wireSelected, this, &SchematicEditor::wireSelected);
-    
-    // Forward topology changes
-    connect(scene, &GridScene::topologyChanged, this, &SchematicEditor::topologyChanged);
-    
-    // Forward ERC violations
-    connect(scene, &GridScene::violationsChanged, this, &SchematicEditor::violationsChanged);
-    
-    // Forward Drill-Down request
-    connect(scene, &GridScene::requestOpenSubcircuit, this, &SchematicEditor::requestOpenSubcircuit);
-}
 
 QWidget* SchematicEditor::createRibbon() {
     QGroupBox* ribbon = new QGroupBox("Tools");
@@ -1216,17 +1531,23 @@ void SchematicEditor::setupUi() {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0,0,0,0);
     mainLayout->setSpacing(0);
-    
+
     QWidget* topArea = new QWidget();
     topArea->setStyleSheet("background-color: #252526;");
     QVBoxLayout* topLayout = new QVBoxLayout(topArea);
-    
+
+    // Phase 5: Breadcrumb widget for hierarchical navigation (placed above ribbon)
+    breadcrumbWidget_ = new acutesim::gui::widgets::BreadcrumbWidget(this);
+    connect(breadcrumbWidget_, &acutesim::gui::widgets::BreadcrumbWidget::navigationRequested,
+            this, &SchematicEditor::onBreadcrumbNavigation);
+    topLayout->addWidget(breadcrumbWidget_);
+
     QHBoxLayout* settingsLayout = new QHBoxLayout();
     QCheckBox* gridCheck = new QCheckBox("Show Grid");
     gridCheck->setChecked(true);
     gridCheck->setStyleSheet("color: #DDD;");
     connect(gridCheck, &QCheckBox::toggled, this, &SchematicEditor::onGridToggled);
-    
+
     QCheckBox* snapCheck = new QCheckBox("Snap to Grid");
     snapCheck->setChecked(true);
     snapCheck->setStyleSheet("color: #DDD;");
@@ -1235,13 +1556,13 @@ void SchematicEditor::setupUi() {
     settingsLayout->addWidget(gridCheck);
     settingsLayout->addWidget(snapCheck);
     settingsLayout->addStretch();
-    
+
     topLayout->addLayout(settingsLayout);
     topLayout->addWidget(createRibbon());
     mainLayout->addWidget(topArea);
 
     view->setRenderHint(QPainter::Antialiasing);
-    view->setBackgroundBrush(Qt::NoBrush); 
+    view->setBackgroundBrush(Qt::NoBrush);
     view->setFrameShape(QFrame::NoFrame);
     // FORCE FULL VIEWPORT UPDATE TO FIX VISUAL BUGS
     view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
@@ -1251,7 +1572,7 @@ void SchematicEditor::setupUi() {
     statusLabel = new QLabel("Ready");
     statusLabel->setStyleSheet("background: #007ACC; color: white; padding: 4px; font-weight: bold;");
     mainLayout->addWidget(statusLabel);
-    
+
     scene->setTool(ComponentType::Select);
 }
 
@@ -1331,101 +1652,7 @@ QJsonObject SchematicEditor::getCircuitState() {
 }
 
 void SchematicEditor::loadState(const QJsonObject& state) {
-    qDebug() << "[SchematicEditor] loadState called. Keys:" << state.keys();
-    if(!scene) return;
-    scene->clear(); 
-    
-    // Components
-    QJsonArray components = state["components"].toArray();
-    qDebug() << "[SchematicEditor] loadState: components count =" << components.size();
-    for(const auto& val : components) {
-        QJsonObject c = val.toObject();
-        
-        QPointF pos(c["x"].toDouble(), c["y"].toDouble());
-        if(scene) pos = scene->snapToGrid(pos); // Ensure alignment with wires
-        double rot = c["rotation"].toDouble();
-        QString type = c["type"].toString();
-        
-        // Prepare params
-        QJsonObject params;
-        for(auto it = c.begin(); it != c.end(); ++it) {
-            if (it.key() == "properties") {
-                QJsonObject props = it.value().toObject();
-                for (auto pit = props.begin(); pit != props.end(); ++pit) {
-                    params[pit.key()] = pit.value();
-                }
-            } else if(it.key() != "type" && it.key() != "x" && it.key() != "y" 
-               && it.key() != "rotation" && it.key() != "id" && it.key() != "name") {
-                params[it.key()] = it.value();   
-            }
-        }
-        
-        QString newId = placeComponent(type, pos, rot, params);
-        
-        // Restore Name/ID
-        if (VisualComponent* comp = findComponent(newId)) {
-            QString targetName = c["name"].toString();
-            if (targetName.isEmpty()) targetName = c["id"].toString();
-            
-            if (!targetName.isEmpty()) {
-                comp->name = targetName;
-            }
-            
-            // ICPackage: Load pins from source schematic
-            if (comp->type == ComponentType::ICPackage) {
-                qDebug() << "[ICPackage] Processing ICPackage component:" << comp->name;
-                QString srcFile = params["sourceFile"].toString();
-                qDebug() << "[ICPackage] sourceFile from params:" << srcFile;
-                
-                if (!srcFile.isEmpty()) {
-                    comp->sourceFilePath = srcFile;
-                    // Resolve path relative to resources or user_libs
-                    QStringList searchPaths = {
-                        srcFile,
-                        "resources/cells/" + srcFile,
-                        "user_libs/" + srcFile
-                    };
-                    bool found = false;
-                    for (const QString& path : searchPaths) {
-                        qDebug() << "[ICPackage] Checking path:" << path << "exists:" << QFileInfo::exists(path);
-                        if (QFileInfo::exists(path)) {
-                            comp->loadPinsFromSchematic(path);
-                            comp->sourceFilePath = path; // FIX: Store resolved path for drill-down
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        qDebug() << "[ICPackage] WARNING: Could not find source file:" << srcFile;
-                    }
-                } else {
-                    qDebug() << "[ICPackage] No sourceFile specified in properties";
-                }
-                // Also set display name from params
-                if (params.contains("displayName")) {
-                    comp->displayName = params["displayName"].toString();
-                    qDebug() << "[ICPackage] Set displayName:" << comp->displayName;
-                }
-            }
-        }
-    }
-    
-    // Wires
-    QJsonArray wires = state["wires"].toArray();
-    for(const auto& val : wires) {
-        QJsonObject w = val.toObject();
-        QJsonArray pointsArr = w["points"].toArray();
-        QVector<QPointF> points;
-        for(const auto& p : pointsArr) {
-            QJsonObject pt = p.toObject();
-            points.append(QPointF(pt["x"].toDouble(), pt["y"].toDouble()));
-        }
-        if (points.size() >= 2) {
-            scene->placeWirePath(points);
-        }
-    }
-    
-    if(scene) scene->triggerTopologyUpdate(); // Force ERC update
+    if (scene) scene->loadState(state);
 }
 
 QString SchematicEditor::dumpSceneState() {
@@ -1486,8 +1713,28 @@ QJsonObject GridScene::getCircuitState() const {
             for(auto it = c->params.begin(); it != c->params.end(); ++it) {
                 props[it.key()] = it.value();
             }
+
+            // Save SubCircuit/ICPackage specific properties for drill-down restoration
+            if (c->type == ComponentType::SubCircuit || c->type == ComponentType::ICPackage) {
+                if (!c->subCircuitName.isEmpty()) {
+                    props["source"] = c->subCircuitName;
+                }
+                if (!c->sourceFilePath.isEmpty()) {
+                    props["sourceFilePath"] = c->sourceFilePath;
+                }
+                if (!c->displayName.isEmpty()) {
+                    props["displayName"] = c->displayName;
+                }
+            }
+
+            if (c->type == ComponentType::Probe) {
+                QJsonObject binding;
+                binding["path"] = QJsonArray::fromStringList(c->probeBinding.hierarchicalPath);
+                binding["localNetName"] = c->probeBinding.localNetName;
+                compInfo["probeBinding"] = binding;
+            }
+
             compInfo["properties"] = props;
-            
             components.append(compInfo);
         }
     }
@@ -1579,6 +1826,21 @@ void GridScene::setQuickPreviewEnabled(bool enabled) {
     }
 }
 
+
+// ============================================================================
+// IEditor Implementation
+// ============================================================================
+
+QString SchematicEditor::title() const {
+    return QFileInfo(filePath_).fileName();
+}
+
+acutesim::gui::core::EditorCapabilities SchematicEditor::capabilities() const {
+    acutesim::gui::core::EditorCapabilities caps;
+    caps.canSimulate = true; // Analog simulation
+    return caps;
+}
+
 void SchematicEditor::setQuickPreviewEnabled(bool enabled) {
     quickPreviewEnabled_ = enabled;
     if (GridScene* s = qobject_cast<GridScene*>(scene)) {
@@ -1616,6 +1878,7 @@ bool SchematicEditor::loadFromFile(const QString& filePath) {
     }
     
     scene->clear(); 
+    scene->setFilePath(filePath); // Crucial for hierarchical path resolution
     loadState(loadDoc.object());
     return true;
 }
@@ -1623,30 +1886,21 @@ bool SchematicEditor::loadFromFile(const QString& filePath) {
 void GridScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
     QGraphicsItem* item = itemAt(event->scenePos(), QTransform());
     if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
-        // 1. File-Based Drill Down
-        if (!comp->sourceFilePath.isEmpty()) {
-             emit requestOpenSubcircuit(comp->sourceFilePath);
-             return; // Consume event
+        // Select the component so the handler can retrieve the instance name
+        clearSelection();
+        comp->setSelected(true);
+
+        // Use centralized resolution (consistent with context menu)
+        QString path = resolveSubcircuitPath(comp->subCircuitName);
+
+        // Fallback to sourceFilePath if resolution fails (e.g., ICPackage with explicit path)
+        if (path.isEmpty()) {
+            path = comp->sourceFilePath;
         }
-        
-        // 2. Standard Cell Drill Down (Migration)
-        if (comp->type == ComponentType::SubCircuit || comp->type == ComponentType::ICPackage) {
-             // Heuristic: Check resources/cells/NAME.sch
-             QString cleanName = comp->subCircuitName.toLower().replace(" ", "_");
-             // Clean special chars
-             cleanName.remove(QRegularExpression("[^a-zA-Z0-9_]"));
-             
-             QStringList paths = {
-                 "resources/cells/" + cleanName + ".sch",
-                 "user_libs/" + cleanName + ".sch"
-             };
-             
-             for(const auto& p : paths) {
-                 if (QFileInfo::exists(p)) {
-                     emit requestOpenSubcircuit(p);
-                     return;
-                 }
-             }
+
+        if (!path.isEmpty()) {
+            emit requestOpenSubcircuit(path);
+            return; // Consume event
         }
     }
     QGraphicsScene::mouseDoubleClickEvent(event);
@@ -1654,39 +1908,40 @@ void GridScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
 
 void GridScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     QGraphicsItem* item = itemAt(event->scenePos(), QTransform());
+    
+    // Phase 14 Fix: Use heap-allocated menu with popup() for WASM compatibility (non-blocking)
+    QMenu* menu = new QMenu();
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    
     if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
-        // Check if component supports drill-down
-        QString path = comp->sourceFilePath;
+        // Use Centralized Logic (consistency with simulation)
+        QString path = resolveSubcircuitPath(comp->subCircuitName);
         
-        // If path is empty, try heuristic for SubCircuits/ICPackages
-        if (path.isEmpty() && (comp->type == ComponentType::SubCircuit || comp->type == ComponentType::ICPackage)) {
-             QString cleanName = comp->subCircuitName.toLower().replace(" ", "_");
-             cleanName.remove(QRegularExpression("[^a-zA-Z0-9_]"));
-             
-             QStringList paths = {
-                 "resources/cells/" + cleanName + ".sch",
-                 "user_libs/" + cleanName + ".sch"
-             };
-             
-             for(const auto& p : paths) {
-                 if (QFileInfo::exists(p)) {
-                     path = p;
-                     break;
-                 }
-             }
-        }
+        // If empty, try sourceFilePath (e.g., ICPackage)
+        if (path.isEmpty()) path = comp->sourceFilePath;
         
         if (!path.isEmpty()) {
-            QMenu menu;
-            QAction* drillDown = menu.addAction(QString("Open Schematic (%1)").arg(comp->name));
+            QAction* drillDown = menu->addAction(QString("Drill Down into %1 (%2)").arg(comp->name).arg(QFileInfo(path).baseName()));
             connect(drillDown, &QAction::triggered, this, [this, path](){
                 emit requestOpenSubcircuit(path);
             });
-            menu.exec(event->screenPos());
-            return;
+            menu->addSeparator();
         }
     }
-    QGraphicsScene::contextMenuEvent(event);
+    
+    // Always show Ascend option if possible
+    auto* editor = qobject_cast<SchematicEditor*>(parent());
+    if (editor && editor->canAscend()) {
+        QAction* ascend = menu->addAction("Ascend to Parent");
+        connect(ascend, &QAction::triggered, this, &GridScene::requestAscend);
+    }
+
+    if (!menu->isEmpty()) {
+        menu->popup(event->screenPos());
+    } else {
+        delete menu;
+        QGraphicsScene::contextMenuEvent(event);
+    }
 }
 
 void SchematicEditor::createSubcircuitFromSelection() {
@@ -1952,5 +2207,271 @@ bool GridScene::isWireAllowed(const QLineF& line) const {
     // Check against Forbidden Zones
     // For now, assume any long wire crossing the origin (0,0) is risky if that's a central block
     // Placeholder logic
-    return true; 
+    return true;
+}
+
+// ============================================================================
+// PHASE 5: HIERARCHICAL DRILL-DOWN NAVIGATION
+// ============================================================================
+
+void SchematicEditor::initializeHierarchy() {
+    hierarchyPath_ = new acutesim::gui::core::HierarchyPath(this);
+
+    // Set root level from current file
+    QString displayName = QFileInfo(filePath_).baseName();
+    if (displayName.isEmpty()) {
+        displayName = "Untitled";
+    }
+    hierarchyPath_->setRoot(filePath_, displayName);
+
+    // Connect breadcrumb to hierarchy path
+    if (breadcrumbWidget_) {
+        breadcrumbWidget_->setHierarchyPath(hierarchyPath_);
+    }
+
+    // Connect hierarchy changes to signal
+    connect(hierarchyPath_, &acutesim::gui::core::HierarchyPath::levelChanged,
+            this, [this](const acutesim::gui::core::HierarchyLevel& level,
+                         std::optional<acutesim::gui::core::HierarchyLevel>) {
+        // Update current file path to reflect navigation
+        filePath_ = level.filePath;
+        emit hierarchyChanged();
+    });
+}
+
+void SchematicEditor::descendInto(const QString& filePath, const QString& instanceName) {
+    if (!hierarchyPath_) return;
+
+    // Check for dirty state - prompt user
+    if (modified_) {
+        int result = QMessageBox::question(this, "Unsaved Changes",
+            "You have unsaved changes. Save before navigating to subcircuit?",
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::Save);
+
+        if (result == QMessageBox::Cancel) {
+            return;
+        }
+        if (result == QMessageBox::Save) {
+            if (!saveToFile(filePath_)) {
+                QMessageBox::warning(this, "Save Failed",
+                    "Could not save the current schematic.");
+                return;
+            }
+        }
+        // Discard: continue without saving
+    }
+
+    // Save current editor state
+    saveCurrentState();
+
+    // Get current viewport state for restoration
+    QPointF viewportCenter = view->mapToScene(view->viewport()->rect().center());
+    qreal zoomLevel = view->transform().m11();
+
+    // Push new level onto hierarchy
+    QString displayName = instanceName.isEmpty() ? QFileInfo(filePath).baseName() : instanceName;
+    hierarchyPath_->descendInto(filePath, instanceName, displayName, viewportCenter, zoomLevel);
+
+    // Load the subcircuit schematic
+    bool loadSuccess = false;
+    
+    // Check for "std://" prefix (Standard Cell Library)
+    if (filePath.startsWith("std://")) {
+        QString cellName = filePath.mid(6); // Remove prefix
+        const auto* def = StandardCells::StandardCellLibrary::instance().get(cellName.toStdString());
+        
+        if (def) {
+            // Generate visual representation on the fly
+            acutesim::gui::components::StandardCellVisualizer::populateScene(scene, def->internalBlock, QString::fromStdString(def->name));
+            loadSuccess = true;
+            
+            // Mark as Read-Only (Safety)
+            if (statusLabel) {
+                 statusLabel->setText(QString("Viewing: %1 [READ-ONLY]").arg(displayName));
+            }
+        } else {
+             QMessageBox::warning(this, "Error", QString("Could not find standard cell definition: %1").arg(cellName));
+        }
+    } else {
+        // Standard File Loading
+        loadSuccess = loadFromFile(filePath);
+    }
+
+    if (!loadSuccess) {
+        // Rollback on failure
+        hierarchyPath_->ascend();
+        if (!stateStack_.isEmpty()) {
+            restoreState(stateStack_.last());
+            stateStack_.removeLast();
+        }
+        QMessageBox::warning(this, "Navigation Failed",
+            QString("Could not load subcircuit: %1").arg(filePath));
+        return;
+    }
+
+    // Reset modified state for new schematic
+    modified_ = false;
+
+    // Center the view
+    view->centerOn(0, 0);
+    view->resetTransform();
+
+    // Update status
+    if (statusLabel) {
+        statusLabel->setText(QString("Viewing: %1").arg(displayName));
+    }
+
+    emit hierarchyChanged();
+}
+
+void SchematicEditor::ascend() {
+    if (!hierarchyPath_ || hierarchyPath_->isAtRoot()) {
+        return;
+    }
+
+    // Check for dirty state
+    if (modified_) {
+        int result = QMessageBox::question(this, "Unsaved Changes",
+            "You have unsaved changes. Save before navigating up?",
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::Save);
+
+        if (result == QMessageBox::Cancel) {
+            return;
+        }
+        if (result == QMessageBox::Save) {
+            if (!saveToFile(filePath_)) {
+                QMessageBox::warning(this, "Save Failed",
+                    "Could not save the current schematic.");
+                return;
+            }
+        }
+    }
+
+    // Ascend in hierarchy
+    auto parentLevel = hierarchyPath_->ascend();
+    if (!parentLevel.has_value()) {
+        return;
+    }
+
+    // Restore parent state
+    if (!stateStack_.isEmpty()) {
+        EditorState state = stateStack_.last();
+        stateStack_.removeLast();
+        restoreState(state);
+    } else {
+        // Fallback: just load the file
+        loadFromFile(parentLevel->filePath);
+    }
+
+    // Restore viewport
+    view->centerOn(parentLevel->viewportCenter);
+    view->resetTransform();
+    view->scale(parentLevel->zoomLevel, parentLevel->zoomLevel);
+
+    // Update file path
+    filePath_ = parentLevel->filePath;
+
+    // Update status
+    if (statusLabel) {
+        statusLabel->setText(QString("Viewing: %1").arg(parentLevel->displayName));
+    }
+
+    emit hierarchyChanged();
+}
+
+void SchematicEditor::navigateToDepth(int depth) {
+    if (!hierarchyPath_) return;
+
+    int currentDepth = hierarchyPath_->depth();
+    if (depth == currentDepth) {
+        return;  // Already there
+    }
+
+    if (depth > currentDepth) {
+        // Cannot navigate forward without a path
+        return;
+    }
+
+    // Navigate up to target depth
+    while (hierarchyPath_->depth() > depth) {
+        // Check dirty state only once at the start
+        if (hierarchyPath_->depth() == currentDepth && modified_) {
+            int result = QMessageBox::question(this, "Unsaved Changes",
+                "You have unsaved changes. Save before navigating?",
+                QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+                QMessageBox::Save);
+
+            if (result == QMessageBox::Cancel) {
+                return;
+            }
+            if (result == QMessageBox::Save) {
+                if (!saveToFile(filePath_)) {
+                    return;
+                }
+            }
+        }
+
+        auto parentLevel = hierarchyPath_->ascend();
+        if (!parentLevel.has_value()) {
+            break;
+        }
+
+        // Pop/Restore state for each level to maintain stack integrity
+        // We pop the state saved when descending into the current level we just left
+        EditorState poppedState;
+        bool stateFound = false;
+        if (!stateStack_.isEmpty()) {
+            poppedState = stateStack_.last();
+            stateStack_.removeLast();
+            stateFound = true;
+        } 
+
+        // Only restore when we reach target depth
+        if (hierarchyPath_->depth() == depth) {
+            if (stateFound) {
+                restoreState(poppedState);
+            } else {
+                // Fallback to reload if state was lost
+                loadFromFile(parentLevel->filePath);
+            }
+            filePath_ = parentLevel->filePath;
+
+            // Restore viewport from parent level metadata
+            view->centerOn(parentLevel->viewportCenter);
+            view->resetTransform();
+            view->scale(parentLevel->zoomLevel, parentLevel->zoomLevel);
+
+            if (statusLabel) {
+                statusLabel->setText(QString("Viewing: %1").arg(parentLevel->displayName));
+            }
+        }
+    }
+
+    modified_ = false;
+    emit hierarchyChanged();
+}
+
+bool SchematicEditor::canAscend() const {
+    return hierarchyPath_ && !hierarchyPath_->isAtRoot();
+}
+
+void SchematicEditor::onBreadcrumbNavigation(int depth) {
+    navigateToDepth(depth);
+}
+
+void SchematicEditor::saveCurrentState() {
+    EditorState state;
+    state.sceneState = getCircuitState();
+    state.viewportCenter = view->mapToScene(view->viewport()->rect().center());
+    state.zoomLevel = view->transform().m11();
+    state.currentProfileId = currentProfileId_;
+    stateStack_.append(state);
+}
+
+void SchematicEditor::restoreState(const EditorState& state) {
+    loadState(state.sceneState);
+    currentProfileId_ = state.currentProfileId;
+    modified_ = false;
 }

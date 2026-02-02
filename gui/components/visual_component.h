@@ -161,6 +161,13 @@ public:
     // Paradigm Bridge: Link to Unified DesignDb
     acutesim::components::InstUUID dbId;
 
+    // Probe Support (Late Binding)
+    struct ProbeBinding {
+        QStringList hierarchicalPath; // e.g. ["X1", "X2"]
+        QString localNetName;         // e.g. "VOUT"
+    };
+    ProbeBinding probeBinding;
+
     // For Oscilloscope-style Probes
     ProbeTip* probePositiveTip = nullptr;
     ProbeTip* probeNegativeTip = nullptr;
