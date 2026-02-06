@@ -127,11 +127,28 @@ void MainWindow::setupCentralWidget() {
     // Track active editor for context
     connect(editorManager, &acutesim::gui::core::EditorManager::activeEditorChanged, 
             this, [this](acutesim::gui::core::IEditor* editor){
-        if (auto* sch = qobject_cast<SchematicEditor*>(editor)) {
+             // Disconnect previous editor
+             if (schematicEditor) {
+                 disconnect(schematicEditor, nullptr, this, nullptr);
+             }
+             
              schematicEditor = sch;
              if (simulationWorkspace) simulationWorkspace->setSchematicEditor(sch);
+             
+             // Connect Selection Signals (Fix for Bug #2)
+             connect(sch, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+             connect(sch, &SchematicEditor::wireSelected, this, [this](VisualWire* w){
+                 activeWire = w;
+                 activeComponent = nullptr; // Exclusive selection
+                 // TODO: Show wire properties? For now clear panel or show basics
+                 // updateProperties(nullptr); // Just clear for now
+                 // Ideally we'd have updateWireProperties(w)
+             });
         } else {
              // Code editor or null
+             if (schematicEditor) {
+                 disconnect(schematicEditor, nullptr, this, nullptr);
+             }
              schematicEditor = nullptr;
              if (simulationWorkspace) simulationWorkspace->setSchematicEditor(nullptr);
         }
@@ -600,26 +617,14 @@ void MainWindow::createPropertiesDock() {
     propertiesTable->setAlternatingRowColors(false);
 
     // High-density styling for properties table
-    propertiesTable->setStyleSheet(R"(
-        QTableWidget {
-            background: transparent;
-            border: none;
-            font-size: 11px;
-            gridline-color: #333;
-        }
-        QTableWidget::item {
-            padding: 2px 4px;
-            border: none;
-        }
-        QTableWidget::item:selected { background: #094771; }
-        QHeaderView::section {
-            background: #252526;
-            color: #888;
-            border: none;
-            padding: 3px 4px;
-            font-size: 10px;
-        }
-    )");
+    // High-density styling for properties table (Dynamic)
+    auto updateTableTheme = [this](){
+        propertiesTable->setStyleSheet(acutesim::gui::styling::ThemeManager::instance().getWidgetStyleSheet("QTableWidget"));
+    };
+    updateTableTheme(); // Apply immediately
+    
+    connect(&acutesim::gui::styling::ThemeManager::instance(), &acutesim::gui::styling::ThemeManager::themeChanged, 
+            this, updateTableTheme);
     propertiesTable->verticalHeader()->setDefaultSectionSize(22); // Compact row height
     
     // Example placeholder

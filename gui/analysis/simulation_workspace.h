@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <QThread>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -13,6 +14,8 @@
 #include "simulation_explorer.h"
 #include "simulation_profile.h"
 #include "../core/sim_auto_detector.h"
+#include "simulation_worker.h" 
+
 
 #include "../editors/schematic_editor.h"
 #include "../analysis/erc_engine.h"
@@ -54,6 +57,7 @@ public:
 
 
     explicit SimulationWorkspace(QWidget* parent = nullptr);
+    ~SimulationWorkspace();
     
     // Set active simulation context
     void setContext(const acutesim::gui::core::SimulationContext& context);
@@ -87,14 +91,26 @@ public slots:
     void runQuickDC();
     void stopSimulation();
     void configureCorners();
+    
+    // New Signals for Worker
+signals:
+    void startDCRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startTransientRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
 
     
 private slots:
     void onProfileSelected(const QString& profileId);
     void onRunRequested(const QString& profileId);
-    void stepSimulation();
+
+    // void stepSimulation(); // Removed
     void appendLog(const QString& msg);
     void appendStreamLog(const QString& msg);
+    
+    // Worker Slots
+    void onWorkerResults(const QJsonObject& results);
+    void onWorkerViolation(const ERC::Violation& violation);
+    void onWorkerFinished();
+
     
 private:
     // Layout
@@ -133,11 +149,19 @@ private:
     // currentMode_ removed - unified component library
     
     // Simulation engine
-    CircuitSim sim_;
-    TensorNetlist netlist_;
-    QTimer* simTimer_;
-    double currentTime_ = 0.0;
-    double timeStep_ = 1e-5;
+    // CircuitSim sim_; // Moved to Worker
+    TensorNetlist netlist_; 
+    TensorNetlist lastNetlist_; // Cache for comparison?
+
+    
+    // Threading
+    QThread* workerThread_ = nullptr;
+    SimulationWorker* worker_ = nullptr;
+    
+    // QTimer* simTimer_; // Removed
+    // double currentTime_ = 0.0;
+    // double timeStep_ = 1e-5;
+
     bool isRunning_ = false;
     
     // Run tracking

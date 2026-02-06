@@ -30,6 +30,7 @@ public:
     QFont getScaledFont(const QString& usage, int pointSize) const; // Phase 11.4
     QFontMetrics getScaledFontMetrics(const QString& usage, int pointSize) const; // Phase 11.4
     QString getStyleSheet() const; // For QWidget::setStyleSheet
+    QString getWidgetStyleSheet(const QString& widgetType) const; // Component-specific CSS
 
     // Helpers for common tokens
     static QColor background();

@@ -4,10 +4,24 @@ project(AcuteSim VERSION 1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Phase 0.2.1: Floating-Point Determinism
+option(ACUTESIM_DEPS_NOISY_WARNINGS "Enable verbose warnings for third-party dependencies" OFF)
+
+if(NOT ACUTESIM_DEPS_NOISY_WARNINGS)
+    set(CMAKE_WARN_DEPRECATED OFF)
+    set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
+endif()
+
 if(MSVC)
     add_compile_options(/fp:strict)
 else()
-    add_compile_options(-ffloat-store -fno-fast-math -frounding-math)
+    # Common strictness
+    add_compile_options(-fno-fast-math -frounding-math)
+    
+    # GCC-specific: Prevent x87 excess precision
+    if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+        add_compile_options(-ffloat-store)
+    endif()
+
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error -Wno-narrowing")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error")
 endif()
@@ -73,6 +87,8 @@ if(EMSCRIPTEN)
     # Workaround for Qt 6.9+ Wasm build issue where _qt_test_emscripten_version is undefined
     macro(_qt_test_emscripten_version)
     endmacro()
+
+    option(ACUTESIM_WASM_THREADS "Enable threading for WASM build" OFF)
 endif()
 
 # Global include directory (Project Root)
@@ -107,7 +123,12 @@ else()
 endif()
 
 if(NOT EMSCRIPTEN)
-    find_package(OpenMP)
+    add_definitions(-DACUTESIM_THREADS_ENABLED)
+endif()
+
+find_package(OpenMP)
+
+if(NOT EMSCRIPTEN)
     
     # Phase 12: Orchestration Dependencies (Provided by vcpkg or system)
     find_package(protobuf CONFIG REQUIRED)
@@ -116,6 +137,13 @@ if(NOT EMSCRIPTEN)
 
     # Phase 1.1: Integrate Google Dawn (GPU Acceleration)
     # Moved after gRPC to avoid Abseil target conflicts
+    
+    if(NOT ACUTESIM_DEPS_NOISY_WARNINGS)
+        set(CMAKE_WARN_DEPRECATED OFF)
+        # Suppress warnings from Dawn/Tint/Abseil
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
+    endif()
+
     include(FetchContent)
     message(STATUS "Integrating Google Dawn (Native WebGPU Backend)...")
     
@@ -141,8 +169,16 @@ if(NOT EMSCRIPTEN)
     set(DAWN_ENABLE_DESKTOP_GL OFF CACHE BOOL "" FORCE)
     set(DAWN_WERROR OFF)
     set(TINT_WERROR OFF)
+
+    if(NOT ACUTESIM_DEPS_NOISY_WARNINGS)
+        set(CMAKE_WARN_DEPRECATED OFF) 
+    endif()
     
     FetchContent_MakeAvailable(dawn)
+    
+    if(NOT ACUTESIM_DEPS_NOISY_WARNINGS)
+        set(CMAKE_WARN_DEPRECATED OFF) 
+    endif()
     
     if(TARGET dawn_internal_config)
         target_compile_options(dawn_internal_config INTERFACE -Wno-error)
@@ -232,6 +268,8 @@ add_executable(${PROJECT_NAME}
     gui/analysis/simulation_explorer.h
     gui/analysis/simulation_workspace.cpp
     gui/analysis/simulation_workspace.h
+    gui/analysis/simulation_worker.cpp
+    gui/analysis/simulation_worker.h
     gui/analysis/monte_carlo_setup_dialog.cpp
     gui/analysis/monte_carlo_setup_dialog.h
     gui/analysis/statistical_dashboard.cpp
@@ -425,7 +463,8 @@ else()
 endif()
 
 # Link OpenMP only if found (and not Wasm)
-if(NOT EMSCRIPTEN AND OpenMP_CXX_FOUND)
+# Link OpenMP
+if(OpenMP_CXX_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
@@ -440,10 +479,18 @@ if(EMSCRIPTEN)
         "-sUSE_WEBGPU=1"
         "-sMODULARIZE=1"
         "-sEXPORT_NAME=AcuteSim"
-        "-sEXPORTED_RUNTIME_METHODS=['specialHTMLTargets','UTF8ToString','stringToUTF8','ccall','cwrap','wasmMemory','FS','callMain','ENV']"
+        "-sEXPORTED_RUNTIME_METHODS=['specialHTMLTargets','UTF8ToString','UTF16ToString','stringToUTF8','stringToUTF16','ccall','cwrap','wasmMemory','FS','callMain','ENV']"
         "-sEXPORTED_FUNCTIONS=['_main','_dumpStorageFile','_malloc','_free']"
         "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/resources@/resources"
     )
+
+    if(ACUTESIM_WASM_THREADS)
+        target_link_options(${PROJECT_NAME} PRIVATE "-pthread" "-sUSE_PTHREADS=1" "-sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency")
+        add_compile_options("-pthread")
+        target_compile_definitions(${PROJECT_NAME} PRIVATE ACUTESIM_THREADS_ENABLED)
+    endif()
+
+    target_link_options(${PROJECT_NAME} PRIVATE "-sPROXY_TO_WORKER=0")
     # Ensure the output filename is predictable for the HTML shell
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
 endif()
@@ -612,6 +659,8 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_worker.cpp
+        gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
@@ -721,6 +770,8 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_worker.cpp
+        gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
@@ -1064,6 +1115,8 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_worker.cpp
+        gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
@@ -1166,6 +1219,8 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_worker.cpp
+        gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
@@ -1548,6 +1603,8 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
+        gui/analysis/simulation_worker.cpp
+        gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp

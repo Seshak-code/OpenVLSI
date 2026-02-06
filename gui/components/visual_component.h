@@ -224,7 +224,16 @@ public:
         return !isGhost();
     }
 
+    void updateCachedPens();
+
 protected:
+    // Optimization: Cached Theme Objects
+    QPen m_bodyPen;
+    QBrush m_bodyBrush;
+    QPen m_ghostPen;
+    QBrush m_ghostBrush;
+    QPen m_selectionPen; // Cached selection dash
+
     // Hover events for quick preview tooltip
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;

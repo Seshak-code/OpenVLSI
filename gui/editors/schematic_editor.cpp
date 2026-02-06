@@ -1248,16 +1248,21 @@ TensorNetlist GridScene::generateNetlist() {
         return spatialToDbNet[rootID];
     };
     
-    // Check Ground
+    // Check Ground (and PDK_VSS)
+    NetUUID groundNetId;
+    bool groundFound = false;
+
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if (c->type == ComponentType::Ground) {
+            if (c->type == ComponentType::Ground || c->type == ComponentType::PDK_VSS) {
                 QPointF termPos = c->mapToScene(c->getTerminals()[0]);
                 int rootID = findSet(getNetID(termPos));
                 if (!spatialToDbNet.contains(rootID)) {
                      // Create explicit GND net
                      spatialToDbNet[rootID] = designDb.createNet("GND");
                 }
+                groundNetId = spatialToDbNet[rootID];
+                groundFound = true;
             }
         }
     }
@@ -1275,7 +1280,9 @@ TensorNetlist GridScene::generateNetlist() {
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
             if (c->type == ComponentType::Select || c->type == ComponentType::Wire || 
-                c->type == ComponentType::Probe || c->type == ComponentType::Ground) continue;
+                c->type == ComponentType::Probe || c->type == ComponentType::Ground ||
+                c->type == ComponentType::PDK_VSS || c->type == ComponentType::PDK_VDD ||
+                c->type == ComponentType::PDK_VDDIO) continue;
 
              // Ensure Instance Exists
              if (c->dbId == InstUUID()) {
@@ -1319,6 +1326,43 @@ TensorNetlist GridScene::generateNetlist() {
                  QPointF p = c->mapToScene(terms[i]);
                  NetUUID netId = getDbNet(p);
                  designDb.connectPin(c->dbId, i, netId);
+             }
+        }
+    }
+
+    // Handle PDK_VDD (Implicit Voltage Source)
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+             if (c->type == ComponentType::PDK_VDD || c->type == ComponentType::PDK_VDDIO) {
+                 // Ensure implicit ground exists if VDD is used
+                 if (!groundFound) {
+                     // Create unmapped ground net if missing from schematic
+                     // But we need a spatial ID to map it? No, designDb.createNet returns UUID.
+                     // But we need to use it.
+                     groundNetId = designDb.createNet("GND");
+                     groundFound = true; 
+                 }
+
+                 if (c->dbId == InstUUID()) {
+                      // Map PDK_VDD to a Voltage Source
+                      c->dbId = designDb.createInstance("VoltageSource", c->name.toStdString());
+                 }
+                 
+                 // Default to 1.8V for VDD, 3.3V for VDDIO
+                 double voltage = (c->type == ComponentType::PDK_VDDIO) ? 3.3 : 1.8;
+                 designDb.setParam(c->dbId, "V", voltage);
+                 
+                 designDb.clearPins(c->dbId);
+                 
+                 // Pin 0: Connected to the net at the terminal (Plus)
+                 if (!c->getTerminals().isEmpty()) {
+                     QPointF p = c->mapToScene(c->getTerminals()[0]);
+                     NetUUID netId = getDbNet(p);
+                     designDb.connectPin(c->dbId, 0, netId);
+                 }
+                 
+                 // Pin 1: Connected to Ground (Minus)
+                 designDb.connectPin(c->dbId, 1, groundNetId);
              }
         }
     }

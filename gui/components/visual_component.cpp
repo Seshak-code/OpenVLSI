@@ -171,11 +171,40 @@ QVariant VisualWire::itemChange(GraphicsItemChange change, const QVariant &value
 // ============================================================================
 // VISUAL COMPONENT
 // ============================================================================
+void VisualComponent::updateCachedPens() {
+    auto& tm = acutesim::gui::styling::ThemeManager::instance();
+    
+    QColor outline = tm.getColor("schematic.component_outline");
+    QColor fill = tm.getColor("schematic.component_fill");
+    
+    m_bodyPen = QPen(outline, 2);
+    m_bodyPen.setJoinStyle(Qt::RoundJoin);
+    
+    m_bodyBrush = QBrush(fill);
+    
+    // Ghost
+    QColor ghostColor = tm.getColor("schematic.ghost");
+    if (!ghostColor.isValid()) ghostColor = QColor(0, 200, 255);
+    
+    QColor ghostFill = ghostColor;
+    ghostFill.setAlpha(32);
+    m_ghostBrush = QBrush(ghostFill);
+    
+    m_ghostPen = QPen(ghostColor, 2, Qt::DashLine);
+    
+    // Selection
+    QColor selColor = tm.getColor("schematic.selection");
+    m_selectionPen = QPen(selColor, 2, Qt::DashLine);
+}
+
 VisualComponent::VisualComponent(ComponentType t) : type(t) {
     setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
     setTransformOriginPoint(0, 0); 
     setZValue(2); // Components above wires
     setAcceptHoverEvents(true); // Enable hover for Quick Preview
+    
+    updateCachedPens(); // Initial cache population
+
     
     // Default Properties
     switch(t) {
@@ -627,41 +656,30 @@ QVariant VisualComponent::itemChange(GraphicsItemChange change, const QVariant &
 }
 
 void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*) {
-    auto& tm = acutesim::gui::styling::ThemeManager::instance();
-    
-    // Phase 11.6: Ghost Rendering Logic
-    QColor ghostColor = tm.getColor("schematic.ghost");
-    if (!ghostColor.isValid()) ghostColor = QColor(0, 200, 255); // Fallback Cyan
+    // Phase 11.6 Optimized Rendering
+    if (m_bodyPen.style() == Qt::NoPen) updateCachedPens(); // Safety check
 
     if (ghostState == GhostState::Preview || ghostState == GhostState::Focused) {
-        // High confidence = more opaque
-        int alpha = static_cast<int>(128 * ghostConfidence);
+        int alpha = static_cast<int>(255 * ghostConfidence);
         
-        QColor ghostFill = ghostColor;
-        ghostFill.setAlpha(alpha / 4); // Very faint fill
+        QPen p = m_ghostPen;
+        p.setColor(QColor(p.color().red(), p.color().green(), p.color().blue(), alpha));
         
-        QColor ghostPen = ghostColor;
-        ghostPen.setAlpha(alpha);
-        
-        // Dashed lines for preview
-        QPen p(ghostPen, 2, Qt::DashLine);
         painter->setPen(p);
-        painter->setBrush(ghostFill);
+        painter->setBrush(m_ghostBrush);
     } else {
-        // Normal Paint
-        painter->setPen(QPen(Qt::white, 2));
-        painter->setBrush(QBrush(tm.getColor("schematic.component_fill")));
+        painter->setPen(m_bodyPen);
+        painter->setBrush(m_bodyBrush);
         
-        // If this is a Probe, draw dashed connecting lines to tips
+        // Probe logic
         if (type == ComponentType::Probe && probePositiveTip && probeNegativeTip) {
-            painter->save();
-            QPen dashPen(QColor(200, 200, 200), 1, Qt::DashLine);
-            painter->setPen(dashPen);
-            painter->drawLine(QPointF(0,0), probePositiveTip->pos());
-            painter->drawLine(QPointF(0,0), probeNegativeTip->pos());
-            painter->restore();
-            // Reset for body
-            painter->setPen(QPen(Qt::white, 2));
+             painter->save();
+             QPen dashPen(acutesim::gui::styling::ThemeManager::instance().getColor("schematic.probe_dash"), 1, Qt::DashLine);
+             painter->setPen(dashPen);
+             painter->drawLine(QPointF(0,0), probePositiveTip->pos());
+             painter->drawLine(QPointF(0,0), probeNegativeTip->pos());
+             painter->restore();
+             painter->setPen(m_bodyPen); // Restore body pen
         }
     }
         
@@ -674,7 +692,7 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
             tipRect.setHeight(25);
             
             painter->setBrush(QColor(40, 40, 40, 220));
-            painter->setPen(QPen(ghostColor, 1));
+            painter->setPen(QPen(m_ghostPen.color(), 1));
             painter->drawRoundedRect(tipRect, 4, 4);
             
             painter->setPen(Qt::white);
@@ -1097,7 +1115,7 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                 painter->drawLine(-30, 20, -40, 20);
                 
                 // Straight output leads
-                painter->setPen(QPen(tm.getColor("ui.text"), 2));
+                painter->setPen(QPen(acutesim::gui::styling::ThemeManager::instance().getColor("ui.text"), 2));
                 painter->drawLine(20, 0, 30, 0); // Output bus point
                 painter->drawLine(30, 0, 30, -20);
                 painter->drawLine(30, 0, 30, 20);

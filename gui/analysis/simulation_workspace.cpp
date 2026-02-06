@@ -35,16 +35,52 @@ SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     
     // Initialize default profiles
     profiles_["quick_dc"] = Simulation::SimulationProfile::quickDC();
-
     profiles_["transient_default"] = Simulation::SimulationProfile::transient();
-
     profiles_["ac_sweep_default"] = Simulation::SimulationProfile::acSweep();
-    
     currentProfileId_ = "quick_dc";
     
-    // Simulation timer
-    simTimer_ = new QTimer(this);
-    connect(simTimer_, &QTimer::timeout, this, &SimulationWorkspace::stepSimulation);
+    // Threading Setup
+#ifdef ACUTESIM_THREADS_ENABLED
+    workerThread_ = new QThread(this);
+    worker_ = new SimulationWorker(); // Moved to thread
+    worker_->moveToThread(workerThread_);
+    
+    // Lifecycle
+    connect(workerThread_, &QThread::finished, worker_, &QObject::deleteLater);
+#else
+    worker_ = new SimulationWorker(this); // Main thread worker
+#endif
+    
+    // Commands
+    qRegisterMetaType<TensorNetlist>("TensorNetlist");
+    qRegisterMetaType<Simulation::SimulationProfile>("Simulation::SimulationProfile");
+    qRegisterMetaType<acutesim::physics::RunMode>("acutesim::physics::RunMode");
+    
+    connect(this, &SimulationWorkspace::startDCRequested, worker_, &SimulationWorker::startDC);
+    connect(this, &SimulationWorkspace::startTransientRequested, worker_, &SimulationWorker::startTransient);
+    
+    // Results
+    connect(worker_, &SimulationWorker::resultsReady, this, &SimulationWorkspace::onWorkerResults);
+    connect(worker_, &SimulationWorker::solverViolation, this, &SimulationWorkspace::onWorkerViolation);
+    connect(worker_, &SimulationWorker::simulationFinished, this, &SimulationWorkspace::onWorkerFinished);
+    connect(worker_, &SimulationWorker::logMessage, this, &SimulationWorkspace::appendLog);
+    connect(worker_, &SimulationWorker::streamMessage, this, &SimulationWorkspace::appendStreamLog);
+    
+#ifdef ACUTESIM_THREADS_ENABLED
+    workerThread_->start();
+#endif
+}
+
+SimulationWorkspace::~SimulationWorkspace() {
+#ifdef ACUTESIM_THREADS_ENABLED
+    if (workerThread_) {
+        // Explicit shutdown
+        worker_->stop();
+        workerThread_->quit();
+        workerThread_->wait();
+        // worker_ is deleted via deleteLater on finished()
+    }
+#endif
 }
 
 void SimulationWorkspace::setupUI() {
@@ -173,7 +209,7 @@ void SimulationWorkspace::setupToolbar() {
     layout->addWidget(runBtn_);
     
     // Stop button
-    stopBtn_ = new QPushButton("Stop", toolbar_);
+    stopBtn_ = new QPushButton(toolbar_);
     stopBtn_->setIcon(style()->standardIcon(QStyle::SP_MediaStop));
     stopBtn_->setEnabled(false);
     connect(stopBtn_, &QPushButton::clicked, this, &SimulationWorkspace::stopSimulation);
@@ -572,18 +608,10 @@ void SimulationWorkspace::onProfileSelected(const QString& profileId) {
 
 void SimulationWorkspace::onRunRequested(const QString& profileId) {
     qDebug() << "[SimWorkspace] onRunRequested called with profileId:" << profileId;
-    qDebug() << "[SimWorkspace] schematicEditor_:" << (schematicEditor_ ? "valid" : "NULL");
 
     if (!canRun()) {
         QString error = "Cannot run simulation.\nPossible causes:\n1. ERC Violations (Fix errors in schematic)\n2. No schematic loaded\n3. Missing Ground reference";
-        qWarning() << "[SimWorkspace] canRun() returned false:" << error;
         appendLog("[ERROR] " + error.replace("\n", " "));
-
-        // WASM-SAFE: Do NOT use blocking QMessageBox here as it may crash the browser context if invoked from async path.
-        // The error is already logged to the output panel.
-        // QMessageBox::warning(this, "Simulation Failed", error);
-
-        // Flash status bar red
         if (auto* label = findChild<QLabel*>("statusLabel")) {
             label->setText("Failed: ERC / Checks");
             label->setStyleSheet("color: #f44747;");
@@ -593,23 +621,20 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
 
     qDebug() << "[SimWorkspace] canRun() passed, proceeding with simulation";
     
-    // Get netlist
+    // Get netlist (Main Thread)
     netlist_ = schematicEditor_->toNetlist();
     
-    // Create run object
+    // Create run object logic (UI State)
     currentRun_ = Simulation::SimulationRun();
     currentRun_.runId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-    // Set execution mode based on selector
-    if (computeEngineCombo_) {
-        sim_.execMode = static_cast<CircuitSim::ExecutionMode>(computeEngineCombo_->currentData().toInt());
-    }
-
     currentRun_.profileId = profileId;
     currentRun_.topologyHash = currentTopologyHash_;
     
     if (runModeCombo_) {
         currentRun_.runMode = static_cast<acutesim::physics::RunMode>(runModeCombo_->currentData().toInt());
     }
+    // execMode passed to worker if needed, or part of profile?
+    
     currentRun_.startTime = QDateTime::currentDateTime();
     currentRun_.status = Simulation::SimulationRun::Status::RUNNING;
     
@@ -620,184 +645,32 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     findChild<QLabel*>("statusLabel")->setText("Running...");
     findChild<QLabel*>("statusLabel")->setStyleSheet("color: #dcdcaa;");
     
-    // Clear streaming log
-    // streamingLog_->clear(); // Now in MainWindow dock
-    
-    appendLog(QString("[%1] Starting %2...")
-              .arg(QDateTime::currentDateTime().toString("hh:mm:ss"))
-              .arg(profiles_[profileId].name));
-    
-    emit simulationStarted(profileId);
-    
-    // Start DC solve
-    currentTime_ = 0.0;
-    
     auto* profile = currentProfile();
+    Simulation::SimulationProfile profCopy = *profile; // Copy
     
-    // Prepare corners (default to 1 nominal if empty)
-    QList<acutesim::physics::CornerConfig> runCorners = profile->corners;
-    if (runCorners.isEmpty()) {
-        runCorners.append(acutesim::physics::CornerConfig::Nominal());
-    }
-    
-    if (profile && profile->analysis == Simulation::AnalysisType::DC) {
-        // Quick DC - Run all configured corners (Batch)
-        appendStreamLog(QString("Starting DC Sweep (%1 corners)...").arg(runCorners.size()));
-        
-        bool allConverged = true;
-        
-        for (const auto& corner : runCorners) {
-            // APPLY PVT
-            sim_.applyCorner(netlist_, corner);
-            
-            appendStreamLog(QString("--> Corner: %1 (T=%2C, V=%3x)").arg(corner.name)
-                            .arg(corner.temperatureC).arg(corner.voltageScale));
-            
-            SolverStep result = sim_.solveDC(netlist_);
-            
-            if (result.stats.converged) {
-                 appendStreamLog(QString("   Converged in %1 iter").arg(result.stats.iterations));
-                 // Emit results per corner (tagged) with mode context
-                 QJsonObject jsonRes;
-                 jsonRes["type"] = "DC";
-                 jsonRes["corner"] = QString::fromStdString(corner.name);
-                 // Mode field removed - unified component library
-                 QJsonArray voltages;
-                 for(double v : result.nodeVoltages) voltages.append(v);
-                 jsonRes["voltages"] = voltages;
-                 
-                 // Compute Probes
-                 QJsonObject probeVals;
-                 for (const auto& probe : netlist_.globalBlock.probes) {
-                     double v_pos = (probe.nodePositive > 0 && probe.nodePositive <= result.nodeVoltages.size()) ? result.nodeVoltages[probe.nodePositive-1] : 0.0;
-                     double v_neg = (probe.nodeNegative > 0 && probe.nodeNegative <= result.nodeVoltages.size()) ? result.nodeVoltages[probe.nodeNegative-1] : 0.0;
-                     probeVals[QString::fromStdString(probe.name)] = v_pos - v_neg;
-                 }
-                 jsonRes["probes"] = probeVals;
-
-                 qDebug() << "[SimWorkspace] Emitting DC results for corner:" << corner.name << "voltages:" << voltages.size();
-                 emit resultsReady(jsonRes);
-            } else {
-                 appendStreamLog("   FAILED");
-                 allConverged = false;
-                 
-                 // Emit Solver Violation
-                 ERC::ViolationType vType = ERC::ViolationType::SOLVER_DIVERGENCE;
-                 QString detail = QString::fromStdString(result.stats.error_detail);
-                 if (detail.contains("Singular Matrix", Qt::CaseInsensitive)) {
-                     vType = ERC::ViolationType::SOLVER_SINGULAR_MATRIX;
-                 }
-                 
-                 ERC::Violation v(vType, 
-                     QString("Solver Failed: %1 (Corner %2)").arg(detail).arg(corner.name), 
-                     QPoint(-9999, -9999));
-                 emit solverViolation(v);
-            }
-        }
-        
-        currentRun_.status = allConverged ? 
-            Simulation::SimulationRun::Status::CONVERGED : 
-            Simulation::SimulationRun::Status::FAILED;
-            
-        currentRun_.endTime = QDateTime::currentDateTime();
-        currentRun_.solveTime_ms = currentRun_.startTime.msecsTo(currentRun_.endTime);
-        
-        finishSimulation();
-        
+    // Dispatch
+    if (profCopy.analysis == Simulation::AnalysisType::DC) {
+        emit startDCRequested(netlist_, profCopy, currentRun_.runMode);
     } else {
-        // Transient - Only support single corner for now
-        if (runCorners.size() > 1) {
-             appendLog("[WARNING] Batch Transient not supported in GUI yet. Running first corner only.");
-        }
-        
-        // Apply FIRST corner
-        sim_.applyCorner(netlist_, runCorners.first());
-        appendStreamLog(QString("Corner: %1").arg(runCorners.first().name));
-        
-        // Transient - use timer
-        simTimer_->start(10); // 10ms between steps (for UI responsiveness)
+        emit startTransientRequested(netlist_, profCopy, currentRun_.runMode);
     }
 }
 
-void SimulationWorkspace::stepSimulation() {
-    double stopTime = 0.001; // 1ms default
-    
-    auto* profile = currentProfile();
-    if (profile) {
-        QString stopStr = profile->parameters.value("stopTime", "1ms").toString();
-        // Parse stop time (simplified)
-        if (stopStr.endsWith("ms")) stopTime = stopStr.left(stopStr.length()-2).toDouble() * 1e-3;
-        else if (stopStr.endsWith("us")) stopTime = stopStr.left(stopStr.length()-2).toDouble() * 1e-6;
-        else if (stopStr.endsWith("s")) stopTime = stopStr.left(stopStr.length()-1).toDouble();
-    }
-    
-    // Run several steps per timer tick
-    for (int i = 0; i < 10 && currentTime_ < stopTime; ++i) {
-        SolverStep result = sim_.stepTransient(netlist_, timeStep_, currentTime_);
-        currentTime_ += timeStep_;
-        currentRun_.iterations++;
-        
-        // Emit waveform data with mode context
-        QJsonObject point;
-        point["type"] = "TransientPoint";
-        point["time"] = currentTime_;
-        // Mode field removed - unified component library
-        QJsonArray voltages;
-        for(double v : result.nodeVoltages) voltages.append(v);
-        point["voltages"] = voltages;
-        
-        // Compute Probes
-        QJsonObject probeVals;
-        for (const auto& probe : netlist_.globalBlock.probes) {
-             double v_pos = (probe.nodePositive > 0 && probe.nodePositive <= result.nodeVoltages.size()) ? result.nodeVoltages[probe.nodePositive-1] : 0.0;
-             double v_neg = (probe.nodeNegative > 0 && probe.nodeNegative <= result.nodeVoltages.size()) ? result.nodeVoltages[probe.nodeNegative-1] : 0.0;
-             probeVals[QString::fromStdString(probe.name)] = v_pos - v_neg;
-        }
-        point["probes"] = probeVals;
-
-        if (static_cast<int>(currentTime_ / timeStep_) % 100 == 0) {
-            qDebug() << "[SimWorkspace] Emitting TransientPoint t=" << currentTime_ << "voltages:" << voltages.size();
-        }
-        emit resultsReady(point);
-        
-        if (!result.stats.converged) {
-            currentRun_.status = Simulation::SimulationRun::Status::FAILED;
-            QString reason = result.stats.error_detail.empty() ? 
-                "Transient step failed" : QString::fromStdString(result.stats.error_detail);
-            currentRun_.failureReason = reason;
-            
-            // Emit Solver Violation
-            ERC::ViolationType vType = ERC::ViolationType::SOLVER_DIVERGENCE;
-            if (reason.contains("Singular Matrix", Qt::CaseInsensitive)) {
-                vType = ERC::ViolationType::SOLVER_SINGULAR_MATRIX;
-            } else if (reason.contains("Time step underflow", Qt::CaseInsensitive)) {
-                 vType = ERC::ViolationType::SOLVER_TIMEOUT; // Or divergence?
-            }
-            
-            ERC::Violation v(vType, 
-                QString("Transient Failed at t=%1s: %2").arg(currentTime_).arg(reason), 
-                QPoint(-9999, -9999));
-            emit solverViolation(v);
-            
-            simTimer_->stop();
-            finishSimulation();
-            return;
-        }
-    }
-    
-    // Update streaming log periodically
-    if (static_cast<int>(currentTime_ / timeStep_) % 100 == 0) {
-        appendStreamLog(QString("t = %1 us").arg(currentTime_ * 1e6, 0, 'f', 2));
-    }
-    
-    // Check completion
-    if (currentTime_ >= stopTime) {
-        currentRun_.status = Simulation::SimulationRun::Status::CONVERGED;
-        simTimer_->stop();
-        finishSimulation();
-    }
+void SimulationWorkspace::stopSimulation() {
+    if (worker_) worker_->stop();
 }
 
+void SimulationWorkspace::onWorkerResults(const QJsonObject& results) {
+    emit resultsReady(results);
+}
+
+void SimulationWorkspace::onWorkerViolation(const ERC::Violation& violation) {
+    emit solverViolation(violation);
+}
+
+void SimulationWorkspace::onWorkerFinished() {
+    finishSimulation();
+}
 void SimulationWorkspace::finishSimulation() {
     isRunning_ = false;
     runBtn_->setEnabled(true);
@@ -853,14 +726,7 @@ void SimulationWorkspace::finishSimulation() {
     emit simulationCompleted(currentRun_);
 }
 
-void SimulationWorkspace::stopSimulation() {
-    if (isRunning_) {
-        simTimer_->stop();
-        currentRun_.status = Simulation::SimulationRun::Status::CANCELLED;
-        finishSimulation();
-        appendLog("[INFO] Simulation cancelled by user.");
-    }
-}
+
 
 void SimulationWorkspace::appendLog(const QString& msg) {
     emit logMessage(msg);

@@ -59,6 +59,15 @@ void ThemeManager::initTokenRegistry() {
     reg("schematic.wire", QColor("#cccccc"), true, "Default wire color");
     reg("schematic.pin", QColor("#cccccc"), true, "Component pins");
     reg("schematic.selection", QColor(0, 122, 204, 100), true, "Selection overlay");
+    reg("schematic.component_outline", QColor("#ffffff"), true, "Component body outline");
+    reg("schematic.component_fill", QColor("#1e1e1e"), true, "Component body fill");
+    reg("schematic.probe_dash", QColor(200, 200, 200), true, "Probe connecting line");
+    reg("schematic.ghost", QColor(0, 200, 255), true, "Ghost/Preview color");
+
+    // Table Styling
+    reg("table.header", QColor("#252526"), true, "Table header background");
+    reg("table.row_selected", QColor("#094771"), true, "Selected row background");
+    reg("table.grid", QColor("#333333"), true, "Table grid lines");
 }
 
 bool ThemeManager::loadThemeFromJson(const QString& jsonPath) {
@@ -222,6 +231,36 @@ QString ThemeManager::getStyleSheet() const {
     return css;
 }
 
+QString ThemeManager::getWidgetStyleSheet(const QString& widgetType) const {
+    if (widgetType == "QTableWidget") {
+        return QString(R"(
+            QTableWidget {
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                gridline-color: %1;
+            }
+            QTableWidget::item {
+                padding: 2px 4px;
+                border: none;
+            }
+            QTableWidget::item:selected { background: %2; }
+            QHeaderView::section {
+                background: %3;
+                color: %4;
+                border: none;
+                padding: 3px 4px;
+                font-size: 10px;
+            }
+        )")
+        .arg(getColor("table.grid").name())
+        .arg(getColor("table.row_selected").name())
+        .arg(getColor("table.header").name())
+        .arg(getColor("ui.textDim").name());
+    }
+    return "";
+}
+
 // Static Helpers
 QColor ThemeManager::background() { return instance().getColor("ui.background"); }
 QColor ThemeManager::foreground() { return instance().getColor("ui.text"); }
@@ -250,6 +289,15 @@ void ThemeManager::loadDarkTheme() {
     colors_["schematic.wire"] = QColor("#cccccc");
     colors_["schematic.pin"] = QColor("#cccccc");
     colors_["schematic.selection"] = QColor(0, 122, 204, 100);
+    colors_["schematic.component_outline"] = QColor("#cccccc");
+    colors_["schematic.component_fill"] = QColor("#1e1e1e");
+    colors_["schematic.probe_dash"] = QColor(200, 200, 200);
+    colors_["schematic.ghost"] = QColor(0, 200, 255);
+    
+    // Tables
+    colors_["table.header"] = QColor("#252526");
+    colors_["table.row_selected"] = QColor("#094771");
+    colors_["table.grid"] = QColor("#333333");
     
     // Fonts
     QFont defaultFont("Inter"); // Or system default
@@ -272,6 +320,18 @@ void ThemeManager::loadLightTheme() {
     
     colors_["input.background"] = QColor("#ffffff");
     colors_["input.text"] = QColor("#333333");
+
+    // Schematic - Light
+    colors_["schematic.component_outline"] = QColor("#333333");
+    colors_["schematic.component_fill"] = QColor("#ffffff");
+    colors_["schematic.wire"] = QColor("#333333");
+    colors_["schematic.pin"] = QColor("#333333");
+    colors_["schematic.probe_dash"] = QColor("#666666");
+
+    // Tables - Light
+    colors_["table.header"] = QColor("#f3f3f3");
+    colors_["table.row_selected"] = QColor("#0060c0");
+    colors_["table.grid"] = QColor("#e0e0e0");
 }
 
 
