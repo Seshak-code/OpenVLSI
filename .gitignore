@@ -4,6 +4,7 @@
 build/
 build_desktop/
 build_wasm/
+build_wasm_fresh/
 build2/
 build-*/
 cmake-build-*/
@@ -208,4 +209,5 @@ libs/Frameworks/
 # User/Agent Data
 # ============================================
 .gemini/
-
+.claude/
+Untitled.sch

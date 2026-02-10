@@ -304,6 +304,16 @@ add_executable(${PROJECT_NAME}
     ai_api/system/feedback_loop.h
     ai_api/simulation/auto_harness.cpp
     ai_api/simulation/auto_harness.h
+    ai_api/context/context_budget.cpp
+    ai_api/context/context_budget.h
+    ai_api/adk/tool_registry.cpp
+    ai_api/adk/tool_registry.h
+    ai_api/adk/tool_handlers.cpp
+    ai_api/adk/tool_handlers.h
+    ai_api/adk/session_manager.cpp
+    ai_api/adk/session_manager.h
+    ai_api/pipeline/rag_pipeline.cpp
+    ai_api/pipeline/rag_pipeline.h
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
@@ -419,6 +429,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
     ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/ai
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/panels
@@ -701,6 +713,11 @@ if(NOT EMSCRIPTEN)
         ai_api/analysis/topology_analyzer.cpp
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
+        ai_api/context/context_budget.cpp
+        ai_api/adk/tool_registry.cpp
+        ai_api/adk/tool_handlers.cpp
+        ai_api/adk/session_manager.cpp
+        ai_api/pipeline/rag_pipeline.cpp
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
@@ -776,6 +793,10 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
     )
     target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_auto_harness PUBLIC cxx_std_17)
@@ -822,6 +843,11 @@ if(NOT EMSCRIPTEN)
         ai_api/analysis/topology_analyzer.cpp
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
+        ai_api/context/context_budget.cpp
+        ai_api/adk/tool_registry.cpp
+        ai_api/adk/tool_handlers.cpp
+        ai_api/adk/session_manager.cpp
+        ai_api/pipeline/rag_pipeline.cpp
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
@@ -897,6 +923,10 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
     )
     target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_copilot_validate PUBLIC cxx_std_17)
@@ -977,6 +1007,116 @@ target_include_directories(test_safe_io PRIVATE
 )
 target_link_libraries(test_safe_io PRIVATE Qt6::Core Qt6::Test)
 target_compile_features(test_safe_io PUBLIC cxx_std_17)
+
+# Phase 1.26: Context Budget Tests
+add_executable(test_context_budget
+    tests/test_context_budget.cpp
+    ai_api/context/context_budget.cpp
+)
+target_include_directories(test_context_budget PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+)
+target_link_libraries(test_context_budget PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_context_budget PUBLIC cxx_std_17)
+
+# Phase 1.26: ADK Tool Registry Tests
+add_executable(test_adk_tool_registry
+    tests/test_adk_tool_registry.cpp
+    tests/stubs/ai_api_test_stubs.cpp
+    ai_api/adk/tool_registry.cpp
+    ai_api/adk/tool_handlers.cpp
+    ai_api/adk/session_manager.cpp
+    ai_api/context/context_budget.cpp
+    ai_api/context/rag_context.cpp
+    ai_api/context/prompt_builder.cpp
+    ai_api/system/feedback_loop.cpp
+    ai_api/simulation/simulation_trace.cpp
+    ai_api/analysis/failure_classifier.cpp
+    ai_api/analysis/topology_analyzer.cpp
+    ai_api/pipeline/rag_pipeline.cpp
+)
+target_include_directories(test_adk_tool_registry PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+)
+target_include_directories(test_adk_tool_registry PRIVATE $<TARGET_PROPERTY:Qt6::Gui,INTERFACE_INCLUDE_DIRECTORIES>)
+target_link_libraries(test_adk_tool_registry PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_adk_tool_registry PUBLIC cxx_std_17)
+
+# Phase 1.26: RAG Pipeline Tests
+add_executable(test_rag_pipeline
+    tests/test_rag_pipeline.cpp
+    tests/stubs/ai_api_test_stubs.cpp
+    ai_api/pipeline/rag_pipeline.cpp
+    ai_api/context/context_budget.cpp
+    ai_api/context/rag_context.cpp
+    ai_api/context/prompt_builder.cpp
+    ai_api/system/feedback_loop.cpp
+    ai_api/simulation/simulation_trace.cpp
+    ai_api/analysis/failure_classifier.cpp
+    ai_api/analysis/topology_analyzer.cpp
+)
+target_include_directories(test_rag_pipeline PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+)
+target_include_directories(test_rag_pipeline PRIVATE $<TARGET_PROPERTY:Qt6::Gui,INTERFACE_INCLUDE_DIRECTORIES>)
+target_link_libraries(test_rag_pipeline PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_rag_pipeline PUBLIC cxx_std_17)
+
+# Phase 1.26: Session Manager Tests
+add_executable(test_session_manager
+    tests/test_session_manager.cpp
+    ai_api/adk/session_manager.cpp
+)
+target_include_directories(test_session_manager PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+)
+target_link_libraries(test_session_manager PRIVATE Qt6::Core Qt6::Test)
+target_compile_features(test_session_manager PUBLIC cxx_std_17)
 
 # Phase 1.7 Simulation Suite Tests
 add_executable(test_simulation 
@@ -1178,6 +1318,11 @@ if(NOT EMSCRIPTEN)
         ai_api/analysis/topology_analyzer.cpp
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
+        ai_api/context/context_budget.cpp
+        ai_api/adk/tool_registry.cpp
+        ai_api/adk/tool_handlers.cpp
+        ai_api/adk/session_manager.cpp
+        ai_api/pipeline/rag_pipeline.cpp
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
@@ -1246,6 +1391,10 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
         ${TCL_INCLUDE_PATH}
     )
     target_link_libraries(test_pdk_compliance PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
@@ -1290,6 +1439,11 @@ if(NOT EMSCRIPTEN)
         ai_api/analysis/topology_analyzer.cpp
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
+        ai_api/context/context_budget.cpp
+        ai_api/adk/tool_registry.cpp
+        ai_api/adk/tool_handlers.cpp
+        ai_api/adk/session_manager.cpp
+        ai_api/pipeline/rag_pipeline.cpp
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
@@ -1358,6 +1512,10 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
     )
     target_link_libraries(test_hierarchical_sim PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_hierarchical_sim PUBLIC cxx_std_17)
@@ -1383,6 +1541,10 @@ enable_testing()
 
 add_test(NAME test_safe_io COMMAND test_safe_io)
 add_test(NAME test_ai_simulation_intelligence COMMAND test_ai_simulation_intelligence)
+add_test(NAME test_context_budget COMMAND test_context_budget)
+add_test(NAME test_adk_tool_registry COMMAND test_adk_tool_registry)
+add_test(NAME test_rag_pipeline COMMAND test_rag_pipeline)
+add_test(NAME test_session_manager COMMAND test_session_manager)
 
 # Helper for testing Tcl without GUI
 # add_executable(test_tcl_bridge tests/test_tcl_bridge.cpp gui/scripting/tcl_bridge.cpp components/design_db.cpp)
@@ -1684,6 +1846,11 @@ if(NOT EMSCRIPTEN)
         ai_api/analysis/topology_analyzer.cpp
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
+        ai_api/context/context_budget.cpp
+        ai_api/adk/tool_registry.cpp
+        ai_api/adk/tool_handlers.cpp
+        ai_api/adk/session_manager.cpp
+        ai_api/pipeline/rag_pipeline.cpp
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
@@ -1752,6 +1919,10 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
         ${TCL_INCLUDE_PATH}
     )
     target_link_libraries(test_introspection PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent Qt6::Test ${TCL_LIBRARY})

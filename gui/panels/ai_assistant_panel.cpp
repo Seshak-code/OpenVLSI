@@ -3,10 +3,13 @@
 #include "schematic_editor.h"
 // gui_types.h include removed - AppMode no longer used
 
-// AI API Includes (Assuming these exist based on old file)
+// AI API Includes
 #include "../../ai_api/context/context_engine.h"
 #include "../../ai_api/core/nl_parser.h"
 #include "../../ai_api/core/circuit_templates.h"
+#include "../../ai_api/adk/session_manager.h"
+#include "../../ai_api/system/feedback_loop.h"
+#include "../../ai_api/pipeline/rag_pipeline.h"
 
 #include <QLabel>
 #include <QFrame>
@@ -188,13 +191,29 @@ void AiAssistantPanel::hideAllOverlays() {
     chatView_->setVisible(true);
 }
 
+void AiAssistantPanel::ensureSession() {
+    if (currentSessionId_.isEmpty()) {
+        auto session = AIAPI::SessionManager::instance().createSession();
+        currentSessionId_ = session.sessionId;
+    }
+}
+
 void AiAssistantPanel::onSendClicked() {
     QString txt = inputBox_->toPlainText().trimmed();
     if (txt.isEmpty()) return;
-    
+
+    ensureSession();
+
     appendUserMessage(txt);
     inputBox_->clear();
-    
+
+    // Record user turn in session
+    AIAPI::ConversationTurn userTurn;
+    userTurn.role = "user";
+    userTurn.content = txt;
+    userTurn.timestamp = QDateTime::currentDateTimeUtc();
+    AIAPI::SessionManager::instance().addTurn(currentSessionId_, userTurn);
+
     processCommand(txt);
     emit querySubmitted(txt);
 }
@@ -248,10 +267,15 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
         return;
     }
 
-    // Mode restrictions removed - unified component library
-    // All components are now available regardless of previous mode concept
+    // Generate query ID for feedback attribution
+    lastQueryId_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
-    // Reuse Parser Logic (Simulated for brevity, using simple matching)
+    // Enrich context via RAG pipeline (non-blocking for now)
+    auto& pipeline = AIAPI::RAGPipelineOrchestrator::instance();
+    QString enrichedContext = pipeline.buildPromptContext(text, 4000);
+    Q_UNUSED(enrichedContext); // Will be sent to LLM in future phase
+
+    // Reuse Parser Logic
     AIAPI::ParsedIntent intent = AIAPI::NLParser::parseIntent(text);
     pendingIntent_ = text;
     pendingConfidence_ = intent.confidence;
@@ -282,13 +306,35 @@ void AiAssistantPanel::processNaturalLanguage(const QString& text) {
 
 void AiAssistantPanel::onApproveSchematicChange() {
     executeSchematicChange(pendingSchematicRequest_);
-    hideAllOverlays(); // FIX: Persistence Bug
-    appendAiMessage("Action Executed: " + pendingSchematicRequest_.description);
+    hideAllOverlays();
+
+    QString response = "Action Executed: " + pendingSchematicRequest_.description;
+    appendAiMessage(response);
+
+    // Submit positive feedback
+    if (!lastQueryId_.isEmpty()) {
+        AIAPI::FeedbackLoop::instance().submitFeedback(lastQueryId_, 1);
+    }
+
+    // Record AI turn in session
+    if (!currentSessionId_.isEmpty()) {
+        AIAPI::ConversationTurn aiTurn;
+        aiTurn.role = "assistant";
+        aiTurn.content = response;
+        aiTurn.timestamp = QDateTime::currentDateTimeUtc();
+        aiTurn.queryId = lastQueryId_;
+        AIAPI::SessionManager::instance().addTurn(currentSessionId_, aiTurn);
+    }
 }
 
 void AiAssistantPanel::onRejectSchematicChange() {
     hideAllOverlays();
     appendAiMessage("Action Rejected.");
+
+    // Submit negative feedback
+    if (!lastQueryId_.isEmpty()) {
+        AIAPI::FeedbackLoop::instance().submitFeedback(lastQueryId_, -1);
+    }
 }
 
 void AiAssistantPanel::executeSchematicChange(const SchematicChangeRequest& req) {

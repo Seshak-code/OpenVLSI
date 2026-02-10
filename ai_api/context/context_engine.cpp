@@ -13,6 +13,7 @@ namespace AIAPI {
 
 // Static member initialization
 AIPolicy ContextEngine::currentPolicy_ = AIPolicy::defaultPolicy();
+std::optional<SimulationTrace> ContextEngine::lastTrace_ = std::nullopt;
 
 // Phase 1.7.10: Apply AI Policy to responses
 QString ContextEngine::applyPolicy(const QString& aiResponse, const QJsonObject& solverEvidence) {
@@ -423,17 +424,35 @@ QJsonObject ContextEngine::serializeTopologyChunks() {
     deviceTables["sources"] = sources;
     result["deviceTables"] = deviceTables;
     
-    // 2. DC Operating Point (Placeholder - would come from last simulation)
-    // In a real implementation, this would read from SimulationTrace
+    // 2. DC Operating Point - read from lastTrace_ if available
     QJsonObject dcOP;
-    dcOP["status"] = "Not yet simulated";
-    dcOP["nodeVoltages"] = QJsonArray();
+    if (lastTrace_.has_value() && !lastTrace_->voltageSeries.empty()) {
+        dcOP["status"] = lastTrace_->isFailure() ? "Failed" : "Converged";
+        QJsonArray nodeVoltages;
+        for (auto it = lastTrace_->voltageSeries.begin(); it != lastTrace_->voltageSeries.end(); ++it) {
+            if (!it.value().empty()) {
+                QJsonObject nv;
+                nv["node"] = it.key();
+                nv["voltage"] = it.value().back(); // Final voltage
+                nodeVoltages.append(nv);
+            }
+        }
+        dcOP["nodeVoltages"] = nodeVoltages;
+    } else {
+        dcOP["status"] = "Not yet simulated";
+        dcOP["nodeVoltages"] = QJsonArray();
+    }
     result["dcOperatingPoint"] = dcOP;
-    
-    // 3. Transient Endpoints (Placeholder)
+
+    // 3. Transient Endpoints - read from lastTrace_ if available
     QJsonObject transient;
-    transient["status"] = "Not yet simulated";
-    transient["finalTime"] = 0.0;
+    if (lastTrace_.has_value() && !lastTrace_->timePoints.empty()) {
+        transient["status"] = "Completed";
+        transient["finalTime"] = lastTrace_->timePoints.back();
+    } else {
+        transient["status"] = "Not yet simulated";
+        transient["finalTime"] = 0.0;
+    }
     result["transientEndpoint"] = transient;
     
     return result;
@@ -460,16 +479,34 @@ QJsonObject ContextEngine::serializeProbeContext() {
     }
     result["probes"] = probeValues;
     
-    // 2. Historical Errors (Placeholder - would come from trace history)
+    // 2. Historical Errors - read from lastTrace_ failures
     QJsonArray errorHistory;
-    // In production, this would iterate over last N simulation traces
-    // and extract convergence failures, KCL residuals, etc.
+    if (lastTrace_.has_value()) {
+        for (const auto& failure : lastTrace_->failureModes) {
+            QJsonObject err;
+            err["type"] = failureTypeToString(failure.type);
+            err["message"] = failure.message;
+            err["node"] = failure.nodeOrComponent;
+            err["timestamp"] = failure.timestamp;
+            errorHistory.append(err);
+        }
+    }
     result["errorHistory"] = errorHistory;
-    
+
     // 3. KCL Residual Summary
     QJsonObject kclSummary;
-    kclSummary["maxResidual_A"] = "N/A";
-    kclSummary["residualStatus"] = "Not yet computed";
+    if (lastTrace_.has_value() && !lastTrace_->failureModes.isEmpty()) {
+        // Find max residual from failure debug contexts
+        double maxResidual = 0.0;
+        for (const auto& f : lastTrace_->failureModes) {
+            if (f.residual > maxResidual) maxResidual = f.residual;
+        }
+        kclSummary["maxResidual_A"] = QString::number(maxResidual, 'e', 3);
+        kclSummary["residualStatus"] = lastTrace_->isFailure() ? "Above threshold" : "Within tolerance";
+    } else {
+        kclSummary["maxResidual_A"] = "N/A";
+        kclSummary["residualStatus"] = lastTrace_.has_value() ? "Within tolerance" : "Not yet computed";
+    }
     result["kclResiduals"] = kclSummary;
     
     return result;
@@ -477,32 +514,42 @@ QJsonObject ContextEngine::serializeProbeContext() {
 
 QJsonObject ContextEngine::serializeSolverDecisions() {
     QJsonObject result;
-    
-    // 1. Integration Method
-    // In production, this would query the active CircuitSim instance
-    result["integrationMethod"] = "Trapezoidal"; // Default
-    result["lteThreshold"] = 1e-4;
-    result["maxIterations"] = 20;
-    
-    // 2. GMIN Stepping
-    QJsonObject gminState;
-    gminState["active"] = false;
-    gminState["currentGmin"] = 1e-12;
-    gminState["steppingPhase"] = "None";
-    result["gminStepping"] = gminState;
-    
+
+    // Read from lastTrace_ config if available
+    if (lastTrace_.has_value()) {
+        const auto& config = lastTrace_->configParams;
+        result["integrationMethod"] = config.solverType;
+        result["lteThreshold"] = config.reltol;
+        result["maxIterations"] = 20;
+
+        QJsonObject gminState;
+        gminState["active"] = config.gminSteppingEnabled;
+        gminState["currentGmin"] = 1e-12;
+        gminState["steppingPhase"] = config.gminSteppingEnabled ? "Active" : "None";
+        result["gminStepping"] = gminState;
+    } else {
+        result["integrationMethod"] = "Trapezoidal";
+        result["lteThreshold"] = 1e-4;
+        result["maxIterations"] = 20;
+
+        QJsonObject gminState;
+        gminState["active"] = false;
+        gminState["currentGmin"] = 1e-12;
+        gminState["steppingPhase"] = "None";
+        result["gminStepping"] = gminState;
+    }
+
     // 3. Rollback History
     QJsonArray rollbacks;
-    // Would track timestep rollbacks due to LTE violations
     result["rollbackHistory"] = rollbacks;
-    
+
     // 4. Solver Flags
     QJsonObject flags;
     flags["useSourceStepping"] = false;
     flags["useDampedNewton"] = true;
     flags["pnjlimEnabled"] = true;
     result["solverFlags"] = flags;
-    
+
     return result;
 }
 

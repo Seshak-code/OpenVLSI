@@ -12,6 +12,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include "ghost_diff_viewer.h"
+#include "../../ai_api/adk/session_manager.h"
 // Forward declaration
 class SchematicEditor;
 
@@ -92,6 +93,11 @@ private:
     // Feedback State
     QString pendingIntent_;
     double pendingConfidence_;
+
+    // Session State (Phase 1.26)
+    QString currentSessionId_;
+    QString lastQueryId_;
+    void ensureSession();
 };
 
 } // namespace panels

@@ -1,7 +1,9 @@
 #pragma once
 #include <QString>
 #include <QJsonObject>
+#include <optional>
 #include "../policy/ai_policy.h"
+#include "../simulation/simulation_trace.h"
 
 namespace AIAPI {
 
@@ -79,10 +81,17 @@ private:
     
     // Phase 1.7.10: AI Policy Enforcement
     static AIPolicy currentPolicy_;
+
+    // Phase 1.26: Last simulation trace cache
+    static std::optional<SimulationTrace> lastTrace_;
     
 public:
     static void setPolicy(const AIPolicy& policy) { currentPolicy_ = policy; }
     static AIPolicy getPolicy() { return currentPolicy_; }
+
+    // Phase 1.26: Last simulation trace for live context wiring
+    static void setLastTrace(const SimulationTrace& trace) { lastTrace_ = trace; }
+    static std::optional<SimulationTrace> getLastTrace() { return lastTrace_; }
     
     /**
      * Applies policy to an AI response:
