@@ -354,6 +354,11 @@ public:
     void ascend();
     void navigateToDepth(int depth);
     bool canAscend() const;
+
+    // Continuation helpers for async InlineDialog callbacks
+    void continueDescendInto(const QString& filePath, const QString& instanceName);
+    void continueAscend();
+    void continueNavigateToDepth(int depth);
     QString rootFilePath() const { return rootFilePath_; }
 
 signals:

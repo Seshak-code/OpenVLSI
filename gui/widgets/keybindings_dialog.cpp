@@ -2,17 +2,16 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QMessageBox>
+#include "inline_dialog.h"
 
 namespace acutesim {
 namespace gui {
 namespace widgets {
 
 KeybindingsDialog::KeybindingsDialog(QWidget* parent)
-    : QDialog(parent)
+    : QWidget(parent)
     , editingRow_(-1)
 {
-    setWindowTitle("Keyboard Shortcuts");
     setMinimumSize(700, 500);
     setupUi();
     populateTable();
@@ -286,13 +285,12 @@ void KeybindingsDialog::onAcceptEdit() {
     auto& km = core::KeybindingManager::instance();
 
     if (km.setKeybinding(editingId_, newKey)) {
-        // Refresh the row
         core::KeyBinding binding = km.getBinding(editingId_);
         updateRow(editingRow_, binding);
         hideEditWidget();
         statusLabel_->setText("Keybinding updated");
     } else {
-        QMessageBox::warning(this, "Conflict", "This keybinding conflicts with another command.");
+        InlineDialog::warning(this, "Conflict", "This keybinding conflicts with another command.");
     }
 }
 
@@ -318,18 +316,17 @@ void KeybindingsDialog::onResetBinding(int row) {
 }
 
 void KeybindingsDialog::onResetAll() {
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "Reset All Keybindings",
+    InlineDialog::question(this, "Reset All Keybindings",
         "Are you sure you want to reset all keybindings to their defaults?",
-        QMessageBox::Yes | QMessageBox::No
-    );
-
-    if (reply == QMessageBox::Yes) {
-        auto& km = core::KeybindingManager::instance();
-        km.resetAllToDefaults();
-        populateTableFiltered(searchBox_->text());
-        statusLabel_->setText("All keybindings reset to defaults");
-    }
+        DialogButton::Yes | DialogButton::No,
+        [this](const DialogResult& r) {
+            if (r.clickedButton == DialogButton::Yes) {
+                auto& km = core::KeybindingManager::instance();
+                km.resetAllToDefaults();
+                populateTableFiltered(searchBox_->text());
+                statusLabel_->setText("All keybindings reset to defaults");
+            }
+        });
 }
 
 } // namespace widgets

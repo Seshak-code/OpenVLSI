@@ -456,6 +456,14 @@ public:
     // Generates an immutable TensorBlock for the solver
     TensorBlock snapshot() const;
 
+    // Extended snapshot that also returns the NetUUID->node index mapping
+    // Used by generateNetlist() to build BlockInstance nodeMapping
+    struct SnapshotResult {
+        std::shared_ptr<TensorBlock> block;
+        std::map<NetUUID, int> netToNode;
+    };
+    SnapshotResult snapshotWithNodeMap() const;
+
     /**
      * @brief Generate a hierarchical snapshot by recursively resolving subcircuits.
      * @param resolver Function that maps a master/subcircuit name and its parameters to a TensorBlock.

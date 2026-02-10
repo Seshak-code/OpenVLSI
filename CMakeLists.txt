@@ -246,9 +246,9 @@ add_executable(${PROJECT_NAME}
     gui/widgets/component_library.h
     gui/widgets/breadcrumb_widget.cpp
     gui/widgets/breadcrumb_widget.h
-    gui/widgets/compliance_report_dialog.cpp
-    gui/widgets/compliance_report_dialog.h
-    gui/widgets/compliance_report_dialog.h
+    gui/widgets/compliance_report_widget.cpp
+    gui/widgets/compliance_report_widget.h
+    gui/widgets/compliance_report_widget.h
     components/pdk_compliance.cpp
     components/pdk_compliance.h
     components/pdk_manager.cpp
@@ -270,8 +270,8 @@ add_executable(${PROJECT_NAME}
     gui/analysis/simulation_workspace.h
     gui/analysis/simulation_worker.cpp
     gui/analysis/simulation_worker.h
-    gui/analysis/monte_carlo_setup_dialog.cpp
-    gui/analysis/monte_carlo_setup_dialog.h
+    gui/analysis/monte_carlo_setup_widget.cpp
+    gui/analysis/monte_carlo_setup_widget.h
     gui/analysis/statistical_dashboard.cpp
     gui/analysis/statistical_dashboard.h
     physics/simulation_profile.h
@@ -321,6 +321,8 @@ add_executable(${PROJECT_NAME}
     gui/orchestration/worker_manager.h
     gui/orchestration/worker_status_panel.cpp
     gui/orchestration/worker_status_panel.h
+    gui/orchestration/rtl_pipeline_panel.cpp
+    gui/orchestration/rtl_pipeline_panel.h
     gui/analysis/corner_setup_widget.cpp
     gui/analysis/corner_setup_widget.h
     gui/widgets/trust_badge_widget.cpp
@@ -343,6 +345,11 @@ add_executable(${PROJECT_NAME}
     gui/widgets/toast_manager.h
     gui/widgets/keybindings_dialog.cpp
     gui/widgets/keybindings_dialog.h
+    gui/widgets/inline_dialog_types.h
+    gui/widgets/inline_dialog.cpp
+    gui/widgets/inline_dialog.h
+    gui/widgets/inline_progress.cpp
+    gui/widgets/inline_progress.h
     gui/widgets/project_model.cpp
     gui/widgets/project_model.h
     gui/widgets/project_explorer.cpp
@@ -483,6 +490,8 @@ if(EMSCRIPTEN)
         "-sEXPORTED_FUNCTIONS=['_main','_dumpStorageFile','_malloc','_free']"
         "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/resources@/resources"
     )
+    
+
 
     if(ACUTESIM_WASM_THREADS)
         target_link_options(${PROJECT_NAME} PRIVATE "-pthread" "-sUSE_PTHREADS=1" "-sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency")
@@ -543,6 +552,43 @@ if(EMSCRIPTEN)
     )
 endif()
 
+
+# Noise Analysis Test
+add_executable(test_noise_analysis
+    tests/test_noise_analysis.cpp
+)
+target_include_directories(test_noise_analysis PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_features(test_noise_analysis PUBLIC cxx_std_17)
+
+# Convergence Engine Test (NR failure classification)
+add_executable(test_convergence_engine
+    tests/test_convergence_engine.cpp
+)
+target_include_directories(test_convergence_engine PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_features(test_convergence_engine PUBLIC cxx_std_17)
+
+# AD Integration Test (Dual<T> vs Finite-Difference for all devices)
+add_executable(test_ad_integration
+    tests/test_ad_integration.cpp
+)
+target_include_directories(test_ad_integration PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_features(test_ad_integration PUBLIC cxx_std_17)
 
 # Sensitivity Analysis Test (AD Gradient Check)
 add_executable(test_sensitivity 
@@ -637,11 +683,13 @@ if(NOT EMSCRIPTEN)
         gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
+        gui/components/standard_cell_visualizer.cpp
+        gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
     gui/scripting/tcl_bridge.cpp
     components/pdk_compliance.cpp
-    gui/widgets/compliance_report_dialog.cpp
+    gui/widgets/compliance_report_widget.cpp
         components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
@@ -668,10 +716,14 @@ if(NOT EMSCRIPTEN)
         gui/widgets/trust_badge_widget.cpp
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
+        gui/orchestration/rtl_pipeline_panel.cpp
+        compute/orchestration/drivers/yosys_task.cpp
+        compute/orchestration/drivers/openroad_task.cpp
+        compute/orchestration/drivers/klayout_task.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
-        gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/analysis/monte_carlo_setup_widget.cpp
         gui/styling/theme_manager.cpp
         gui/core/layout_manager.cpp
         gui/core/storage_manager.cpp
@@ -695,6 +747,11 @@ if(NOT EMSCRIPTEN)
         gui/core/keybinding_manager.h
         gui/widgets/keybindings_dialog.cpp
         gui/widgets/keybindings_dialog.h
+        gui/widgets/inline_dialog_types.h
+        gui/widgets/inline_dialog.cpp
+        gui/widgets/inline_dialog.h
+        gui/widgets/inline_progress.cpp
+        gui/widgets/inline_progress.h
         gui/widgets/search_dock.cpp
         gui/widgets/search_dock.h
         gui/widgets/project_model.cpp
@@ -747,9 +804,10 @@ if(NOT EMSCRIPTEN)
         gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/subcircuit_resolver.cpp
+        gui/components/standard_cell_visualizer.cpp
     gui/scripting/tcl_bridge.cpp
     components/pdk_compliance.cpp
-    gui/widgets/compliance_report_dialog.cpp
+    gui/widgets/compliance_report_widget.cpp
         gui/core/welcome_widget.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
@@ -779,10 +837,14 @@ if(NOT EMSCRIPTEN)
         gui/widgets/trust_badge_widget.cpp
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
+        gui/orchestration/rtl_pipeline_panel.cpp
+        compute/orchestration/drivers/yosys_task.cpp
+        compute/orchestration/drivers/openroad_task.cpp
+        compute/orchestration/drivers/klayout_task.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
-        gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/analysis/monte_carlo_setup_widget.cpp
         gui/styling/theme_manager.cpp
         gui/core/layout_manager.cpp
         gui/core/storage_manager.cpp
@@ -806,6 +868,11 @@ if(NOT EMSCRIPTEN)
         gui/core/keybinding_manager.h
         gui/widgets/keybindings_dialog.cpp
         gui/widgets/keybindings_dialog.h
+        gui/widgets/inline_dialog_types.h
+        gui/widgets/inline_dialog.cpp
+        gui/widgets/inline_dialog.h
+        gui/widgets/inline_progress.cpp
+        gui/widgets/inline_progress.h
         gui/widgets/search_dock.cpp
         gui/widgets/search_dock.h
         gui/widgets/project_model.cpp
@@ -1096,6 +1163,8 @@ if(NOT EMSCRIPTEN)
         gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
+        gui/components/standard_cell_visualizer.cpp
+        gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
         components/netlist_export.cpp
@@ -1124,10 +1193,14 @@ if(NOT EMSCRIPTEN)
         gui/widgets/trust_badge_widget.cpp
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
+        gui/orchestration/rtl_pipeline_panel.cpp
+        compute/orchestration/drivers/yosys_task.cpp
+        compute/orchestration/drivers/openroad_task.cpp
+        compute/orchestration/drivers/klayout_task.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
-        gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/analysis/monte_carlo_setup_widget.cpp
         gui/styling/theme_manager.cpp
         gui/core/layout_manager.cpp
         gui/core/storage_manager.cpp
@@ -1144,6 +1217,8 @@ if(NOT EMSCRIPTEN)
         gui/widgets/toast_manager.cpp
         gui/core/keybinding_manager.cpp
         gui/widgets/keybindings_dialog.cpp
+        gui/widgets/inline_dialog.cpp
+        gui/widgets/inline_progress.cpp
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
@@ -1152,7 +1227,7 @@ if(NOT EMSCRIPTEN)
         components/pdk_manager.cpp
         components/design_db.cpp
         gui/scripting/tcl_bridge.cpp
-        gui/widgets/compliance_report_dialog.cpp
+        gui/widgets/compliance_report_widget.cpp
     )
     target_include_directories(test_pdk_compliance PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -1201,6 +1276,8 @@ if(NOT EMSCRIPTEN)
         gui/editors/code_editor.cpp
         gui/core/editor_manager.cpp
         gui/core/sim_auto_detector.cpp
+        gui/components/standard_cell_visualizer.cpp
+        gui/core/subcircuit_resolver.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
         ai_api/system/schema_api.cpp
@@ -1228,10 +1305,14 @@ if(NOT EMSCRIPTEN)
         gui/widgets/trust_badge_widget.cpp
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
+        gui/orchestration/rtl_pipeline_panel.cpp
+        compute/orchestration/drivers/yosys_task.cpp
+        compute/orchestration/drivers/openroad_task.cpp
+        compute/orchestration/drivers/klayout_task.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
-        gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/analysis/monte_carlo_setup_widget.cpp
         gui/styling/theme_manager.cpp
         gui/core/layout_manager.cpp
         gui/core/storage_manager.cpp
@@ -1244,12 +1325,14 @@ if(NOT EMSCRIPTEN)
         gui/core/icon_provider.cpp
         resources/icons.qrc
         components/pdk_compliance.cpp
-        gui/widgets/compliance_report_dialog.cpp
+        gui/widgets/compliance_report_widget.cpp
         gui/widgets/command_palette.cpp
         gui/widgets/ghost_diff_viewer.cpp
         gui/widgets/toast_manager.cpp
         gui/core/keybinding_manager.cpp
         gui/widgets/keybindings_dialog.cpp
+        gui/widgets/inline_dialog.cpp
+        gui/widgets/inline_progress.cpp
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
@@ -1327,7 +1410,9 @@ if(NOT EMSCRIPTEN)
         gui/widgets/breadcrumb_widget.cpp
         gui/editors/code_editor.cpp
         gui/core/icon_provider.cpp
-        gui/widgets/compliance_report_dialog.cpp
+        gui/widgets/compliance_report_widget.cpp
+        gui/components/standard_cell_visualizer.cpp
+        gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
         components/netlist_export.cpp
@@ -1585,6 +1670,8 @@ if(NOT EMSCRIPTEN)
         gui/editors/code_editor.cpp
         gui/core/editor_manager.cpp
         gui/core/sim_auto_detector.cpp
+        gui/components/standard_cell_visualizer.cpp
+        gui/core/subcircuit_resolver.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
         ai_api/system/schema_api.cpp
@@ -1612,10 +1699,14 @@ if(NOT EMSCRIPTEN)
         gui/widgets/trust_badge_widget.cpp
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
+        gui/orchestration/rtl_pipeline_panel.cpp
+        compute/orchestration/drivers/yosys_task.cpp
+        compute/orchestration/drivers/openroad_task.cpp
+        compute/orchestration/drivers/klayout_task.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
-        gui/analysis/monte_carlo_setup_dialog.cpp
+        gui/analysis/monte_carlo_setup_widget.cpp
         gui/styling/theme_manager.cpp
         gui/core/layout_manager.cpp
         gui/core/storage_manager.cpp
@@ -1628,12 +1719,14 @@ if(NOT EMSCRIPTEN)
         gui/core/icon_provider.cpp
         resources/icons.qrc
         components/pdk_compliance.cpp
-        gui/widgets/compliance_report_dialog.cpp
+        gui/widgets/compliance_report_widget.cpp
         gui/widgets/command_palette.cpp
         gui/widgets/ghost_diff_viewer.cpp
         gui/widgets/toast_manager.cpp
         gui/core/keybinding_manager.cpp
         gui/widgets/keybindings_dialog.cpp
+        gui/widgets/inline_dialog.cpp
+        gui/widgets/inline_progress.cpp
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
@@ -1783,4 +1876,26 @@ if(NOT EMSCRIPTEN)
         ${PROTO_GEN_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}
     )
+endif()
+
+# Fix Qt platform plugin path for macOS tests (prevents dual-Qt library loading)
+# When both 'qt' and 'qtbase' are installed via Homebrew, the platform plugin
+# search may find a plugin built against a different Qt version, causing crashes.
+if(APPLE AND CMAKE_PREFIX_PATH)
+    set(_qt_plugin_dir "${CMAKE_PREFIX_PATH}/share/qt/plugins")
+    if(EXISTS "${_qt_plugin_dir}")
+        message(STATUS "Setting QT_PLUGIN_PATH for GUI tests: ${_qt_plugin_dir}")
+        set(_qt_gui_tests
+            test_hierarchical_sim
+            test_gui_logic
+            test_docking_interaction
+        )
+        foreach(_test ${_qt_gui_tests})
+            if(TEST ${_test})
+                set_tests_properties(${_test} PROPERTIES
+                    ENVIRONMENT "QT_PLUGIN_PATH=${_qt_plugin_dir}"
+                )
+            endif()
+        endforeach()
+    endif()
 endif()

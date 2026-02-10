@@ -94,7 +94,19 @@ namespace NetlistExporter {
         }
 
         // 2. Export Top Module
-        ss << "module " << options.topModuleName << " ();\n";
+        // Include power ports if explicit power is enabled
+        if (options.useExplicitPower) {
+            ss << "module " << options.topModuleName << " (";
+            bool first = true;
+            for (const auto& [key, name] : options.powerNetNames) {
+                if (!first) ss << ", ";
+                ss << "inout " << name;
+                first = false;
+            }
+            ss << ");\n";
+        } else {
+            ss << "module " << options.topModuleName << " ();\n";
+        }
 
         // Collect all global nets
         std::set<int> allNodes;
@@ -183,12 +195,11 @@ namespace NetlistExporter {
         ss << "*R_UNIT 1.00000 OHM\n";
         ss << "*L_UNIT 1.00000 HENRY\n\n";
 
-        // Ports Section (Match Verilog)
+        // Ports Section (Match Verilog power ports)
         ss << "*PORTS\n";
-        ss << "in I\n";
-        ss << "out O\n";
-        ss << options.powerNetNames.at("VDD") << " B\n"; // Bidirectional Power
-        ss << options.powerNetNames.at("VSS") << " B\n";
+        for (const auto& [key, name] : options.powerNetNames) {
+            ss << name << " B\n";
+        }
         ss << "*END\n\n";
 
         // Parasitics (D_NET)

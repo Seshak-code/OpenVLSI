@@ -29,6 +29,7 @@
 #include "welcome_widget.h"
 #include "problems_panel.h"
 #include "../orchestration/worker_status_panel.h"
+#include "../orchestration/rtl_pipeline_panel.h"
 #include "../widgets/debug_suggestions_panel.h"
 #include "../widgets/command_palette.h"
 
@@ -110,6 +111,9 @@ private:
     // Phase 12.3: Worker Orchestration
     QDockWidget* workerDock;
     acutesim::gui::orchestration::WorkerStatusPanel* workerPanel;
+
+    // RTL -> GDS Pipeline Panel
+    acutesim::gui::orchestration::RtlPipelinePanel* rtlPipelinePanel = nullptr;
 
     // Phase 11.2: Docking Manager
     DockingManager* dockingManager;

@@ -154,6 +154,22 @@ This section now includes explicit test cases, verification artifacts, and accep
 
 ---
 
+### Robustness & Input Hardening
+- [x] Fix unsafe `toDouble()` JSON conversions (default value enforcement)
+- [x] Refactor ad-hoc unit parsing to `parseUnitValue` helper
+- [x] Consolidate duplicate physics logic in `device_physics.h`
+**Outcome**: Reduced crash risk from malformed inputs and improved code maintainability.
+
+#### Robustness Objectives
+- [x] **Safe Conversions**: Audit and fix all `toDouble` calls in `rag_context.h` to prevent crashes on null/invalid JSON.
+- [x] **Unified Parsing**: Replace scattered regex/string logic with a central helper for "1.2ms", "5GHz", etc.
+- [x] **Physics Deduplication**: Unified Diode/BJT junction logic to ensure consistent clamping and behavior.
+
+**Verification:**
+*   `test_simulation` verified to pass with new parsing logic.
+*   RAG context generation safety verified via safe build.
+
+
 ## CONTEXT: PHASE GATES (SHIPMENT CRITERIA)
 *   **Phase 1 Ship**: Bench + DC + Transient (No AI Autonomy).
 *   **Phase 2 Ship**: AC + Noise + Corners + Trust Surface Layer.
@@ -275,6 +291,8 @@ Now with explicit exit conditions and quality gates:
 - [x] M4: Formal Numerical Stability (Substrate)
 - [x] Energy-based Lyapunov monitors for nodal equations.
 - [x] Passivity checks for linearized device models.
+- [x] **State-less Physics Kernels**: Refactored `circuitsim.h` to use `stampNonLinear` helpers, moving towards full SoA.
+- [x] **Unified Diode Model**: `diode_model_pair` kernel now handles both discrete Diodes and BJT junctions (branchless linear continuation).
 
 ### 📐 BACKEND PERFORMANCE BENCHMARKS
 | Metric | 10k Node Target | 100k Node Target | Context |
@@ -703,15 +721,15 @@ graph TD
 **Purpose**: Move from pixel-based placement to semantic and relational layout.
 
 ### Backend: Geometric Reasoning
-- [ ] Obstruction Awareness: API-level collision detection (collidesWithAny).
-- [ ] Relational Positioning API: placeNextTo, alignWith, and findClearSpace.
-- [ ] Semantic Context Generator: Describe spatial relationships in the AI Prompt.
-- [ ] Spatial Placement Logic: Auto-relocate templates to clear space when origin is blocked.
+- [x] Obstruction Awareness: API-level collision detection (collidesWithAny).
+- [x] Relational Positioning API: placeNextTo, alignWith, and findClearSpace.
+- [x] Semantic Context Generator: Describe spatial relationships in the AI Prompt.
+- [x] Spatial Placement Logic: Auto-relocate templates to clear space when origin is blocked.
 
-#### 1.3.1.1 Geometric Intelligence Objectives
-- [ ] **Semantic Collision Engine**: Detect and score layout violations based on component type and net sensitivity (e.g., sensitive LNA inputs get higher penalty near high-swing nets).
-- [ ] **Weighted Proximity Graph**: Dynamic graph where edges represent electrical connectivity and spatial distance for AI placement optimization.
-- [ ] **Congestion Analytics**: Predict potential routing bottlenecks before wires are placed during the design loop.
+### 1.3.1.1 Geometric Intelligence Objectives
+- [x] **Semantic Collision Engine**: Detect and score layout violations based on component type and net sensitivity (e.g., sensitive LNA inputs get higher penalty near high-swing nets).
+- [x] **Weighted Proximity Graph**: Dynamic graph where edges represent electrical connectivity and spatial distance for AI placement optimization.
+- [x] **Congestion Analytics**: Predict potential routing bottlenecks before wires are placed during the design loop.
 
 ### Backend: Physics & Simulation
 - [x] BJT Implementation: Complete
@@ -728,10 +746,10 @@ graph TD
 - [x] Standard Cell Library: Refactoring ICs to use PDK primitives (standard_cells.h).
 
 ### GUI: Visual Feedback
-- [ ] Visual Component Library: Improved painting for MOSFETs, BJTs (3-terminals with X indicators), Inductors, and Current Sources.
+- [x] Visual Component Library: Improved painting for MOSFETs, BJTs (3-terminals with X indicators), Inductors, and Current Sources.
 - [ ] Create components: Schottky Diode, Current Source.
-- [ ] Placement Pre-Flight: Visual indicator of collisions during the "Approval Loop".
-- [ ] Geometric Constraints: Sticky alignments and distribution helpers triggered by AI commands.
+- [x] Placement Pre-Flight: Visual indicator of collisions during the "Approval Loop".
+- [x] Geometric Constraints: Sticky alignments and distribution helpers triggered by AI commands.
 
 ---
 
@@ -741,7 +759,7 @@ graph TD
 ### Backend: Numerical Hardening & M1/M4
 - [ ] Newton-Raphson Solver: Residual tracking and Jacobian conditioning.
 - [ ] Automatic Differentiation: Code generation for Jacobians from device_physics.h.
-- [ ] Dual Number Library (autodiff/dual.h).
+- [x] Dual Number Library (autodiff/dual.h).
 - [ ] Templated Physics Kernels (physics/device_physics.h).
 - [ ] Integration into Stamping (physics/circuitsim.h).
 - [ ] Differentiable Physics: $\nabla_p V$ for gradient-based tuning.
@@ -753,7 +771,7 @@ graph TD
 
 #### 2.0.1 Measurement Objectives
 - [ ] **Noise Confidence Sentinel**: Calculation of statistical variance for noise results to ensure frequent domain convergence.
-- [ ] **Probe Latched Semantic Model**: Logic that ensures probes "stick" to the logical center of wires even during drastic schematic reflows.
+- [x] **Probe Latched Semantic Model**: Logic that ensures probes "stick" to the logical center of wires even during drastic schematic reflows.
 - [ ] **Automatic Derivative Audit**: CI task verifying Jacobian derivatives against finite-difference reference models.
 
 ### 🎯 PHASE 2 SUCCESS CRITERIA
@@ -769,14 +787,14 @@ graph TD
 - [ ] M1: Noise Visualizer: Noise spectral plots and integrated noise dashboards.
 
 ### Phase 2.5: Draggable Probe Tips (Oscilloscope Style)
-- [ ] Architecture: Implement ProbeTip class as moving child items of VisualComponent.
-- [ ] Visuals: Render virtual dashed wires between body and current tip positions.
-- [ ] Superposition Law: Class SuperpositionSolver to decompose multi-source linear circuits.
-- [ ] Source Decomposition: Validate V_total = Sum(V_i) for each independent source.
-- [ ] Interaction: Ensure tips snap to grid and update visuals in real-time.
-- [ ] Connectivity: Implement tip-to-wire intersection detection in drawForeground.
-- [ ] Netlist: Probes now attach AFTER all components stamped, using wire endpoint node IDs.
-- [ ] Verification: Probes no longer inflate node count or cause matrix crashes.
+- [x] Architecture: Implement ProbeTip class as moving child items of VisualComponent.
+- [x] Visuals: Render virtual dashed wires between body and current tip positions.
+- [x] Superposition Law: Class SuperpositionSolver to decompose multi-source linear circuits.
+- [x] Source Decomposition: Validate V_total = Sum(V_i) for each independent source.
+- [x] Interaction: Ensure tips snap to grid and update visuals in real-time.
+- [x] Connectivity: Implement tip-to-wire intersection detection in drawForeground.
+- [x] Netlist: Probes now attach AFTER all components stamped, using wire endpoint node IDs.
+- [x] Verification: Probes no longer inflate node count or cause matrix crashes.
 
 ### Phase 2.6: Debug Logging & AI Integration
 - [ ] crash_report.h: Created with CrashReport, ProbeDebugInfo, ComponentDebugInfo structs.

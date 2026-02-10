@@ -4,7 +4,10 @@
 
 // Stub implementation of GridScene for testing purposes
 
-GridScene::GridScene(QObject* parent) : QGraphicsScene(parent) {}
+GridScene::GridScene(Mode mode, QObject* parent) : QGraphicsScene(parent), m_mode(mode) {}
+
+// Destructor stub
+GridScene::~GridScene() {}
 
 // DesignDbObserver Implementation
 void GridScene::onNetModified(const acutesim::components::Net& net) {}
@@ -44,6 +47,7 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {}
 SchematicEditor::SchematicEditor(const QString& filePath, QWidget* parent) : acutesim::gui::core::IEditor(parent), filePath_(filePath) {}
 void SchematicEditor::onGridToggled(bool) {}
 void SchematicEditor::onSnappingToggled(bool) {}
+void SchematicEditor::onBreadcrumbNavigation(int) {}
 acutesim::gui::core::EditorCapabilities SchematicEditor::capabilities() const { return {}; }
 QString SchematicEditor::title() const { return "Stub"; }
 

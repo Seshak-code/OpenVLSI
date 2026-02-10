@@ -1,6 +1,6 @@
 #include "simulation_workspace.h"
 #include "../../gui/styling/theme_manager.h"
-#include "monte_carlo_setup_dialog.h"
+#include "monte_carlo_setup_widget.h"
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -11,11 +11,10 @@
 #include <QDateTime>
 #include <QJsonObject>
 #include <QJsonArray>
-#include <QMessageBox>
-#include <QFileDialog>
+#include "../widgets/inline_dialog.h"
+#include "../widgets/inline_progress.h"
 #include <QFile>
 #include <QTextStream>
-#include <QDialog>
 #include <QDockWidget>
 #include <QMainWindow>
 #include "corner_setup_widget.h"
@@ -25,7 +24,6 @@
 #include <random>
 #include <numeric>
 #include <map>
-#include <QDialogButtonBox>
 #include <QSpinBox>
 
 SimulationWorkspace::SimulationWorkspace(QWidget* parent)
@@ -58,6 +56,8 @@ SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     
     connect(this, &SimulationWorkspace::startDCRequested, worker_, &SimulationWorker::startDC);
     connect(this, &SimulationWorkspace::startTransientRequested, worker_, &SimulationWorker::startTransient);
+    connect(this, &SimulationWorkspace::startACRequested, worker_, &SimulationWorker::startAC);
+    connect(this, &SimulationWorkspace::startNoiseRequested, worker_, &SimulationWorker::startNoise);
     
     // Results
     connect(worker_, &SimulationWorker::resultsReady, this, &SimulationWorkspace::onWorkerResults);
@@ -648,11 +648,21 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     auto* profile = currentProfile();
     Simulation::SimulationProfile profCopy = *profile; // Copy
     
-    // Dispatch
-    if (profCopy.analysis == Simulation::AnalysisType::DC) {
-        emit startDCRequested(netlist_, profCopy, currentRun_.runMode);
-    } else {
-        emit startTransientRequested(netlist_, profCopy, currentRun_.runMode);
+    // Dispatch based on analysis type
+    switch (profCopy.analysis) {
+        case Simulation::AnalysisType::DC:
+            emit startDCRequested(netlist_, profCopy, currentRun_.runMode);
+            break;
+        case Simulation::AnalysisType::AC:
+            emit startACRequested(netlist_, profCopy, currentRun_.runMode);
+            break;
+        case Simulation::AnalysisType::NOISE:
+            emit startNoiseRequested(netlist_, profCopy, currentRun_.runMode);
+            break;
+        case Simulation::AnalysisType::TRANSIENT:
+        default:
+            emit startTransientRequested(netlist_, profCopy, currentRun_.runMode);
+            break;
     }
 }
 
@@ -661,10 +671,32 @@ void SimulationWorkspace::stopSimulation() {
 }
 
 void SimulationWorkspace::onWorkerResults(const QJsonObject& results) {
+    QString type = results.value("type").toString();
+
+    // Per-step transient points: forward data but don't update run status yet
+    // (status is set by the TransientSummary at the end, or by solverViolation on failure)
+    if (type == "TransientPoint") {
+        emit resultsReady(results);
+        return;
+    }
+
+    // DC result or TransientSummary: mark run as converged and extract stats
+    currentRun_.status = Simulation::SimulationRun::Status::CONVERGED;
+
+    if (results.contains("stats")) {
+        QJsonObject stats = results["stats"].toObject();
+        currentRun_.iterations = stats.value("iterations").toInt();
+        currentRun_.trustMaxResidual = stats.value("residual").toDouble();
+        currentRun_.trustMethod = stats.value("method").toString();
+        currentRun_.trustGminUsed = stats.value("gminSteppingUsed").toBool();
+        currentRun_.trustSourceStepUsed = stats.value("sourceSteppingUsed").toBool();
+    }
+
     emit resultsReady(results);
 }
 
 void SimulationWorkspace::onWorkerViolation(const ERC::Violation& violation) {
+    currentRun_.status = Simulation::SimulationRun::Status::FAILED;
     emit solverViolation(violation);
 }
 
@@ -711,17 +743,15 @@ void SimulationWorkspace::finishSimulation() {
               .arg(passed ? "PASSED" : "FAILED")
               .arg(currentRun_.solveTime_ms, 0, 'f', 1));
     
-    // Phase 7: Completion notification (non-blocking for WASM compatibility)
-    // The status is already shown in the toolbar statusLabel and log panel
-#ifndef __EMSCRIPTEN__
+    // Phase 7: Completion notification (inline — works on all platforms including WASM)
+    using namespace acutesim::gui::widgets;
     if (passed) {
-        QMessageBox::information(this, "Simulation Complete", 
+        InlineDialog::success(this, "Simulation Complete",
             QString("Simulation PASSED in %1 ms").arg(currentRun_.solveTime_ms, 0, 'f', 1));
     } else {
-        QMessageBox::warning(this, "Simulation Complete", 
+        InlineDialog::warning(this, "Simulation Complete",
             "Simulation FAILED\n\nCheck streaming log for details.");
     }
-#endif
     
     emit simulationCompleted(currentRun_);
 }
@@ -737,36 +767,23 @@ void SimulationWorkspace::appendStreamLog(const QString& msg) {
 }
 
 void SimulationWorkspace::configureCorners() {
-    QDialog dlg(this);
-    dlg.setWindowTitle("Setup Simulation Corners");
-    dlg.resize(400, 300);
-    
-    QVBoxLayout* layout = new QVBoxLayout(&dlg);
-    
-    acutesim::gui::analysis::CornerSetupWidget* setupWidget = new acutesim::gui::analysis::CornerSetupWidget(&dlg);
-    layout->addWidget(setupWidget);
-    
-    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-    layout->addWidget(buttons);
-    
-    if (dlg.exec() == QDialog::Accepted) {
-        // Apply corners to current profile
-        auto* profile = currentProfile();
-        if (profile) {
-            profile->corners = setupWidget->getCorners().toList(); // Convert QVector to QList
-            
-            // If Monte Carlo, update Run Mode?
-            // Actually, SimulationProfile handles the run logic.
-            // Just notify user
-            if (profile->corners.size() > 1) {
-                appendLog(QString("[INFO] Configured %1 corners for next run.").arg(profile->corners.size()));
-            } else {
-                 appendLog("[INFO] Configured single corner.");
+    using namespace acutesim::gui::widgets;
+    auto* setupWidget = new acutesim::gui::analysis::CornerSetupWidget();
+    InlineDialog::showCustom(this, "Setup Simulation Corners", setupWidget,
+        DialogButton::Ok | DialogButton::Cancel,
+        [this, setupWidget](const DialogResult& r) {
+            if (r.clickedButton == DialogButton::Ok) {
+                auto* profile = currentProfile();
+                if (profile) {
+                    profile->corners = setupWidget->getCorners().toList();
+                    if (profile->corners.size() > 1) {
+                        appendLog(QString("[INFO] Configured %1 corners for next run.").arg(profile->corners.size()));
+                    } else {
+                        appendLog("[INFO] Configured single corner.");
+                    }
+                }
             }
-        }
-    }
+        });
 }
 
 // ============================================================================
@@ -788,27 +805,29 @@ void SimulationWorkspace::setupStatisticalDashboard() {
 
     // Connect CSV export
     connect(statsDashboard_, &StatisticalDashboard::exportRequested, this, [this]() {
+        using namespace acutesim::gui::widgets;
         if (lastMonteCarloResults_.empty()) {
-            QMessageBox::warning(this, "Export", "No Monte Carlo results available to export.");
+            InlineDialog::warning(this, "Export", "No Monte Carlo results available to export.");
             return;
         }
 
-        QString fileName = QFileDialog::getSaveFileName(this, "Export Monte Carlo Results", 
-                                                        "", "CSV Files (*.csv)");
-        if (fileName.isEmpty()) return;
-
-        QFile file(fileName);
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream out(&file);
-            out << "Run,Voltage\n";
-            for (size_t i = 0; i < lastMonteCarloResults_.size(); ++i) {
-                out << (i + 1) << "," << lastMonteCarloResults_[i] << "\n";
-            }
-            file.close();
-            appendLog("Exported results to: " + fileName);
-        } else {
-            QMessageBox::critical(this, "Export Failed", "Could not open file for writing.");
-        }
+        InlineDialog::getSaveFileName(this, "Export Monte Carlo Results", "CSV Files (*.csv)",
+            [this](const DialogResult& r) {
+                if (r.clickedButton == DialogButton::Cancel || r.textValue.isEmpty()) return;
+                QString fileName = r.textValue;
+                QFile file(fileName);
+                if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                    QTextStream out(&file);
+                    out << "Run,Voltage\n";
+                    for (size_t i = 0; i < lastMonteCarloResults_.size(); ++i) {
+                        out << (i + 1) << "," << lastMonteCarloResults_[i] << "\n";
+                    }
+                    file.close();
+                    appendLog("Exported results to: " + fileName);
+                } else {
+                    InlineDialog::critical(this, "Export Failed", "Could not open file for writing.");
+                }
+            });
     });
 }
 
@@ -818,15 +837,24 @@ void SimulationWorkspace::runMonteCarlo() {
     // 0. Update Netlist
     netlist_ = schematicEditor_->toNetlist();
 
-    // 1. Setup Advanced Dialog
-    acutesim::gui::analysis::MonteCarloSetupDialog setupDlg(netlist_, this);
-    if (setupDlg.exec() != QDialog::Accepted) return;
-    
-    int nRuns = setupDlg.numRuns();
-    auto variations = setupDlg.variations();
-    int targetNode = setupDlg.targetNode();
-    auto strategy = setupDlg.strategy();
-    
+    // 1. Setup Advanced Dialog (inline)
+    using namespace acutesim::gui::widgets;
+    auto* setupWidget = new acutesim::gui::analysis::MonteCarloSetupWidget(netlist_);
+    InlineDialog::showCustom(this, "Advanced Monte Carlo Setup", setupWidget,
+        DialogButton::Ok | DialogButton::Cancel,
+        [this, setupWidget](const DialogResult& r) {
+            if (r.clickedButton != DialogButton::Ok) return;
+            int nRuns = setupWidget->numRuns();
+            auto variations = setupWidget->variations();
+            int targetNode = setupWidget->targetNode();
+            auto strategy = setupWidget->strategy();
+            continueMonteCarloRun(nRuns, variations, targetNode, strategy);
+        });
+}
+
+void SimulationWorkspace::continueMonteCarloRun(int nRuns,
+    const std::map<std::string, Statistics::Distribution>& variations,
+    int targetNode, Statistics::SamplingStrategy strategy) {
     appendLog(QString("Starting Monte Carlo (%1 runs, %2 vars)...").arg(nRuns).arg(variations.size()));
     
 
@@ -874,17 +902,19 @@ void SimulationWorkspace::runMonteCarlo() {
 
 #ifdef __EMSCRIPTEN__
     // WASM: Synchronous execution (single-threaded)
-    // For better UX, we could use QTimer slicing, but for MVP synchronous is fine.
     appendLog("Running Monte Carlo synchronously (WASM limitation)...");
-    
-    QProgressDialog progress("Running Monte Carlo (Sync)...", "Cancel", 0, nRuns, this);
-    progress.show();
-    QCoreApplication::processEvents(); 
-    
+
+    auto* progress = new acutesim::gui::widgets::InlineProgress(this);
+    progress->setTitle("Running Monte Carlo (Sync)...");
+    progress->setRange(0, nRuns);
+    progress->show();
+    QCoreApplication::processEvents();
+
     std::vector<double> results = runBatch();
-    lastMonteCarloResults_ = results; // Save for export
-    
-    // Update Dashboard
+    lastMonteCarloResults_ = results;
+
+    progress->dismiss();
+
     setupStatisticalDashboard();
     if (!results.empty()) {
         double sum = std::accumulate(results.begin(), results.end(), 0.0);
@@ -893,38 +923,37 @@ void SimulationWorkspace::runMonteCarlo() {
     }
     statsDashboard_->show();
     appendLog(QString("Monte Carlo completed. Processed %1 runs.").arg(results.size()));
-    
+
 #else
     // Desktop: Threaded execution
+    auto* progress = new acutesim::gui::widgets::InlineProgress(this);
+    progress->setTitle("Running Monte Carlo Simulation...");
+    progress->setRange(0, nRuns);
+    progress->setCancelEnabled(true);
+    progress->show();
+
     auto* watcher = new QFutureWatcher<std::vector<double>>(this);
-    connect(watcher, &QFutureWatcher<std::vector<double>>::finished, this, [this, watcher, nRuns]() {
+    connect(watcher, &QFutureWatcher<std::vector<double>>::finished, this, [this, watcher, progress]() {
         std::vector<double> results = watcher->result();
-        
-        // 4. Update Dashboard (Main Thread)
+
+        progress->dismiss();
+
         setupStatisticalDashboard();
-        
-        // Calculate bounds for histogram
         if (!results.empty()) {
-            lastMonteCarloResults_ = results; // Save for export
+            lastMonteCarloResults_ = results;
             double sum = std::accumulate(results.begin(), results.end(), 0.0);
             double mean = sum / results.size();
-            statsDashboard_->histogram()->setData(results, mean * 0.9, mean * 1.1); // +/- 10%
+            statsDashboard_->histogram()->setData(results, mean * 0.9, mean * 1.1);
         }
         statsDashboard_->show();
-        
+
         appendLog(QString("Monte Carlo completed. Processed %1 runs.").arg(results.size()));
-        
+
         watcher->deleteLater();
     });
-    
-    // Progress Dialog
-    QProgressDialog* progress = new QProgressDialog("Running Monte Carlo Simulation...", "Cancel", 0, nRuns, this);
-    progress->setWindowModality(Qt::WindowModal);
-    progress->show();
-    
-    connect(watcher, &QFutureWatcher<std::vector<double>>::finished, progress, &QProgressDialog::reset);
-    connect(progress, &QProgressDialog::canceled, watcher, &QFutureWatcher<std::vector<double>>::cancel);
-    
+
+    connect(progress, &acutesim::gui::widgets::InlineProgress::cancelled, watcher, &QFutureWatcher<std::vector<double>>::cancel);
+
     QFuture<std::vector<double>> future = QtConcurrent::run(runBatch);
     watcher->setFuture(future);
 #endif

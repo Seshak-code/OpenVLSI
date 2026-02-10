@@ -76,6 +76,7 @@ private:
     IEditor* createEditorForFile(const QString& path, const QString& typeHint);
     void updateTabTitle(IEditor* editor);
     void updateContext(const QString& filePath, IEditor* editor);
+    void doCloseEditor(int index, QWidget* widget);
 };
 
 } // namespace acutesim::gui::core

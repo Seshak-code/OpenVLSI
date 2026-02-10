@@ -68,6 +68,13 @@ void ThemeManager::initTokenRegistry() {
     reg("table.header", QColor("#252526"), true, "Table header background");
     reg("table.row_selected", QColor("#094771"), true, "Selected row background");
     reg("table.grid", QColor("#333333"), true, "Table grid lines");
+
+    // InlineDialog
+    reg("dialog.background", QColor("#252526"), false, "InlineDialog bubble background");
+    reg("dialog.border", QColor("#3e3e42"), false, "InlineDialog bubble border");
+    reg("dialog.scrim", QColor("#000000"), false, "Scrim overlay color");
+    reg("dialog.buttonPrimary", QColor("#007acc"), false, "Primary action button");
+    reg("dialog.buttonSecondary", QColor("#3c3c3c"), false, "Secondary action button");
 }
 
 bool ThemeManager::loadThemeFromJson(const QString& jsonPath) {

@@ -12,6 +12,7 @@
 
 #include "circuitsim.h"
 #include "physics_tensors.h"
+#include "convergence_engine.h"
 #include "../../physics/device_physics.h"
 #include "../../physics/physics_constants.h"
 #include "../infrastructure/safe_utils.h"
@@ -20,10 +21,16 @@
 // PHASE 1 HARDENING: Helper Method Implementations
 // =============================================================================
 
-void CircuitSim::seedInitialGuess(const TensorNetlist& netlist, 
+void CircuitSim::seedInitialGuess(const TensorNetlist& netlist,
                                    std::vector<double>& voltageEstimate) {
     const size_t N = voltageEstimate.size();
-    
+
+    // Temperature-corrected Vbe seed: at cold temps, Vbe increases (~+2mV/K below nominal)
+    double T = netlist.environment.ambient_temp_K;
+    double vbe_seed = PhysicsConstants::V_BE_SEED - 0.002 * (T - 300.15);
+    // Clamp to reasonable range [0.5V, 1.2V]
+    vbe_seed = std::max(0.5, std::min(1.2, vbe_seed));
+
     // 1. Seed from Voltage Sources (direct)
     for (const auto& source : netlist.globalBlock.voltageSources) {
         int idx = SafeUtils::safe_idx(source.nodePositive, N, "VSource seed");
@@ -31,34 +38,34 @@ void CircuitSim::seedInitialGuess(const TensorNetlist& netlist,
             voltageEstimate[idx] = source.voltage_V;
         }
     }
-    
+
     // 2. Seed Diode anodes (0.6V initial for silicon)
     for (const auto& diode : netlist.globalBlock.diodes) {
         int idx = SafeUtils::safe_idx(diode.anode, N, "Diode seed");
         if (idx >= 0) {
-            voltageEstimate[idx] = std::max(voltageEstimate[idx], 
+            voltageEstimate[idx] = std::max(voltageEstimate[idx],
                                              PhysicsConstants::V_DIODE_SEED);
         }
     }
-    
+
     // 3. Find supply voltage for mid-rail seeding
     double vSupply = PhysicsConstants::V_SUPPLY_DEFAULT;
     for (const auto& vs : netlist.globalBlock.voltageSources) {
         if (vs.voltage_V > vSupply) vSupply = vs.voltage_V;
     }
-    
+
     // 4. Current Source Node Seeding (BJT base detection)
     for (const auto& cs : netlist.globalBlock.currentSources) {
         int nPos = SafeUtils::safe_idx(cs.nodePositive, N, "ISource seed");
         if (nPos < 0) continue;
-        
+
         // Check if this node is a BJT base
         bool isBase = false;
         for (const auto& bjt : netlist.globalBlock.bjts) {
             if (SafeUtils::safe_idx(bjt.base, N, "BJT base check") == nPos) {
                 int nE = SafeUtils::safe_idx(bjt.emitter, N, "BJT emitter");
                 double v_e = (nE >= 0) ? voltageEstimate[nE] : 0.0;
-                double vbe = bjt.isNPN ? PhysicsConstants::V_BE_SEED : -PhysicsConstants::V_BE_SEED;
+                double vbe = bjt.isNPN ? vbe_seed : -vbe_seed;
                 voltageEstimate[nPos] = std::max(voltageEstimate[nPos], v_e + vbe);
                 isBase = true;
                 break;
@@ -69,30 +76,30 @@ void CircuitSim::seedInitialGuess(const TensorNetlist& netlist,
             voltageEstimate[nPos] = vSupply * 0.5;
         }
     }
-    
+
     // 5. BJT Multi-Pass Seeding (Darlington propagation) - Flattened
     for (int pass = 0; pass < 3; ++pass) {
         for (size_t i = 0; i < soaBlock.bjts.size(); ++i) {
             int nB = soaBlock.bjts.bases[i] - 1;
             int nE = soaBlock.bjts.emitters[i] - 1;
             int nC = soaBlock.bjts.collectors[i] - 1;
-            
+
             if (soaBlock.bjts.isNPN[i]) {
                 if (nE >= 0 && nB >= 0) {
-                    voltageEstimate[nB] = std::max(voltageEstimate[nB], 
-                        voltageEstimate[nE] + PhysicsConstants::V_BE_SEED);
+                    voltageEstimate[nB] = std::max(voltageEstimate[nB],
+                        voltageEstimate[nE] + vbe_seed);
                 }
                 if (nC >= 0 && nB >= 0) {
-                    voltageEstimate[nC] = std::max(voltageEstimate[nC], 
+                    voltageEstimate[nC] = std::max(voltageEstimate[nC],
                         voltageEstimate[nB] + 0.5);
                 }
             } else { // PNP
                 if (nE >= 0 && nB >= 0) {
-                    voltageEstimate[nB] = std::min(voltageEstimate[nB], 
-                        voltageEstimate[nE] - PhysicsConstants::V_BE_SEED);
+                    voltageEstimate[nB] = std::min(voltageEstimate[nB],
+                        voltageEstimate[nE] - vbe_seed);
                 }
                 if (nC >= 0 && nB >= 0) {
-                    voltageEstimate[nC] = std::min(voltageEstimate[nC], 
+                    voltageEstimate[nC] = std::min(voltageEstimate[nC],
                         voltageEstimate[nB] - 0.5);
                 }
             }
@@ -102,13 +109,17 @@ void CircuitSim::seedInitialGuess(const TensorNetlist& netlist,
 
 void CircuitSim::applyPnJunctionLimits(const TensorizedBlock& block,
                                         std::vector<double>& v_new,
-                                        const std::vector<double>& v_old) {
+                                        const std::vector<double>& v_old,
+                                        double temp_K) {
     if (v_new.empty()) return;
     const size_t N = v_new.size();
-    const double Vt_ref = PhysicsConstants::V_THERMAL_300K;
-    
+    const double temp_scale = temp_K / 300.15;
+
     // Helper lambda for limiting a single junction
     auto limitJunction = [&](int p_node, int n_node, double Is, double Vt) {
+        // Scale Vt and Is for temperature
+        Vt *= temp_scale;
+        Is *= std::pow(temp_scale, 3.0) * exp(1.11 / (Vt / temp_scale) - 1.11 / Vt);
         int p = p_node - 1; // 1-based to 0-based
         int n = n_node - 1; // 1-based to 0-based
         
@@ -172,18 +183,20 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   bool converged = false;
   int total_iterations = 0;
   double final_kcl_error = 0.0;
-  
+  bool singularMatrixDetected = false;
+  std::vector<ConvergenceStep> convergenceHistory;
+
   // GMIN Stepping: Start with large parallel conductances, reduce each pass
   // This prevents singular matrices for cold-start BJT circuits
-  double gmin_factor = 1.0; 
-  const int GMIN_STEPS = 10;
-  
+  // Use half-decade steps for better convergence at extreme temperatures
+  double gmin_factor = 1.0;
+  const int GMIN_STEPS = 19; // 1e-3 to 1e-12 in half-decade steps
+
   for (int gmin_step = 0; gmin_step < GMIN_STEPS; ++gmin_step) {
-    // Scale GMIN: start at 1e-3, reduce to 1e-12 over steps
-    gmin_factor = std::pow(10.0, -(3 + gmin_step)); 
+    // Scale GMIN: start at 1e-3, reduce by sqrt(10) each step to 1e-12
+    gmin_factor = std::pow(10.0, -(3.0 + gmin_step * 0.5));
+    if (gmin_factor < 1e-12) gmin_factor = 1e-12;
     bool gmin_converged = false;
-    
-    std::cerr << "GMIN Step " << gmin_step << " (G=" << gmin_factor << ")\n";
 
   int iteration = 0; // Declare outside loop for scope access
   for (; iteration < MAX_NR_ITER; ++iteration) {
@@ -220,9 +233,10 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
       // Matrix is singular - circuit topology error or floating node
       std::cerr << "DC Solver: Linear solver failed (Singular Matrix) at iter " << iteration << "\n";
       final_kcl_error = 1e9; // Flag as bad residual
+      singularMatrixDetected = true;
       // If singular, retrying with same Jacobian won't help. Abort this GMIN step.
       total_iterations += iteration + 1;
-      break; 
+      break;
     }
     
     std::vector<double> v_new = result.solution;
@@ -231,7 +245,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     SafeUtils::sanitize_vector(v_new, 0.0);
     
     // Phase 1 Hardening: Use extracted helper for PN junction limiting
-    applyPnJunctionLimits(soaBlock, v_new, voltageEstimate);
+    applyPnJunctionLimits(soaBlock, v_new, voltageEstimate, netlist.environment.ambient_temp_K);
 
     // Check 1 + 2: Voltage Convergence AND Physical KCL Accuracy
     double kcl_error = calculatePhysicalResiduals(netlist, v_new);
@@ -254,6 +268,25 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
               kcl_error = calculatePhysicalResiduals(netlist, v_new);
          }
     }
+    // Record convergence step for diagnostics
+    {
+        ConvergenceStep cs;
+        cs.iteration = iteration;
+        cs.residualNorm = kcl_error;
+        cs.dampingFactor = (iteration > 0 && kcl_error >= final_kcl_error) ? 0.5 : 1.0;
+
+        // Compute max voltage delta
+        double maxDelta = 0.0;
+        for (size_t i = 0; i < v_new.size(); ++i) {
+            double d = std::abs(v_new[i] - voltageEstimate[i]);
+            if (d > maxDelta) maxDelta = d;
+        }
+        cs.maxVoltageDelta = maxDelta;
+        cs.worstNode = ConvergenceEngine::findWorstNode(
+            std::vector<double>(v_new.size(), kcl_error)); // Simplified; worst node from residual
+        convergenceHistory.push_back(cs);
+    }
+
     final_kcl_error = kcl_error; // Store for next iteration comparison
 
     // During GMIN stepping, we relax the KCL check because GMIN itself adds residual.
@@ -264,11 +297,8 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
         voltageEstimate = v_new;
         gmin_converged = true;
         total_iterations += iteration + 1;
-        std::cerr << "  -> gmin_converged in " << iteration + 1 << " iterations\n";
         break;
     }
-    
-    if (iteration % 10 == 0) std::cerr << "  iter " << iteration << " res=" << kcl_error << "\n";
 
     voltageEstimate = v_new;
   }
@@ -284,9 +314,17 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
       break;
   }
   
-  // If we failed to converge a single GMIN step, the whole process fails
+  // If we failed to converge a single GMIN step, check if we're making progress.
+  // If residual is within a reasonable range, continue stepping as the current
+  // solution may be a good starting point for the next (tighter) GMIN step.
   if (!gmin_converged) {
-      break;
+      if (final_kcl_error < 1.0) {
+          // Making progress — continue GMIN stepping
+          std::cerr << "  -> GMIN step did not fully converge (res=" << final_kcl_error
+                    << "), continuing...\n";
+      } else {
+          break;
+      }
   }
   
   } // End GMIN stepping loop
@@ -298,6 +336,19 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
       details = auditPhysicalResiduals(netlist, voltageEstimate);
   }
 
+  // NR Convergence Diagnostics
+  ConvergenceFailureType failureType = ConvergenceEngine::classifyFailure(
+      convergenceHistory, singularMatrixDetected);
+
+  std::vector<ResidualContribution> worstDevices;
+  int worstNode = 0;
+  if (!converged) {
+      calculatePhysicalResidualsDetailed(netlist, voltageEstimate, worstDevices, worstNode);
+  }
+
+  std::string justification = ConvergenceEngine::generateJustification(
+      failureType, convergenceHistory, worstDevices);
+
   // Phase 1.7.9: Build trust-enriched SolverStats
   SolverStats stats;
   stats.iterations = total_iterations;
@@ -308,6 +359,10 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   stats.integrationMethod = "";  // DC has no integration
   stats.gminSteppingUsed = (gmin_factor < 1e-3);  // If we progressed past initial steps
   stats.sourceSteppingUsed = false;  // Not implemented yet
+  stats.failureType = failureType;
+  stats.convergenceHistory = std::move(convergenceHistory);
+  stats.worstDevices = std::move(worstDevices);
+  stats.convergenceJustification = justification;
   stats.convergenceTolerance = 1e-6;
 
   return {0.0, voltageEstimate, stats, netlist.globalBlock.topologyHash};

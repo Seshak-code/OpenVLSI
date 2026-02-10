@@ -1,6 +1,6 @@
 #pragma once
 
-#include <QDialog>
+#include <QWidget>
 #include <QTableWidget>
 #include <QLineEdit>
 #include <QPushButton>
@@ -15,6 +15,8 @@ namespace widgets {
 /**
  * KeybindingsDialog - VS Code-style keyboard shortcuts editor
  *
+ * Now a QWidget for use inside InlineDialog::showCustom().
+ *
  * Features:
  * - Searchable list of all shortcuts
  * - Inline editing of shortcuts
@@ -22,7 +24,7 @@ namespace widgets {
  * - Reset individual or all shortcuts
  * - Category grouping
  */
-class KeybindingsDialog : public QDialog {
+class KeybindingsDialog : public QWidget {
     Q_OBJECT
 
 public:

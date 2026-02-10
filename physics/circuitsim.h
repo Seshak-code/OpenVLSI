@@ -324,6 +324,291 @@ public:
   /*
    * Stamping Helpers
    */
+  // ===========================================================================
+  // COMPONENT STAMPERS (Reusability Layer)
+  // ===========================================================================
+  // These helpers encapsulate the physics-to-matrix mapping.
+  // They are used by:
+  // 1. stampBlockNonLinear (AoS / Teaching Path)
+  // 2. stampSoABlock (SoA / Fast Path) [Partial coverage]
+  // 3. calculateSensitivity (Adjoint Method) [Future]
+
+  void stampResistor(int n1, int n2, double R, MatrixConstructor& mb) {
+      if (std::abs(R) < 1e-15) R = 1e-15; // Safety
+      double g = 1.0 / R;
+      if (n1 != 0 && n2 != 0) {
+          mb.add(n1-1, n1-1, g);
+          mb.add(n2-1, n2-1, g);
+          mb.add(n1-1, n2-1, -g);
+          mb.add(n2-1, n1-1, -g);
+      } else if (n1 != 0) {
+          mb.add(n1-1, n1-1, g);
+      } else if (n2 != 0) {
+          mb.add(n2-1, n2-1, g);
+      }
+  }
+
+  // Helper for Zener/Diode generic stamping
+  void stampTwoTerminalNonLinear(int n1, int n2, double g_eq, double i_eq, 
+                                 MatrixConstructor& mb, std::vector<double>& rhs) {
+      // Safety floor for M4 numerical stability
+      if (g_eq < 1e-15) g_eq = 1e-15;
+
+      // Stamp G (J = dI/dV)
+      if (n1 != 0 && n2 != 0) {
+          mb.add(n1-1, n1-1, g_eq);
+          mb.add(n2-1, n2-1, g_eq);
+          mb.add(n1-1, n2-1, -g_eq);
+          mb.add(n2-1, n1-1, -g_eq);
+      } else if (n1 != 0) {
+          mb.add(n1-1, n1-1, g_eq);
+      } else if (n2 != 0) {
+          mb.add(n2-1, n2-1, g_eq);
+      }
+
+      // Stamp RHS (Current Residual)
+      if (n1 != 0) rhs[n1-1] -= i_eq;
+      if (n2 != 0) rhs[n2-1] += i_eq;
+  }
+
+  void stampDiode(const Diode& d, int nA, int nC, double v_diff, double temp_K,
+                  MatrixConstructor& mb, std::vector<double>& rhs) {
+      // 1. Setup Parameters
+      DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
+                                    d.thermalVoltage_V_T_V};
+      
+      // Thermal Scaling
+      double temp_scale = temp_K / 300.15;
+      params.Vt *= temp_scale;
+
+      // 2. Evaluate Physics (AD)
+      Dual<double> v_diff_dual(v_diff, 1.0);
+      Dual<double> i_d = diode_current_clamped(v_diff_dual, params);
+
+      // 3. Extract Linear Model
+      double g_eq = i_d.grad;
+      double i_src = i_d.val - g_eq * v_diff;
+
+      // 4. Stamp
+      stampTwoTerminalNonLinear(nA, nC, g_eq, i_src, mb, rhs);
+  }
+
+  void stampSchottky(const SchottkyDiode& sd, int nA, int nC, double v_diff, double temp_K,
+                     MatrixConstructor& mb, std::vector<double>& rhs) {
+      // Identical structure to Diode but different params/handling potentially
+      DiodeParams<double> params = {sd.saturationCurrent_I_S_A, sd.emissionCoefficient_N,
+                                    sd.thermalVoltage_V_T_V};
+      params.Vt *= (temp_K / 300.15);
+
+      Dual<double> v_diff_dual(v_diff, 1.0);
+      Dual<double> i_d = diode_current_clamped(v_diff_dual, params);
+
+      double g_eq = i_d.grad;
+      double i_src = i_d.val - g_eq * v_diff;
+
+      stampTwoTerminalNonLinear(nA, nC, g_eq, i_src, mb, rhs);
+  }
+
+  void stampZener(const ZenerDiode& z, int nA, int nC, double v_diff, double temp_K,
+                  MatrixConstructor& mb, std::vector<double>& rhs) {
+      ZenerParams<double> zp;
+      zp.BV = z.breakdownVoltage_V;
+      zp.IBV = z.currentAtBreakdown_A;
+      zp.Rs = z.seriesResistance_Rs_ohms;
+      zp.N = z.emissionCoefficient_N;
+      zp.Is = z.saturationCurrent_I_S_A;
+      zp.Vt = z.thermalVoltage_V_T_V * (temp_K / 300.15);
+
+      Dual<double> v_d(v_diff, 1.0);
+      Dual<double> result = zener_current(v_d, zp);
+
+      double g_eq = result.grad;
+      double i_src = result.val - g_eq * v_diff;
+
+      stampTwoTerminalNonLinear(nA, nC, g_eq, i_src, mb, rhs);
+  }
+
+  void stampMosfet(const Mosfet& m, int nD, int nG, int nS, int nB, 
+                   double v_d, double v_g, double v_s, double v_b,
+                   MatrixConstructor& mb, std::vector<double>& rhs) {
+      double vgs = v_g - v_s;
+      double vds = v_d - v_s;
+
+      MosfetParams<double> p;
+      // Defaults (Placeholder until Model Library is integrated)
+      // Standard 180nm CMOS approximate values
+      p.Kp = 200e-6; 
+      p.Vth = 0.7;   
+      p.lambda = 0.02;
+      p.W = m.w;
+      p.L = m.l;
+
+      // PMOS Detection
+      bool isPMOS = (m.modelName.find("P") != std::string::npos || m.modelName.find("p") != std::string::npos);
+      // Note: Device physics engine expects positive Vth for the equivalent NMOS model logic
+      // For now we run NMOS logic as per original code, just centralized here.
+      
+      // Calculate GM (dId/dVgs)
+      Dual<double> ids_vgs = mosfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
+      double gm = ids_vgs.grad;
+      
+      // Calculate GDS (dId/dVds)
+      Dual<double> ids_vds = mosfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p);
+      double gds = ids_vds.grad;
+      
+      double ids = ids_vgs.val; 
+      double gmb = 0.0; // Body effect placeholder
+      double i_eq = ids - (gm * vgs + gmb * 0.0 + gds * vds);
+
+      stampMosfetMatrix(nD, nG, nS, nB, gm, gmb, gds, i_eq, mb, rhs);
+  }
+
+  void stampMosfetMatrix(int d, int g, int s, int b,
+                         double gm, double gmb, double gds, double i_eq,
+                         MatrixConstructor& mb, std::vector<double>& rhs) {
+      // Linearized Model:
+      // I_ds = gm*Vgs + gmb*Vbs + gds*Vds + I_eq
+      
+      // Gds (Drain-Source Conductance)
+      if (d!=0 && s!=0) {
+           mb.add(d-1, d-1,  gds);
+           mb.add(s-1, s-1,  gds);
+           mb.add(d-1, s-1, -gds);
+           mb.add(s-1, d-1, -gds);
+      } else if (d!=0) mb.add(d-1, d-1, gds);
+      else if (s!=0)   mb.add(s-1, s-1, gds);
+
+      // Gm (Transconductance)
+      if (d!=0) {
+           if (g!=0) mb.add(d-1, g-1,  gm);
+           if (s!=0) mb.add(d-1, s-1, -gm);
+      }
+      if (s!=0) {
+           if (g!=0) mb.add(s-1, g-1, -gm);
+           if (s!=0) mb.add(s-1, s-1,  gm);
+      }
+
+      // RHS
+      if (d!=0) rhs[d-1] -= i_eq;
+      if (s!=0) rhs[s-1] += i_eq;
+  }
+
+  void stampBJT(const BJT& bjt, int nC, int nB, int nE, int nS,
+                double v_c, double v_b, double v_e, double v_s,
+                double temp_K,
+                MatrixConstructor& mb, std::vector<double>& rhs) {
+      // Use efficient analytical model (No dual overhead if not needed)
+      BJTParams<double> p;
+      p.Is = bjt.saturationCurrent_I_S_A;
+      p.BetaF = bjt.betaF;
+      p.BetaR = bjt.betaR;
+      p.Vt = bjt.thermalVoltage_V_T_V;
+
+      // Thermal scaling (consistent with stampDiode/stampZener)
+      double Tnom = 300.15; // 27°C nominal
+      double temp_scale = temp_K / Tnom;
+      p.Vt *= temp_scale;
+
+      // Is temperature scaling: Is(T) = Is(Tnom) * (T/Tnom)^Xti * exp(Eg/Vt_nom - Eg/Vt_T)
+      double Xti = 3.0;  // Silicon default
+      double Eg = 1.11;  // Silicon bandgap [eV]
+      double Vt_nom = bjt.thermalVoltage_V_T_V;
+      double Vt_T = p.Vt;
+      p.Is *= std::pow(temp_scale, Xti) * exp(Eg / Vt_nom - Eg / Vt_T);
+
+      bool isNPN = (bjt.modelName.find("NPN") != std::string::npos || bjt.modelName.find("npn") != std::string::npos);
+      
+      BJTCurrents<double> res = bjt_ebers_moll(v_c, v_b, v_e, isNPN, p);
+
+      // Stamp G (7x7 block for 3 terminals usually, simplified here)
+      // Helper to add conductance
+      auto addG = [&](int r, int c, double val) {
+          if (r!=0 && c!=0) mb.add(r-1, c-1, val);
+      };
+
+      addG(nC, nC, res.g_cc); addG(nC, nB, res.g_cb); addG(nC, nE, res.g_ce);
+      addG(nB, nC, res.g_bc); addG(nB, nB, res.g_bb); addG(nB, nE, res.g_be);
+      addG(nE, nC, res.g_ec); addG(nE, nB, res.g_eb); addG(nE, nE, res.g_ee);
+
+      // Stamp I_rhs
+      // I_node = -Sum(G*V) + I_eq
+      // I_eq = I_actual(V) - G*V
+      // RHS needs -I_eq (to move I_eq to LHS? No wait).
+      // KCL: Sum(G*V) = Sum(I_sources).
+      // Linearized: I(V) ~ I(Vo) + G*(V-Vo) = I(Vo) - G*Vo + G*V.
+      // So I_source_equiv = I(Vo) - G*Vo.
+      // KCL: ... + I(V) = 0 -> ... + G*V + I_source_equiv = 0 -> ... + G*V = -I_source_equiv.
+      // RHS = -I_source_equiv.
+      // RHS = -(I(Vo) - G*Vo) = G*Vo - I(Vo).
+      
+      // Let's compute I_source_equiv for each terminal
+      double i_c_eq = res.Ic - (res.g_cc*v_c + res.g_cb*v_b + res.g_ce*v_e);
+      double i_b_eq = res.Ib - (res.g_bc*v_c + res.g_bb*v_b + res.g_be*v_e);
+      double i_e_eq = res.Ie - (res.g_ec*v_c + res.g_eb*v_b + res.g_ee*v_e);
+
+      if (nC != 0) rhs[nC-1] -= i_c_eq;
+      if (nB != 0) rhs[nB-1] -= i_b_eq;
+      if (nE != 0) rhs[nE-1] -= i_e_eq;
+  }
+
+  void stampJFET(const JFET& j, int nD, int nG, int nS,
+                 double v_d, double v_g, double v_s,
+                 MatrixConstructor& mb, std::vector<double>& rhs) {
+      double vgs = v_g - v_s;
+      double vds = v_d - v_s;
+
+      JFETParams<double> p;
+      p.Beta = j.beta;
+      p.Vto = j.Vto;
+      p.Lambda = j.lambda;
+
+      // Determine N-Channel/P-Channel
+      bool isNChannel = j.isNChannel;
+      double sign = isNChannel ? 1.0 : -1.0;
+
+      // Calculate currents and conductances using AD
+      Dual<double> vgs_dual(vgs * sign, 1.0);
+      Dual<double> vds_dual(vds * sign, 1.0);
+
+      Dual<double> ids_ad = jfet_ids(vgs_dual, vds_dual, p);
+      double ids = ids_ad.val;
+
+      // gm = dIds/dVgs
+      Dual<double> gm_ad = jfet_ids(Dual<double>(vgs * sign, 1.0), Dual<double>(vds * sign, 0.0), p);
+      double gm = gm_ad.grad * sign;
+
+      // gds = dIds/dVds
+      Dual<double> gds_ad = jfet_ids(Dual<double>(vgs * sign, 0.0), Dual<double>(vds * sign, 1.0), p);
+      double gds = gds_ad.grad * sign;
+
+      // Linearized current source
+      double i_eq = ids - (gm * vgs + gds * vds);
+
+      // Stamp JFET
+      // Ids = gm*Vgs + gds*Vds + I_eq
+
+      // Drain node (nD)
+      if (nD != 0) {
+          if (nG != 0) mb.add(nD-1, nG-1, gm);
+          if (nS != 0) mb.add(nD-1, nS-1, -gm - gds);
+          if (nD != 0) mb.add(nD-1, nD-1, gds);
+          rhs[nD-1] -= i_eq;
+      }
+
+      // Source node (nS)
+      // KCL at S: -Ids = Is
+      // Is = -Ids = -(gm*Vgs + gds*Vds + I_eq)
+      if (nS != 0) {
+          if (nG != 0) mb.add(nS-1, nG-1, -gm);
+          if (nS != 0) mb.add(nS-1, nS-1, gm + gds);
+          if (nD != 0) mb.add(nS-1, nD-1, -gds);
+          rhs[nS-1] += i_eq;
+      }
+  }
+
+  /*
+   * Stamping Helpers
+   */
   void stampConductanceToMat(MatrixConstructor& mat, int n1, int n2, double G) {
       if (n1 > 0) mat.add(n1 - 1, n1 - 1, G);
       if (n2 > 0) mat.add(n2 - 1, n2 - 1, G);
@@ -785,7 +1070,8 @@ private:
    */
   void applyPnJunctionLimits(const TensorizedBlock& block,
                               std::vector<double>& v_new,
-                              const std::vector<double>& v_old);
+                              const std::vector<double>& v_old,
+                              double temp_K = 300.15);
 
   // NR Parameters (Using centralized PhysicsConstants)
   // Note: Kept as local constexpr for backward compatibility; prefer PhysicsConstants::
@@ -950,18 +1236,25 @@ public:
       addRes(sd.cathode, i_d);
     }
 
-    // 3.5 BJT Audit
+    // 3.5 BJT Audit (temperature-aware)
     for (const auto &q : netlist.globalBlock.bjts) {
         double v_c = getV(q.nodeCollector);
         double v_b = getV(q.base);
         double v_e = getV(q.emitter);
-        
+
         BJTParams<double> params;
         params.Is = q.saturationCurrent_I_S_A;
         params.BetaF = q.betaF;
         params.BetaR = q.betaR;
         params.Vt = q.thermalVoltage_V_T_V;
-        
+
+        // Thermal scaling (match stampBJT)
+        double Tnom_audit = 300.15;
+        double T_audit = netlist.environment.ambient_temp_K;
+        double temp_scale_audit = T_audit / Tnom_audit;
+        params.Vt *= temp_scale_audit;
+        params.Is *= std::pow(temp_scale_audit, 3.0) * exp(1.11 / q.thermalVoltage_V_T_V - 1.11 / params.Vt);
+
         BJTCurrents currents = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
         
         addRes(q.nodeCollector, -currents.Ic);
@@ -991,48 +1284,7 @@ public:
         addRes(m.source, ids);
     }
     
-    // 3.7 Hierarchical Instances (Audit internal branches)
-    for (const auto &inst : netlist.instances) {
-        auto it = netlist.blockDefinitions.find(inst.blockName);
-        if (it == netlist.blockDefinitions.end()) continue;
-        const auto &block = it->second;
-        auto mapNode = [&](int local) { return (local == 0 ? 0 : inst.nodeMapping[local-1]); };
-        
-        // Audit Block Resistors
-        for (const auto &r : block.resistors) {
-            double v1 = getV(mapNode(r.nodeTerminal1));
-            double v2 = getV(mapNode(r.nodeTerminal2));
-            double i_r = (v1 - v2) / r.resistance_ohms;
-            addRes(mapNode(r.nodeTerminal1), -i_r);
-            addRes(mapNode(r.nodeTerminal2), i_r);
-        }
-        // Audit Block BJTs
-        for (const auto &q : block.bjts) {
-            double vc = getV(mapNode(q.nodeCollector));
-            double vb = getV(mapNode(q.base));
-            double ve = getV(mapNode(q.emitter));
-            BJTParams<double> params = {q.saturationCurrent_I_S_A, q.betaF, q.betaR, q.thermalVoltage_V_T_V};
-            BJTCurrents currents = bjt_ebers_moll(vc, vb, ve, q.isNPN, params);
-            addRes(mapNode(q.nodeCollector), -currents.Ic);
-            addRes(mapNode(q.base), -currents.Ib);
-            addRes(mapNode(q.emitter), -currents.Ie);
-        }
-        // Audit Block MOSFETs
-        for (const auto &m : block.mosfets) {
-            double vd = getV(mapNode(m.drain));
-            double vg = getV(mapNode(m.gate));
-            double vs = getV(mapNode(m.source));
-            MosfetParams<double> p;
-            p.Kp = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos) ? 100e-6 : 200e-6;
-            p.Vth = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos) ? -0.7 : 0.7;
-            p.lambda = 0.02; p.W = m.w; p.L = m.l;
-            bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
-            double sign = isPMOS ? -1.0 : 1.0;
-            double ids = sign * mosfet_ids(sign*(vg-vs), sign*(vd-vs), p);
-            addRes(mapNode(m.drain), -ids);
-            addRes(mapNode(m.source), ids);
-        }
-    }
+    // 3.7 Hierarchical Instances — audited in Section 5 (parallel scheduler path)
     
     // 3.8 JFET Audit (Shichman-Hodges)
     for (const auto &jfet_inst : netlist.globalBlock.jfets) {
@@ -1240,14 +1492,18 @@ public:
         }
 
         // BJTs (Instance)
+        // BJTs (temperature-aware)
         for (const auto &q : block.bjts) {
             double v_c = getV(mapNode(q.nodeCollector));
             double v_b = getV(mapNode(q.base));
             double v_e = getV(mapNode(q.emitter));
-            
+
             BJTParams<double> params = {q.saturationCurrent_I_S_A, q.betaF, q.betaR, q.thermalVoltage_V_T_V};
+            double ts_par = netlist.environment.ambient_temp_K / 300.15;
+            params.Vt *= ts_par;
+            params.Is *= std::pow(ts_par, 3.0) * exp(1.11 / q.thermalVoltage_V_T_V - 1.11 / params.Vt);
             BJTCurrents currents = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
-            
+
             addResAtomic(mapNode(q.nodeCollector), -currents.Ic);
             addResAtomic(mapNode(q.base), -currents.Ib);
             addResAtomic(mapNode(q.emitter), -currents.Ie);
@@ -1297,6 +1553,194 @@ public:
     for (double val : node_residuals) {
       max_err = std::max(max_err, std::abs(val));
     }
+    return max_err;
+  }
+
+  /**
+   * calculatePhysicalResidualsDetailed
+   * Like calculatePhysicalResiduals but additionally records per-device
+   * attribution for the worst KCL violations. Returns max KCL error.
+   * Populates worstDevices with sorted contributions to the worst node.
+   */
+  double calculatePhysicalResidualsDetailed(
+      const TensorNetlist &netlist,
+      const std::vector<double> &v_candidate,
+      std::vector<ResidualContribution> &worstDevices,
+      int &worstNodeOut) {
+
+    int n = netlist.numGlobalNodes;
+    worstDevices.clear();
+    worstNodeOut = 0;
+    if (n == 0) return 0.0;
+
+    std::vector<double> node_residuals(n, 0.0);
+
+    auto getV = [&](int nodeIdx) {
+      if (nodeIdx <= 0 || nodeIdx > (int)v_candidate.size()) return 0.0;
+      return v_candidate[nodeIdx - 1];
+    };
+    auto addRes = [&](int nodeIdx, double val) {
+      if (nodeIdx > 0 && nodeIdx <= n)
+        node_residuals[nodeIdx - 1] += val;
+    };
+
+    // Per-device attribution: (deviceName, deviceType, affectedNodes[], current)
+    struct DeviceAttribution {
+        std::string name;
+        std::string type;
+        std::vector<std::pair<int, double>> nodeCurrents; // (1-based node, current contributed)
+    };
+    std::vector<DeviceAttribution> attributions;
+
+    // 1. Resistors
+    for (const auto &r : netlist.globalBlock.resistors) {
+      double v1 = getV(r.nodeTerminal1);
+      double v2 = getV(r.nodeTerminal2);
+      double i_r = (v1 - v2) / r.resistance_ohms;
+      addRes(r.nodeTerminal1, -i_r);
+      addRes(r.nodeTerminal2, i_r);
+      attributions.push_back({r.name, "Resistor",
+          {{r.nodeTerminal1, -i_r}, {r.nodeTerminal2, i_r}}});
+    }
+
+    // 2. Voltage Sources
+    for (const auto &v : netlist.globalBlock.voltageSources) {
+      double v1 = getV(v.nodePositive);
+      double v2 = getV(v.nodeNegative);
+      double r_int = 1e-3;
+      double i_src = (v.voltage_V - (v1 - v2)) / r_int;
+      addRes(v.nodePositive, i_src);
+      addRes(v.nodeNegative, -i_src);
+      attributions.push_back({v.type.empty() ? "V?" : v.type, "VoltageSource",
+          {{v.nodePositive, i_src}, {v.nodeNegative, -i_src}}});
+    }
+
+    // Current Sources
+    for (const auto &cs : netlist.globalBlock.currentSources) {
+      addRes(cs.nodePositive, -cs.current_A);
+      addRes(cs.nodeNegative, cs.current_A);
+      attributions.push_back({cs.type.empty() ? "I?" : cs.type, "CurrentSource",
+          {{cs.nodePositive, -cs.current_A}, {cs.nodeNegative, cs.current_A}}});
+    }
+
+    // 3. Diodes
+    for (const auto &d : netlist.globalBlock.diodes) {
+      double v_d = getV(d.anode) - getV(d.cathode);
+      DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
+                            d.thermalVoltage_V_T_V};
+      double i_d = diode_current_clamped(v_d, params, 30.0);
+      addRes(d.anode, -i_d);
+      addRes(d.cathode, i_d);
+      attributions.push_back({d.modelName, "Diode",
+          {{d.anode, -i_d}, {d.cathode, i_d}}});
+    }
+
+    // Schottky Diodes
+    for (const auto &sd : netlist.globalBlock.schottkyDiodes) {
+      double v_d = getV(sd.anode) - getV(sd.cathode);
+      DiodeParams<double> params = {sd.saturationCurrent_I_S_A, sd.emissionCoefficient_N,
+                            sd.thermalVoltage_V_T_V};
+      double i_d = diode_current_clamped(v_d, params, 30.0);
+      addRes(sd.anode, -i_d);
+      addRes(sd.cathode, i_d);
+      attributions.push_back({sd.instanceName, "SchottkyDiode",
+          {{sd.anode, -i_d}, {sd.cathode, i_d}}});
+    }
+
+    // BJTs (temperature-aware)
+    for (const auto &q : netlist.globalBlock.bjts) {
+      double v_c = getV(q.nodeCollector);
+      double v_b = getV(q.base);
+      double v_e = getV(q.emitter);
+      BJTParams<double> params;
+      params.Is = q.saturationCurrent_I_S_A;
+      params.BetaF = q.betaF;
+      params.BetaR = q.betaR;
+      params.Vt = q.thermalVoltage_V_T_V;
+      double ts_det = netlist.environment.ambient_temp_K / 300.15;
+      params.Vt *= ts_det;
+      params.Is *= std::pow(ts_det, 3.0) * exp(1.11 / q.thermalVoltage_V_T_V - 1.11 / params.Vt);
+      BJTCurrents<double> currents = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
+      addRes(q.nodeCollector, -currents.Ic);
+      addRes(q.base, -currents.Ib);
+      addRes(q.emitter, -currents.Ie);
+      attributions.push_back({q.instanceName, "BJT",
+          {{q.nodeCollector, -currents.Ic}, {q.base, -currents.Ib}, {q.emitter, -currents.Ie}}});
+    }
+
+    // MOSFETs
+    for (const auto &m : netlist.globalBlock.mosfets) {
+      double vd = getV(m.drain), vg = getV(m.gate), vs = getV(m.source);
+      MosfetParams<double> p;
+      p.Kp = 200e-6; p.Vth = 0.7; p.lambda = 0.02; p.W = m.w; p.L = m.l;
+      double ids = mosfet_ids(vg - vs, vd - vs, p);
+      addRes(m.drain, -ids);
+      addRes(m.source, ids);
+      attributions.push_back({m.instanceName, "MOSFET",
+          {{m.drain, -ids}, {m.source, ids}}});
+    }
+
+    // JFETs
+    for (const auto &j : netlist.globalBlock.jfets) {
+      double vgs = getV(j.gate) - getV(j.source);
+      double vds = getV(j.drain) - getV(j.source);
+      JFETParams<double> p;
+      p.Beta = j.beta; p.Vto = j.Vto; p.Lambda = j.lambda;
+      double sign = j.isNChannel ? 1.0 : -1.0;
+      double ids = sign * jfet_ids(sign * vgs, sign * vds, p);
+      addRes(j.drain, -ids);
+      addRes(j.source, ids);
+      attributions.push_back({j.instanceName, "JFET",
+          {{j.drain, -ids}, {j.source, ids}}});
+    }
+
+    // Zener Diodes
+    for (const auto &z : netlist.globalBlock.zenerDiodes) {
+      double vd = getV(z.anode) - getV(z.cathode);
+      ZenerParams<double> zp;
+      zp.BV = z.breakdownVoltage_V; zp.IBV = z.currentAtBreakdown_A;
+      zp.Rs = z.seriesResistance_Rs_ohms; zp.N = z.emissionCoefficient_N;
+      zp.Is = z.saturationCurrent_I_S_A; zp.Vt = z.thermalVoltage_V_T_V;
+      double iz = zener_current(vd, zp);
+      addRes(z.anode, -iz);
+      addRes(z.cathode, iz);
+      attributions.push_back({z.instanceName, "ZenerDiode",
+          {{z.anode, -iz}, {z.cathode, iz}}});
+    }
+
+    // Find worst node
+    double max_err = 0.0;
+    int worst_idx = 0;
+    for (int i = 0; i < n; ++i) {
+      double abs_val = std::abs(node_residuals[i]);
+      if (abs_val > max_err) {
+        max_err = abs_val;
+        worst_idx = i;
+      }
+    }
+    worstNodeOut = worst_idx + 1; // 1-based
+
+    // Build per-device attribution for worst node
+    for (const auto &attr : attributions) {
+      for (const auto &[node, current] : attr.nodeCurrents) {
+        if (node == worstNodeOut && std::abs(current) > 1e-15) {
+          ResidualContribution rc;
+          rc.deviceName = attr.name;
+          rc.deviceType = attr.type;
+          rc.nodeIndex = node;
+          rc.currentContribution = current;
+          rc.percentOfTotal = (max_err > 0.0) ? (std::abs(current) / max_err * 100.0) : 0.0;
+          worstDevices.push_back(rc);
+        }
+      }
+    }
+
+    // Sort by contribution magnitude (descending)
+    std::sort(worstDevices.begin(), worstDevices.end(),
+              [](const ResidualContribution &a, const ResidualContribution &b) {
+                return std::abs(a.currentContribution) > std::abs(b.currentContribution);
+              });
+
     return max_err;
   }
 
@@ -2095,160 +2539,64 @@ public:
         return v_guess[globalNode - 1];
       return 0.0;
     };
-    
-    // Helper to stamp matrix (G)
-    auto addG = [&](int r, int c, double val) {
-        if (r!=0 && c!=0) matrixBuilder.add(r, c, val);
-    };
-    
-    // Helper to stamp RHS (Current)
-    auto addI = [&](int r, double val) {
-        if (r!=0) rhsVector[r-1] += val;
-    };
 
     // 1. Diodes
     for (const auto &d : block.diodes) {
-      double v_a = getV(mapNode(d.anode));
-      double v_c = getV(mapNode(d.cathode));
-      double v_diff = v_a - v_c;
-
-      // AD: Seed derivative wrt Vd (v_diff)
-      Dual<double> v_diff_dual(v_diff, 1.0);
-
-      DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N,
-                            d.thermalVoltage_V_T_V};
-      
-      // Thermal Update: Vt = k T / q
-      // Scale Vt relative to default 300.15K (assuming stored Vt is at 300K)
-      double temp_scale = temp_K / 300.15;
-      params.Vt = params.Vt * temp_scale;
-      
-      // Simple Is Tempco (exponential leakage increase)
-      // Rule of thumb: doubles every 10C. 
-      // This is a heuristic until we have full models.
-      // double delta_T = temp_K - 300.15;
-      // params.Is *= std::pow(2.0, delta_T / 10.0);
-      
-      // Auto-differentiate: returns { I, dI/dV }
-      Dual<double> i_diode = diode_current_clamped(v_diff_dual, params);
-      
-      double g_eq = i_diode.grad;
-      double i_eq = i_diode.val - g_eq * v_diff;
-
-      // M4 Safety
-      if (g_eq < 1e-15) g_eq = 1e-15; 
-      
-      stampResistor(mapNode(d.anode), mapNode(d.cathode), 1.0 / g_eq,
-                    matrixBuilder);
-      // Stamp current
-      if (mapNode(d.anode) != 0)
-        rhsVector[mapNode(d.anode) - 1] -= i_eq;
-      if (mapNode(d.cathode) != 0)
-        rhsVector[mapNode(d.cathode) - 1] += i_eq;
+      int nA = mapNode(d.anode);
+      int nC = mapNode(d.cathode);
+      stampDiode(d, nA, nC, getV(nA) - getV(nC), temp_K, matrixBuilder, rhsVector);
     }
 
-    // 1.5 Schottky Diodes (same physics, different defaults + series resistance)
+    // 1.5 Schottky Diodes (Reuse Unified Diode Logic)
     for (const auto &sd : block.schottkyDiodes) {
       int nA = mapNode(sd.anode);
       int nC = mapNode(sd.cathode);
-      double v_diff = getV(nA) - getV(nC);
-
-      DiodeParams<double> params = {sd.saturationCurrent_I_S_A, sd.emissionCoefficient_N,
-                            sd.thermalVoltage_V_T_V};
-      double temp_scale = temp_K / 300.15;
-      params.Vt = params.Vt * temp_scale;
-      
-      Dual<double> v_diff_dual(v_diff, 1.0);
-      Dual<double> i_schottky = diode_current_clamped(v_diff_dual, params);
-      
-      double g_eq = i_schottky.grad;
-      double i_eq = i_schottky.val - g_eq * v_diff;
-      
-      if (g_eq < 1e-15) g_eq = 1e-15;
-      
-      // Stamp diode conductance
-      stampResistor(nA, nC, 1.0 / g_eq, matrixBuilder);
-      
-      // Stamp series resistance Rs (if significant)
-      if (sd.seriesResistance_Rs_ohms > 1e-6) {
-          // For simplicity, we model Rs in series by adding a small conductance correction.
-          // Full implementation would require an internal node. For now, approximate.
-          double g_rs = 1.0 / sd.seriesResistance_Rs_ohms;
-          // Reduce effective conductance: g_total = 1 / (1/g_eq + Rs)
-          // This is a linearization approximation.
-      }
-      
-      if (nA != 0) rhsVector[nA - 1] -= i_eq;
-      if (nC != 0) rhsVector[nC - 1] += i_eq;
+      stampSchottky(sd, nA, nC, getV(nA) - getV(nC), temp_K, matrixBuilder, rhsVector);
     }
 
-    // 2. MOSFETs (Phase 1: Level-1 logic)
+    // 2. MOSFETs
     for (const auto &m : block.mosfets) {
-      double v_d = getV(mapNode(m.drain));
-      double v_g = getV(mapNode(m.gate));
-      double v_s = getV(mapNode(m.source));
+      int nD = mapNode(m.drain);
+      int nG = mapNode(m.gate);
+      int nS = mapNode(m.source);
+      int nB = mapNode(m.body);
 
-      double vgs = v_g - v_s;
-      double vds = v_d - v_s;
-
-      MosfetParams<double> p;
-      p.Kp = 200e-6;
-      p.Vth = 0.7; // TODO: Parse from model name (PMOS vs NMOS)
-      p.lambda = 0.02;
-      p.W = m.w;
-      p.L = m.l;
-      
-      // Simple Hack for PMOS detection based on name/model
-      if (m.modelName.find("P") != std::string::npos || m.modelName.find("p") != std::string::npos) {
-          // Should actually flip voltages or use PMOS physics
-          // For now, assume NMOS physics is sufficient for demo 
-          // or user is using NMOS-only templates
-      }
-
-      Dual<double> ids_vgs = mosfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
-      double gm = ids_vgs.grad;
-      
-      Dual<double> ids_vds = mosfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p);
-      double gds = ids_vds.grad;
-      
-      double ids = ids_vgs.val;
-      double gmb = 0.0; // Placeholder for body effect
-      double ieq = ids - gm * vgs - gds * vds;
-
-      stampMosfet(mapNode(m.drain), mapNode(m.gate), mapNode(m.source),
-                  mapNode(m.body), gm, gmb, gds, ieq, matrixBuilder, rhsVector);
+      stampMosfet(m, nD, nG, nS, nB,
+                  getV(nD), getV(nG), getV(nS), getV(nB),
+                  matrixBuilder, rhsVector);
     }
 
-    // 3. BJTs (Ebers-Moll Implementation)
+    // 3. BJTs
     for (const auto &q : block.bjts) {
         int nC = mapNode(q.nodeCollector);
         int nB = mapNode(q.base);
         int nE = mapNode(q.emitter);
-        
-        double v_c = getV(nC);
-        double v_b = getV(nB);
-        double v_e = getV(nE);
-        
-        BJTParams<double> params;
-        params.Is = q.saturationCurrent_I_S_A;
-        params.BetaF = q.betaF;
-        params.BetaR = q.betaR;
-        params.Vt = q.thermalVoltage_V_T_V;
-        
-        // Thermal Update
-        params.Vt = params.Vt * (temp_K / 300.15);
-        
-        BJTCurrents res = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
-        
-        stampBJT(nC, nB, nE, 
-                 res.g_cc, res.g_cb, res.g_ce,
-                 res.g_bc, res.g_bb, res.g_be,
-                 res.g_ec, res.g_eb, res.g_ee,
-                 res.Ic, res.Ib, res.Ie,
-                 v_c, v_b, v_e,
+        int nS = 0; // Substrate not yet modeled
+
+        stampBJT(q, nC, nB, nE, nS,
+                 getV(nC), getV(nB), getV(nE), 0.0,
+                 temp_K,
                  matrixBuilder, rhsVector);
     }
 
+    // 4. JFETs
+    for (const auto &j : block.jfets) {
+        int nD = mapNode(j.drain);
+        int nG = mapNode(j.gate);
+        int nS = mapNode(j.source);
+
+        stampJFET(j, nD, nG, nS,
+                  getV(nD), getV(nG), getV(nS),
+                  matrixBuilder, rhsVector);
+    }
+
+    // 5. Zener Diodes
+    for (const auto &z : block.zenerDiodes) {
+        int nA = mapNode(z.anode);
+        int nC = mapNode(z.cathode);
+        
+        stampZener(z, nA, nC, getV(nA) - getV(nC), temp_K, matrixBuilder, rhsVector);
+    }
   }
 
   /**

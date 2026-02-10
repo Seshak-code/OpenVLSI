@@ -122,6 +122,22 @@ struct SimulationProfile {
         p.parameters["sweepType"] = "log";
         return p;
     }
+
+    static SimulationProfile noiseSweep() {
+        SimulationProfile p;
+        p.profileId = "noise_sweep_default";
+        p.name = "Noise Sweep";
+        p.analysis = AnalysisType::NOISE;
+        p.category = Category::ANALYSIS;
+        p.requiresDC = true;
+        p.parameters["fStart"] = "1Hz";
+        p.parameters["fStop"] = "100MHz";
+        p.parameters["points"] = 200;
+        p.parameters["outputNode"] = 1;
+        p.parameters["inputNode"] = 0;
+        p.parameters["temperature_K"] = 300.15;
+        return p;
+    }
     
     // Corner configurations for PVT analysis
     QList<acutesim::physics::CornerConfig> corners;  // Default: empty = typical corner only

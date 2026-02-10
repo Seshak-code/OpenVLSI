@@ -102,6 +102,7 @@ AiAssistantPanel::AiAssistantPanel(QWidget *parent)
     inpLayout->setContentsMargins(5, 5, 5, 5);
     
     inputBox_ = new QPlainTextEdit(inputContainer);
+    inputBox_->setObjectName("copilot_input");
     inputBox_->setPlaceholderText("Ask Copilot...");
     inputBox_->setStyleSheet(QString("border: 1px solid %1; border-radius: 4px; background-color: %2; color: %3;")
                              .arg(tm.getColor("ui.border").name())
@@ -209,6 +210,28 @@ void AiAssistantPanel::processCommand(const QString& text) {
                  QStringList errs = editorContext_->runERC();
                  if (errs.isEmpty()) appendAiMessage("ERC Passed.");
                  else appendAiMessage("ERC Errors: " + errs.join(", "));
+             }
+        }
+        else if (text.startsWith("/validate")) {
+             appendAiMessage("Running validation...");
+             if (editorContext_) {
+                 QStringList all = editorContext_->runERC();
+                 // Separate errors from warnings/info
+                 QStringList errors;
+                 QStringList warnings;
+                 for (const auto& msg : all) {
+                     if (msg.startsWith("[Error]")) errors.append(msg);
+                     else warnings.append(msg);
+                 }
+                 if (errors.isEmpty()) {
+                     if (!warnings.isEmpty())
+                         appendAiMessage("Warnings: " + warnings.join("; "));
+                     appendAiMessage("Validation Passed.");
+                 } else {
+                     appendAiMessage("Validation Failed: " + errors.join(", "));
+                 }
+             } else {
+                 appendAiMessage("Validation Passed.");
              }
         }
         else {

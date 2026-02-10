@@ -21,6 +21,9 @@ service WorkerService {
   // Analog/Mixed-Signal Circuit Simulation (Tensor MNA)
   rpc RunCircuitSimulation (CircuitSimulationRequest) returns (stream CircuitSimulationLog);
 
+  // Sign-Off (DRC/LVS/PEX via KLayout)
+  rpc RunSignOff (SignOffRequest) returns (stream SignOffLog);
+
   // Parity Validation (Regression Harness)
   rpc RunRegression (RegressionRequest) returns (stream RegressionLog);
 }
@@ -169,7 +172,31 @@ message RegressionLog {
   bool is_error = 3;
   bool is_finished = 4;
   bool passed = 5;       // Only valid if is_finished=true
-  
+
   // Optional result data (e.g. JSON summary)
-  string result_json = 6; 
+  string result_json = 6;
+}
+
+// ============================================================================
+// SIGN-OFF (KLayout DRC/LVS/PEX)
+// ============================================================================
+
+message SignOffRequest {
+  string job_id = 1;
+  FileData layout_file = 2;          // GDS/OASIS file
+  FileData script_file = 3;          // Ruby/DRC script
+  string check_type = 4;             // "DRC", "LVS", "PEX"
+
+  // Optional: reference netlist for LVS
+  FileData reference_netlist = 5;
+}
+
+message SignOffLog {
+  string job_id = 1;
+  string log_line = 2;
+  bool is_error = 3;
+  bool is_finished = 4;
+
+  // Result artifacts (only in final message)
+  FileData report = 5;
 }

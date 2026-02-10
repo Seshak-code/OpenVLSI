@@ -78,8 +78,8 @@ struct ReferenceDesignContext {
         text += QString("Golden Status: %1 (ngspice correlation: %2)\n")
                 .arg(goldenStatus).arg(ngspiceCorrelation, 0, 'f', 4);
         text += QString("Key Metrics: Gain=%1dB, PM=%2°\n")
-                .arg(simResults["gain_dB"].toDouble(), 0, 'f', 1)
-                .arg(simResults["phase_margin"].toDouble(), 0, 'f', 1);
+                .arg(simResults["gain_dB"].toDouble(0.0), 0, 'f', 1)
+                .arg(simResults["phase_margin"].toDouble(0.0), 0, 'f', 1);
         return text;
     }
 };

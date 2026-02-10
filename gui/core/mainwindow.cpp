@@ -12,19 +12,19 @@
 #include "../widgets/search_dock.h"
 #include "../styling/theme_manager.h"
 #include "../scripting/tcl_bridge.h"
+#include "../editors/schematic_editor.h"
+#include "editor_manager.h"
 #include <QApplication>
 #include <QHeaderView>
 #include <QStatusBar>
 #include <QDebug>
 #include <QComboBox>
-#include <QMessageBox>
+#include "../widgets/inline_dialog.h"
 #include <QPushButton>
 #include <QLabel>
-#include <QInputDialog>
 #include <QToolButton>
 #include <QMenu>
 #include <QShortcut>
-#include <QFileDialog>
 #include <QFileInfo>
 #include <QFile>
 #include <QTextStream>
@@ -132,26 +132,25 @@ void MainWindow::setupCentralWidget() {
                  disconnect(schematicEditor, nullptr, this, nullptr);
              }
              
-             schematicEditor = sch;
-             if (simulationWorkspace) simulationWorkspace->setSchematicEditor(sch);
-             
-             // Connect Selection Signals (Fix for Bug #2)
-             connect(sch, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
-             connect(sch, &SchematicEditor::wireSelected, this, [this](VisualWire* w){
-                 activeWire = w;
-                 activeComponent = nullptr; // Exclusive selection
-                 // TODO: Show wire properties? For now clear panel or show basics
-                 // updateProperties(nullptr); // Just clear for now
-                 // Ideally we'd have updateWireProperties(w)
-             });
-        } else {
-             // Code editor or null
-             if (schematicEditor) {
-                 disconnect(schematicEditor, nullptr, this, nullptr);
+             auto* sch = qobject_cast<SchematicEditor*>(editor);
+             if (sch) {
+                 schematicEditor = sch;
+                 if (simulationWorkspace) simulationWorkspace->setSchematicEditor(sch);
+                 
+                 // Connect Selection Signals (Fix for Bug #2)
+                 connect(sch, &SchematicEditor::itemSelected, this, &MainWindow::updateProperties);
+                 connect(sch, &SchematicEditor::wireSelected, this, [this](VisualWire* w){
+                     activeWire = w;
+                     activeComponent = nullptr; // Exclusive selection
+                     // TODO: Show wire properties? For now clear panel or show basics
+                     // updateProperties(nullptr); // Just clear for now
+                     // Ideally we'd have updateWireProperties(w)
+                 });
+             } else {
+                 // Code editor or null
+                 schematicEditor = nullptr;
+                 if (simulationWorkspace) simulationWorkspace->setSchematicEditor(nullptr);
              }
-             schematicEditor = nullptr;
-             if (simulationWorkspace) simulationWorkspace->setSchematicEditor(nullptr);
-        }
     });
 
     // Sync Simulation Context (Unified Architecture)
@@ -174,20 +173,9 @@ void MainWindow::setupCentralWidget() {
     rtlLayout->addWidget(editorTabs);
     stageTabs->addTab(rtlContainer, "RTL Design");
     
-    // --- Stage 2: Synthesis (Placeholder) ---
-    QLabel* synthesisLabel = new QLabel("Logic Synthesis & Timing Optimization\n\n[Run Synthesis] button coming soon...");
-    synthesisLabel->setAlignment(Qt::AlignCenter);
-    stageTabs->addTab(synthesisLabel, "Synthesis");
-    
-    // --- Stage 3: Physical Design (Placeholder) ---
-    QLabel* physicalLabel = new QLabel("Physical Design: Netlist → Layout\n\nFloorplanning, P&R, Power Grid visualization.");
-    physicalLabel->setAlignment(Qt::AlignCenter);
-    stageTabs->addTab(physicalLabel, "Physical Design");
-    
-    // --- Stage 4: Verification (Placeholder) ---
-    QLabel* verificationLabel = new QLabel("DRC/LVS Checks & Sign-Off\n\n(Future: 3D LVS Viewer)");
-    verificationLabel->setAlignment(Qt::AlignCenter);
-    stageTabs->addTab(verificationLabel, "Verification");
+    // --- Stages 2-4: RTL -> GDS Pipeline ---
+    rtlPipelinePanel = new acutesim::gui::orchestration::RtlPipelinePanel(this);
+    stageTabs->addTab(rtlPipelinePanel, "RTL \u2192 GDS Pipeline");
     
     // Simulator Panel (popup, not a tab - triggered from menu)
     // DockingManager handles Terminal/Output/Problems panels now.
@@ -214,6 +202,16 @@ void MainWindow::setupCentralWidget() {
         }
     });
     connect(simulationWorkspace, &SimulationWorkspace::resultsReady, this, &MainWindow::onSimulationResults);
+
+    // Connect RTL Pipeline Panel logs to output
+    if (rtlPipelinePanel) {
+        connect(rtlPipelinePanel, &acutesim::gui::orchestration::RtlPipelinePanel::logMessage,
+                this, [this](const QString& msg) {
+            if (dockingManager && dockingManager->output()) {
+                dockingManager->output()->appendText("[Pipeline] " + msg);
+            }
+        });
+    }
 
     // Connect solver violations to problems panel
     connect(simulationWorkspace, &SimulationWorkspace::solverViolation, this, [this](const ERC::Violation& v) {
@@ -264,9 +262,7 @@ void MainWindow::setupCentralWidget() {
     // Connect tab changes to flow manager
     connect(stageTabs, &QTabWidget::currentChanged, this, [this](int idx) {
         if (idx == 0) flowManager->setStage(DesignStage::RTL_DESIGN);
-        else if (idx == 1) flowManager->setStage(DesignStage::SYNTHESIS);
-        else if (idx == 2) flowManager->setStage(DesignStage::PHYSICAL_DESIGN);
-        else if (idx == 3) flowManager->setStage(DesignStage::VERIFICATION);
+        else if (idx == 1) flowManager->setStage(DesignStage::SYNTHESIS); // Pipeline tab covers Synthesis/PnR/SignOff
     });
     
     // Legacy connections removed
@@ -363,6 +359,11 @@ void MainWindow::setupDocks() {
     streamingDock_ = nullptr;
     resultsDock_ = nullptr;
     
+    // Worker Orchestration Dock
+    qDebug() << "[MW] Creating Worker Dock...";
+    createWorkerDock();
+    addDockWidget(Qt::BottomDockWidgetArea, workerDock);
+
     qDebug() << "[MW] Creating Debug Suggestions Dock...";
     createDebugSuggestionsDock();
     addDockWidget(Qt::BottomDockWidgetArea, debugSuggestionsDock);
@@ -1062,17 +1063,17 @@ void MainWindow::newProject() {
 }
 
 void MainWindow::openProject() {
-    QString filePath = QFileDialog::getOpenFileName(this,
-        "Open Project", QString(),
-        "AcuteSim Projects (*.acu);;Schematic Files (*.sch);;All Files (*)");
-    if (!filePath.isEmpty()) {
-        // Add to recent projects
-        if (welcomeWidget) {
-            welcomeWidget->addRecentProject(filePath, QFileInfo(filePath).baseName());
-        }
-        // TODO: Implement full project loading
-        statusBar()->showMessage("Project loading not yet implemented: " + filePath, 3000);
-    }
+    using namespace acutesim::gui::widgets;
+    InlineDialog::getOpenFileName(this, "Open Project",
+        "AcuteSim Projects (*.acu);;Schematic Files (*.sch);;All Files (*)",
+        [this](const DialogResult& r) {
+            if (r.clickedButton == DialogButton::Cancel || r.textValue.isEmpty()) return;
+            QString filePath = r.textValue;
+            if (welcomeWidget) {
+                welcomeWidget->addRecentProject(filePath, QFileInfo(filePath).baseName());
+            }
+            statusBar()->showMessage("Project loading not yet implemented: " + filePath, 3000);
+        });
 }
 
 void MainWindow::runSimulation() {
@@ -1522,12 +1523,13 @@ void MainWindow::setupCommandPalette() {
     cmd.category = "Layout";
     cmd.shortcut = "";
     cmd.callback = [this]() {
-        QString name = QInputDialog::getText(this, "Save Layout",
-            "Enter layout name:", QLineEdit::Normal, "My Layout");
-        if (!name.isEmpty()) {
-            acutesim::gui::core::LayoutManager::instance().saveLayoutAs(name, this);
-            statusBar()->showMessage("Layout saved: " + name, 3000);
-        }
+        using namespace acutesim::gui::widgets;
+        InlineDialog::getText(this, "Save Layout", "Enter layout name:", "My Layout",
+            [this](const DialogResult& r) {
+                if (r.clickedButton == DialogButton::Cancel || r.textValue.isEmpty()) return;
+                acutesim::gui::core::LayoutManager::instance().saveLayoutAs(r.textValue, this);
+                statusBar()->showMessage("Layout saved: " + r.textValue, 3000);
+            });
     };
     commandPalette_->registerCommand(cmd);
 
@@ -1607,6 +1609,7 @@ void MainWindow::setupCommandPalette() {
     cmd.category = "Layout";
     cmd.shortcut = "";
     cmd.callback = [this]() {
+        using namespace acutesim::gui::widgets;
         auto layouts = acutesim::gui::core::LayoutManager::instance().availableLayouts();
         QStringList userLayouts;
         QStringList userLayoutIds;
@@ -1620,20 +1623,23 @@ void MainWindow::setupCommandPalette() {
             statusBar()->showMessage("No user layouts to delete", 3000);
             return;
         }
-        bool ok;
-        QString name = QInputDialog::getItem(this, "Delete Layout",
-            "Select layout to delete:", userLayouts, 0, false, &ok);
-        if (ok && !name.isEmpty()) {
-            int idx = userLayouts.indexOf(name);
-            if (idx >= 0 && idx < userLayoutIds.size()) {
-                QString id = userLayoutIds.at(idx);
-                if (acutesim::gui::core::LayoutManager::instance().deleteLayout(id)) {
-                    statusBar()->showMessage("Layout deleted: " + name, 3000);
-                } else {
-                    statusBar()->showMessage("Failed to delete layout: " + name, 3000);
+        InlineDialog::getItem(this, "Delete Layout",
+            "Select layout to delete:", userLayouts, 0,
+            [this, userLayouts, userLayoutIds](const DialogResult& r) {
+                if (r.clickedButton == DialogButton::Cancel) return;
+                QString name = r.textValue;
+                if (!name.isEmpty()) {
+                    int idx = userLayouts.indexOf(name);
+                    if (idx >= 0 && idx < userLayoutIds.size()) {
+                        QString id = userLayoutIds.at(idx);
+                        if (acutesim::gui::core::LayoutManager::instance().deleteLayout(id)) {
+                            statusBar()->showMessage("Layout deleted: " + name, 3000);
+                        } else {
+                            statusBar()->showMessage("Failed to delete layout: " + name, 3000);
+                        }
+                    }
                 }
-            }
-        }
+            });
     };
     commandPalette_->registerCommand(cmd);
 
@@ -1802,8 +1808,10 @@ void MainWindow::showCommandPalette() {
 }
 
 void MainWindow::showKeybindingsDialog() {
-    acutesim::gui::widgets::KeybindingsDialog dialog(this);
-    dialog.exec();
+    using namespace acutesim::gui::widgets;
+    auto* widget = new KeybindingsDialog();
+    InlineDialog::showCustom(this, "Keyboard Shortcuts", widget,
+        DialogButton::Ok, nullptr);
 }
 
 void MainWindow::applyModernTabStyle(QTabWidget* tabWidget) {
@@ -1914,12 +1922,13 @@ void MainWindow::updateLayoutMenu() {
     layoutMenu_->addSeparator();
 
     layoutMenu_->addAction("Save Layout As...", this, [this]() {
-        QString name = QInputDialog::getText(this, "Save Layout",
-            "Enter layout name:", QLineEdit::Normal, "My Layout");
-        if (!name.isEmpty()) {
-            acutesim::gui::core::LayoutManager::instance().saveLayoutAs(name, this);
-            statusBar()->showMessage("Layout saved: " + name, 3000);
-        }
+        using namespace acutesim::gui::widgets;
+        InlineDialog::getText(this, "Save Layout", "Enter layout name:", "My Layout",
+            [this](const DialogResult& r) {
+                if (r.clickedButton == DialogButton::Cancel || r.textValue.isEmpty()) return;
+                acutesim::gui::core::LayoutManager::instance().saveLayoutAs(r.textValue, this);
+                statusBar()->showMessage("Layout saved: " + r.textValue, 3000);
+            });
     });
 
     layoutMenu_->addAction("Reset to Default", this, &MainWindow::resetLayout);

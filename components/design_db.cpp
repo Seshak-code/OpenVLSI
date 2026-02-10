@@ -147,16 +147,19 @@ void DesignDb::removeObserver(DesignDbObserver* obs) {
 // SNAPSHOT GENERATION (Paradigm Bridge)
 // ============================================================================
 
-TensorBlock DesignDb::snapshot() const {
-    TensorBlock block;
+DesignDb::SnapshotResult DesignDb::snapshotWithNodeMap() const {
+    SnapshotResult result;
+    result.block = std::make_shared<TensorBlock>();
+    TensorBlock& block = *result.block;
+    std::map<NetUUID, int>& netToNode = result.netToNode;
+
     // Uses a distinct name to ensure cache uniqueness
-    block.name = "DesignDb_Snapshot"; 
+    block.name = "DesignDb_Snapshot";
 
     // 1. Connectivity Mapping (Contextual Node IDs)
     // DesignDb NetUUID -> Solver int NodeIndex
-    std::map<NetUUID, int> netToNode;
     int nextNode = 1;
-    
+
     // Ensure "0", "GND", "gnd" map to 0
     std::vector<const Net*> sortedNets;
     for (const auto& kv : nets_) sortedNets.push_back(&kv.second);
@@ -171,7 +174,7 @@ TensorBlock DesignDb::snapshot() const {
             netToNode[net->id] = nextNode++;
         }
     }
-    
+
     block.numInternalNodes = nextNode - 1;
 
     // 2. Build Instance Connectivity Map (InstUUID -> Terminal -> NodeIndex)
@@ -179,7 +182,7 @@ TensorBlock DesignDb::snapshot() const {
     for (const auto& kv : pins_) {
         const Pin& pin = kv.second;
         auto it = netToNode.find(pin.netId);
-        int nodeIdx = (it != netToNode.end()) ? it->second : 0; 
+        int nodeIdx = (it != netToNode.end()) ? it->second : 0;
         instConn[pin.instanceId][pin.terminalIndex] = nodeIdx;
     }
 
@@ -188,7 +191,7 @@ TensorBlock DesignDb::snapshot() const {
         auto it = inst.parameters.find(key);
         return (it != inst.parameters.end()) ? it->second : def;
     };
-    
+
     // Helper to safely get string parameter
     auto getStrParam = [](const Instance& inst, const std::string& key, const std::string& def) {
         auto it = inst.stringParameters.find(key);
@@ -205,25 +208,37 @@ TensorBlock DesignDb::snapshot() const {
     for (const Instance* instPtr : sortedInsts) {
         const Instance& inst = *instPtr;
         const auto& nodes = instConn[inst.id];
-        
-        auto getN = [&](int t) { 
+
+        auto getN = [&](int t) {
             auto it = nodes.find(t);
             return (it != nodes.end()) ? it->second : 0;
         };
 
         std::string m = inst.masterName;
-        
+
         if (m == "R" || m == "res_generic" || m == "Resistor") {
             block.addResistor(inst.name, getN(0), getN(1), getParam(inst, "R", 1000.0));
-            if (!inst.stringParameters.empty()) {
-                // Populate model if present
+            if (!block.resistors.empty()) {
+                auto& r = block.resistors.back();
+                r.model_name = getStrParam(inst, "Model", "poly_res");
+                r.width_m = getParam(inst, "W", 0.0);
             }
         }
         else if (m == "C" || m == "cap_generic" || m == "Capacitor") {
             block.addCapacitor(inst.name, getN(0), getN(1), getParam(inst, "C", 1e-12));
+            if (!block.capacitors.empty()) {
+                auto& c = block.capacitors.back();
+                c.model_name = getStrParam(inst, "Model", "mim_cap");
+            }
         }
         else if (m == "L" || m == "ind_generic" || m == "Inductor") {
             block.addInductor(inst.name, getN(0), getN(1), getParam(inst, "L", 1e-9));
+            if (!block.inductors.empty()) {
+                auto& l = block.inductors.back();
+                l.model_name = getStrParam(inst, "Model", "ind_generic");
+                l.width_m = getParam(inst, "W", 0.0);
+                l.area_m2 = getParam(inst, "Area", 0.0);
+            }
         }
         else if (m == "V" || m == "vsource" || m == "vdc" || m == "VoltageSource") {
             block.addVoltageSource(getN(0), getN(1), getParam(inst, "V", 0.0), "DC");
@@ -235,9 +250,6 @@ TensorBlock DesignDb::snapshot() const {
             block.addDiode(getN(0), getN(1), getParam(inst, "Is", 1e-14));
         }
         else if (m == "nfet" || m == "nfet_01v8" || m == "Mosfet" || m == "PDK_NFET") {
-            // MOSFET D, G, S, B
-            // Default generic MOSFET to nfet if not specified, but visual component tells us.
-            // Check Model param?
             std::string model = getStrParam(inst, "Model", "nfet");
             block.addMosfet(inst.name, getN(0), getN(1), getN(2), getN(3),
                             model, getParam(inst, "W", 1e-6), getParam(inst, "L", 1e-6));
@@ -245,7 +257,7 @@ TensorBlock DesignDb::snapshot() const {
         else if (m == "pfet" || m == "pfet_01v8" || m == "PDK_PFET") {
             std::string model = getStrParam(inst, "Model", "pfet");
             block.addMosfet(inst.name, getN(0), getN(1), getN(2), getN(3),
-                            model, getParam(inst, "W", 1e-6), getParam(inst, "L", 1e-6));           
+                            model, getParam(inst, "W", 1e-6), getParam(inst, "L", 1e-6));
         }
         else if (m == "Bjt") {
              std::string model = getStrParam(inst, "Model", "2N2222");
@@ -256,9 +268,13 @@ TensorBlock DesignDb::snapshot() const {
         }
         // ... (Other dependent sources)
     }
-    
+
     block.freeze();
-    return block;
+    return result;
+}
+
+TensorBlock DesignDb::snapshot() const {
+    return *snapshotWithNodeMap().block;
 }
 
 } // namespace components
@@ -330,9 +346,15 @@ acutesim::components::HierarchicalSnapshot acutesim::components::DesignDb::recur
             const std::string& masterName = inst.masterName;
 
             // Skip common primitives (Optimization)
-            if (masterName == "R" || masterName == "C" || masterName == "L" || 
+            if (masterName == "R" || masterName == "C" || masterName == "L" ||
                 masterName == "V" || masterName == "I" || masterName == "Mosfet" ||
-                masterName == "Bjt" || masterName == "Diode") {
+                masterName == "Bjt" || masterName == "Diode" ||
+                masterName == "Resistor" || masterName == "Capacitor" || masterName == "Inductor" ||
+                masterName == "VoltageSource" || masterName == "CurrentSource" ||
+                masterName == "Pin" || masterName == "VCVS" || masterName == "VCCS" ||
+                masterName == "CCVS" || masterName == "CCCS" ||
+                masterName == "nfet" || masterName == "pfet" || masterName == "PDK_NFET" || masterName == "PDK_PFET" ||
+                masterName == "res_generic" || masterName == "cap_generic" || masterName == "ind_generic") {
                 continue;
             }
 

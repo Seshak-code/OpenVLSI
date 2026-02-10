@@ -70,7 +70,8 @@ void test_gui_pdk_extraction(SchematicEditor& editor) {
     // Verify NFET
     bool foundMos = false;
     for (const auto& m : netlist.globalBlock.mosfets) {
-        if (m.modelName == "nfet") { // Default for PDK_NFET unless overridden
+        // PDK_NFET defaults to "nfet_01v8" model unless overridden
+        if (m.modelName == "nfet_01v8" || m.modelName == "nfet") {
              // We configured w=10u, l=0.18u
              if (std::abs(m.w - 10e-6) < 1e-9 && std::abs(m.l - 0.18e-6) < 1e-9) {
                  foundMos = true;

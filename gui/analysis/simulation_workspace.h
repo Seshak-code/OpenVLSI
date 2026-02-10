@@ -14,8 +14,8 @@
 #include "simulation_explorer.h"
 #include "simulation_profile.h"
 #include "../core/sim_auto_detector.h"
-#include "simulation_worker.h" 
-
+#include "simulation_worker.h"
+#include "../../physics/statistical_engine.h"
 
 #include "../editors/schematic_editor.h"
 #include "../analysis/erc_engine.h"
@@ -96,6 +96,8 @@ public slots:
 signals:
     void startDCRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     void startTransientRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startACRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startNoiseRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
 
     
 private slots:
@@ -185,6 +187,9 @@ private:
     // Statistical Analysis
     void setupStatisticalDashboard();
     void runMonteCarlo();
+    void continueMonteCarloRun(int nRuns,
+        const std::map<std::string, Statistics::Distribution>& variations,
+        int targetNode, Statistics::SamplingStrategy strategy);
     void runSensitivity();
     StatisticalDashboard* statsDashboard_ = nullptr;
     std::vector<double> lastMonteCarloResults_;

@@ -9,18 +9,16 @@ The `physics/` directory contains the core numerical engine of CuteApp. It is de
 **Role**: The "Source of Truth". Contains pure, stateless C++ functions defining low-level device behavior.
 -   **Design**: Templated for `double` (fast scalar) and `Dual<double>` (Automatic Differentiation).
 -   **Key Concepts**:
-    -   **Exact vs. Clamped**: `diode_current_clamped` uses linear continuation to prevent numerical explosion during the solve phase.
+    -   **Unified Diode Model**: `diode_model_pair` unifies logic for discrete Diodes and BJT junctions, returning `{I, G}` pairs.
     
     ```cpp
     // physics/device_physics.h
     template <typename T, typename P>
+    inline std::pair<T, T> diode_model_pair(T vd, const DiodeParams<P>& p, double max_arg = 30.0);
+
+    // Legacy Helpers (Wrappers around diode_model_pair)
+    template <typename T, typename P>
     inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 30.0);
-
-    template <typename T, typename P>
-    inline T zener_current_clamped(T vd, const ZenerParams<P>& p);
-
-    template <typename T, typename P>
-    inline T jfet_ids_clamped(T vgs, T vds, const JFETParams<P>& p);
     ```
 
     -   **PNJLIM**: SPICE-style voltage limiting logic (`pnjlim`) to dampen Newton-Raphson oscillations.
@@ -36,20 +34,19 @@ The `physics/` directory contains the core numerical engine of CuteApp. It is de
     }
     ```
 
-### 2. Matrix Assembly (`stamps.h`)
+### 2. Matrix Assembly (`circuitsim.h` Stampers)
 **Role**: The "Mapper". Translates physical quantities (Current, Conductance) into Linear Algebra terms (Matrix entries, RHS vector).
--   **Pattern**: MNA (Modified Nodal Analysis) stamping.
--   **Voltage Sources**: Implemented as "Norton Equivalents" to minimize matrix fill-in.
+-   **Pattern**: MNA (Modified Nodal Analysis) stamping via specialized helpers.
+-   **Design**: Reusable stamper functions (`stampResistor`, `stampDiode`, `stampBJT`) encapsulate the physics mapping, allowing the main solver loop to remain clean and extensible.
     
     ```cpp
-    // physics/stamps.h
-    inline void stampVoltageSourceAsNorton(...) {
-        double g_int = 1.0 / 1e-3; // High conductance
-        double i_eq = voltage * g_int;
-        
-        // Pure Nodal formulation avoids extra rows for voltage sources
-        matrixBuilder.add(nodePos - 1, nodePos - 1, g_int);
-        rhsVector[nodePos - 1] += i_eq;
+    // physics/circuitsim.h
+    inline void stampResistor(...) {
+        double g = 1.0 / r_val;
+        matrixBuilder.add(n1, n1, g);
+        matrixBuilder.add(n2, n2, g);
+        matrixBuilder.add(n1, n2, -g);
+        matrixBuilder.add(n2, n1, -g);
     }
     ```
 

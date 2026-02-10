@@ -2,7 +2,7 @@
 #include "gui/editors/schematic_editor.h"
 #include "gui/editors/code_editor.h"
 #include <QFileInfo>
-#include <QMessageBox>
+#include "gui/widgets/inline_dialog.h"
 #include <QDebug>
 #include "icon_provider.h"
 
@@ -61,22 +61,27 @@ IEditor* EditorManager::createEditorForFile(const QString& path, const QString& 
 void EditorManager::closeEditor(int index) {
     QWidget* widget = tabWidget_->widget(index);
     IEditor* editor = getEditor(index);
-    
+
     if (editor && editor->isDirty()) {
-        auto reply = QMessageBox::question(
-            tabWidget_, 
-            "Unsaved Changes", 
+        using namespace acutesim::gui::widgets;
+        InlineDialog::question(tabWidget_, "Unsaved Changes",
             QString("Save changes to %1 before closing?").arg(editor->title()),
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel
-        );
-        
-        if (reply == QMessageBox::Cancel) return;
-        if (reply == QMessageBox::Save) saveCurrent(); // Needs impl
+            DialogButton::Save | DialogButton::Discard | DialogButton::Cancel,
+            [this, index, widget](const DialogResult& r) {
+                if (r.clickedButton == DialogButton::Cancel) return;
+                if (r.clickedButton == DialogButton::Save) saveCurrent();
+                doCloseEditor(index, widget);
+            });
+        return;
     }
-    
+
+    doCloseEditor(index, widget);
+}
+
+void EditorManager::doCloseEditor(int index, QWidget* widget) {
     tabWidget_->removeTab(index);
     editorMap_.remove(widget);
-    delete widget; // Destroys editor
+    delete widget;
 }
 
 void EditorManager::closeAll() {

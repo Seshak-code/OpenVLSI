@@ -448,8 +448,17 @@ QRectF VisualComponent::boundingRect() const {
         return QRectF(-width/2.0, -height/2.0, width, height);
     }
     if (type == ComponentType::SubCircuit) {
-        // Dynamic size based on pin count? For now fixed large box
-        return QRectF(-60, -80, 120, 160);
+        // Size accounts for body (-40,-40,80,80) + terminal stubs extending beyond
+        // Terminals can be at x=-60 or x=60 (left/right) or y=-80/+80 (top/bottom)
+        QRectF rect(-40, -40, 80, 80);
+        auto terms = getTerminals();
+        for (const auto& t : terms) {
+            if (t.x() < rect.left())   rect.setLeft(t.x() - 5);
+            if (t.x() > rect.right())  rect.setRight(t.x() + 5);
+            if (t.y() < rect.top())    rect.setTop(t.y() - 5);
+            if (t.y() > rect.bottom()) rect.setBottom(t.y() + 5);
+        }
+        return rect.adjusted(-3, -3, 3, 3); // Small margin for dots/labels
     }
     return QRectF(-50, -50, 100, 100);
 }
@@ -862,20 +871,53 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
              break;
 
         case ComponentType::SubCircuit: {
-        // Draw a generic box
-        QString displayText = subCircuitName.isEmpty() ? "SUB" : subCircuitName;
+        const auto* def = StandardCells::StandardCellLibrary::instance().get(subCircuitName.toStdString());
         QRectF rect(-40, -40, 80, 80);
+
+        // Body
         painter->drawRect(rect);
+        QString displayText = subCircuitName.isEmpty() ? "SUB" : subCircuitName;
         painter->drawText(rect, Qt::AlignCenter, displayText);
-        
-        // Pin visualization (simple dots)
-        if (StandardCells::StandardCellLibrary::instance().contains(subCircuitName.toStdString())) {
-            const auto* def = StandardCells::StandardCellLibrary::instance().get(subCircuitName.toStdString());
-            if (def) {
-               auto terms = getTerminals(); // Use consistency
-               for(const auto& t : terms) {
-                   painter->drawEllipse(t, 2, 2);
-               }
+
+        // Wire stubs from each terminal to nearest body edge, with pin labels
+        auto terms = getTerminals();
+        for (int i = 0; i < terms.size(); ++i) {
+            QPointF t = terms[i];
+
+            // Connection dot
+            painter->setBrush(Qt::white);
+            painter->drawEllipse(t, 3, 3);
+
+            // Compute nearest body edge point
+            QPointF edge = t;
+            if (t.x() <= rect.left())        edge = QPointF(rect.left(), t.y());
+            else if (t.x() >= rect.right())  edge = QPointF(rect.right(), t.y());
+            else if (t.y() <= rect.top())    edge = QPointF(t.x(), rect.top());
+            else if (t.y() >= rect.bottom()) edge = QPointF(t.x(), rect.bottom());
+
+            // Wire stub line
+            if (edge != t) painter->drawLine(t, edge);
+
+            // Pin label (from standard cell definition)
+            if (def && i < (int)def->pinNames.size()) {
+                QString label = QString::fromStdString(def->pinNames[i]);
+                QFont labelFont = painter->font();
+                labelFont.setPointSize(7);
+                painter->setFont(labelFont);
+
+                if (t.x() <= rect.left()) {
+                    painter->drawText(QRectF(rect.left() + 3, t.y() - 8, 35, 16),
+                                      Qt::AlignLeft | Qt::AlignVCenter, label);
+                } else if (t.x() >= rect.right()) {
+                    painter->drawText(QRectF(rect.right() - 38, t.y() - 8, 35, 16),
+                                      Qt::AlignRight | Qt::AlignVCenter, label);
+                } else if (t.y() <= rect.top()) {
+                    painter->drawText(QRectF(t.x() - 18, rect.top() + 2, 36, 14),
+                                      Qt::AlignCenter, label);
+                } else if (t.y() >= rect.bottom()) {
+                    painter->drawText(QRectF(t.x() - 18, rect.bottom() - 16, 36, 14),
+                                      Qt::AlignCenter, label);
+                }
             }
         }
         break;

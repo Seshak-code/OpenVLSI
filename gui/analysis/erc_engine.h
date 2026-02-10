@@ -40,8 +40,11 @@ enum class ViolationType {
     // Solver Violations (Dynamic)
     SOLVER_SINGULAR_MATRIX,  // LU decomposition failed (rank deficiency)
     SOLVER_DIVERGENCE,       // Newton-Raphson failed to converge
-    SOLVER_TIMEOUT,           // Simulation exceeded iteration/time limit
-    
+    SOLVER_TIMEOUT,          // Simulation exceeded iteration/time limit
+    SOLVER_LIMIT_CYCLE,      // NR oscillating between states
+    SOLVER_SLOW_CONVERGENCE, // NR converging but too slowly
+    SOLVER_EXPONENTIAL_OVERFLOW, // Device exponential overflow (voltage step > 100V)
+
     // Power Domain Violations
     CROSS_DOMAIN_SIGNAL      // Signal crosses power domains without level shifter
 };
@@ -64,6 +67,9 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::MULTIPLE_DRIVERS:
         case ViolationType::OPEN_DRAIN:
         case ViolationType::SOLVER_TIMEOUT:
+        case ViolationType::SOLVER_LIMIT_CYCLE:
+        case ViolationType::SOLVER_SLOW_CONVERGENCE:
+        case ViolationType::SOLVER_EXPONENTIAL_OVERFLOW:
         case ViolationType::CROSS_DOMAIN_SIGNAL:
             return Severity::WARNING;
         case ViolationType::NEAR_MISS:
@@ -85,6 +91,9 @@ inline QString typeToString(ViolationType type) {
         case ViolationType::SOLVER_SINGULAR_MATRIX: return "Singular Matrix (Solver)";
         case ViolationType::SOLVER_DIVERGENCE: return "Divergence (Solver)";
         case ViolationType::SOLVER_TIMEOUT: return "Timeout (Solver)";
+        case ViolationType::SOLVER_LIMIT_CYCLE: return "Limit Cycle (Solver)";
+        case ViolationType::SOLVER_SLOW_CONVERGENCE: return "Slow Convergence (Solver)";
+        case ViolationType::SOLVER_EXPONENTIAL_OVERFLOW: return "Exponential Overflow (Solver)";
         case ViolationType::CROSS_DOMAIN_SIGNAL: return "Cross-Domain Signal";
         default: return "Unknown";
     }

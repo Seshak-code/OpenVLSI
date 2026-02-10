@@ -484,7 +484,12 @@ struct Mosfet {
         int nf = 1;      // Number of fingers
         int mult = 1;    // Multiplier
     } extra;
-    
+
+    // Noise Parameters
+    double KF = 0.0;     // Flicker noise coefficient
+    double AF = 1.0;     // Flicker noise exponent
+    double C_ox = 0.0;   // Gate oxide capacitance [F/m^2]
+
     double temperature_K = 300.15;
 };
 
@@ -503,7 +508,12 @@ struct BJT {
     double betaR = 1.0;                         // Reverse Beta
     double saturationCurrent_I_S_A = 1e-14;       // Is [A]
     double thermalVoltage_V_T_V = 0.02585;          // Vt [V]
-    
+
+    // Noise Parameters
+    double r_bb = 0.0;   // Base spreading resistance [Ohm]
+    double KF = 0.0;     // Flicker noise coefficient
+    double AF = 1.0;     // Flicker noise exponent
+
     double temperature_K = 300.15;
 };
 
@@ -575,7 +585,8 @@ struct Probe {
 struct TensorBlock {
     std::string name;
     int numInternalNodes = 0;
-    std::vector<std::string> pinNames; // Metadata for Verilog-A port naming
+    std::vector<std::string> pinNames;      // Metadata for Verilog-A port naming
+    std::vector<int> portNodeIndices;         // Pin index -> internal node index (for subcircuit blocks)
     
     // Passive Components
     std::vector<Resistor> resistors;

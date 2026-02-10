@@ -1,7 +1,7 @@
 #include <QTest>
 #include <QSignalSpy>
-#include <QTextEdit>
-#include <QLineEdit>
+#include <QTextBrowser>
+#include <QPlainTextEdit>
 #include "../gui/panels/ai_assistant_panel.h"
 #include "../gui/editors/schematic_editor.h"
 #include "../ai_api/system/schema_api.h"
@@ -19,48 +19,40 @@ private slots:
     void testValidateCommand() {
         // 1. Setup Mock Editor
         SchematicEditor editor("test.sch");
-        // setMode() removed - unified component library
 
-        // Add a simple circuit (Probe In + Resistor + Probe Out)
+        // Add a simple circuit — spread components to avoid collision
         editor.placeComponent("Probe", 0, 0, "PinIn", R"({"value": "Vin"})");
-        editor.placeComponent("Resistor", 50, 0, "R1", R"({"value": "1k"})");
-        editor.placeComponent("Probe", 100, 0, "PinOut", R"({"value": "Vout"})");
+        editor.placeComponent("Resistor", 200, 0, "R1", R"({"value": "1k"})");
+        editor.placeComponent("Probe", 400, 0, "PinOut", R"({"value": "Vout"})");
+        editor.placeComponent("Ground", 200, 200, "GND0", R"({})");
 
-        // 2. Setup Assistant Panel
-        AiAssistantPanel panel(&editor);
+        // 2. Setup Assistant Panel and connect editor
+        AiAssistantPanel panel;
+        panel.setEditor(&editor);
 
-        // Access private members via findChild or by checking side effects?
-        // Easier to check output in the QTextEdit if we can access it.
-        // AiAssistantPanel has `chatHistory` as a member.
-        // We will fallback to "findChild" approach since members are private
-        QTextEdit* history = panel.findChild<QTextEdit*>();
+        // Access chat history — panel uses QTextBrowser
+        QTextBrowser* history = panel.findChild<QTextBrowser*>();
         QVERIFY(history != nullptr);
 
-        // 3. Execute "/validate" (Auto mode)
-        // We can call processCommand via invoking the slot or direct call if public.
-        // It's private/protected usually.
-        // BUT `onSendMessage` is a slot triggered by the button.
-        // We can simulate input.
-
-        QLineEdit* input = panel.findChild<QLineEdit*>();
+        // 3. Execute "/validate" — find input by objectName to avoid ambiguity
+        QPlainTextEdit* input = panel.findChild<QPlainTextEdit*>("copilot_input");
         QVERIFY(input != nullptr);
 
         // Test: Validation runs without mode restrictions
-        input->setText("/validate");
-        QMetaObject::invokeMethod(&panel, "onSendMessage");
-        
-        // Since validateComponent is synchronous in our mock implementation (see schema_api.cpp),
-        // we should see results immediately.
+        input->setPlainText("/validate");
+        QMetaObject::invokeMethod(&panel, "onSendClicked");
+
+        // Since validation is synchronous, results should appear immediately.
         QString log = history->toPlainText();
         qDebug() << "Log:" << log;
-        
-        // We expect "Running validation..." and "Validation Passed" (since our mock AutoValidator returns pass=true)
+
+        // We expect "Running validation" and "Validation Passed"
         QVERIFY(log.contains("Running validation"));
         QVERIFY(log.contains("Validation Passed"));
-        
+
         // Test C: Custom JSON
-        input->setText("/validate {\"stimuli\": []}");
-        QMetaObject::invokeMethod(&panel, "onSendMessage");
+        input->setPlainText("/validate {\"stimuli\": []}");
+        QMetaObject::invokeMethod(&panel, "onSendClicked");
         log = history->toPlainText();
         QVERIFY(log.contains("Validation Passed"));
     }

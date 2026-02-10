@@ -1,6 +1,6 @@
 #include "schematic_editor.h"
 #include "component_wizard.h"
-#include "../widgets/compliance_report_dialog.h"
+#include "../widgets/compliance_report_widget.h"
 #include "../widgets/breadcrumb_widget.h"
 #include "../../components/pdk_compliance.h"
 #include "../../ai_api/system/crash_report.h"
@@ -22,7 +22,7 @@
 #include "../../components/design_db.h"
 #include "../components/standard_cell_visualizer.h" // Phase 14: Visualizer
 #include <QFileInfo>
-#include <QMessageBox>
+#include "../widgets/inline_dialog.h"
 #include <QMenu>
 #include <QAction>
 #include <QDateTime>
@@ -1286,8 +1286,16 @@ TensorNetlist GridScene::generateNetlist() {
 
              // Ensure Instance Exists
              if (c->dbId == InstUUID()) {
-                  c->dbId = designDb.createInstance(componentTypeToString(c->type).toStdString(), 
-                                                    c->name.toStdString());
+                  // Use actual subcircuit/source identifier for hierarchical components
+                  std::string masterName;
+                  if (c->type == ComponentType::ICPackage && !c->sourceFilePath.isEmpty()) {
+                      masterName = c->sourceFilePath.toStdString();
+                  } else if (c->type == ComponentType::SubCircuit && !c->subCircuitName.isEmpty()) {
+                      masterName = c->subCircuitName.toStdString();
+                  } else {
+                      masterName = componentTypeToString(c->type).toStdString();
+                  }
+                  c->dbId = designDb.createInstance(masterName, c->name.toStdString());
              }
              
              // Sync Parameters
@@ -1296,7 +1304,12 @@ TensorNetlist GridScene::generateNetlist() {
              std::string mainKey = "val";
              if (c->type == ComponentType::Resistor) { mainKey = "R"; designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "poly_res").toStdString()); }
              else if (c->type == ComponentType::Capacitor) { mainKey = "C"; designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "mim_cap").toStdString()); }
-             else if (c->type == ComponentType::Inductor) { mainKey = "L"; designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "spiral_ind").toStdString()); }
+             else if (c->type == ComponentType::Inductor) {
+                 mainKey = "L";
+                 designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "spiral_ind").toStdString());
+                 if (c->params.contains("W")) designDb.setParam(c->dbId, "W", parseValue(c->params.value("W", "0")));
+                 if (c->params.contains("Area")) designDb.setParam(c->dbId, "Area", parseValue(c->params.value("Area", "0")));
+             }
              else if (c->type == ComponentType::VoltageSource) mainKey = "V";
              else if (c->type == ComponentType::CurrentSource) mainKey = "I";
              else if (c->type == ComponentType::Diode) mainKey = "Is";
@@ -1389,17 +1402,45 @@ TensorNetlist GridScene::generateNetlist() {
         if (result.source == acutesim::gui::core::ResolvedSubcircuit::Source::FileSystem) {
             // Headless Scene for nested netlisting
             GridScene subScene(GridScene::Mode::Headless);
-            subScene.setFilePath(result.filePath); 
-            
+            subScene.setFilePath(result.filePath);
+
             // Load the sub-circuit from its JSON source
             QFile file(result.filePath);
             if (file.open(QIODevice::ReadOnly)) {
                 QJsonObject state = QJsonDocument::fromJson(file.readAll()).object();
                 subScene.loadState(state);
-                
+
                 // RECURSIVE CALL via generateNetlist on the sub-scene
                 TensorNetlist subNet = subScene.generateNetlist();
-                return std::make_shared<TensorBlock>(subNet.globalBlock);
+                auto block = std::make_shared<TensorBlock>(subNet.globalBlock);
+
+                // Extract pin port interface from child's Pin components
+                auto snapResult = subScene.getDesignDb().snapshotWithNodeMap();
+                for (auto* subItem : subScene.items()) {
+                    if (auto* sc = dynamic_cast<VisualComponent*>(subItem)) {
+                        if (sc->type == ComponentType::Pin && !sc->name.isEmpty()) {
+                            block->pinNames.push_back(sc->name.toStdString());
+                            // Find the node index for this pin's net
+                            QVector<QPointF> terms = sc->getTerminals();
+                            if (!terms.isEmpty()) {
+                                // Look up the net this pin connects to in the sub-scene's designDb
+                                // The pin's net was created during generateNetlist() and is in the sub's designDb
+                                int nodeIdx = 0; // Default to ground
+                                // Search for a net named after this pin
+                                for (const auto& [netId, netNode] : snapResult.netToNode) {
+                                    const auto* net = subScene.getDesignDb().getNet(netId);
+                                    if (net && net->name == sc->name.toStdString()) {
+                                        nodeIdx = netNode;
+                                        break;
+                                    }
+                                }
+                                block->portNodeIndices.push_back(nodeIdx);
+                            }
+                        }
+                    }
+                }
+
+                return block;
             }
         }
         
@@ -1409,14 +1450,117 @@ TensorNetlist GridScene::generateNetlist() {
     };
 
     HierarchicalSnapshot snapshot = designDb.recursiveSnapshot(resolver);
-    
+
+    // Get the netToNode mapping for building BlockInstance nodeMapping
+    auto topSnap = designDb.snapshotWithNodeMap();
+
     // 4. Wrap and resolve Probes
     TensorNetlist netlist;
     if (snapshot.topBlock) {
         netlist.globalBlock = *snapshot.topBlock;
     }
-    netlist.subBlocks = snapshot.subBlocks; // Register definitions for instantiation
-    
+    netlist.subBlocks = snapshot.subBlocks;
+
+    // 4a. Register resolved subBlocks as blockDefinitions and create BlockInstance entries
+    for (const auto& [blockName, block] : snapshot.subBlocks) {
+        if (block) {
+            netlist.defineBlock(*block);
+        }
+    }
+
+    // 4b. Create BlockInstance for each SubCircuit/ICPackage
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->type != ComponentType::SubCircuit && c->type != ComponentType::ICPackage)
+                continue;
+
+            // Determine masterName (same logic as Phase 1)
+            std::string masterName;
+            if (c->type == ComponentType::ICPackage && !c->sourceFilePath.isEmpty()) {
+                masterName = c->sourceFilePath.toStdString();
+            } else if (c->type == ComponentType::SubCircuit && !c->subCircuitName.isEmpty()) {
+                masterName = c->subCircuitName.toStdString();
+            } else {
+                continue; // No valid master - skip
+            }
+
+            // Check if this block was resolved
+            auto defIt = netlist.blockDefinitions.find(masterName);
+            if (defIt == netlist.blockDefinitions.end()) continue;
+
+            const TensorBlock& blockDef = defIt->second;
+
+            // Build nodeMapping: for each terminal of the visual component,
+            // map the block's port node index to the parent's global node index
+            QVector<QPointF> terms = c->getTerminals();
+            int mapSize = std::max((int)blockDef.portNodeIndices.size(),
+                                   blockDef.numInternalNodes + 1);
+            std::vector<int> nodeMapping(mapSize, 0);
+
+            // Map port pins to parent global nodes
+            int numPorts = std::min((int)blockDef.portNodeIndices.size(), (int)terms.size());
+            for (int i = 0; i < numPorts; ++i) {
+                QPointF scenePos = c->mapToScene(terms[i]);
+                int spatialId = findSet(getNetID(scenePos));
+                NetUUID netId = spatialToDbNet.value(spatialId, NetUUID());
+                int globalNode = 0; // default ground
+                if (netId != NetUUID()) {
+                    auto nodeIt = topSnap.netToNode.find(netId);
+                    if (nodeIt != topSnap.netToNode.end()) {
+                        globalNode = nodeIt->second;
+                    }
+                }
+                int localNode = blockDef.portNodeIndices[i];
+                if (localNode >= 0 && localNode < mapSize) {
+                    nodeMapping[localNode] = globalNode;
+                }
+            }
+
+            netlist.addInstance(masterName, nodeMapping);
+            emit messageLogged(QString("DEBUG: Created BlockInstance for '%1' (%2) with %3 port mappings")
+                .arg(c->name).arg(QString::fromStdString(masterName)).arg(numPorts));
+        }
+    }
+
+    // 4c. Floating pin validation for hierarchical components
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if (c->type != ComponentType::SubCircuit && c->type != ComponentType::ICPackage)
+                continue;
+
+            QVector<QPointF> terms = c->getTerminals();
+            QStringList floatingPins;
+            for (int i = 0; i < terms.size(); ++i) {
+                QPointF scenePos = c->mapToScene(terms[i]);
+                int spatialId = findSet(getNetID(scenePos));
+                // A pin is "floating" if no wire connects to the same net
+                // Check if any wire endpoint shares this net
+                bool connected = false;
+                for (auto* wItem : allItems) {
+                    if (auto* w = dynamic_cast<VisualWire*>(wItem)) {
+                        if (!w->isVisible()) continue;
+                        QLineF line = w->line();
+                        QPointF sp1 = w->mapToScene(line.p1());
+                        QPointF sp2 = w->mapToScene(line.p2());
+                        int wNet1 = findSet(getNetID(sp1));
+                        int wNet2 = findSet(getNetID(sp2));
+                        if (wNet1 == spatialId || wNet2 == spatialId) {
+                            connected = true;
+                            break;
+                        }
+                    }
+                }
+                if (!connected) {
+                    floatingPins.append(QString("pin%1").arg(i));
+                }
+            }
+            if (!floatingPins.isEmpty()) {
+                emit messageLogged(QString("WARNING: %1 has %2 floating pin(s): %3")
+                    .arg(c->name).arg(floatingPins.size()).arg(floatingPins.join(", ")));
+            }
+        }
+    }
+
     // Late-bind Probes to unique TensorNetlist nodes
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
@@ -1445,7 +1589,59 @@ TensorNetlist GridScene::generateNetlist() {
         }
     }
 
-    netlist.globalState.initialize(netlist.globalBlock); 
+    // 5. Wire Segment Extraction (Phase 1.5: Parasitic-Aware)
+    // Convert VisualWires into WireSegments for parasitic extraction
+    constexpr double PIXEL_TO_UM = 0.1; // 1 pixel = 0.1 um
+    constexpr double PARASITIC_R_PER_UM = 0.1; // Default sheet resistance
+    constexpr double PARASITIC_LENGTH_THRESHOLD = 15.0; // um, inject R_WIRE above this
+    int wireSegIdx = 0;
+    for (auto* item : allItems) {
+        if (auto* w = dynamic_cast<VisualWire*>(item)) {
+            if (!w->isVisible()) continue;
+            QLineF line = w->line();
+            QPointF sp1 = w->mapToScene(line.p1());
+            QPointF sp2 = w->mapToScene(line.p2());
+
+            double lengthPx = line.length();
+            double lengthUm = lengthPx * PIXEL_TO_UM;
+
+            // Look up node indices for endpoints
+            int spatialId1 = findSet(getNetID(sp1));
+            int spatialId2 = findSet(getNetID(sp2));
+            int n1 = 0, n2 = 0;
+            {
+                NetUUID nid1 = spatialToDbNet.value(spatialId1, NetUUID());
+                NetUUID nid2 = spatialToDbNet.value(spatialId2, NetUUID());
+                auto it1 = topSnap.netToNode.find(nid1);
+                auto it2 = topSnap.netToNode.find(nid2);
+                if (it1 != topSnap.netToNode.end()) n1 = it1->second;
+                if (it2 != topSnap.netToNode.end()) n2 = it2->second;
+            }
+
+            TensorBlock::WireSegment seg;
+            seg.layer = w->layer.toStdString();
+            seg.node1 = n1;
+            seg.node2 = n2;
+            seg.width_um = w->width_um;
+            seg.length_um = lengthUm;
+            seg.r_per_um = PARASITIC_R_PER_UM;
+            netlist.globalBlock.wireSegments.push_back(seg);
+
+            // Inject parasitic resistor for long wires
+            if (lengthUm > PARASITIC_LENGTH_THRESHOLD) {
+                double R = lengthUm * PARASITIC_R_PER_UM;
+                TensorBlock::ParasiticResistor pr;
+                pr.name = "R_WIRE_" + std::to_string(wireSegIdx);
+                pr.node1 = n1;
+                pr.node2 = n2;
+                pr.R = R;
+                netlist.globalBlock.parasiticResistors.push_back(pr);
+            }
+            ++wireSegIdx;
+        }
+    }
+
+    netlist.globalState.initialize(netlist.globalBlock);
     return netlist;
 }
 // ============================================================================
@@ -1547,8 +1743,9 @@ QWidget* SchematicEditor::createRibbon() {
     );
     connect(auditBtn, &QPushButton::clicked, this, [this](){
         ComplianceReport report = PDKComplianceChecker::checkCompliance(scene);
-        ComplianceReportDialog dlg(report, this);
-        dlg.exec();
+        auto* widget = new ComplianceReportWidget(report);
+        acutesim::gui::widgets::InlineDialog::showCustom(this, "PDK Compliance Audit Report", widget,
+            acutesim::gui::widgets::DialogButton::Ok, nullptr);
     });
     layout->addWidget(auditBtn);
 
@@ -1992,13 +2189,13 @@ void SchematicEditor::createSubcircuitFromSelection() {
     // Scaffold for Phase 2.3
     QList<QGraphicsItem*> selected = scene->selectedItems();
     if (selected.isEmpty()) {
-        QMessageBox::information(this, "Encapsulate", "Please select components to encapsulate.");
+        acutesim::gui::widgets::InlineDialog::information(this, "Encapsulate", "Please select components to encapsulate.");
         return;
     }
-    
+
     // For now, just log intent
     qDebug() << "Encapsulate requested for" << selected.size() << "items.";
-    QMessageBox::information(this, "Encapsulate", "Subcircuit functionality coming in Phase 2.3!");
+    acutesim::gui::widgets::InlineDialog::information(this, "Encapsulate", "Subcircuit functionality coming in Phase 2.3!");
 }
 
 QPointF SchematicEditor::findClearSpace(QPointF idealPos, QSizeF size, int searchRadius) const {
@@ -2286,82 +2483,71 @@ void SchematicEditor::initializeHierarchy() {
 void SchematicEditor::descendInto(const QString& filePath, const QString& instanceName) {
     if (!hierarchyPath_) return;
 
-    // Check for dirty state - prompt user
     if (modified_) {
-        int result = QMessageBox::question(this, "Unsaved Changes",
-            "You have unsaved changes. Save before navigating to subcircuit?",
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-            QMessageBox::Save);
-
-        if (result == QMessageBox::Cancel) {
-            return;
-        }
-        if (result == QMessageBox::Save) {
-            if (!saveToFile(filePath_)) {
-                QMessageBox::warning(this, "Save Failed",
-                    "Could not save the current schematic.");
-                return;
-            }
-        }
-        // Discard: continue without saving
+        using namespace acutesim::gui::widgets;
+        InlineDialog::question(this, "Unsaved Changes",
+            "Save before navigating to subcircuit?",
+            DialogButton::Save | DialogButton::Discard | DialogButton::Cancel,
+            [this, filePath, instanceName](const DialogResult& r) {
+                if (r.clickedButton == DialogButton::Cancel) return;
+                if (r.clickedButton == DialogButton::Save) {
+                    if (!saveToFile(filePath_)) {
+                        InlineDialog::warning(this, "Save Failed", "Could not save the current schematic.");
+                        return;
+                    }
+                }
+                continueDescendInto(filePath, instanceName);
+            });
+        return;
     }
+    continueDescendInto(filePath, instanceName);
+}
 
-    // Save current editor state
+void SchematicEditor::continueDescendInto(const QString& filePath, const QString& instanceName) {
+    using namespace acutesim::gui::widgets;
+
     saveCurrentState();
 
-    // Get current viewport state for restoration
     QPointF viewportCenter = view->mapToScene(view->viewport()->rect().center());
     qreal zoomLevel = view->transform().m11();
 
-    // Push new level onto hierarchy
     QString displayName = instanceName.isEmpty() ? QFileInfo(filePath).baseName() : instanceName;
     hierarchyPath_->descendInto(filePath, instanceName, displayName, viewportCenter, zoomLevel);
 
-    // Load the subcircuit schematic
     bool loadSuccess = false;
-    
-    // Check for "std://" prefix (Standard Cell Library)
+
     if (filePath.startsWith("std://")) {
-        QString cellName = filePath.mid(6); // Remove prefix
+        QString cellName = filePath.mid(6);
         const auto* def = StandardCells::StandardCellLibrary::instance().get(cellName.toStdString());
-        
+
         if (def) {
-            // Generate visual representation on the fly
             acutesim::gui::components::StandardCellVisualizer::populateScene(scene, def->internalBlock, QString::fromStdString(def->name));
             loadSuccess = true;
-            
-            // Mark as Read-Only (Safety)
             if (statusLabel) {
                  statusLabel->setText(QString("Viewing: %1 [READ-ONLY]").arg(displayName));
             }
         } else {
-             QMessageBox::warning(this, "Error", QString("Could not find standard cell definition: %1").arg(cellName));
+             InlineDialog::warning(this, "Error", QString("Could not find standard cell definition: %1").arg(cellName));
         }
     } else {
-        // Standard File Loading
         loadSuccess = loadFromFile(filePath);
     }
 
     if (!loadSuccess) {
-        // Rollback on failure
         hierarchyPath_->ascend();
         if (!stateStack_.isEmpty()) {
             restoreState(stateStack_.last());
             stateStack_.removeLast();
         }
-        QMessageBox::warning(this, "Navigation Failed",
+        InlineDialog::warning(this, "Navigation Failed",
             QString("Could not load subcircuit: %1").arg(filePath));
         return;
     }
 
-    // Reset modified state for new schematic
     modified_ = false;
-
-    // Center the view
     view->centerOn(0, 0);
     view->resetTransform();
 
-    // Update status
     if (statusLabel) {
         statusLabel->setText(QString("Viewing: %1").arg(displayName));
     }
@@ -2374,50 +2560,46 @@ void SchematicEditor::ascend() {
         return;
     }
 
-    // Check for dirty state
     if (modified_) {
-        int result = QMessageBox::question(this, "Unsaved Changes",
-            "You have unsaved changes. Save before navigating up?",
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-            QMessageBox::Save);
-
-        if (result == QMessageBox::Cancel) {
-            return;
-        }
-        if (result == QMessageBox::Save) {
-            if (!saveToFile(filePath_)) {
-                QMessageBox::warning(this, "Save Failed",
-                    "Could not save the current schematic.");
-                return;
-            }
-        }
+        using namespace acutesim::gui::widgets;
+        InlineDialog::question(this, "Unsaved Changes",
+            "Save before navigating up?",
+            DialogButton::Save | DialogButton::Discard | DialogButton::Cancel,
+            [this](const DialogResult& r) {
+                if (r.clickedButton == DialogButton::Cancel) return;
+                if (r.clickedButton == DialogButton::Save) {
+                    if (!saveToFile(filePath_)) {
+                        InlineDialog::warning(this, "Save Failed", "Could not save the current schematic.");
+                        return;
+                    }
+                }
+                continueAscend();
+            });
+        return;
     }
+    continueAscend();
+}
 
-    // Ascend in hierarchy
+void SchematicEditor::continueAscend() {
     auto parentLevel = hierarchyPath_->ascend();
     if (!parentLevel.has_value()) {
         return;
     }
 
-    // Restore parent state
     if (!stateStack_.isEmpty()) {
         EditorState state = stateStack_.last();
         stateStack_.removeLast();
         restoreState(state);
     } else {
-        // Fallback: just load the file
         loadFromFile(parentLevel->filePath);
     }
 
-    // Restore viewport
     view->centerOn(parentLevel->viewportCenter);
     view->resetTransform();
     view->scale(parentLevel->zoomLevel, parentLevel->zoomLevel);
 
-    // Update file path
     filePath_ = parentLevel->filePath;
 
-    // Update status
     if (statusLabel) {
         statusLabel->setText(QString("Viewing: %1").arg(parentLevel->displayName));
     }
@@ -2430,54 +2612,49 @@ void SchematicEditor::navigateToDepth(int depth) {
 
     int currentDepth = hierarchyPath_->depth();
     if (depth == currentDepth) {
-        return;  // Already there
-    }
-
-    if (depth > currentDepth) {
-        // Cannot navigate forward without a path
         return;
     }
 
-    // Navigate up to target depth
-    while (hierarchyPath_->depth() > depth) {
-        // Check dirty state only once at the start
-        if (hierarchyPath_->depth() == currentDepth && modified_) {
-            int result = QMessageBox::question(this, "Unsaved Changes",
-                "You have unsaved changes. Save before navigating?",
-                QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-                QMessageBox::Save);
+    if (depth > currentDepth) {
+        return;
+    }
 
-            if (result == QMessageBox::Cancel) {
-                return;
-            }
-            if (result == QMessageBox::Save) {
-                if (!saveToFile(filePath_)) {
-                    return;
+    if (modified_) {
+        using namespace acutesim::gui::widgets;
+        InlineDialog::question(this, "Unsaved Changes",
+            "Save before navigating?",
+            DialogButton::Save | DialogButton::Discard | DialogButton::Cancel,
+            [this, depth](const DialogResult& r) {
+                if (r.clickedButton == DialogButton::Cancel) return;
+                if (r.clickedButton == DialogButton::Save) {
+                    if (!saveToFile(filePath_)) return;
                 }
-            }
-        }
+                continueNavigateToDepth(depth);
+            });
+        return;
+    }
+    continueNavigateToDepth(depth);
+}
 
+void SchematicEditor::continueNavigateToDepth(int depth) {
+    while (hierarchyPath_->depth() > depth) {
         auto parentLevel = hierarchyPath_->ascend();
         if (!parentLevel.has_value()) {
             break;
         }
 
-        // Pop/Restore state for each level to maintain stack integrity
-        // We pop the state saved when descending into the current level we just left
         EditorState poppedState;
         bool stateFound = false;
         if (!stateStack_.isEmpty()) {
             poppedState = stateStack_.last();
             stateStack_.removeLast();
             stateFound = true;
-        } 
+        }
 
-        // Only restore when we reach target depth
         if (hierarchyPath_->depth() == depth) {
             if (stateFound) {
                 restoreState(poppedState);
             } else {
-                // Fallback to reload if state was lost
                 loadFromFile(parentLevel->filePath);
             }
             filePath_ = parentLevel->filePath;

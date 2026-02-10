@@ -8,6 +8,7 @@
 #include <QWaitCondition>
 #include "../../physics/circuitsim.h"
 #include "../../physics/simulation_profile.h"
+#include "../../compute/solvers/ac_solver.h"
 #include "../analysis/erc_engine.h"
 
 class SimulationWorker : public QObject {
@@ -24,6 +25,8 @@ public slots:
     // Start methods - objects passed by value for thread safety
     void startDC(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     void startTransient(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startAC(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startNoise(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     
     // Request stop (Thread-safe)
     void stop();

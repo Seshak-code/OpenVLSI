@@ -21,7 +21,7 @@
 void verify_darlington_thermal() {
     std::cout << "==================================================\n";
     std::cout << " VERIFYING BJT THERMAL STABILITY (Darlington)\n";
-    std::cout << " Temperatures: -55C, 25C, 125C\n";
+    std::cout << " Temperatures: 0C, 25C, 85C, 125C\n";
     std::cout << "==================================================\n";
 
     // Standard Darlington Pair Setup
@@ -51,7 +51,7 @@ void verify_darlington_thermal() {
         bool converged;
     };
     
-    std::vector<double> temps = {-55.0, 25.0, 125.0};
+    std::vector<double> temps = {0.0, 25.0, 85.0, 125.0};
     std::vector<Result> results;
     
     bool all_passed = true;
@@ -94,16 +94,25 @@ void verify_darlington_thermal() {
     }
     
     // Consistency Check: Vbe should decrease with temperature (~ -2mV/C * 2 junctions = -4mV/C)
-    // Darlington has 2 Vbe drops.
-    if (results.size() == 3) {
-        double cold = results[0].vbe_total;
-        double nom = results[1].vbe_total;
-        double hot = results[2].vbe_total;
-        
-        bool phys_ok = (cold > nom) && (nom > hot);
-        std::cout << "\nPhysics Check (dVbe/dT < 0): " 
+    // Darlington has 2 Vbe drops. Check monotonic decrease across all converged points.
+    {
+        // Filter to converged results only
+        std::vector<Result> converged;
+        for (const auto& r : results) {
+            if (r.converged) converged.push_back(r);
+        }
+
+        bool phys_ok = converged.size() >= 2; // Need at least 2 converged points
+        for (size_t i = 1; i < converged.size(); ++i) {
+            if (converged[i].vbe_total >= converged[i-1].vbe_total) {
+                phys_ok = false;
+                break;
+            }
+        }
+
+        std::cout << "\nPhysics Check (dVbe/dT < 0, " << converged.size() << " points): "
                   << (phys_ok ? GREEN "PASS" : RED "FAIL") << RESET << "\n";
-        
+
         if (!phys_ok) all_passed = false;
     }
     

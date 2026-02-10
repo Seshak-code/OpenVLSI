@@ -151,3 +151,4 @@ QVector<acutesim::physics::CornerConfig> getCorners() const;
 1.  **Engine Separation**: GUI classes (`Workspace`, `Explorer`) simply orchestrate the underlying physics engines (`CircuitSim`, `ERCEngine`). They do not perform calculations themselves.
 2.  **Mode Awareness**: The `ERCEngine` must be aware of the current `AppMode` (Bench/Block/System) to apply the correct rule set.
 3.  **Visualization Decoupling**: Visualizers (`LogicWaveformWidget`) ingest raw data copies, decoupling rendering frame rate from simulation step rate.
+4.  **Robust Input Handling**: Input parameters (time strings, frequencies) must be parsed via the centralized `acutesim::utils::parseUnitValue` helper to ensure consistency (e.g., "1.2ms", "5GHz").

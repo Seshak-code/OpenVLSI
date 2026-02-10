@@ -64,32 +64,51 @@ inline T diode_current(T vd, const DiodeParams<P>& p)
 }
 
 /**
+ * diode_model_pair
+ * Returns {Current (I), Conductance (G)}
+ * Handles linear continuation for convergence.
+ */
+template <typename T, typename P>
+inline std::pair<T, T> diode_model_pair(T vd, const DiodeParams<P>& p, double max_arg = 30.0) 
+{
+    // NASA Optimization: Keep params as scalars where possible
+    auto n_vt = p.N * p.Vt;
+    T arg = vd / n_vt;
+    T GMIN = T(1e-12); 
+
+    // Linear Continuation Region
+    if (arg > T(max_arg)) {
+        using std::exp;
+        double exp_max_d = std::exp(max_arg);
+        T exp_max = T(exp_max_d);
+        
+        T i_max = p.Is * (exp_max - T(1.0));
+        T g_max = (p.Is / n_vt) * exp_max;
+        
+        T delta = vd - (n_vt * T(max_arg));
+        return {i_max + delta * g_max, g_max};
+    }
+    
+    using std::exp;
+    T exp_val = exp(arg);
+    T i_val = p.Is * (exp_val - T(1.0));
+    T g_val = (p.Is / n_vt) * exp_val;
+    
+    // Safety clamp for G
+    if (g_val < GMIN) g_val = GMIN;
+    
+    return {i_val, g_val};
+}
+
+/**
  * diode_current_clamped
  * Safe version for NR iteration. Clamps exponent to prevent inf/nan.
  */
 template <typename T, typename P>
 inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 30.0) 
 {
-    // NASA Optimization: Keep params as scalars (double) to avoid Dual overhead
-    auto n_vt = p.N * p.Vt;
-    T arg = vd / n_vt;
-    
-    // Linear Continuation to avoid zero-gradient (singularity) and overflow
-    // If arg > max_arg, assume linear slope matching the derivative at max_arg.
-    if (arg > max_arg) {
-        // I(max) = Is * (exp(max) - 1)
-        // G(max) = (Is / n_vt) * exp(max)
-        using std::exp;
-    double exp_max = exp(max_arg);
-        auto i_max = p.Is * (exp_max - 1.0);
-        auto g_max = (p.Is / n_vt) * exp_max;
-        
-        T delta = vd - (n_vt * max_arg);
-        return i_max + delta * g_max;
-    }
-    
-    using std::exp;
-    return p.Is * (exp(arg) - 1.0);
+    // Delegate to unified model
+    return diode_model_pair(vd, p, max_arg).first;
 }
 
 /**
@@ -272,29 +291,17 @@ inline BJTCurrents<T> bjt_ebers_moll(T v_c, T v_b, T v_e, bool isNPN, const BJTP
     v_bc = sign * (v_b - v_c);
 
     // 2. Compute Diode Currents
-    T Vcrit = T(30.0) * p.Vt;
-    T GMIN = T(1e-12);
     
-    auto linear_continuation_diode = [&](T v_j) -> std::pair<T, T> {
-        T arg = v_j / p.Vt;
-        T arg_clamped = (arg < T(30.0)) ? arg : T(30.0); // Simple clamp for generic T
-        
-        using std::exp;
-        T exp_val = exp(arg_clamped);
-        T i_base = p.Is * (exp_val - T(1.0));
-        T g_base = (p.Is / p.Vt) * exp_val;
-        T g_clamped = (g_base > GMIN) ? g_base : GMIN;
-        
-        T delta = (v_j > Vcrit) ? (v_j - Vcrit) : T(0.0);
-        T i_ext = g_clamped * delta; // Use clamped slope
-        
-        T i_total = i_base + i_ext;
-        
-        return {i_total, g_clamped};
-    };
-    
-    auto [i_f, g_f] = linear_continuation_diode(v_be);
-    auto [i_r, g_r] = linear_continuation_diode(v_bc);
+    // Implicit Diode Params (Ebers-Moll diodes have N=1 ideal usually, or scaled)
+    // We construct a temporary DiodeParams to pass to the unified helper
+    DiodeParams<T> dp;
+    dp.Is = p.Is;
+    dp.N = T(1.0); // Ebers-Moll assumes N=1 or absorbed into Is? Usually N=1.
+    dp.Vt = p.Vt;
+    // Rs, etc ignored for core junction
+
+    auto [i_f, g_f] = diode_model_pair(v_be, dp);
+    auto [i_r, g_r] = diode_model_pair(v_bc, dp);
 
     // 3. Terminal Currents (Ebers-Moll)
     T invBetaF = T(1.0) / p.BetaF;
@@ -455,7 +462,7 @@ inline T zener_current(T vd, const ZenerParams<P>& p)
                  T delta_v = vd_z - (n_vt * 30.0);
                  breakdown_current = i_max + g_max * delta_v;
              } else {
-                 breakdown_current = p.IBV * (std::exp(arg) - 1.0);
+                 breakdown_current = p.IBV * (exp(arg) - 1.0);
              }
              
              i_rev = -breakdown_current;
