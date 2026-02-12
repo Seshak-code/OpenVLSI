@@ -3,6 +3,9 @@
 #include <QTextBlock>
 #include <QHBoxLayout>
 #include <QFileInfo>
+#include <QMenu>
+#include <QAction>
+#include "gui/orchestration/worker_manager.h"
 
 using namespace acutesim::gui::editors;
 
@@ -140,6 +143,25 @@ CodeEditor::CodeEditor(const QString& filePath, QWidget *parent)
     else if (ext == "py") setLanguage(CodeSyntaxHighlighter::PYTHON);
     else if (ext == "tcl") setLanguage(CodeSyntaxHighlighter::TCL);
     else setLanguage(CodeSyntaxHighlighter::PLAIN_TEXT);
+
+    // Context Menu
+    textEdit_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(textEdit_, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        QMenu* menu = textEdit_->createStandardContextMenu();
+        
+        QFileInfo fi(filePath_);
+        QString ext = fi.suffix().toLower();
+        if (ext == "yaml" || ext == "yml" || ext == "va") {
+            menu->addSeparator();
+            QAction* compileAction = menu->addAction("Compile Model (Physics)");
+            connect(compileAction, &QAction::triggered, this, [this]() {
+                acutesim::gui::orchestration::WorkerManager::instance()->submitPhysicsCompilation(filePath_);
+            });
+        }
+        
+        menu->exec(textEdit_->mapToGlobal(pos));
+        delete menu;
+    });
 }
 
 void CodeEditor::setLanguage(CodeSyntaxHighlighter::Language lang) {

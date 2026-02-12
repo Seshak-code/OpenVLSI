@@ -105,6 +105,44 @@ int main() {
         check(!report.isSemanticallyIdentical, "Different circuits");
     }
 
+    // Test 7: MOSFET Parameter Change (W/L sizing)
+    {
+        TensorBlock b1, b2;
+        b1.addMosfet("M1", 1, 2, 0, 0, "nmos_generic", 2e-6, 0.18e-6);
+        b2.addMosfet("M1", 1, 2, 0, 0, "nmos_generic", 4e-6, 0.18e-6); // W changed
+
+        DiffReport report = SemanticNetlistDiffer::diff(b1, b2);
+        check(!report.isSemanticallyIdentical, "MOSFET W change should not be identical");
+        check(report.changes.size() == 1, "Expected 1 MOSFET change");
+        check(report.changes[0].changeType == DiffChangeType::MODIFIED_PARAMETER, "Expected MODIFIED_PARAMETER for MOSFET W");
+        check(report.changes[0].name == "M1", "Change should be on M1");
+    }
+
+    // Test 8: VoltageSource Value Change (Index-based diff)
+    {
+        TensorBlock b1, b2;
+        b1.addVoltageSource(1, 0, 5.0);
+        b2.addVoltageSource(1, 0, 3.3); // Value changed
+
+        DiffReport report = SemanticNetlistDiffer::diff(b1, b2);
+        check(!report.isSemanticallyIdentical, "VoltageSource value change should not be identical");
+        check(report.changes.size() == 1, "Expected 1 VoltageSource change");
+        check(report.changes[0].changeType == DiffChangeType::MODIFIED_PARAMETER, "Expected MODIFIED_PARAMETER for V");
+    }
+
+    // Test 9: Inductor Inductance Change
+    {
+        TensorBlock b1, b2;
+        b1.addInductor("L1", 1, 2, 1e-3);
+        b2.addInductor("L1", 1, 2, 2.2e-3); // Inductance changed
+
+        DiffReport report = SemanticNetlistDiffer::diff(b1, b2);
+        check(!report.isSemanticallyIdentical, "Inductor value change should not be identical");
+        check(report.changes.size() == 1, "Expected 1 Inductor change");
+        check(report.changes[0].changeType == DiffChangeType::MODIFIED_PARAMETER, "Expected MODIFIED_PARAMETER for L");
+        check(report.changes[0].name == "L1", "Change should be on L1");
+    }
+
     
     std::cout << "All Semantic Diff Tests Passed." << std::endl;
     return 0;

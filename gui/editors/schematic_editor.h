@@ -82,6 +82,12 @@ public:
     bool isQuickPreviewEnabled() const { return quickPreviewEnabled_; }
     TensorNetlist generateNetlist();
     QStringList runERC();
+
+    // DC Operating Point Annotations (Phase 2)
+    void setDCResults(const QJsonObject& results);
+    void setAnnotationsEnabled(bool enabled);
+    bool annotationsEnabled() const { return m_annotationsEnabled; }
+    void clearAnnotations();
     
     // Automation API (GenAI Hook)
     // Returns full circuit state for AI context
@@ -190,6 +196,19 @@ private:
     
     // Draw violation markers
     void drawViolationMarkers(QPainter* painter);
+
+    // DC Operating Point Annotations (Phase 2)
+    struct NodeAnnotation {
+        int solverNodeId;       // 1-based (0 = ground, not annotated)
+        QString netName;        // "Vout", "n3", etc.
+        QPointF position;       // Representative schematic position for label
+    };
+    QVector<NodeAnnotation> m_nodeAnnotations;
+    QJsonObject m_lastDCResults;
+    bool m_annotationsEnabled = false;
+
+    void drawDCAnnotations(QPainter* painter);
+    static QString formatVoltage(double v);
 
 public:
     // Real-time ERC access

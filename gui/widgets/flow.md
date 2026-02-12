@@ -170,11 +170,15 @@ void setTrustData(TrustLevel level,
 ```
 
 ### Component Library (`component_library.h`)
-**Role**: The "Palette". Filters components based on the current AppMode (Bench/Block/System).
+**Role**: The "Palette". Filters components based on the current AppMode (Bench/Block/System) and lists User Models.
+*   **User Models**: Dynamically populates the "Verilog-A" tab by scanning `ModelRegistry`.
 
 ```cpp
 // Filter visible components by mode
 void setMode(AppMode mode);
+
+// Refresh list from ModelRegistry
+void refresh();
 
 signals:
     void componentSelected(ComponentType type);

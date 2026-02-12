@@ -17,6 +17,7 @@ AcuteSim distinguishes between three pillars of a component:
 Defines the `TensorizedBlock` structure, which holds typed tensors for each device class:
 *   `DiodeTensor`: `anodes[]`, `cathodes[]`, `Is[]`, `v_d[]`, `i_d[]`, `g_d[]`.
 *   `MosfetTensor`: `drains[]`, `gates[]`, `sources[]`, `W[]`, `L[]`, `vgs[]`, `ids[]`.
+*   **Generic Components**: `std::vector<GenericComponent>` stores user-defined models with type-erased `void*` tensors, managed by `ModelRegistry`.
 *   **Design Rule Masks (`dr_validity`)**: GPU-compatible `uint8` flags (e.g., `DR_THERMAL_VIOLATION`) that allow validitation to happen in parallel with physics evaluation.
 
 ### 2. `physics_tensors.cpp`: The Kernel Launcher

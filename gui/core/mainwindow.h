@@ -75,6 +75,7 @@ private:
     // Actions
     QAction* viewQuickPreviewAction; // Phase 1.7.7 Toggle
     QAction* hdlToggleAction;        // Phase 7: HDL Editor visibility
+    QAction* viewDCAnnotationsAction = nullptr; // Phase 2: DC annotation toggle
     WelcomeWidget* welcomeWidget;
     
     // Docks

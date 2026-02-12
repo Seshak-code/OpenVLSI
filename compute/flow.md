@@ -23,7 +23,7 @@ When `CircuitSim::solveDC()` is called, the following sequence occurs:
 
 1.  **Preparation (AoS -> SoA)**
     *   **Source**: `components/circuit.h` (`TensorNetlist`).
-    *   **Action**: `physics_tensors.cpp` convert the friendly object graph into a `TensorizedBlock` (Structure-of-Arrays).
+    *   **Action**: `physics_tensors.cpp` convert the friendly object graph into a `TensorizedBlock` (Structure-of-Arrays). Handles both standard devices and `genericComponents` via `ModelRegistry`.
     *   **State Init**: `BlockState` objects are initialized for the global block and every hierarchical instance (`instanceStates`), decoupling definition from history.
     *   **Optimization**: `tensorscheduler.h` groups hierarchical instances by `topologyHash` into `SolverJob` batches.
 
@@ -35,6 +35,7 @@ When `CircuitSim::solveDC()` is called, the following sequence occurs:
         *   It calls `stampBlockLinear()` for passive R/L/C/V/I elements (using `BlockState` for history).
         *   It calls `stampSoABlock()` which calculates physics via `KernelDispatcher` (AVX-512/Neon).
         *   **Batch Stamping**: Diodes, MOSFETs, and BJTs now use `matrixBuilder.addBatch(...)` to commit stamps in efficient chunks.
+        *   **Generic Models**: User-defined models use `ModelRegistry::stampJacobian` to dispatch to compiled shared libraries.
         *   **Parallelism**: Lock-free assembly using `omp_get_thread_num` and thread-local buffers in `MatrixConstructor`.
 
 3.  **Matrix Solution (`math/linalg.h`)**

@@ -146,6 +146,14 @@ void MainWindow::setupCentralWidget() {
                      // updateProperties(nullptr); // Just clear for now
                      // Ideally we'd have updateWireProperties(w)
                  });
+
+                 // Phase 2: Clear stale DC annotations on topology change
+                 connect(sch, &SchematicEditor::topologyChanged, this, [this](size_t) {
+                     if (schematicEditor && schematicEditor->getScene())
+                         schematicEditor->getScene()->clearAnnotations();
+                     if (viewDCAnnotationsAction)
+                         viewDCAnnotationsAction->setChecked(false);
+                 });
              } else {
                  // Code editor or null
                  schematicEditor = nullptr;
@@ -949,6 +957,14 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
         // Show output dock with results
     }
     
+    // Phase 2: Annotate schematic with DC operating points
+    if (type == "DC" && schematicEditor && schematicEditor->getScene()) {
+        schematicEditor->getScene()->setDCResults(results);
+        if (viewDCAnnotationsAction && !viewDCAnnotationsAction->isChecked()) {
+            viewDCAnnotationsAction->setChecked(true);
+        }
+    }
+
     // Phase 2.1: Pass to Scripting Bridge
     QJsonDocument doc(results);
     acutesim::gui::scripting::TclBridge::instance().setLastResults(doc.toJson().toStdString());
@@ -1014,7 +1030,16 @@ void MainWindow::setupMenus() {
             schematicEditor->setQuickPreviewEnabled(checked);
         }
     });
-    
+
+    // Phase 2: DC Operating Point Annotations Toggle
+    viewDCAnnotationsAction = viewMenu->addAction("Show DC Annotations");
+    viewDCAnnotationsAction->setCheckable(true);
+    viewDCAnnotationsAction->setChecked(false);
+    connect(viewDCAnnotationsAction, &QAction::toggled, this, [this](bool checked) {
+        if (schematicEditor && schematicEditor->getScene())
+            schematicEditor->getScene()->setAnnotationsEnabled(checked);
+    });
+
     // Phase 7: HDL Editor Toggle removed
 
     viewMenu->addSeparator();
@@ -1450,6 +1475,14 @@ void MainWindow::setupCommandPalette() {
     };
     commandPalette_->registerCommand(cmd);
 
+    // Phase 2: DC Annotations toggle
+    cmd.id = "view.dcAnnotations";
+    cmd.label = "Toggle DC Annotations";
+    cmd.category = "View";
+    cmd.shortcut = "Ctrl+Shift+D";
+    cmd.callback = [this]() { if (viewDCAnnotationsAction) viewDCAnnotationsAction->toggle(); };
+    commandPalette_->registerCommand(cmd);
+
     // Simulation commands
     cmd.id = "simulation.run";
     cmd.label = "Run Simulation";
@@ -1770,6 +1803,9 @@ void MainWindow::setupKeybindings() {
                                schematicEditor->getView()->fitInView(schematicEditor->getScene()->sceneRect(), Qt::KeepAspectRatio);
                            }
                        }, this, "editor");
+
+    km.registerAction("view.dcAnnotations", "Toggle DC Annotations", "View",
+                      QKeySequence("Ctrl+Shift+D"), viewDCAnnotationsAction, "global");
 
     // =========================================================================
     // Editor

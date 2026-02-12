@@ -27,7 +27,10 @@ public:
 
     // Hierarchical Support
     // Handles recursive loading of "sourceFile" for ICPackage components
+    // Hierarchical Support
+    // Handles recursive loading of "sourceFile" for ICPackage components
     // Emits requestOpenSubcircuit(path) for drill-down navigation
+    // Handles Generic Component persistence (saves "source" property)
 };
 ```
 

@@ -11,7 +11,7 @@ It serves as the bridge between:
 
 ### 1. `circuit.h`: The Structural Core (`TensorBlock` & `BlockState`)
 Defines the `TensorBlock`, which is the container for a netlist.
-*   **TensorBlock**: Holds *immutable definition* (Resistors, Capacitors, Model Params). Can be reused across multiple instances.
+*   **TensorBlock**: Holds *immutable definition* (Resistors, Capacitors, **Generic Models**, Model Params). Can be reused across multiple instances.
 *   **BlockState**: Holds *mutable simulation state* (History buffers, Operating points). Unique per instance.
 *   **TensorNetlist**: The root object. Manages `globalBlock` + `globalState` and a list of `instances` + `instanceStates`.
 
@@ -42,6 +42,11 @@ Defines the **PDK-compliant** hardcoded components (e.g., Darlington Pairs, OpAm
 Handles JSON serialization/deserialization for *User-Defined* components.
 *   **Format**: `.comp` files (JSON).
 *   **AI Metadata**: Stores "Description", "Tags", and "LogicSummary" to help the AI understand what the component *does*.
+
+### 6. `model_registry.h`: The User Model Database
+Manages **Dynamic Physics Models** (e.g., Verilog-A compilation results).
+*   **Registration**: Macros (`REGISTER_PHYSICS_MODEL`) register model metadata (terminals, parameters, tensor layout) at runtime.
+*   **Integration**: Bridges the gap between the static `TensorBlock` and the dynamic `GenericComponent` solver execution.
 
 ## Core Logic & Snippets
 

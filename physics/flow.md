@@ -50,6 +50,8 @@ The `physics/` directory contains the core numerical engine of CuteApp. It is de
     }
     ```
 
+    - **Generic Models**: Dispatches to `ModelRegistry::stampJacobian`, which invokes the compiled model's `stamp` function (loaded from shared library).
+
 ### 3. Solver Engine (`circuitsim.h`)
 **Role**: The "Orchestrator". Manages the time-step evolution and non-linear solution search.
 -   **IntegratorArbiter**: Monitors stability via LTE and Lyapunov Energy checks.

@@ -204,7 +204,8 @@ void batchBJTPhysics(BJTTensor& tensor, const std::vector<double>& voltages) {
 // AOS -> SOA CONVERSION
 // ============================================================================
 
-TensorizedBlock tensorizeBlock(const TensorBlock& block) {
+TensorizedBlock tensorizeBlock(const TensorBlock& block,
+                               const std::map<std::string, ModelCard>* modelCards) {
     TensorizedBlock result;
     
     // Convert Resistors
@@ -247,15 +248,34 @@ TensorizedBlock tensorizeBlock(const TensorBlock& block) {
                            d.temperature_K);
     }
     
-    // Convert MOSFETs
+    // Convert MOSFETs (with model card lookup)
     result.mosfets.reserve(block.mosfets.size());
     for (const auto& m : block.mosfets) {
-        bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
-        double kp = isPMOS ? 100e-6 : 200e-6;
-        double vth = isPMOS ? -0.7 : 0.7;
-        result.mosfets.push(m.drain, m.gate, m.source, m.body, 
+        bool isPMOS = false;
+        double kp = 200e-6, vth = 0.7, lam = 0.02;
+
+        if (modelCards) {
+            auto it = modelCards->find(m.modelName);
+            if (it != modelCards->end()) {
+                const auto& card = it->second;
+                isPMOS = (card.type == "PMOS");
+                kp  = card.get("KP", isPMOS ? 100e-6 : 200e-6);
+                vth = card.get("VTO", isPMOS ? -0.7 : 0.7);
+                lam = card.get("LAMBDA", 0.02);
+            } else {
+                isPMOS = (m.modelName.find("PMOS") != std::string::npos ||
+                          m.modelName.find("pmos") != std::string::npos);
+                if (isPMOS) { kp = 100e-6; vth = -0.7; }
+            }
+        } else {
+            isPMOS = (m.modelName.find("PMOS") != std::string::npos ||
+                      m.modelName.find("pmos") != std::string::npos);
+            if (isPMOS) { kp = 100e-6; vth = -0.7; }
+        }
+
+        result.mosfets.push(m.drain, m.gate, m.source, m.body,
                            m.w, m.l,
-                           kp, vth, 0.02, 
+                           kp, vth, lam,
                            isPMOS, m.temperature_K);
     }
     
@@ -282,9 +302,111 @@ TensorizedBlock tensorizeBlock(const TensorBlock& block) {
 }
 
 TensorizedBlock tensorizeNetlist(const TensorNetlist& netlist) {
-    // 1. Start with the flattened global block
-    TensorizedBlock result = tensorizeBlock(netlist.globalBlock);
+    // 1. Start with the flattened global block (standard components)
+    const auto* cards = netlist.modelCards.empty() ? nullptr : &netlist.modelCards;
+    TensorizedBlock result = tensorizeBlock(netlist.globalBlock, cards);
     
+    // -------------------------------------------------------------------------
+    // DYNAMIC MODEL PASS 1: COUNTING
+    // -------------------------------------------------------------------------
+    std::map<std::string, size_t> typeCounts;
+    auto& registry = ModelRegistry::instance();
+
+    auto countBlock = [&](const TensorBlock& block) {
+        for (const auto& gc : block.genericComponents) {
+            const ModelInfo* info = registry.findModelByName(gc.modelName); // Helper needed or use getModel with known type?
+            // Problem: We don't know the type from just modelName efficiently without scanning all types?
+            // Optimization: ModelRegistry should map modelName -> DeviceType or ModelInfo directly.
+            // For now, we iterate types to find it (slow but safe).
+            // Better: Add lookup to registry.
+        }
+    };
+    
+    // We need a fast lookup for model name to info. 
+    // Let's assume we can build a cache or modify registry. 
+    // See below for Registry helper assumption.
+    
+    // Temporary lambda to find model info
+    auto findInfo = [&](const std::string& name) -> const ModelInfo* {
+        // Try to guess type or search all. 
+        // This is inefficient. We should have ModelRegistry::findModel(name).
+        // Let's implement a naive search here or rely on specific naming convention.
+        // Actually, let's use the listDeviceTypes loop.
+        auto types = registry.listDeviceTypes();
+        for(const auto& t : types) {
+             if(const ModelInfo* info = registry.getModel(t, name)) return info;
+        }
+        return nullptr;
+    };
+
+    // Count Global
+    for (const auto& gc : netlist.globalBlock.genericComponents) {
+        if (const ModelInfo* info = findInfo(gc.modelName)) {
+            typeCounts[info->deviceType]++;
+        }
+    }
+    
+    // Count Instances
+    for (const auto& instance : netlist.instances) {
+        auto it = netlist.blockDefinitions.find(instance.blockName);
+        if (it != netlist.blockDefinitions.end()) {
+            for (const auto& gc : it->second.genericComponents) {
+                 if (const ModelInfo* info = findInfo(gc.modelName)) {
+                    typeCounts[info->deviceType]++;
+                 }
+            }
+        }
+    }
+
+    // Allocate Tensors
+    for (const auto& [type, count] : typeCounts) {
+        if (count == 0) continue;
+        // Get any model of this type to access create/resize functions
+        auto models = registry.listModels(type);
+        if (models.empty()) continue;
+        const ModelInfo* factory = registry.getModel(type, models[0]);
+        
+        if (factory && factory->createTensor && factory->resizeTensor) {
+            void* tensor = factory->createTensor();
+            factory->resizeTensor(tensor, count);
+            result.dynamicTensors[type] = {tensor, count};
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // DYNAMIC MODEL PASS 2: POPULATION
+    // -------------------------------------------------------------------------
+    std::map<std::string, size_t> typeIndices; // Current write index
+
+    auto populateGeneric = [&](const TensorBlock& block, auto remap) {
+        for (const auto& gc : block.genericComponents) {
+            const ModelInfo* info = findInfo(gc.modelName);
+            if (!info) {
+                 std::cerr << "[Warning] Generic component '" << gc.instanceName 
+                           << "' uses unknown model '" << gc.modelName << "'\n";
+                 continue;
+            }
+            
+            void* tensor = result.dynamicTensors[info->deviceType].tensor;
+            if (!tensor) continue;
+            
+            size_t idx = typeIndices[info->deviceType]++;
+            
+            // Remap nodes
+            std::vector<int> mappedNodes;
+            mappedNodes.reserve(gc.nodes.size());
+            for(int n : gc.nodes) mappedNodes.push_back(remap(n));
+            
+            // Call setInstance
+            if (info->setInstance) {
+                info->setInstance(tensor, idx, mappedNodes.data(), gc.params.data());
+            }
+        }
+    };
+
+    // Populate Global
+    populateGeneric(netlist.globalBlock, [](int n){ return n; });
+
     // 2. Add all instances, remapping local nodes to global nodes
     for (size_t i = 0; i < netlist.instances.size(); ++i) {
         const auto& instance = netlist.instances[i];
@@ -301,6 +423,7 @@ TensorizedBlock tensorizeNetlist(const TensorNetlist& netlist) {
             return nodeMap[localNode - 1];
         };
         
+        // STANDARD COMPONENTS
         // Append Resistors
         for (const auto& r : block.resistors) {
             result.resistors.push(remap(r.nodeTerminal1), remap(r.nodeTerminal2), r.resistance_ohms);
@@ -324,13 +447,32 @@ TensorizedBlock tensorizeNetlist(const TensorNetlist& netlist) {
                               0.0, netlist.environment.ambient_temp_K);
         }
         
-        // Append MOSFETs
+        // Append MOSFETs (with model card lookup)
         for (const auto& m : block.mosfets) {
-            bool isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
-            double kp = isPMOS ? 100e-6 : 200e-6;
-            double vth = isPMOS ? -0.7 : 0.7;
+            bool isPMOS = false;
+            double kp = 200e-6, vth = 0.7, lam = 0.02;
+
+            if (cards) {
+                auto cit = cards->find(m.modelName);
+                if (cit != cards->end()) {
+                    const auto& card = cit->second;
+                    isPMOS = (card.type == "PMOS");
+                    kp  = card.get("KP", isPMOS ? 100e-6 : 200e-6);
+                    vth = card.get("VTO", isPMOS ? -0.7 : 0.7);
+                    lam = card.get("LAMBDA", 0.02);
+                } else {
+                    isPMOS = (m.modelName.find("PMOS") != std::string::npos ||
+                              m.modelName.find("pmos") != std::string::npos);
+                    if (isPMOS) { kp = 100e-6; vth = -0.7; }
+                }
+            } else {
+                isPMOS = (m.modelName.find("PMOS") != std::string::npos ||
+                          m.modelName.find("pmos") != std::string::npos);
+                if (isPMOS) { kp = 100e-6; vth = -0.7; }
+            }
+
             result.mosfets.push(remap(m.drain), remap(m.gate), remap(m.source), remap(m.body),
-                               m.w, m.l, kp, vth, 0.02, isPMOS, netlist.environment.ambient_temp_K);
+                               m.w, m.l, kp, vth, lam, isPMOS, netlist.environment.ambient_temp_K);
         }
         
         // Append BJTs
@@ -348,6 +490,9 @@ TensorizedBlock tensorizeNetlist(const TensorNetlist& netlist) {
         for (const auto& i : block.currentSources) {
             result.currentSources.push(remap(i.nodePositive), remap(i.nodeNegative), i.current_A);
         }
+
+        // DYNAMIC COMPONENTS (Populate)
+        populateGeneric(block, remap);
     }
     
     return result;

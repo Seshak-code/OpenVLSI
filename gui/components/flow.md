@@ -18,7 +18,9 @@ enum class ComponentType {
     PDK_NFET, PDK_PFET, PDK_Resistor, PDK_Capacitor,
     PDK_NAND2, PDK_NOR2, PDK_AND2, PDK_OR2, PDK_XOR2, PDK_XNOR2,
     PDK_Buffer, PDK_MUX2, PDK_DFF,
-    ICPackage // Hierarchical (Links to external schematic file via "sourceFile" property)
+    PDK_Buffer, PDK_MUX2, PDK_DFF,
+    ICPackage, // Hierarchical (Links to external schematic file via "sourceFile" property)
+    Generic    // User-Defined Model (Links to compiled shared library via "subCircuitName")
 };
 
 struct PinInfo {

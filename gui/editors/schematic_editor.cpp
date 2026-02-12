@@ -225,8 +225,8 @@ QString GridScene::placeComponent(const QString& typeStr, QPointF pos, double ro
     comp->setRotation(rotation);
     if (params.contains("flipped") && params["flipped"].toBool()) comp->flip();
     
-    // SubCircuit/ICPackage Specific: Restore drill-down properties
-    if (comp->type == ComponentType::SubCircuit || comp->type == ComponentType::ICPackage) {
+    // SubCircuit/ICPackage/Generic Specific: Restore drill-down/model properties
+    if (comp->type == ComponentType::SubCircuit || comp->type == ComponentType::ICPackage || comp->type == ComponentType::Generic) {
         // Restore subCircuitName from "source" param
         QString src = params.contains("source") ? params["source"].toString() :
                       (params.contains("sourceFile") ? params["sourceFile"].toString() : comp->params["sourceFile"]);
@@ -384,7 +384,7 @@ void GridScene::setTool(ComponentType t, const QString& subName) {
     
     if (t != ComponentType::Select && t != ComponentType::Wire) {
         ghostItem = new VisualComponent(t);
-        if (t == ComponentType::SubCircuit && !subName.isEmpty()) {
+        if ((t == ComponentType::SubCircuit || t == ComponentType::Generic) && !subName.isEmpty()) {
             ghostItem->subCircuitName = subName;
         }
         ghostItem->setOpacity(0.5);
@@ -591,7 +591,7 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 
             if (!colliding) {
                 auto* item = new VisualComponent(currentTool);
-                if (currentTool == ComponentType::SubCircuit && !currentSubTool.isEmpty()) {
+                if ((currentTool == ComponentType::SubCircuit || currentTool == ComponentType::Generic) && !currentSubTool.isEmpty()) {
                     item->subCircuitName = currentSubTool;
                 }
                 item->setPos(p);
@@ -964,6 +964,11 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
     
     // ====== ERC VIOLATION MARKERS ======
     drawViolationMarkers(painter);
+
+    // ====== DC OPERATING POINT ANNOTATIONS (Phase 2) ======
+    if (m_annotationsEnabled && !m_lastDCResults.isEmpty()) {
+        drawDCAnnotations(painter);
+    }
 }
 
 // ============================================================================
@@ -1066,6 +1071,76 @@ void GridScene::acceptRoutingHint() {
 
 void GridScene::dismissRoutingHint() {
     ercAutoFix_.clearHint(this);
+}
+
+// ============================================================================
+// DC OPERATING POINT ANNOTATIONS (Phase 2)
+// ============================================================================
+
+QString GridScene::formatVoltage(double v) {
+    double absV = std::abs(v);
+    if (absV < 1e-12) return "0 V";
+    if (absV < 1e-9)  return QString("%1 pV").arg(v * 1e12, 0, 'f', 1);
+    if (absV < 1e-6)  return QString("%1 nV").arg(v * 1e9, 0, 'f', 1);
+    if (absV < 1e-3)  return QString("%1 \u00b5V").arg(v * 1e6, 0, 'f', 1);
+    if (absV < 1.0)   return QString("%1 mV").arg(v * 1e3, 0, 'f', 1);
+    return QString("%1 V").arg(v, 0, 'f', 3);
+}
+
+void GridScene::drawDCAnnotations(QPainter* painter) {
+    QJsonArray voltages = m_lastDCResults["voltages"].toArray();
+    if (voltages.isEmpty() || m_nodeAnnotations.isEmpty()) return;
+
+    painter->save();
+    auto& tm = acutesim::gui::styling::ThemeManager::instance();
+
+    QFont labelFont("monospace", 8);
+    labelFont.setBold(true);
+    painter->setFont(labelFont);
+    QFontMetrics fm(labelFont);
+
+    for (const auto& ann : m_nodeAnnotations) {
+        if (ann.solverNodeId < 1 || ann.solverNodeId > voltages.size()) continue;
+        double voltage = voltages[ann.solverNodeId - 1].toDouble();
+        QString voltStr = formatVoltage(voltage);
+
+        // Pill dimensions
+        int textWidth = fm.horizontalAdvance(voltStr) + 10;
+        int textHeight = fm.height() + 4;
+        QRectF pill(ann.position.x() + 8, ann.position.y() - textHeight - 2,
+                    textWidth, textHeight);
+
+        // Dark background pill
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(30, 30, 30, 200));
+        painter->drawRoundedRect(pill, 3, 3);
+
+        // Accent border
+        painter->setPen(QPen(tm.getColor("ui.accent"), 1));
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRoundedRect(pill, 3, 3);
+
+        // Teal voltage text (matches probe color in resultsTree)
+        painter->setPen(QColor("#4ec9b0"));
+        painter->drawText(pill, Qt::AlignCenter, voltStr);
+    }
+    painter->restore();
+}
+
+void GridScene::setDCResults(const QJsonObject& results) {
+    m_lastDCResults = results;
+    if (m_annotationsEnabled) update();
+}
+
+void GridScene::setAnnotationsEnabled(bool enabled) {
+    m_annotationsEnabled = enabled;
+    update();
+}
+
+void GridScene::clearAnnotations() {
+    m_lastDCResults = QJsonObject();
+    m_nodeAnnotations.clear();
+    update();
 }
 
 // ============================================================================
@@ -1456,6 +1531,28 @@ TensorNetlist GridScene::generateNetlist() {
 
     // Get the netToNode mapping for building BlockInstance nodeMapping
     auto topSnap = designDb.snapshotWithNodeMap();
+
+    // Phase 2: Build DC annotation map (solver node ID → name + position)
+    m_nodeAnnotations.clear();
+    for (auto it = spatialToDbNet.begin(); it != spatialToDbNet.end(); ++it) {
+        int rootID = it.key();
+        NetUUID netId = it.value();
+        auto nodeIt = topSnap.netToNode.find(netId);
+        if (nodeIt == topSnap.netToNode.end() || nodeIt->second == 0) continue;
+
+        NodeAnnotation ann;
+        ann.solverNodeId = nodeIt->second;
+        ann.netName = spatialToName.value(rootID, "n" + QString::number(rootID));
+
+        // Find representative position: first grid point belonging to this root net
+        for (auto pit = pointToNetID.begin(); pit != pointToNetID.end(); ++pit) {
+            if (findSet(pit.value()) == rootID) {
+                ann.position = QPointF(pit.key().first, pit.key().second);
+                break;
+            }
+        }
+        m_nodeAnnotations.append(ann);
+    }
 
     // 4. Wrap and resolve Probes
     TensorNetlist netlist;
@@ -1958,8 +2055,8 @@ QJsonObject GridScene::getCircuitState() const {
                 props[it.key()] = it.value();
             }
 
-            // Save SubCircuit/ICPackage specific properties for drill-down restoration
-            if (c->type == ComponentType::SubCircuit || c->type == ComponentType::ICPackage) {
+            // Save SubCircuit/ICPackage/Generic specific properties for drill-down/model restoration
+            if (c->type == ComponentType::SubCircuit || c->type == ComponentType::ICPackage || c->type == ComponentType::Generic) {
                 if (!c->subCircuitName.isEmpty()) {
                     props["source"] = c->subCircuitName;
                 }

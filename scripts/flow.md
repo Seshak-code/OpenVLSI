@@ -8,6 +8,15 @@ The `scripts/` directory contains **DevOps and Developer Utilities**. These are 
 -   **`kill_web.sh/ps1`**: Helper to terminate lingering web server processes during Wasm development.
 -   **`serve.py`**: A simple Python HTTP server for testing the WebAssembly build locally.
 
+## Physics Compiler (`scripts/physics_compiler/`)
+
+The **Physics Compiler** is a Python-based toolchain that converts high-level physics descriptions (YAML/Verilog-A) into optimized C++ and WGSL code for the solver.
+
+*   **`frontend.py`**: Parses input files into an Intermediate Representation (IR).
+*   **`ir.py`**: Defines the Abstract Syntax Tree (AST) for physics equations (Nodes, Variables, BinaryOps).
+*   **`backends/scalar_cpp.py`**: Generates C++ code for CPU execution (AVX/Scalar).
+*   **`backends/wgsl.py`**: Generates WebGPU Shading Language code for GPU execution.
+
 ## Development Workflows
 
 1.  **Setting Up**: `source scripts/setup_dependencies.sh`

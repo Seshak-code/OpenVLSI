@@ -21,6 +21,7 @@
 #include "physics_constants.h"
 #include "physics_tensors.h"
 #include "stamps.h"
+#include "../compute/model_registry.h"
 
 // ============================================================================
 // CIRCUITSIM CLASS
@@ -295,6 +296,9 @@ public:
   std::unique_ptr<IIntegrationMethod> integrator;
   ExecutionMode execMode = ExecutionMode::LEGACY_AOS;
 
+  // Model card library pointer (set before stamping, for per-model parameter lookup)
+  const std::map<std::string, ModelCard>* currentModelCards = nullptr;
+
   CircuitSim() {
     integrator = std::make_unique<TrapezoidalIntegration>();
   }
@@ -428,25 +432,34 @@ public:
       stampTwoTerminalNonLinear(nA, nC, g_eq, i_src, mb, rhs);
   }
 
-  void stampMosfet(const Mosfet& m, int nD, int nG, int nS, int nB, 
+  void stampMosfet(const Mosfet& m, int nD, int nG, int nS, int nB,
                    double v_d, double v_g, double v_s, double v_b,
                    MatrixConstructor& mb, std::vector<double>& rhs) {
       double vgs = v_g - v_s;
       double vds = v_d - v_s;
 
       MosfetParams<double> p;
-      // Defaults (Placeholder until Model Library is integrated)
-      // Standard 180nm CMOS approximate values
-      p.Kp = 200e-6; 
-      p.Vth = 0.7;   
-      p.lambda = 0.02;
+
+      // Look up model card by name (falls back to defaults)
+      const ModelCard* card = currentModelCards ?
+          currentModelCards->count(m.modelName) ? &currentModelCards->at(m.modelName) : nullptr
+          : nullptr;
+
+      bool isPMOS = false;
+      if (card) {
+          isPMOS = (card->type == "PMOS");
+          p.Kp     = card->get("KP", isPMOS ? 100e-6 : 200e-6);
+          p.Vth    = card->get("VTO", isPMOS ? -0.7 : 0.7);
+          p.lambda = card->get("LAMBDA", 0.02);
+      } else {
+          isPMOS = (m.modelName.find("P") != std::string::npos ||
+                    m.modelName.find("p") != std::string::npos);
+          p.Kp = isPMOS ? 100e-6 : 200e-6;
+          p.Vth = isPMOS ? -0.7 : 0.7;
+          p.lambda = 0.02;
+      }
       p.W = m.w;
       p.L = m.l;
-
-      // PMOS Detection
-      bool isPMOS = (m.modelName.find("P") != std::string::npos || m.modelName.find("p") != std::string::npos);
-      // Note: Device physics engine expects positive Vth for the equivalent NMOS model logic
-      // For now we run NMOS logic as per original code, just centralized here.
       
       // Calculate GM (dId/dVgs)
       Dual<double> ids_vgs = mosfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
@@ -1545,7 +1558,41 @@ public:
           }
         }
 
+        // DYNAMIC COMPONENTS (Generic Physics Models)
+        // Note: Generic models are stored in soaBlock (TensorizedBlock), not in the structural netlist directly.
+        // We iterate the dynamic tensors in soaBlock.
+        if (job.blockTmpl == &netlist.globalBlock) { // Only do this once per structural pass, or better: outside the job loop
+            // Actually, dynamic tensors are aggregated in soaBlock. 
+            // The scheduler jobs iterate structural instances.
+            // Dynamic tensors are already flattened in soaBlock.dynamicTensors.
+            // So we should stamp them OUTSIDE the scheduler loop to avoid double counting?
+            // YES. soaBlock.dynamicTensors contains GLOBAL tensors for the whole netlist (populated by tensorizeNetlist).
+            // So we should move this loop to AFTER the scheduler loop.
+        }
       }
+    }
+
+    // 7. Stamp Dynamic Models (Type-Erased)
+    // These are flattened and live in this->soaBlock
+    for (auto& [modelType, dynEntry] : soaBlock.dynamicTensors) {
+        if (!dynEntry.tensor) continue;
+
+        auto& registry = ModelRegistry::instance();
+        const ModelInfo* info = registry.getModel(modelType, modelType);
+
+        if (info && info->batchPhysics && info->stampJacobian) {
+            info->batchPhysics(dynEntry.tensor, v_candidate);
+
+            struct ConcreteTarget : public SparseStampTarget {
+                MatrixConstructor& mat;
+                std::vector<double>& rhs;
+                ConcreteTarget(MatrixConstructor& m, std::vector<double>& r) : mat(m), rhs(r) {}
+                void add(int r, int c, double v) override { mat.add(r, c, v); }
+                void addRhs(int r, double v) override { rhs[r] += v; }
+            };
+            ConcreteTarget target(matrixBuilder, rhsVector);
+            info->stampJacobian(dynEntry.tensor, dynEntry.count, &target);
+        }
     }
 
     // 6. Find Max Residual
@@ -1706,6 +1753,29 @@ public:
       addRes(z.cathode, iz);
       attributions.push_back({z.instanceName, "ZenerDiode",
           {{z.anode, -iz}, {z.cathode, iz}}});
+    }
+
+    // DYNAMIC COMPONENTS (Generic Physics Models)
+    // Re-use stampJacobian but only capture RHS (which sums currents/residuals)
+    for (auto& [modelType, dynEntry] : soaBlock.dynamicTensors) {
+        if (!dynEntry.tensor) continue;
+        auto& registry = ModelRegistry::instance();
+        const ModelInfo* info = registry.getModel(modelType, modelType);
+
+        if (info && info->batchPhysics && info->stampJacobian) {
+             info->batchPhysics(dynEntry.tensor, v_candidate);
+
+             struct ResidualTarget : public SparseStampTarget {
+                std::function<void(int, double)> addResFn;
+                ResidualTarget(std::function<void(int, double)> fn) : addResFn(fn) {}
+                void add(int r, int c, double v) override { (void)r; (void)c; (void)v; }
+                void addRhs(int r, double v) override {
+                    addResFn(r + 1, -v);
+                }
+            };
+            ResidualTarget target(addRes);
+            info->stampJacobian(dynEntry.tensor, dynEntry.count, &target);
+        }
     }
 
     // Find worst node
@@ -2527,6 +2597,35 @@ public:
         */
     }
 
+    // 3. Dynamic Models (ModelRegistry dispatch)
+    auto& registry = ModelRegistry::instance();
+    for (auto& [deviceType, entry] : block.dynamicTensors) {
+        if (!entry.tensor || entry.count == 0) continue;
+
+        auto models = registry.listModels(deviceType);
+        if (models.empty()) continue;
+        const ModelInfo* info = registry.getModel(deviceType, models[0]);
+        if (!info) continue;
+
+        // Batch physics evaluation
+        if (info->batchPhysics) {
+            info->batchPhysics(entry.tensor, v_guess);
+        }
+
+        // Jacobian + RHS stamping via SparseStampTarget adapter
+        if (info->stampJacobian) {
+            struct StampAdapter : SparseStampTarget {
+                MatrixConstructor& mb;
+                std::vector<double>& rhs;
+                StampAdapter(MatrixConstructor& mb_, std::vector<double>& rhs_)
+                    : mb(mb_), rhs(rhs_) {}
+                void add(int row, int col, double val) override { mb.add(row, col, val); }
+                void addRhs(int row, double val) override { rhs[row] += val; }
+            };
+            StampAdapter adapter(matrixBuilder, rhsVector);
+            info->stampJacobian(entry.tensor, entry.count, &adapter);
+        }
+    }
 
   }
 
@@ -2605,6 +2704,9 @@ public:
    */
   void stampAllElements(const TensorNetlist &netlist, double h,
                         const std::vector<double> &v_guess, double time) {
+    // Set model card pointer for per-model parameter lookup
+    currentModelCards = &netlist.modelCards;
+
     if (execMode == ExecutionMode::LEGACY_AOS) {
         // A. Global Block
         auto identityMap = [](int n) { return n; };

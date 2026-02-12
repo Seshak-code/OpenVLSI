@@ -45,7 +45,8 @@ enum class ComponentType {
     
     SubCircuit,      // Generic SubCircuit (Standard Cell)
     ICPackage,      // Hierarchical (File-Based)
-    Pin             // External Interface Pin
+    Pin,             // External Interface Pin
+    Generic         // User-Defined Physics Model (Verilog-A)
 };
 
 

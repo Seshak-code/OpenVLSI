@@ -24,6 +24,23 @@
 
 
 // ============================================================================
+// SPICE MODEL CARD
+// ============================================================================
+
+// Stores device model parameters parsed from .MODEL directives.
+struct ModelCard {
+    std::string name;        // e.g. "nfet_01v8", "DMOD"
+    std::string type;        // "NMOS", "PMOS", "D", "NPN", "PNP", "NJFET", "PJFET"
+    int level = 1;           // Model level (1 = Shichman-Hodges, 4 = BSIM4, etc.)
+    std::map<std::string, double> params;  // Key-value: "KP"->200e-6, "VTO"->0.7, etc.
+
+    double get(const std::string& key, double defaultVal) const {
+        auto it = params.find(key);
+        return (it != params.end()) ? it->second : defaultVal;
+    }
+};
+
+// ============================================================================
 // PASSIVE COMPONENTS
 // ============================================================================
 
@@ -70,9 +87,6 @@ struct Capacitor {
     double length_m = 0.0;
     double m = 1.0;               // Multiplier
     
-    // Generic History Buffer REMOVED (moved to BlockState)
-
-    
     double tolerance_percent = 0.0;
 };
 
@@ -89,9 +103,6 @@ struct Inductor {
     int nodeCoil1;                // First coil terminal (node index)
     int nodeCoil2;                // Second coil terminal (node index)
     double inductance_henries;    // Inductance in Henries [H]
-    
-    // Generic History Buffer REMOVED (moved to BlockState)
-
     
     double tolerance_percent = 0.0;
 
@@ -245,8 +256,6 @@ struct PowerRail {
     double tolerance_percent;      // ±5% for typical regulators
     double temp_coefficient;       // Voltage drift with temperature [V/K]
     
-    // Transient History REMOVED (moved to BlockState)
-
 };
 
 /*
@@ -332,7 +341,6 @@ struct BusProbe {
         uint64_t value;
     };
     
-    // History moved to BlockState
 };
 
 /*
@@ -354,11 +362,7 @@ struct SimulationEnvironment {
     bool flicker_noise_enabled = false;
 };
 
-// ============================================================================
-// CONTROLLED SOURCES (Linear Dependent Sources)
-// ============================================================================
 
-// Redundant long-named structs removed. Using VCVS, VCCS, CCVS, CCCS.
 
 
 // ============================================================================
@@ -385,7 +389,6 @@ struct Diode {
     double emissionCoefficient_N;         // N (dimensionless)
     double thermalVoltage_V_T_V;          // V_T [V]
     
-    // Thermal (Optional, default 300.15K)
     // Thermal (Optional, default 300.15K)
     double temperature_K = 300.15;
 
@@ -427,7 +430,7 @@ struct SchottkyDiode {
     double temperature_K = 300.15;
 };
 
-// ...
+
 
 /*
  * Zener Diode (D) - Breakdown Diode
@@ -493,7 +496,7 @@ struct Mosfet {
     double temperature_K = 300.15;
 };
 
-// ...
+
 
 struct BJT {
     std::string instanceName;
@@ -620,8 +623,16 @@ struct TensorBlock {
     std::vector<ZenerDiode> zenerDiodes;
     
     // Interconnects
-    // Interconnects
     std::vector<TransmissionLine> transmissionLines;
+    
+    // Generic Components (Dynamic Physics Models)
+    struct GenericComponent {
+        std::string instanceName;
+        std::string modelName; // Reference to registered model
+        std::vector<int> nodes;
+        std::vector<double> params;
+    };
+    std::vector<GenericComponent> genericComponents;
     
     // Aux
     std::vector<Probe> probes;
@@ -712,8 +723,6 @@ struct TensorBlock {
         assert(C > 0 && "Capacitance must be positive");
         if (isFrozen) return;
         Capacitor cap = {name, n1, n2, C};
-        // History initialized in BlockState
-
         capacitors.push_back(cap);
         updateNodeCount(n1); updateNodeCount(n2);
     }
@@ -727,7 +736,6 @@ struct TensorBlock {
         if (isFrozen) return;
         Inductor ind = {name, n1, n2, L};
         ind.model_name = "ind_generic";
-        // History initialized in BlockState
 
         inductors.push_back(ind);
         updateNodeCount(n1); updateNodeCount(n2);
@@ -763,9 +771,6 @@ struct TensorBlock {
         rail.capacitance_F = 100e-9;
         rail.tolerance_percent = 5.0;
         rail.temp_coefficient = 0.0;
-        
-        // History initialized in BlockState
-
         
         powerRails.push_back(rail);
         updateNodeCount(node);
@@ -1034,6 +1039,18 @@ public:
 
     // Global Simulation Context (Phase 2.9)
     SimulationEnvironment environment;
+
+    // SPICE .MODEL card library
+    std::map<std::string, ModelCard> modelCards;
+
+    void addModelCard(const ModelCard& card) {
+        modelCards[card.name] = card;
+    }
+
+    const ModelCard* findModelCard(const std::string& name) const {
+        auto it = modelCards.find(name);
+        return (it != modelCards.end()) ? &it->second : nullptr;
+    }
 
     TensorNetlist() { 
         globalBlock.name = "GLOBAL"; 

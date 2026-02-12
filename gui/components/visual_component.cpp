@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include "../../gui/styling/theme_manager.h"
+#include "../compute/model_registry.h"
 
 QString componentTypeToString(ComponentType t) {
     switch(t) {
@@ -40,6 +41,7 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::SubCircuit: return "SubCircuit";
         case ComponentType::ICPackage: return "ICPackage";
         case ComponentType::Pin: return "Pin";
+        case ComponentType::Generic: return "Generic";
         default: return "Unknown";
     }
 }
@@ -74,6 +76,7 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "SubCircuit") return ComponentType::SubCircuit;
     if (s == "ICPackage") return ComponentType::ICPackage;
     if (s == "Pin") return ComponentType::Pin;
+    if (s == "Generic") return ComponentType::Generic;
     return ComponentType::Select;
 }
 
@@ -323,6 +326,10 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             params["direction"] = "Input";
             paramOptions["direction"] = {"Input", "Output", "BiDir"};
             break;
+        case ComponentType::Generic:
+            name = "U?";
+            value = "Model";
+            break;
         default: 
             name = "U?"; 
             value = "0"; 
@@ -447,6 +454,20 @@ QRectF VisualComponent::boundingRect() const {
         // Center the rect
         return QRectF(-width/2.0, -height/2.0, width, height);
     }
+    if (type == ComponentType::Generic) {
+        // Dynamic size based on terminals
+        auto terms = getTerminals();
+        if (terms.isEmpty()) return QRectF(-30, -30, 60, 60);
+        
+        QRectF r(-30, -30, 60, 60); // Min body size
+        for(const auto& p : terms) {
+            if (p.x() < r.left()) r.setLeft(p.x());
+            if (p.x() > r.right()) r.setRight(p.x());
+            if (p.y() < r.top()) r.setTop(p.y());
+            if (p.y() > r.bottom()) r.setBottom(p.y());
+        }
+        return r.adjusted(-5,-5,5,5);
+    }
     if (type == ComponentType::SubCircuit) {
         // Size accounts for body (-40,-40,80,80) + terminal stubs extending beyond
         // Terminals can be at x=-60 or x=60 (left/right) or y=-80/+80 (top/bottom)
@@ -526,6 +547,40 @@ QVector<QPointF> VisualComponent::getTerminals() const {
                     t << QPointF(60, 0); // Right side
                 } else {
                     t << QPointF(-60, 0); // Default left
+                }
+            }
+            }
+            break;
+        }
+        case ComponentType::Generic: {
+            const ModelInfo* info = ModelRegistry::instance().getModel(subCircuitName.toStdString(), subCircuitName.toStdString());
+            if (!info) {
+               // Try generic lookup if mismatch
+                auto types = ModelRegistry::instance().listDeviceTypes();
+                for(const auto& dt : types) {
+                    info = ModelRegistry::instance().getModel(dt, subCircuitName.toStdString());
+                    if (info) break;
+                }
+            }
+            
+            if (!info) {
+                t << QPointF(-40, 0) << QPointF(40, 0);
+            } else {
+                int count = info->terminalCount;
+                int left = (count + 1) / 2;
+                int right = count - left;
+                
+                int spacing = 20;
+                int h_offset = 40;
+                
+                int startY_left = -((left - 1) * spacing) / 2;
+                for (int i=0; i<left; ++i) {
+                    t << QPointF(-h_offset, startY_left + i*spacing);
+                }
+                
+                int startY_right = -((right - 1) * spacing) / 2;
+                for (int i=0; i<right; ++i) {
+                    t << QPointF(h_offset, startY_right + i*spacing);
                 }
             }
             break;
@@ -643,6 +698,12 @@ QPainterPath VisualComponent::shape() const {
             break;
         case ComponentType::PDK_VSS:
             path.addRect(-15, -20, 30, 35);
+            break;
+        case ComponentType::Generic:
+            {
+                QRectF b = boundingRect();
+                path.addRect(b.adjusted(10, 10, -10, -10));
+            }
             break;
         default:
             path.addRect(-15, -15, 30, 30);
@@ -869,6 +930,37 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
                  }
              }
              break;
+
+        case ComponentType::Generic: {
+            QRectF b = boundingRect().adjusted(10, 10, -10, -10);
+            painter->drawRect(b);
+            painter->drawText(b, Qt::AlignCenter, subCircuitName);
+            
+            const ModelInfo* info = ModelRegistry::instance().getModel(subCircuitName.toStdString(), subCircuitName.toStdString());
+            if(!info) {
+                auto types = ModelRegistry::instance().listDeviceTypes();
+                for(const auto& dt : types) {
+                    info = ModelRegistry::instance().getModel(dt, subCircuitName.toStdString());
+                    if (info) break;
+                }
+            }
+            
+            auto terms = getTerminals();
+            for(int i=0; i<terms.size(); ++i) {
+                QPointF p = terms[i];
+                if (p.x() < 0) painter->drawLine(p, QPointF(b.left(), p.y()));
+                else painter->drawLine(p, QPointF(b.right(), p.y()));
+                
+                QString label = QString::number(i+1);
+                if (info && info->terminalNames && info->terminalNames[i]) {
+                    label = QString(info->terminalNames[i]);
+                }
+                
+                QPointF textPos = (p.x() < 0) ? QPointF(b.left()+5, p.y()+5) : QPointF(b.right()-15, p.y()+5);
+                painter->drawText(textPos, label);
+            }
+            break;
+        }
 
         case ComponentType::SubCircuit: {
         const auto* def = StandardCells::StandardCellLibrary::instance().get(subCircuitName.toStdString());

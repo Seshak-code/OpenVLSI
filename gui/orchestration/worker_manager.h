@@ -61,6 +61,9 @@ public:
                                 const acutesim::compute::orchestration::CTSConfig& ctsConfig,
                                 const acutesim::compute::orchestration::RoutingConfig& routeConfig);
     QString submitSignOff(const acutesim::compute::orchestration::DRCConfig& drcConfig);
+    QString submitPhysicsCompilation(const QString& modelPath,
+                                      const QString& backend = "scalar_cpp",
+                                      bool stableTempNaming = true);
     void cancelJob(const QString& jobId);
 
 signals:
@@ -78,6 +81,9 @@ signals:
     void pnrResultReady(const QString& jobId, const acutesim::compute::orchestration::PnRResult& result);
     void drcResultReady(const QString& jobId, const acutesim::compute::orchestration::DRCResult& result);
     void lvsResultReady(const QString& jobId, const acutesim::compute::orchestration::LVSResult& result);
+    void physicsCompilationReady(const QString& jobId, bool success,
+                                  const QString& generatedHeaderPath,
+                                  const QString& sharedLibPath);
 
 private:
     void pollStatus(); // Periodic health check
@@ -100,6 +106,8 @@ private:
                      const acutesim::compute::orchestration::CTSConfig& ctsConfig,
                      const acutesim::compute::orchestration::RoutingConfig& routeConfig);
     void runLocalSignOff(const QString& jobId, const acutesim::compute::orchestration::DRCConfig& config);
+    void runLocalPhysicsCompilation(const QString& jobId, const QString& modelPath,
+                                     const QString& backend, bool stableTempNaming);
 };
 
 } // namespace acutesim::gui::orchestration

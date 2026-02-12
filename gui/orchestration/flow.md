@@ -26,6 +26,9 @@ signals:
 
 public:
     void connectToWorker(const QString& target);
+    
+    // Physics Compiler Integration
+    void submitPhysicsCompilation(const QString& sourcePath, const QString& outputPath);
 };
 ```
 

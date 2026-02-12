@@ -1,6 +1,10 @@
 #pragma once
 #include <vector>
 #include <cstddef>
+#include <map>
+#include <unordered_map>
+#include <string>
+#include "../model_registry.h"
 
 /*
  * physics_tensors.h - Structure-of-Arrays (SoA) Tensor Data Structures
@@ -378,6 +382,14 @@ struct TensorizedBlock {
     MosfetTensor mosfets;
     BJTTensor bjts;
     
+    // Dynamic Models (Type-Erased)
+    // Key: DeviceType (e.g. "Diode", "MosfetLevel1") -> Value: tensor + instance count
+    struct DynamicTensorEntry {
+        void* tensor = nullptr;
+        size_t count = 0;
+    };
+    std::unordered_map<std::string, DynamicTensorEntry> dynamicTensors;
+
     void clear() {
         resistors.clear();
         capacitors.clear();
@@ -387,6 +399,20 @@ struct TensorizedBlock {
         diodes.clear();
         mosfets.clear();
         bjts.clear();
+        
+        // Clear dynamic tensors
+        auto& registry = ModelRegistry::instance();
+        for (auto& [type, entry] : dynamicTensors) {
+            if (!entry.tensor) continue;
+            auto models = registry.listModels(type);
+            if (!models.empty()) {
+                const ModelInfo* info = registry.getModel(type, models[0]);
+                if (info && info->destroyTensor) {
+                    info->destroyTensor(entry.tensor);
+                }
+            }
+        }
+        dynamicTensors.clear();
     }
 };
 
@@ -397,11 +423,16 @@ struct TensorizedBlock {
 // Forward declaration: TensorBlock is defined in circuit.h
 struct TensorBlock;
 
+// Forward declaration
+struct ModelCard;
+
 /**
  * Convert a TensorBlock (AoS) to TensorizedBlock (SoA).
  * This enables efficient batch processing on the solver side.
+ * @param modelCards Optional pointer to model card library for per-device parameter lookup.
  */
-TensorizedBlock tensorizeBlock(const struct TensorBlock& block);
+TensorizedBlock tensorizeBlock(const struct TensorBlock& block,
+                                const std::map<std::string, ModelCard>* modelCards = nullptr);
 
 /**
  * Convert a full TensorNetlist (Hierarchical) to a single TensorizedBlock (Flat SoA).

@@ -1,5 +1,6 @@
 #include "component_library.h"
 #include "../../components/standard_cells.h"
+#include "../compute/model_registry.h"
 
 ComponentLibrary::ComponentLibrary(QWidget* parent) : QWidget(parent) {
     setupUi();
@@ -68,17 +69,21 @@ void ComponentLibrary::setupUi() {
 
     basicList = new QListWidget();
     pdkList = new QListWidget();
+    userList = new QListWidget();
 
     // Apply compact styling to all lists
     basicList->setStyleSheet(listStyle);
     pdkList->setStyleSheet(listStyle);
+    userList->setStyleSheet(listStyle);
 
     // Set uniform item heights for density
     basicList->setUniformItemSizes(true);
     pdkList->setUniformItemSizes(true);
+    userList->setUniformItemSizes(true);
 
     tabs->addTab(basicList, "Primitives");
     tabs->addTab(pdkList, "Standard Cells");
+    tabs->addTab(userList, "Verilog-A");
     
     // Connect Signals
     auto setupConnection = [this](QListWidget* list) {
@@ -91,6 +96,32 @@ void ComponentLibrary::setupUi() {
     
     setupConnection(basicList);
     setupConnection(pdkList);
+    setupConnection(userList);
+}
+
+void ComponentLibrary::refresh() {
+    userList->clear();
+    
+    // Scan ModelRegistry for non-standard models
+    std::vector<std::string> deviceTypes = ModelRegistry::instance().listDeviceTypes();
+    for (const auto& type : deviceTypes) {
+        // Skip standard types usually (handled manually in basicList)
+        // But if user overwrites them?
+        // Let's filter out known primitives to avoid duplication if registry has them?
+        // Actually, basic properties are hardcoded in populateLists.
+        // We only want Dynamic External Models here.
+        // Heuristic: If it's not in a "Standard Library" exclude list?
+        // For now, list everything found in Registry that matches "Generic" usage pattern.
+        // Or simply list everything from Registry.
+        
+        std::vector<std::string> models = ModelRegistry::instance().listModels(type);
+        for (const auto& name : models) {
+            // Check if this is a Verilog-A model
+            // We can assume any model in Registry is a candidate for "User Models" if not explicitly excluded.
+            // Let's just list them.
+            addComponentItem(userList, QString::fromStdString(name), "chip.png", ComponentType::Generic);
+        }
+    }
 }
 
 void ComponentLibrary::populateLists() {
@@ -132,6 +163,9 @@ void ComponentLibrary::populateLists() {
     }
 
 
+    }
+
+    refresh(); // Populate User Models
 }
 
 void ComponentLibrary::addComponentItem(QListWidget* list, const QString& name, const QString& iconName, ComponentType type) {
@@ -146,7 +180,8 @@ void ComponentLibrary::addComponentItem(QListWidget* list, const QString& name, 
         type == ComponentType::PDK_NFET || 
         type == ComponentType::PDK_PFET ||
         type == ComponentType::PDK_Resistor ||
-        type == ComponentType::PDK_Capacitor) {
+        type == ComponentType::PDK_Capacitor ||
+        type == ComponentType::Generic) {
         item->setData(Qt::UserRole + 1, name);
     }
 }
@@ -160,6 +195,7 @@ void ComponentLibrary::onSearchTextChanged(const QString& text) {
     QString pattern = text.trimmed().toLower();
     filterList(basicList, pattern);
     filterList(pdkList, pattern);
+    filterList(userList, pattern);
 }
 
 void ComponentLibrary::filterList(QListWidget* list, const QString& pattern) {

@@ -22,7 +22,8 @@ public:
 signals:
     void componentSelected(ComponentType type, const QString& name);
 
-private slots:
+public slots:
+    void refresh();
     void onSearchTextChanged(const QString& text);
 
 private:
@@ -30,6 +31,7 @@ private:
     QTabWidget* tabs;
     QListWidget* basicList; // Primitives
     QListWidget* pdkList;   // Standard Cells / PDK
+    QListWidget* userList;  // User Models (Verilog-A)
 
     void setupUi();
     void populateLists();
