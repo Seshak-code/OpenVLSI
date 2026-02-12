@@ -211,6 +211,13 @@ void MainWindow::setupCentralWidget() {
                 dockingManager->output()->appendText("[Pipeline] " + msg);
             }
         });
+
+        connect(rtlPipelinePanel, &acutesim::gui::orchestration::RtlPipelinePanel::overlayRequested,
+                this, [this](const QString& defPath) {
+            if (schematicEditor) {
+                schematicEditor->showPhysicalOverlay(defPath);
+            }
+        });
     }
 
     // Connect solver violations to problems panel

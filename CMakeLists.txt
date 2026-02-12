@@ -327,12 +327,31 @@ add_executable(${PROJECT_NAME}
     compute/orchestration/drivers/openroad_task.h
     compute/orchestration/drivers/klayout_task.cpp
     compute/orchestration/drivers/klayout_task.h
+    compute/orchestration/drivers/yosys_log_parser.cpp
+    compute/orchestration/drivers/yosys_log_parser.h
+    compute/orchestration/drivers/openroad_report_parser.cpp
+    compute/orchestration/drivers/openroad_report_parser.h
+    compute/orchestration/drivers/klayout_report_parser.cpp
+    compute/orchestration/drivers/klayout_report_parser.h
+    compute/orchestration/drivers/tool_driver.cpp
+    compute/orchestration/drivers/tool_driver.h
+    compute/orchestration/server/subprocess.cpp
     gui/orchestration/worker_manager.cpp
     gui/orchestration/worker_manager.h
     gui/orchestration/worker_status_panel.cpp
     gui/orchestration/worker_status_panel.h
     gui/orchestration/rtl_pipeline_panel.cpp
     gui/orchestration/rtl_pipeline_panel.h
+    gui/orchestration/synthesis_result_dialog.cpp
+    gui/orchestration/synthesis_result_dialog.h
+    gui/orchestration/pnr_result_dialog.cpp
+    gui/orchestration/pnr_result_dialog.h
+    gui/orchestration/signoff_result_dialog.cpp
+    gui/orchestration/signoff_result_dialog.h
+    gui/editors/physical_overlay_item.cpp
+    gui/editors/physical_overlay_item.h
+    gui/widgets/cell_pie_chart.h
+    gui/widgets/timing_indicator.h
     gui/analysis/corner_setup_widget.cpp
     gui/analysis/corner_setup_widget.h
     gui/widgets/trust_badge_widget.cpp
@@ -734,9 +753,17 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
         gui/orchestration/rtl_pipeline_panel.cpp
+        gui/orchestration/synthesis_result_dialog.cpp
+        gui/orchestration/pnr_result_dialog.cpp
+        gui/orchestration/signoff_result_dialog.cpp
+        gui/editors/physical_overlay_item.cpp
         compute/orchestration/drivers/yosys_task.cpp
         compute/orchestration/drivers/openroad_task.cpp
         compute/orchestration/drivers/klayout_task.cpp
+        compute/orchestration/drivers/yosys_log_parser.cpp
+        compute/orchestration/drivers/openroad_report_parser.cpp
+        compute/orchestration/drivers/klayout_report_parser.cpp
+        compute/orchestration/drivers/tool_driver.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -864,9 +891,17 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
         gui/orchestration/rtl_pipeline_panel.cpp
+        gui/orchestration/synthesis_result_dialog.cpp
+        gui/orchestration/pnr_result_dialog.cpp
+        gui/orchestration/signoff_result_dialog.cpp
+        gui/editors/physical_overlay_item.cpp
         compute/orchestration/drivers/yosys_task.cpp
         compute/orchestration/drivers/openroad_task.cpp
         compute/orchestration/drivers/klayout_task.cpp
+        compute/orchestration/drivers/yosys_log_parser.cpp
+        compute/orchestration/drivers/openroad_report_parser.cpp
+        compute/orchestration/drivers/klayout_report_parser.cpp
+        compute/orchestration/drivers/tool_driver.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -1339,9 +1374,17 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
         gui/orchestration/rtl_pipeline_panel.cpp
+        gui/orchestration/synthesis_result_dialog.cpp
+        gui/orchestration/pnr_result_dialog.cpp
+        gui/orchestration/signoff_result_dialog.cpp
+        gui/editors/physical_overlay_item.cpp
         compute/orchestration/drivers/yosys_task.cpp
         compute/orchestration/drivers/openroad_task.cpp
         compute/orchestration/drivers/klayout_task.cpp
+        compute/orchestration/drivers/yosys_log_parser.cpp
+        compute/orchestration/drivers/openroad_report_parser.cpp
+        compute/orchestration/drivers/klayout_report_parser.cpp
+        compute/orchestration/drivers/tool_driver.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -1460,9 +1503,17 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
         gui/orchestration/rtl_pipeline_panel.cpp
+        gui/orchestration/synthesis_result_dialog.cpp
+        gui/orchestration/pnr_result_dialog.cpp
+        gui/orchestration/signoff_result_dialog.cpp
+        gui/editors/physical_overlay_item.cpp
         compute/orchestration/drivers/yosys_task.cpp
         compute/orchestration/drivers/openroad_task.cpp
         compute/orchestration/drivers/klayout_task.cpp
+        compute/orchestration/drivers/yosys_log_parser.cpp
+        compute/orchestration/drivers/openroad_report_parser.cpp
+        compute/orchestration/drivers/klayout_report_parser.cpp
+        compute/orchestration/drivers/tool_driver.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -1867,9 +1918,17 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
         gui/orchestration/rtl_pipeline_panel.cpp
+        gui/orchestration/synthesis_result_dialog.cpp
+        gui/orchestration/pnr_result_dialog.cpp
+        gui/orchestration/signoff_result_dialog.cpp
+        gui/editors/physical_overlay_item.cpp
         compute/orchestration/drivers/yosys_task.cpp
         compute/orchestration/drivers/openroad_task.cpp
         compute/orchestration/drivers/klayout_task.cpp
+        compute/orchestration/drivers/yosys_log_parser.cpp
+        compute/orchestration/drivers/openroad_report_parser.cpp
+        compute/orchestration/drivers/klayout_report_parser.cpp
+        compute/orchestration/drivers/tool_driver.cpp
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -2052,6 +2111,29 @@ endif()
 # Fix Qt platform plugin path for macOS tests (prevents dual-Qt library loading)
 # When both 'qt' and 'qtbase' are installed via Homebrew, the platform plugin
 # search may find a plugin built against a different Qt version, causing crashes.
+
+# EDA Driver Unit Tests (no external tools required)
+add_executable(test_eda_drivers
+    tests/test_eda_drivers.cpp
+    compute/orchestration/drivers/yosys_task.cpp
+    compute/orchestration/drivers/yosys_log_parser.cpp
+    compute/orchestration/drivers/openroad_task.cpp
+    compute/orchestration/drivers/openroad_report_parser.cpp
+    compute/orchestration/drivers/klayout_report_parser.cpp
+    compute/orchestration/drivers/klayout_task.cpp
+    compute/orchestration/drivers/tool_driver.cpp
+    compute/orchestration/server/subprocess.cpp
+)
+target_include_directories(test_eda_drivers PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/drivers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/server
+)
+target_link_libraries(test_eda_drivers PRIVATE Qt6::Core)
+target_compile_features(test_eda_drivers PUBLIC cxx_std_17)
+
 if(APPLE AND CMAKE_PREFIX_PATH)
     set(_qt_plugin_dir "${CMAKE_PREFIX_PATH}/share/qt/plugins")
     if(EXISTS "${_qt_plugin_dir}")

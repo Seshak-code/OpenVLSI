@@ -403,9 +403,12 @@ private:
     acutesim::gui::core::HierarchyPath* hierarchyPath_ = nullptr;
     acutesim::gui::widgets::BreadcrumbWidget* breadcrumbWidget_ = nullptr;
 
-    // Editor state stack for navigation restoration
-    struct EditorState {
-        QJsonObject sceneState;
+    // Overlay
+    PhysicalOverlayItem* m_overlay = nullptr;
+
+public:
+    void showPhysicalOverlay(const QString& defPath);
+    void clearPhysicalOverlay();
         QPointF viewportCenter;
         qreal zoomLevel;
         QString currentProfileId;

@@ -14,8 +14,11 @@
 #include "compute/orchestration/drivers/yosys_task.h"
 #include "compute/orchestration/drivers/openroad_task.h"
 #include "compute/orchestration/drivers/klayout_task.h"
+#include "compute/orchestration/drivers/tool_driver.h"
 
 namespace acutesim::gui::orchestration {
+
+enum class ExecutionMode { LOCAL, REMOTE, AUTO };
 
 struct WorkerState {
     QString workerId;
@@ -46,6 +49,11 @@ public:
     WorkerState currentState() const { return m_state; }
     bool isConnected() const { return m_state.isConnected; }
 
+    void setExecutionMode(ExecutionMode mode);
+    ExecutionMode executionMode() const { return m_executionMode; }
+    void setMockMode(bool enabled); // Proxy to ToolDriver
+    bool canRunLocally() const;
+
     // Job submission - returns job ID (UUID string)
     QString submitSynthesis(const acutesim::compute::orchestration::SynthesisConfig& config);
     QString submitPlaceAndRoute(const acutesim::compute::orchestration::FloorplanConfig& fpConfig,
@@ -65,16 +73,33 @@ signals:
     void jobLogReceived(const QString& jobId, const QString& line, bool isError);
     void jobCompleted(const QString& jobId, bool success, const QString& artifactPath);
 
+    // Structured result signals (emitted after parsing tool output)
+    void synthesisResultReady(const QString& jobId, const acutesim::compute::orchestration::SynthesisResult& result);
+    void pnrResultReady(const QString& jobId, const acutesim::compute::orchestration::PnRResult& result);
+    void drcResultReady(const QString& jobId, const acutesim::compute::orchestration::DRCResult& result);
+    void lvsResultReady(const QString& jobId, const acutesim::compute::orchestration::LVSResult& result);
+
 private:
     void pollStatus(); // Periodic health check
 
     std::unique_ptr<acutesim::worker::WorkerClient> m_client;
     WorkerState m_state;
+    ExecutionMode m_executionMode = ExecutionMode::AUTO;
     std::atomic<bool> m_running { false };
     std::thread m_pollThread;
 
     // Active jobs
     std::map<std::string, std::atomic<bool>*> m_jobCancelFlags;
+
+    // Local execution helpers
+    bool shouldRunLocally() const;
+    void runLocalSynthesis(const QString& jobId, const acutesim::compute::orchestration::SynthesisConfig& config);
+    void runLocalPnR(const QString& jobId,
+                     const acutesim::compute::orchestration::FloorplanConfig& fpConfig,
+                     const acutesim::compute::orchestration::PlacementConfig& placeConfig,
+                     const acutesim::compute::orchestration::CTSConfig& ctsConfig,
+                     const acutesim::compute::orchestration::RoutingConfig& routeConfig);
+    void runLocalSignOff(const QString& jobId, const acutesim::compute::orchestration::DRCConfig& config);
 };
 
 } // namespace acutesim::gui::orchestration

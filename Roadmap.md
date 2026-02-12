@@ -46,7 +46,7 @@ This roadmap evolves CuteApp from a standalone open-source simulator into an Age
 ## 🏛 GLOBAL PROJECT GOVERNANCE
 ### 📅 Milestone Calendar (Target 2026)
 *   **Q1 (Stabilization)**: Complete Phases 0-2. Numerical authority established on x86/ARM/WASM.
-*   **Q2 (Design Flows - Current)**: Complete Phases 3-5. **Hierarchical Drill-Down**, **PDK Compliance Auditor**, and **Standard IR Exports** (SPEF/Verilog).
+*   **Q2 (Design Flows - Current)**: Complete Phases 3-5. **Hierarchical Drill-Down**, **[x] PDK Compliance Auditor**, and **Standard IR Exports** (SPEF/Verilog).
 *   **Q3 (Physical & RF)**: Complete Phases 6-8. **GDSII Layout Editor**, **Harmonic Balance Solver**, and **Simulation Orchestration** (Multi-engine coordinator).
 *   **Q4 (Industry Sign-off)**: Complete Phases 9-14. **Unified Project Management**, **Mixed-Signal (AMS) Engine**, and **GPU-Accelerated Solvers**.
 
@@ -212,7 +212,7 @@ Now with explicit exit conditions and quality gates:
 | **Phase 4** | STCO/3D | Thermal Safety: Partitioning agent predicts hotspots within 5% of FEM baseline. |
 | **Phase 4** | STCO/3D | Thermal Safety: Partitioning agent predicts hotspots within 5% of FEM baseline. |
 | **Phase 5** | Secure Bridge | PDK Isolation: Zero leakage of decrypted PDK data outside TEE RAM. |
-| **Phase 5** | Compliance | **RTL-to-GDS Auditor**: Automated check verifying all schematic/Verilog-A components map to valid PDK cells before export. |
+| **Phase 5** | Compliance | **[x] RTL-to-GDS Auditor**: Automated check verifying all schematic/Verilog-A components map to valid PDK cells before export. |
 
 ---
 
@@ -702,18 +702,18 @@ graph TD
 - [x] Add /demo and /help commands.
 
 #### Step 4: AI Context Representation Layer
-- [ ] Serialize topology, device tables, and DC/Transient endpoints into structured chunks.
-- [ ] Inject probe values and historical error metrics into prompt context.
-- [ ] Incorporate solver decisions and flags for grounding.
+- [x] Serialize topology, device tables, and DC/Transient endpoints into structured chunks.
+- [x] Inject probe values and historical error metrics into prompt context.
+- [x] Incorporate solver decisions and flags for grounding.
 
 #### Step 5: Topology-Aware Prompt Compression
 - [ ] Functional Block Identification (Amplifier, Bias, Feedback stage).
 - [ ] Pathway Summarization (Signal chain extraction).
 
 #### Step 6: Evaluation, Reranking & Feedback Loop
-- [ ] Cross-encoder reranking for context relevance.
-- [ ] Reinforcement Learning (RL) integration: User feedback signals (helpful/not) used for discriminator fine-tuning.
-- [ ] RAG context updates based on successful outcomes.
+- [x] Cross-encoder reranking for context relevance.
+- [x] Reinforcement Learning (RL) integration: User feedback signals (helpful/not) used for discriminator fine-tuning.
+- [x] RAG context updates based on successful outcomes.
 
 ---
 
@@ -797,8 +797,8 @@ graph TD
 - [x] Verification: Probes no longer inflate node count or cause matrix crashes.
 
 ### Phase 2.6: Debug Logging & AI Integration
-- [ ] crash_report.h: Created with CrashReport, ProbeDebugInfo, ComponentDebugInfo structs.
-- [ ] context_engine.cpp: Injects crash context into AI copilot prompts.
+- [x] crash_report.h: Created with CrashReport, ProbeDebugInfo, ComponentDebugInfo structs.
+- [x] context_engine.cpp: Injects crash context into AI copilot prompts.
 - [ ] Crash logs saved to: ~/.beaversim/crash_logs/.
 
 ### AI API
@@ -1376,18 +1376,18 @@ graph TD
 **Goal**: Unified Driver API for local, Docker, and Cloud resources.
 
 **Core Dependencies**
-- [ ] gRPC + Protobuf: Define `WorkerService.proto`.
+- [x] gRPC + Protobuf: Define `WorkerService.proto`.
 - [ ] Docker SDK (C++): Manage local containers.
 - [ ] WSL2 Interop Library: Drive Linux binaries inside WSL2.
 - [ ] **Yosys (Digital Verification)**: Integration for logic synthesis and formal verification.
 - [ ] **OpenROAD (Physical Implementation)**: Integration for pathing, IO placement, and 3D routing verification.
-- [ ] **KLayout (Signoff)**: GDSII export pipeline and final layout viewing.
+- [x] **KLayout (Signoff)**: GDSII export pipeline, DRC/LVS report parsing, and result visualization.
 
 **Implementation Tasks**
-- [ ] Abstract Worker Interface: `IWorkerDriver` with `submitJob`, `cancelJob`.
-- [ ] Client Implementation: `grpc_worker_client.cpp`.
-- [ ] Yosys Driver: Generates TCL, parses logs.
-- [ ] OpenROAD Driver: Translates positions to DEF.
+- [x] Abstract Worker Interface: `IWorkerDriver` with `submitJob`, `cancelJob`.
+- [x] Client Implementation: `grpc_worker_client.cpp`.
+- [x] Yosys Driver: Generates TCL, parses logs.
+- [x] OpenROAD Driver: Translates positions to DEF.
 - [ ] Cross-Platform Strategy: Auto-detect environment.
 
 ### 12.2 Competitive Advantage: Cross-Domain Intelligence

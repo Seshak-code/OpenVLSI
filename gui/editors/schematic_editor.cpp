@@ -29,6 +29,9 @@
 #include <QRegularExpression>
 #include "../../gui/styling/theme_manager.h"
 #include "../core/subcircuit_resolver.h" // Phase 14: Centralized Resolution
+#include "physical_overlay_item.h"
+#include "../../compute/orchestration/drivers/def_parser.h"
+
 
 // ============================================================================
 // WIRE COMPONENT
@@ -2696,3 +2699,65 @@ void SchematicEditor::restoreState(const EditorState& state) {
     currentProfileId_ = state.currentProfileId;
     modified_ = false;
 }
+
+// ============================================================================
+// PHYSICAL OVERLAY (Phase 15)
+// ============================================================================
+
+void SchematicEditor::showPhysicalOverlay(const QString& defPath) {
+    if (!scene) return;
+    
+    QFile f(defPath);
+    if (!f.open(QIODevice::ReadOnly)) {
+        qWarning() << "Failed to open DEF file for overlay:" << defPath;
+        return;
+    }
+    QString content = QString::fromUtf8(f.readAll());
+    
+    using namespace acutesim::compute::orchestration;
+    DEFDesign design = DEFParser::parse(content);
+    
+    if (!m_overlay) {
+        m_overlay = new acutesim::gui::editors::PhysicalOverlayItem();
+        scene->addItem(m_overlay);
+    }
+    
+    // Scale: 1um = 10px (Grid Step)
+    // DEF Units: 1um = 1000 (usually)
+    // pixelToMicronScale = 0.1 (10px / 100um? No. 10px / 1um? Yes.)
+    // If 1um = 10px, then scale is 10 px/um?
+    // DEFTranslator uses: canvasX = defX / (scale * upm) ???
+    // Wait, let's look at DEFTranslator::defToCanvas again.
+    // canvasX = defX / scale; where scale = pixelToMicronScale * defUnitsPerMicron.
+    // If pixelToMicronScale = 0.1?
+    // scale = 0.1 * 1000 = 100.
+    // canvasX = 1000 (1um) / 100 = 10px.
+    // Correct. 1um -> 10px.
+    
+    double pxPerMicronIsScale = 0.1; 
+    
+    // Calculate canvas height from die size to ensure correct Y-flip relative to die bottom
+    // We treat the "canvas" for the die as exactly the die height.
+    double fullScale = pxPerMicronIsScale * design.unitsPerMicron;
+    double canvasHeight = design.dieArea.height() / fullScale;
+    
+    m_overlay->setDEFData(design, pxPerMicronIsScale, canvasHeight);
+    
+    // Center the overlay on the scene (0,0 is center)
+    double canvasWidth = design.dieArea.width() / fullScale;
+    m_overlay->setPos(-canvasWidth / 2.0, -canvasHeight / 2.0);
+    
+    m_overlay->setVisible(true);
+    
+    if (statusLabel) {
+        statusLabel->setText(QString("Overlay loaded: %1").arg(QFileInfo(defPath).fileName()));
+    }
+}
+
+void SchematicEditor::clearPhysicalOverlay() {
+    if (m_overlay) {
+        m_overlay->clear();
+        m_overlay->setVisible(false);
+    }
+}
+

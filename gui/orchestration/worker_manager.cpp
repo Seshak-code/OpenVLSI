@@ -1,6 +1,7 @@
 #include "worker_manager.h"
 #include <QTimer>
 #include <QDebug>
+#include <QDir>
 #include <chrono>
 
 namespace acutesim::gui::orchestration {
@@ -74,8 +75,14 @@ void WorkerManager::pollStatus() {
 QString WorkerManager::submitSynthesis(const acutesim::compute::orchestration::SynthesisConfig& config) {
     QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
 
+    if (shouldRunLocally()) {
+        emit jobLogReceived(jobId, "Running Yosys locally...", false);
+        runLocalSynthesis(jobId, config);
+        return jobId;
+    }
+
     if (!m_client) {
-        emit jobLogReceived(jobId, "No worker connected", true);
+        emit jobLogReceived(jobId, "No worker connected and no local tools available", true);
         emit jobCompleted(jobId, false, "");
         return jobId;
     }
@@ -128,8 +135,14 @@ QString WorkerManager::submitPlaceAndRoute(
 {
     QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
 
+    if (shouldRunLocally()) {
+        emit jobLogReceived(jobId, "Running OpenROAD locally...", false);
+        runLocalPnR(jobId, fpConfig, placeConfig, ctsConfig, routeConfig);
+        return jobId;
+    }
+
     if (!m_client) {
-        emit jobLogReceived(jobId, "No worker connected", true);
+        emit jobLogReceived(jobId, "No worker connected and no local tools available", true);
         emit jobCompleted(jobId, false, "");
         return jobId;
     }
@@ -181,8 +194,13 @@ QString WorkerManager::submitPlaceAndRoute(
 QString WorkerManager::submitSignOff(const acutesim::compute::orchestration::DRCConfig& drcConfig) {
     QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
 
+    if (shouldRunLocally()) {
+        runLocalSignOff(jobId, drcConfig);
+        return jobId;
+    }
+
     if (!m_client) {
-        emit jobLogReceived(jobId, "No worker connected", true);
+        emit jobLogReceived(jobId, "No worker connected and no local tools available", true);
         emit jobCompleted(jobId, false, "");
         return jobId;
     }
@@ -229,6 +247,127 @@ void WorkerManager::cancelJob(const QString& jobId) {
         emit jobLogReceived(jobId, "Job cancelled by user", false);
         emit jobCompleted(jobId, false, "");
     }
+}
+
+// ============================================================================
+// EXECUTION MODE
+// ============================================================================
+
+void WorkerManager::setExecutionMode(ExecutionMode mode) {
+    m_executionMode = mode;
+    emit statusChanged(m_state);
+}
+
+void WorkerManager::setMockMode(bool enabled) {
+    acutesim::compute::orchestration::ToolDriver::setMockMode(enabled);
+    emit statusChanged(m_state); // Trigger UI update (enable run button if formerly disabled)
+}
+
+bool WorkerManager::canRunLocally() const {
+    using TD = acutesim::compute::orchestration::ToolDriver;
+    return TD::isToolAvailable("yosys") || TD::isToolAvailable("openroad");
+}
+
+bool WorkerManager::shouldRunLocally() const {
+    if (m_executionMode == ExecutionMode::LOCAL) return true;
+    if (m_executionMode == ExecutionMode::REMOTE) return false;
+    // AUTO: prefer remote if connected, fall back to local
+    return !m_state.isConnected;
+}
+
+// ============================================================================
+// LOCAL EXECUTION
+// ============================================================================
+
+void WorkerManager::runLocalSynthesis(
+    const QString& jobId,
+    const acutesim::compute::orchestration::SynthesisConfig& config) {
+
+    using namespace acutesim::compute::orchestration;
+
+    auto* cancelFlag = new std::atomic<bool>(false);
+    m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
+
+    std::thread([this, jobId, config, cancelFlag]() {
+        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const QString& line, bool isError) {
+            if (cancelFlag->load()) return;
+            QMetaObject::invokeMethod(this, [this, jobId, line, isError]() {
+                emit jobLogReceived(jobId, line, isError);
+            }, Qt::QueuedConnection);
+        };
+
+        QString workDir = QDir::currentPath();
+        SynthesisResult result = ToolDriver::runYosys(config, workDir, "yosys", logCb);
+
+        if (cancelFlag->load()) return;
+
+        QMetaObject::invokeMethod(this, [this, jobId, result]() {
+            emit synthesisResultReady(jobId, result);
+            emit jobCompleted(jobId, result.success, "");
+        }, Qt::QueuedConnection);
+    }).detach();
+}
+
+void WorkerManager::runLocalPnR(
+    const QString& jobId,
+    const acutesim::compute::orchestration::FloorplanConfig& fpConfig,
+    const acutesim::compute::orchestration::PlacementConfig& placeConfig,
+    const acutesim::compute::orchestration::CTSConfig& ctsConfig,
+    const acutesim::compute::orchestration::RoutingConfig& routeConfig) {
+
+    using namespace acutesim::compute::orchestration;
+
+    auto* cancelFlag = new std::atomic<bool>(false);
+    m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
+
+    std::thread([this, jobId, fpConfig, placeConfig, ctsConfig, routeConfig, cancelFlag]() {
+        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const QString& line, bool isError) {
+            if (cancelFlag->load()) return;
+            QMetaObject::invokeMethod(this, [this, jobId, line, isError]() {
+                emit jobLogReceived(jobId, line, isError);
+            }, Qt::QueuedConnection);
+        };
+
+        QString workDir = QDir::currentPath();
+        PnRResult result = ToolDriver::runOpenROAD(
+            fpConfig, placeConfig, ctsConfig, routeConfig, workDir, "openroad", logCb);
+
+        if (cancelFlag->load()) return;
+
+        QMetaObject::invokeMethod(this, [this, jobId, result]() {
+            emit pnrResultReady(jobId, result);
+            emit jobCompleted(jobId, result.success, "");
+        }, Qt::QueuedConnection);
+    }).detach();
+}
+
+void WorkerManager::runLocalSignOff(
+    const QString& jobId,
+    const acutesim::compute::orchestration::DRCConfig& config) {
+
+    using namespace acutesim::compute::orchestration;
+
+    auto* cancelFlag = new std::atomic<bool>(false);
+    m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
+
+    std::thread([this, jobId, config, cancelFlag]() {
+        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const QString& line, bool isError) {
+            if (cancelFlag->load()) return;
+            QMetaObject::invokeMethod(this, [this, jobId, line, isError]() {
+                emit jobLogReceived(jobId, line, isError);
+            }, Qt::QueuedConnection);
+        };
+
+        QString workDir = QDir::currentPath();
+        DRCResult result = ToolDriver::runKLayoutDRC(config, workDir, "klayout", logCb);
+
+        if (cancelFlag->load()) return;
+
+        QMetaObject::invokeMethod(this, [this, jobId, result]() {
+            emit drcResultReady(jobId, result);
+            emit jobCompleted(jobId, result.success, "");
+        }, Qt::QueuedConnection);
+    }).detach();
 }
 
 } // namespace acutesim::gui::orchestration

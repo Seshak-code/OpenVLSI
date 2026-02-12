@@ -6,6 +6,7 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QProgressBar>
@@ -14,10 +15,14 @@
 #include <QVector>
 #include <QMap>
 
+#include <optional>
 #include "worker_manager.h"
 #include "compute/orchestration/drivers/yosys_task.h"
 #include "compute/orchestration/drivers/openroad_task.h"
 #include "compute/orchestration/drivers/klayout_task.h"
+#include "compute/orchestration/drivers/yosys_log_parser.h"
+#include "compute/orchestration/drivers/openroad_report_parser.h"
+#include "compute/orchestration/drivers/klayout_report_parser.h"
 
 namespace acutesim::gui::orchestration {
 
@@ -58,6 +63,7 @@ public:
 signals:
     void pipelineCompleted(bool success);
     void logMessage(const QString& msg);
+    void overlayRequested(const QString& defFilePath);
 
 private slots:
     void startFullPipeline();
@@ -65,6 +71,10 @@ private slots:
     void onJobProgress(const QString& jobId, float progress);
     void onJobLog(const QString& jobId, const QString& line, bool isError);
     void onJobCompleted(const QString& jobId, bool success, const QString& artifactPath);
+    void onExecutionModeChanged(int index);
+    void onSynthesisResult(const QString& jobId, const acutesim::compute::orchestration::SynthesisResult& result);
+    void onPnRResult(const QString& jobId, const acutesim::compute::orchestration::PnRResult& result);
+    void onDrcResult(const QString& jobId, const acutesim::compute::orchestration::DRCResult& result);
 
 private:
     void setupUI();
@@ -86,12 +96,17 @@ private:
     QComboBox* m_targetLibCombo = nullptr;
     QComboBox* m_synthGoalCombo = nullptr;
 
+    // Synthesis config (extra)
+    QCheckBox* m_flattenCheck = nullptr;
+
     // PnR config widgets
     QDoubleSpinBox* m_dieWidthSpin = nullptr;
     QDoubleSpinBox* m_dieHeightSpin = nullptr;
     QDoubleSpinBox* m_coreUtilSpin = nullptr;
+    QDoubleSpinBox* m_targetDensitySpin = nullptr;
     QComboBox* m_placementGoalCombo = nullptr;
     QComboBox* m_routingEffortCombo = nullptr;
+    QCheckBox* m_repairAntennasCheck = nullptr;
     QLineEdit* m_clockNetEdit = nullptr;
 
     // Sign-Off config widgets
@@ -102,10 +117,21 @@ private:
     QVector<QProgressBar*> m_stepProgressBars;
     QVector<QLabel*> m_stepStatusLabels;
 
+    // Physical overlay
+    QCheckBox* m_showOverlayCheck = nullptr;
+
+    // Execution mode
+    QComboBox* m_execModeCombo = nullptr;
+
     // Pipeline controls
     QPushButton* m_runPipelineBtn = nullptr;
     QPushButton* m_cancelBtn = nullptr;
     QTextEdit* m_pipelineLog = nullptr;
+
+    // Cached results
+    std::optional<acutesim::compute::orchestration::SynthesisResult> m_lastSynthResult;
+    std::optional<acutesim::compute::orchestration::PnRResult> m_lastPnRResult;
+    std::optional<acutesim::compute::orchestration::DRCResult> m_lastDrcResult;
 
     // Worker manager reference
     WorkerManager* m_workerMgr = nullptr;

@@ -51,9 +51,47 @@ QString YosysTask::getGoalOptimizations(SynthesisGoal goal) {
             return " -script +strash;ifraig;retime,-D,{D};dch,-f;map,-a,-M,1,{D}";
         case SynthesisGoal::SPEED:
             return " -script +strash;ifraig;retime,-D,{D};map,-p,-M,1,{D}";
+        case SynthesisGoal::POWER:
+            // Low-power recipe: aggressive area reduction + clock gating awareness
+            return " -script +strash;ifraig;scorr;dc2;dch,-f;map,-a,-M,1,{D}";
         default:
             return ""; // Default ABC heuristic
     }
+}
+
+QString YosysTask::generateJsonTcl(const SynthesisConfig& config) {
+    QString tcl;
+    QTextStream out(&tcl);
+
+    out << "# AcuteSim Auto-Generated Yosys Script (JSON Output Mode)\n";
+    out << "# Yosys 0.30+ required for -json flag\n\n";
+
+    // Same synthesis steps as generateTcl
+    out << "read_liberty -lib " << config.targetLibrary << ".lib\n";
+    for (const auto& file : config.sourceFiles) {
+        out << "read_verilog " << file << "\n";
+    }
+    out << "hierarchy -check -top " << config.topModule << "\n";
+    out << "proc; opt; fsm; opt; memory; opt\n";
+    out << "techmap; opt\n";
+    
+    QString abcCmd = "abc -liberty " + config.targetLibrary + ".lib";
+    abcCmd += getGoalOptimizations(config.goal);
+    out << abcCmd << "\n";
+    out << "dfflibmap -liberty " << config.targetLibrary << ".lib\n";
+    out << "opt_clean -purge\n";
+    
+    // JSON stats output (Yosys 0.30+)
+    out << "stat -json -liberty " << config.targetLibrary << ".lib\n";
+    
+    // Also write netlist
+    out << "write_verilog -noattr syn_" << config.topModule << ".v\n";
+
+    return tcl;
+}
+
+QString YosysTask::generateBatchCommand(const QString& scriptPath) {
+    return QString("yosys -s %1").arg(scriptPath);
 }
 
 } // namespace acutesim::compute::orchestration
