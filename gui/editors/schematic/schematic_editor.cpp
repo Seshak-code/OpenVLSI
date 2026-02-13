@@ -1,9 +1,9 @@
 #include "schematic_editor.h"
-#include "component_wizard.h"
-#include "../widgets/compliance_report_widget.h"
-#include "../widgets/breadcrumb_widget.h"
-#include "../../components/pdk_compliance.h"
-#include "../../ai_api/system/crash_report.h"
+#include "../component_wizard.h"
+#include "../../widgets/compliance_report_widget.h"
+#include "../../widgets/breadcrumb_widget.h"
+#include "../../../components/pdk_compliance.h"
+#include "../../../ai_api/system/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsSceneContextMenuEvent>
@@ -16,23 +16,23 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include "gui_types.h"
-#include "gui/analysis/system_inspector.h"
-#include "gui/editors/physical_overlay_item.h"
-#include "../analysis/erc_engine.h"
-#include "../analysis/erc_autofix.h"
-#include "../../physics/simulation_profile.h"
-#include "../../components/design_db.h"
-#include "../components/standard_cell_visualizer.h" // Phase 14: Visualizer
+#include "../../analysis/system_inspector.h"
+#include "../physical_overlay_item.h"
+#include "../../analysis/erc_engine.h"
+#include "../../analysis/erc_autofix.h"
+#include "../../../physics/simulation_profile.h"
+#include "../../../components/design_db.h"
+#include "../../components/standard_cell_visualizer.h" // Phase 14: Visualizer
 #include <QFileInfo>
-#include "../widgets/inline_dialog.h"
+#include "../../widgets/inline_dialog.h"
 #include <QMenu>
 #include <QAction>
 #include <QDateTime>
 #include <QRegularExpression>
-#include "../../gui/styling/theme_manager.h"
-#include "../core/subcircuit_resolver.h" // Phase 14: Centralized Resolution
-#include "physical_overlay_item.h"
-#include "../../compute/orchestration/drivers/def_parser.h"
+#include "../../styling/theme_manager.h"
+#include "../../core/subcircuit_resolver.h" // Phase 14: Centralized Resolution
+#include "../physical_overlay_item.h"
+#include "../../../compute/orchestration/drivers/def_parser.h"
 
 
 // ============================================================================

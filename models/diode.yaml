@@ -1,4 +1,5 @@
 # Diode (PN Junction) - Shockley Model
+# Originally derived from diode.va (Verilog-A). YAML is the canonical format.
 # This is the proof-of-concept model for the Physics Compiler.
 
 name: Diode

@@ -12,7 +12,7 @@
 #include "../widgets/search_dock.h"
 #include "../styling/theme_manager.h"
 #include "../scripting/tcl_bridge.h"
-#include "../editors/schematic_editor.h"
+#include "../editors/schematic/schematic_editor.h"
 #include "editor_manager.h"
 #include <QApplication>
 #include <QHeaderView>

@@ -14,21 +14,21 @@
 #include <QGroupBox>
 #include <QMap>
 #include <QKeyEvent>
-#include "../core/editor_manager.h" // For IEditor
-#include "../core/hierarchy_path.h" // Phase 5: Hierarchical Navigation
-#include "../components/visual_component.h"
-#include "../../components/circuit.h"
+#include "../../core/editor_manager.h" // For IEditor
+#include "../../core/hierarchy_path.h" // Phase 5: Hierarchical Navigation
+#include "../../components/visual_component.h"
+#include "../../../components/circuit.h"
 #include "schematic_view.h"
 
 
 #include <QJsonArray>
 #include <QJsonObject>
 #include "gui_types.h"
-#include "../analysis/erc_engine.h"
-#include "../analysis/erc_autofix.h"
-#include "../analysis/erc_autofix.h"
-#include "../../physics/simulation_profile.h"
-#include "../../components/design_db.h"
+#include "../../analysis/erc_engine.h"
+#include "../../analysis/erc_autofix.h"
+#include "../../analysis/erc_autofix.h"
+#include "../../../physics/simulation_profile.h"
+#include "../../../components/design_db.h"
 
 // Forward declarations
 // Forward declarations

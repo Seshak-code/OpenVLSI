@@ -1,6 +1,6 @@
 #include "ai_assistant_panel.h"
 #include "../../gui/styling/theme_manager.h"
-#include "schematic_editor.h"
+#include "../editors/schematic/schematic_editor.h"
 // gui_types.h include removed - AppMode no longer used
 
 // AI API Includes

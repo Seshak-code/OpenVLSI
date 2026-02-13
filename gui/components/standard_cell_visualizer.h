@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../components/circuit.h"
-#include "../editors/schematic_editor.h"
+#include "../editors/schematic/schematic_editor.h"
 
 namespace acutesim {
 namespace gui {

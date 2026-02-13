@@ -1,6 +1,6 @@
 #include "pdk_compliance.h"
 #include "../gui/components/visual_component.h"
-#include "../gui/editors/schematic_editor.h"
+#include "../gui/editors/schematic/schematic_editor.h"
 #include "pdk_manager.h"
 #include <QGraphicsItem>
 #include <QDebug>

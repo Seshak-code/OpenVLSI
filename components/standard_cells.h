@@ -438,31 +438,55 @@ public:
         static StandardCellLibrary lib;
         return lib;
     }
-    
+
     const SubCircuitDefinition* get(const std::string& name) const {
-        auto it = definitions_.find(name);
-        return (it != definitions_.end()) ? &it->second : nullptr;
+        // Data-driven cells take priority over hardcoded fallbacks
+        auto it = dataDrivenDefs_.find(name);
+        if (it != dataDrivenDefs_.end()) return &it->second;
+        auto it2 = definitions_.find(name);
+        return (it2 != definitions_.end()) ? &it2->second : nullptr;
     }
-    
+
     void registerDefinition(const SubCircuitDefinition& def) {
         definitions_[def.name] = def;
     }
-    
+
     bool contains(const std::string& name) const {
-        return definitions_.find(name) != definitions_.end();
+        return dataDrivenDefs_.find(name) != dataDrivenDefs_.end()
+            || definitions_.find(name) != definitions_.end();
     }
-    
+
     std::vector<std::string> getNames() const {
         std::vector<std::string> names;
-        for (const auto& kv : definitions_) {
+        // Data-driven cells first
+        for (const auto& kv : dataDrivenDefs_) {
             names.push_back(kv.first);
+        }
+        // Hardcoded fallbacks (skip duplicates)
+        for (const auto& kv : definitions_) {
+            if (dataDrivenDefs_.find(kv.first) == dataDrivenDefs_.end())
+                names.push_back(kv.first);
         }
         return names;
     }
-    
+
+    /**
+     * Load all .sch files from a directory and register them as data-driven cells.
+     * Returns the number of cells successfully loaded.
+     * Implemented in standard_cells.cpp.
+     */
+    int loadFromDirectory(const std::string& dir);
+
+    /**
+     * Parse a single .sch JSON file into a SubCircuitDefinition.
+     * Returns true on success, populating outDef.
+     * Implemented in standard_cells.cpp.
+     */
+    static bool loadCellFromSchematic(const std::string& path, SubCircuitDefinition& outDef);
+
 private:
     StandardCellLibrary() {
-        // Register built-in ICs
+        // Register built-in ICs (hardcoded fallbacks)
         registerDefinition(createGenericDarlington());
         registerDefinition(createResistiveDivider());
         registerDefinition(createHalfWaveRectifier());
@@ -470,16 +494,16 @@ private:
         registerDefinition(createDifferentialPair());
         registerDefinition(createRCLowPass());
         registerDefinition(createBiCMOSBuffer());
-        
+
         // PDK-Ready Templates
         registerDefinition(createPDK_NFET());
         registerDefinition(createPDK_PFET());
         registerDefinition(createPDK_Resistor_Poly());
         registerDefinition(createPDK_Capacitor_MIM());
-        
     }
-    
-    std::map<std::string, SubCircuitDefinition> definitions_;
+
+    std::map<std::string, SubCircuitDefinition> definitions_;      // Hardcoded
+    std::map<std::string, SubCircuitDefinition> dataDrivenDefs_;   // From .sch files
 };
 
 } // namespace StandardCells

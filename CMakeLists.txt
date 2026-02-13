@@ -225,16 +225,16 @@ add_executable(${PROJECT_NAME}
     gui/core/hierarchy_path.cpp
     gui/core/hierarchy_path.h
     resources/icons.qrc
-    gui/editors/schematic_editor.cpp
-    gui/editors/schematic_editor_sync.cpp
+    gui/editors/schematic/schematic_editor.cpp
+    gui/editors/schematic/schematic_editor_sync.cpp
     components/netlist_export.cpp
-    gui/editors/schematic_editor.h
+    gui/editors/schematic/schematic_editor.h
     gui/editors/code_editor.cpp
     gui/editors/code_editor.h
     gui/core/sim_auto_detector.cpp
     gui/core/sim_auto_detector.h
-    gui/editors/schematic_view.cpp
-    gui/editors/schematic_view.h
+    gui/editors/schematic/schematic_view.cpp
+    gui/editors/schematic/schematic_view.h
     gui/editors/component_wizard.cpp
     gui/editors/component_wizard.h
     gui/components/visual_component.cpp
@@ -253,7 +253,8 @@ add_executable(${PROJECT_NAME}
     components/pdk_compliance.h
     components/pdk_manager.cpp
     components/pdk_manager.h
-    gui/editors/schematic_editor_api.cpp
+    components/standard_cells.cpp
+    gui/editors/schematic/schematic_editor_api.cpp
     gui/analysis/system_inspector.cpp
     gui/analysis/system_inspector.h
     gui/widgets/design_flow.cpp
@@ -430,6 +431,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/gui
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors/schematic
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
@@ -727,11 +729,11 @@ if(NOT EMSCRIPTEN)
         gui/components/probe_tip.cpp
         gui/core/hierarchy_path.cpp
         gui/widgets/breadcrumb_widget.cpp
-        gui/editors/schematic_editor.cpp
-        gui/editors/schematic_view.cpp
+        gui/editors/schematic/schematic_editor.cpp
+        gui/editors/schematic/schematic_view.cpp
         gui/editors/component_wizard.cpp
-        gui/editors/schematic_editor_api.cpp
-        gui/editors/schematic_editor_sync.cpp
+        gui/editors/schematic/schematic_editor_api.cpp
+        gui/editors/schematic/schematic_editor_sync.cpp
         gui/panels/ai_assistant_panel.cpp
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
@@ -870,11 +872,11 @@ if(NOT EMSCRIPTEN)
         gui/components/probe_tip.cpp
         gui/core/hierarchy_path.cpp
         gui/widgets/breadcrumb_widget.cpp
-        gui/editors/schematic_editor.cpp
-        gui/editors/schematic_view.cpp
+        gui/editors/schematic/schematic_editor.cpp
+        gui/editors/schematic/schematic_view.cpp
         gui/editors/component_wizard.cpp
-        gui/editors/schematic_editor_api.cpp
-        gui/editors/schematic_editor_sync.cpp
+        gui/editors/schematic/schematic_editor_api.cpp
+        gui/editors/schematic/schematic_editor_sync.cpp
         gui/panels/ai_assistant_panel.cpp
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
@@ -1327,7 +1329,7 @@ add_executable(test_pdk_swap
     gui/widgets/breadcrumb_widget.cpp
     tests/stubs/grid_scene_stub.cpp # Stub implementation
     components/design_db.cpp
-    gui/editors/schematic_editor.h # Triggers MOC for GridScene
+    gui/editors/schematic/schematic_editor.h # Triggers MOC for GridScene
     gui/core/editor_manager.cpp
     gui/core/sim_auto_detector.cpp
     gui/editors/code_editor.cpp
@@ -1384,11 +1386,11 @@ if(NOT EMSCRIPTEN)
         gui/components/probe_tip.cpp
         gui/core/hierarchy_path.cpp
         gui/widgets/breadcrumb_widget.cpp
-        gui/editors/schematic_editor.cpp
-        gui/editors/schematic_view.cpp
+        gui/editors/schematic/schematic_editor.cpp
+        gui/editors/schematic/schematic_view.cpp
         gui/editors/component_wizard.cpp
-        gui/editors/schematic_editor_api.cpp
-        gui/editors/schematic_editor_sync.cpp
+        gui/editors/schematic/schematic_editor_api.cpp
+        gui/editors/schematic/schematic_editor_sync.cpp
         gui/panels/ai_assistant_panel.cpp
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
@@ -1520,11 +1522,11 @@ if(NOT EMSCRIPTEN)
         gui/components/probe_tip.cpp
         gui/core/hierarchy_path.cpp
         gui/widgets/breadcrumb_widget.cpp
-        gui/editors/schematic_editor.cpp
-        gui/editors/schematic_view.cpp
+        gui/editors/schematic/schematic_editor.cpp
+        gui/editors/schematic/schematic_view.cpp
         gui/editors/component_wizard.cpp
-        gui/editors/schematic_editor_api.cpp
-        gui/editors/schematic_editor_sync.cpp
+        gui/editors/schematic/schematic_editor_api.cpp
+        gui/editors/schematic/schematic_editor_sync.cpp
         gui/panels/ai_assistant_panel.cpp
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
@@ -1679,10 +1681,10 @@ if(NOT EMSCRIPTEN)
     # Currently CuteApp sources are scattered. Best to add them or link a library if available.
     # Since we don't have a library target for gui/components, we must add sources interactively.
     target_sources(test_spatial_logic PRIVATE
-        gui/editors/schematic_editor.cpp
-        gui/editors/schematic_editor_api.cpp
-        gui/editors/schematic_editor_sync.cpp
-        gui/editors/schematic_view.cpp
+        gui/editors/schematic/schematic_editor.cpp
+        gui/editors/schematic/schematic_editor_api.cpp
+        gui/editors/schematic/schematic_editor_sync.cpp
+        gui/editors/schematic/schematic_view.cpp
         gui/editors/component_wizard.cpp
         gui/components/visual_component.cpp
         gui/components/probe_tip.cpp
@@ -1923,9 +1925,10 @@ target_include_directories(test_verification_harness PRIVATE
 target_compile_features(test_verification_harness PUBLIC cxx_std_17)
 target_link_libraries(test_verification_harness PRIVATE Qt6::Core)
 # Standard Cell Verification (Generic Darlington)
-add_executable(test_std_cells 
+add_executable(test_std_cells
     tests/test_std_cells.cpp
     physics/quick_analysis.cpp
+    components/standard_cells.cpp
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
@@ -1965,16 +1968,16 @@ if(NOT EMSCRIPTEN)
         gui/components/probe_tip.cpp
         gui/core/hierarchy_path.cpp
         gui/widgets/breadcrumb_widget.cpp
-        gui/editors/schematic_editor.cpp
-        gui/editors/schematic_editor_api.cpp
+        gui/editors/schematic/schematic_editor.cpp
+        gui/editors/schematic/schematic_editor_api.cpp
         gui/core/editor_manager.cpp
         gui/components/visual_component.cpp
         gui/components/probe_tip.cpp
-        gui/editors/schematic_editor.cpp
-        gui/editors/schematic_view.cpp
+        gui/editors/schematic/schematic_editor.cpp
+        gui/editors/schematic/schematic_view.cpp
         gui/editors/component_wizard.cpp
-        gui/editors/schematic_editor_api.cpp
-        gui/editors/schematic_editor_sync.cpp
+        gui/editors/schematic/schematic_editor_api.cpp
+        gui/editors/schematic/schematic_editor_sync.cpp
         gui/panels/ai_assistant_panel.cpp
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
@@ -2257,3 +2260,27 @@ if(APPLE AND CMAKE_PREFIX_PATH)
         endforeach()
     endif()
 endif()
+
+# ── CTest Labels: quick (< 5s unit tests) vs heavy (GUI/stress/regression) ──
+# Usage: ctest -L quick   (fast feedback loop)
+#        ctest -L heavy   (full validation)
+set(_quick_tests
+    test_physics_kernels test_safe_io test_emulated_f64 test_dual_emulated
+    test_fpu_determinism test_determinism test_kernel_dispatch
+    test_hierarchy_path test_context_budget test_adk_tool_registry
+)
+foreach(_t ${_quick_tests})
+    if(TEST ${_t})
+        set_tests_properties(${_t} PROPERTIES LABELS "quick")
+    endif()
+endforeach()
+
+set(_heavy_tests
+    test_hierarchical_sim test_gui_logic test_docking_interaction
+    test_ai_simulation_intelligence test_rag_pipeline test_session_manager
+)
+foreach(_t ${_heavy_tests})
+    if(TEST ${_t})
+        set_tests_properties(${_t} PROPERTIES LABELS "heavy")
+    endif()
+endforeach()

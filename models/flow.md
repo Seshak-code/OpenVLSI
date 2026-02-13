@@ -6,23 +6,25 @@ The `models/` directory serves as the **Source of Truth** for user-defined and e
 
 We support two distinct formats for defining physics, both of which compile down to the same internal representation (IR).
 
-### Verilog-A (`.va`)
-The industry-standard language for compact modeling. We support a substantial subset suitable for analog electronics.
+### AcuteSim YAML (`.yaml`) — Canonical Format
+The canonical, declarative model format. All models checked into `models/` use YAML. Verilog-A sources are converted to YAML during initial development and the `.va` originals are not retained.
+
+### Verilog-A (`.va`) — Import Format
+The industry-standard language for compact modeling. The Verilog-A frontend parses `.va` files into the same IR as YAML. Use this for importing third-party models, then maintain them as YAML going forward.
 
 ```verilog
 module diode(p, n);
     inout p, n;
     electrical p, n;
     parameter real Is = 1e-14;
-    
+
     analog begin
         I(p, n) <+ Is * (limexp(V(p, n) / $vt) - 1);
     end
 endmodule
 ```
 
-### AcuteSim YAML (`.yaml`)
-A declarative, Python-friendly format used for rapid prototyping and internal regression testing.
+### YAML Example
 
 ```yaml
 name: Diode

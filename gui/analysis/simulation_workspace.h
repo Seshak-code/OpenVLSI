@@ -17,7 +17,7 @@
 #include "simulation_worker.h"
 #include "../../physics/statistical_engine.h"
 
-#include "../editors/schematic_editor.h"
+#include "../editors/schematic/schematic_editor.h"
 #include "../analysis/erc_engine.h"
 #include "../widgets/problems_panel.h"
 #include "../widgets/trust_badge_widget.h"

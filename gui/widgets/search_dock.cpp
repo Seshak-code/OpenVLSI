@@ -1,5 +1,5 @@
 #include "search_dock.h"
-#include "schematic_editor.h"
+#include "../editors/schematic/schematic_editor.h"
 #include "../styling/theme_manager.h"
 #include <QHeaderView>
 

@@ -15,6 +15,11 @@ void batchBJTPhysics_generic(BJTTensor& tensor, const std::vector<double>& volta
 void batchDiodePhysics_avx512(DiodeTensor& tensor, const std::vector<double>& voltages);
 #endif
 
+#ifdef __AVX2__
+void batchDiodePhysics_avx2(DiodeTensor& tensor, const std::vector<double>& voltages);
+void batchMosfetPhysics_avx2(MosfetTensor& tensor, const std::vector<double>& voltages);
+#endif
+
 namespace acutesim {
 namespace compute {
 
@@ -61,8 +66,13 @@ void KernelDispatcher::detectCpuAndBind() {
         #endif
     } else if (hasAVX2) {
         architecture = SimdArch::AVX2;
-        std::cout << "[INFO] Compute: Detected AVX2. (Mapping to Generic for now)" << std::endl;
-        // Bind AVX2 kernels here when implemented
+        std::cout << "[INFO] Compute: Detected AVX2. Using AVX2 kernels." << std::endl;
+        #ifdef __AVX2__
+        batch_diode_physics = batchDiodePhysics_avx2;
+        batch_mosfet_physics = batchMosfetPhysics_avx2;
+        #else
+        std::cout << "[WARN] Compute: AVX2 detected but binary compiled without AVX2 support." << std::endl;
+        #endif
     }
 
 #elif defined(__aarch64__)

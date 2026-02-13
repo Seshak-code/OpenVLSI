@@ -1,5 +1,5 @@
 #include "editor_manager.h"
-#include "gui/editors/schematic_editor.h"
+#include "gui/editors/schematic/schematic_editor.h"
 #include "gui/editors/code_editor.h"
 #include <QFileInfo>
 #include "gui/widgets/inline_dialog.h"

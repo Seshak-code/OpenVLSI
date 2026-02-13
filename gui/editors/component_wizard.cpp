@@ -1,5 +1,5 @@
 #include "component_wizard.h"
-#include "schematic_editor.h"
+#include "schematic/schematic_editor.h"
 #include <QGridLayout>
 #include <QRegularExpression>
 

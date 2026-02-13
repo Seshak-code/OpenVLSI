@@ -6,7 +6,7 @@
 #include <QPointer>
 #include <QMap>
 #include "../../gui/components/visual_component.h"
-#include "../../gui/editors/schematic_editor.h"
+#include "../../gui/editors/schematic/schematic_editor.h"
 
 namespace AIAPI {
 

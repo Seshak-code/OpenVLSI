@@ -1,6 +1,6 @@
 #include "probe_tip.h"
 #include "visual_component.h"
-#include "../editors/schematic_editor.h" // For GridScene access if needed
+#include "../editors/schematic/schematic_editor.h" // For GridScene access if needed
 #include <QGraphicsSceneMouseEvent>
 #include <QCursor>
 #include <QDebug>

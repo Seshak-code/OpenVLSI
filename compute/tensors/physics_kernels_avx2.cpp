@@ -115,4 +115,114 @@ void batchDiodePhysics_avx2(DiodeTensor& tensor, const std::vector<double>& volt
     }
 }
 
+// ── MOSFET Level-1 (Shichman-Hodges) AVX2 Kernel ──
+// Adapted from physics compiler output for MosfetTensor field names.
+// Uses saturation-region equations with max() clamping.
+// GMIN = 1e-12 (constant, not per-device).
+
+void batchMosfetPhysics_avx2(MosfetTensor& tensor, const std::vector<double>& voltages) {
+    const size_t n = tensor.size();
+    const __m256d v_GMIN = _mm256_set1_pd(1e-12);
+
+    size_t i = 0;
+    // --- SIMD Loop: 4 devices per iteration ---
+    for (; i + 3 < n; i += 4) {
+        const double* v_ptr = voltages.data();
+        const int v_size = (int)voltages.size();
+
+        // Gather terminal voltages
+        alignas(32) double _buf_d[4];
+        for (int k = 0; k < 4; ++k) {
+            int idx = tensor.drains[i + k];
+            _buf_d[k] = (idx > 0 && idx <= v_size) ? v_ptr[idx - 1] : 0.0;
+        }
+        __m256d v_v_d = _mm256_load_pd(_buf_d);
+
+        alignas(32) double _buf_g[4];
+        for (int k = 0; k < 4; ++k) {
+            int idx = tensor.gates[i + k];
+            _buf_g[k] = (idx > 0 && idx <= v_size) ? v_ptr[idx - 1] : 0.0;
+        }
+        __m256d v_v_g = _mm256_load_pd(_buf_g);
+
+        alignas(32) double _buf_s[4];
+        for (int k = 0; k < 4; ++k) {
+            int idx = tensor.sources[i + k];
+            _buf_s[k] = (idx > 0 && idx <= v_size) ? v_ptr[idx - 1] : 0.0;
+        }
+        __m256d v_v_s = _mm256_load_pd(_buf_s);
+
+        // Load parameters
+        __m256d v_Kp = _mm256_loadu_pd(&tensor.Kp[i]);
+        __m256d v_W = _mm256_loadu_pd(&tensor.W[i]);
+        __m256d v_L = _mm256_loadu_pd(&tensor.L[i]);
+        __m256d v_Vth = _mm256_loadu_pd(&tensor.Vth[i]);
+        __m256d v_lambda = _mm256_loadu_pd(&tensor.lambda[i]);
+
+        // vgs, vds
+        __m256d v_vgs = _mm256_sub_pd(v_v_g, v_v_s);
+        __m256d v_vds = _mm256_sub_pd(v_v_d, v_v_s);
+        _mm256_storeu_pd(&tensor.vgs[i], v_vgs);
+        _mm256_storeu_pd(&tensor.vds[i], v_vds);
+
+        // beta = Kp * (W / L)
+        __m256d v_beta = _mm256_mul_pd(_mm256_div_pd(v_W, v_L), v_Kp);
+        // vov = vgs - Vth
+        __m256d v_vov = _mm256_sub_pd(v_vgs, v_Vth);
+
+        // Saturation: ids = 0.5 * beta * vov^2 * (1 + lambda * vds)
+        __m256d v_half_beta = _mm256_mul_pd(_mm256_set1_pd(0.5), v_beta);
+        __m256d v_vov2 = _mm256_mul_pd(v_vov, v_vov);
+        __m256d v_clm = _mm256_add_pd(_mm256_set1_pd(1.0), _mm256_mul_pd(v_lambda, v_vds));
+        __m256d v_ids_raw = _mm256_mul_pd(_mm256_mul_pd(v_half_beta, v_vov2), v_clm);
+
+        // gm = beta * vov * (1 + lambda * vds)
+        __m256d v_gm_raw = _mm256_mul_pd(_mm256_mul_pd(v_beta, v_vov), v_clm);
+
+        // gds = 0.5 * beta * vov^2 * lambda
+        __m256d v_gds_raw = _mm256_mul_pd(_mm256_mul_pd(v_half_beta, v_vov2), v_lambda);
+
+        // Clamp: ids = max(0, ids), gm/gds = max(GMIN, ...)
+        __m256d v_ids = _mm256_max_pd(_mm256_setzero_pd(), v_ids_raw);
+        __m256d v_gm = _mm256_max_pd(v_GMIN, v_gm_raw);
+        __m256d v_gds = _mm256_max_pd(v_GMIN, v_gds_raw);
+
+        _mm256_storeu_pd(&tensor.ids[i], v_ids);
+        _mm256_storeu_pd(&tensor.gm[i], v_gm);
+        _mm256_storeu_pd(&tensor.gds[i], v_gds);
+    }
+
+    // --- Scalar Tail Loop ---
+    for (; i < n; ++i) {
+        int n_d = tensor.drains[i];
+        double v_d = (n_d > 0 && n_d <= (int)voltages.size()) ? voltages[n_d - 1] : 0.0;
+        int n_g = tensor.gates[i];
+        double v_g = (n_g > 0 && n_g <= (int)voltages.size()) ? voltages[n_g - 1] : 0.0;
+        int n_s = tensor.sources[i];
+        double v_s = (n_s > 0 && n_s <= (int)voltages.size()) ? voltages[n_s - 1] : 0.0;
+
+        double Kp = tensor.Kp[i];
+        double W = tensor.W[i];
+        double L = tensor.L[i];
+        double Vth = tensor.Vth[i];
+        double lam = tensor.lambda[i];
+
+        double vgs = v_g - v_s;
+        double vds = v_d - v_s;
+        tensor.vgs[i] = vgs;
+        tensor.vds[i] = vds;
+
+        double beta = Kp * (W / L);
+        double vov = vgs - Vth;
+
+        double ids_raw = 0.5 * beta * vov * vov * (1.0 + lam * vds);
+        double gm_raw = beta * vov * (1.0 + lam * vds);
+        double gds_raw = 0.5 * beta * vov * vov * lam;
+
+        tensor.ids[i] = std::max(0.0, ids_raw);
+        tensor.gm[i] = std::max(1e-12, gm_raw);
+        tensor.gds[i] = std::max(1e-12, gds_raw);
+    }
+}
+
 #endif // __AVX2__

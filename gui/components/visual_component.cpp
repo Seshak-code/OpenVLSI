@@ -1,5 +1,5 @@
 #include "visual_component.h"
-#include "schematic_editor.h" 
+#include "../editors/schematic/schematic_editor.h" 
 #include "../../components/standard_cells.h"
 #include <cmath>
 #include <QGraphicsSceneHoverEvent>

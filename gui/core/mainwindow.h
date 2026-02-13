@@ -15,7 +15,7 @@
 #include <QToolBar>
 #include <QFileSystemModel>
 #include <QTreeView>
-#include "schematic_editor.h"
+#include "schematic/schematic_editor.h"
 #include "../panels/ai_assistant_panel.h"
 #include "../widgets/component_library.h"
 #include "../analysis/simulation_workspace.h"

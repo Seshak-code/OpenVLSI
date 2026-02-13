@@ -7,7 +7,7 @@
 #include <QLabel>
 #include <QJsonArray>
 #include <QJsonObject>
-#include "../editors/schematic_editor.h"
+#include "../editors/schematic/schematic_editor.h"
 
 namespace acutesim::gui::widgets {
 

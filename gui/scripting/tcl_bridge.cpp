@@ -5,7 +5,7 @@
 #else
 #include <tcl.h> // Assumes system Tcl is available.
 #endif
-#include "../editors/schematic_editor.h" // Include full definition for casting
+#include "../editors/schematic/schematic_editor.h" // Include full definition for casting
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
