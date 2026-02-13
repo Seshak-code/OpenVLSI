@@ -163,7 +163,7 @@ void ComponentLibrary::populateLists() {
     }
 
 
-    }
+
 
     refresh(); // Populate User Models
 }

@@ -21,6 +21,7 @@ from .ir import (
 from .backends.scalar_cpp import generate as generate_scalar_cpp
 from .backends.wgsl import generate as generate_wgsl
 from .backends.avx512 import generate as generate_avx512
+from .backends.avx2 import generate as generate_avx2
 
 
 def main():
@@ -36,7 +37,7 @@ def main():
     parser.add_argument(
         "--backend",
         type=str,
-        choices=["scalar_cpp", "avx512", "wgsl"],
+        choices=["scalar_cpp", "avx512", "avx2", "wgsl"],
         default="scalar_cpp",
         help="Code generation backend (default: scalar_cpp).",
     )
@@ -60,6 +61,17 @@ def main():
         "--stable-temp-naming",
         action="store_true",
         help="Rename all local temporaries to deterministic _t0, _t1, ... names.",
+    )
+    parser.add_argument(
+        "--fma",
+        action="store_true",
+        help="Enable FMA intrinsics in AVX2/AVX-512 backends. Disabling (default) ensures bit-exact parity with scalar.",
+    )
+    parser.add_argument(
+        "--include-header",
+        type=str,
+        default=None,
+        help="Override the generated #include header name (e.g. 'physics_tensors.h').",
     )
 
     args = parser.parse_args()
@@ -115,6 +127,8 @@ def main():
         code = generate_scalar_cpp(model)
     elif args.backend == "avx512":
         code = generate_avx512(model)
+    elif args.backend == "avx2":
+        code = generate_avx2(model, use_fma=args.fma, include_header=args.include_header)
     elif args.backend == "wgsl":
         code = generate_wgsl(model)
 

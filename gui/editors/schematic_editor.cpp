@@ -16,6 +16,8 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include "gui_types.h"
+#include "gui/analysis/system_inspector.h"
+#include "gui/editors/physical_overlay_item.h"
 #include "../analysis/erc_engine.h"
 #include "../analysis/erc_autofix.h"
 #include "../../physics/simulation_profile.h"

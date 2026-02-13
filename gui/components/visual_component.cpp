@@ -551,7 +551,6 @@ QVector<QPointF> VisualComponent::getTerminals() const {
             }
             }
             break;
-        }
         case ComponentType::Generic: {
             const ModelInfo* info = ModelRegistry::instance().getModel(subCircuitName.toStdString(), subCircuitName.toStdString());
             if (!info) {

@@ -31,8 +31,12 @@
 #include "../../components/design_db.h"
 
 // Forward declarations
+// Forward declarations
 namespace acutesim::gui::widgets {
     class BreadcrumbWidget;
+}
+namespace acutesim::gui::editors {
+    class PhysicalOverlayItem;
 }
 
 // ============================================================================
@@ -423,14 +427,16 @@ private:
     acutesim::gui::widgets::BreadcrumbWidget* breadcrumbWidget_ = nullptr;
 
     // Overlay
-    PhysicalOverlayItem* m_overlay = nullptr;
+    acutesim::gui::editors::PhysicalOverlayItem* m_overlay = nullptr;
 
 public:
     void showPhysicalOverlay(const QString& defPath);
     void clearPhysicalOverlay();
+    struct EditorState {
         QPointF viewportCenter;
         qreal zoomLevel;
         QString currentProfileId;
+        QJsonObject sceneState;
     };
     QVector<EditorState> stateStack_;
 

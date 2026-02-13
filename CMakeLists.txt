@@ -317,6 +317,7 @@ add_executable(${PROJECT_NAME}
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
     compute/solvers/webgpu_solver.cpp
@@ -506,6 +507,29 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
+# Per-file SIMD compile flags (scoped, not global — x86 only)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i[3-6]86)")
+    if(NOT EMSCRIPTEN AND NOT MSVC)
+        set_source_files_properties(
+            compute/tensors/physics_kernels_avx2.cpp
+            PROPERTIES COMPILE_FLAGS "-mavx2 -mfma"
+        )
+        set_source_files_properties(
+            compute/tensors/physics_kernels_avx512.cpp
+            PROPERTIES COMPILE_FLAGS "-mavx512f"
+        )
+    elseif(MSVC)
+        set_source_files_properties(
+            compute/tensors/physics_kernels_avx2.cpp
+            PROPERTIES COMPILE_FLAGS "/arch:AVX2"
+        )
+        set_source_files_properties(
+            compute/tensors/physics_kernels_avx512.cpp
+            PROPERTIES COMPILE_FLAGS "/arch:AVX512"
+        )
+    endif()
+endif()
+
 # WebAssembly specific link flags
 if(EMSCRIPTEN)
     target_link_options(${PROJECT_NAME} PRIVATE 
@@ -557,6 +581,7 @@ add_executable(test_regression
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -627,6 +652,7 @@ add_executable(test_sensitivity
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -651,6 +677,7 @@ add_executable(test_superposition
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -674,6 +701,7 @@ add_executable(test_mode_ladder
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -740,6 +768,7 @@ if(NOT EMSCRIPTEN)
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
@@ -764,6 +793,10 @@ if(NOT EMSCRIPTEN)
         compute/orchestration/drivers/openroad_report_parser.cpp
         compute/orchestration/drivers/klayout_report_parser.cpp
         compute/orchestration/drivers/tool_driver.cpp
+        compute/orchestration/server/subprocess.cpp
+        gui/widgets/cell_pie_chart.h
+        gui/widgets/timing_indicator.h
+
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -878,6 +911,7 @@ if(NOT EMSCRIPTEN)
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
@@ -902,6 +936,11 @@ if(NOT EMSCRIPTEN)
         compute/orchestration/drivers/openroad_report_parser.cpp
         compute/orchestration/drivers/klayout_report_parser.cpp
         compute/orchestration/drivers/tool_driver.cpp
+        compute/orchestration/server/subprocess.cpp
+        gui/widgets/cell_pie_chart.h
+        gui/widgets/timing_indicator.h
+
+
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -973,6 +1012,7 @@ add_executable(test_erc_rules
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -1018,6 +1058,7 @@ if(NOT EMSCRIPTEN)
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     )
     target_include_directories(test_ai_simulation_intelligence PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -1160,6 +1201,7 @@ add_executable(test_simulation
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -1183,6 +1225,7 @@ add_executable(verify_bjt_thermal
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -1205,6 +1248,7 @@ add_executable(test_dependent_simulation
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -1227,6 +1271,7 @@ add_executable(test_soa_bridge
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -1287,6 +1332,21 @@ add_executable(test_pdk_swap
     gui/core/sim_auto_detector.cpp
     gui/editors/code_editor.cpp
     gui/core/icon_provider.cpp
+    gui/orchestration/worker_manager.cpp
+    compute/orchestration/grpc_worker_client.cpp
+    gui/widgets/inline_dialog.cpp
+    gui/widgets/inline_progress.cpp
+    gui/widgets/toast_manager.cpp
+    compute/orchestration/drivers/yosys_task.cpp
+    compute/orchestration/drivers/openroad_task.cpp
+    compute/orchestration/drivers/klayout_task.cpp
+    compute/orchestration/drivers/yosys_log_parser.cpp
+    compute/orchestration/drivers/openroad_report_parser.cpp
+    compute/orchestration/drivers/klayout_report_parser.cpp
+    compute/orchestration/drivers/tool_driver.cpp
+    compute/orchestration/server/subprocess.cpp
+    gui/widgets/cell_pie_chart.h
+    gui/widgets/timing_indicator.h
 )
 target_include_directories(test_pdk_swap PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/components
@@ -1361,6 +1421,7 @@ if(NOT EMSCRIPTEN)
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
@@ -1385,6 +1446,10 @@ if(NOT EMSCRIPTEN)
         compute/orchestration/drivers/openroad_report_parser.cpp
         compute/orchestration/drivers/klayout_report_parser.cpp
         compute/orchestration/drivers/tool_driver.cpp
+        compute/orchestration/server/subprocess.cpp
+        gui/widgets/cell_pie_chart.h
+        gui/widgets/timing_indicator.h
+
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -1490,6 +1555,7 @@ if(NOT EMSCRIPTEN)
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
@@ -1514,6 +1580,10 @@ if(NOT EMSCRIPTEN)
         compute/orchestration/drivers/openroad_report_parser.cpp
         compute/orchestration/drivers/klayout_report_parser.cpp
         compute/orchestration/drivers/tool_driver.cpp
+        compute/orchestration/server/subprocess.cpp
+        gui/widgets/cell_pie_chart.h
+        gui/widgets/timing_indicator.h
+
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
@@ -1631,7 +1701,28 @@ if(NOT EMSCRIPTEN)
         components/netlist_export.cpp
         components/pdk_compliance.cpp
         gui/scripting/tcl_bridge.cpp
+        gui/orchestration/worker_manager.cpp
+        gui/orchestration/synthesis_result_dialog.cpp
+        gui/orchestration/pnr_result_dialog.cpp
+        gui/orchestration/signoff_result_dialog.cpp
+        gui/editors/physical_overlay_item.cpp
+        gui/widgets/inline_dialog.cpp
+        gui/widgets/inline_progress.cpp
+        gui/widgets/toast_manager.cpp
+        compute/orchestration/drivers/tool_driver.cpp
+        compute/orchestration/server/subprocess.cpp
+        compute/orchestration/drivers/yosys_task.cpp
+        compute/orchestration/drivers/openroad_task.cpp
+        compute/orchestration/drivers/klayout_task.cpp
+        compute/orchestration/drivers/yosys_log_parser.cpp
+        compute/orchestration/drivers/openroad_report_parser.cpp
+        compute/orchestration/drivers/klayout_report_parser.cpp
+        gui/widgets/cell_pie_chart.h
+        gui/widgets/timing_indicator.h
+        compute/orchestration/grpc_worker_client.cpp
     )
+
+
     # Includes
     target_include_directories(test_spatial_logic PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -1641,7 +1732,12 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
         ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
         ${CMAKE_CURRENT_SOURCE_DIR}/gui/scripting
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/orchestration
     )
+
 endif()
 
 # Power Domain Test (Phase 1.3)
@@ -1767,6 +1863,7 @@ add_executable(test_determinism
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -1790,6 +1887,7 @@ add_executable(test_kernel_dispatch
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_tensors.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
 )
 target_include_directories(test_kernel_dispatch PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
@@ -1808,6 +1906,7 @@ add_executable(test_verification_harness
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -1830,6 +1929,7 @@ add_executable(test_std_cells
     compute/tensors/physics_tensors.cpp
     compute/tensors/kernel_dispatch.cpp
     compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
 )
@@ -1905,6 +2005,7 @@ if(NOT EMSCRIPTEN)
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
         compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
         gui/analysis/simulation_workspace.cpp
@@ -1929,6 +2030,10 @@ if(NOT EMSCRIPTEN)
         compute/orchestration/drivers/openroad_report_parser.cpp
         compute/orchestration/drivers/klayout_report_parser.cpp
         compute/orchestration/drivers/tool_driver.cpp
+        compute/orchestration/server/subprocess.cpp
+        gui/widgets/cell_pie_chart.h
+        gui/widgets/timing_indicator.h
+
         physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp

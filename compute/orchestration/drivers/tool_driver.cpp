@@ -3,6 +3,7 @@
 #include <QTemporaryFile>
 #include <QDir>
 #include <QProcess>
+#include <thread>
 
 namespace acutesim::compute::orchestration {
 
@@ -21,7 +22,7 @@ QString ToolDriver::writeTempScript(const QString& content, const QString& suffi
         tmpFile.close();
         return tmpFile.fileName();
     }
-    }
+
     return {};
 }
 

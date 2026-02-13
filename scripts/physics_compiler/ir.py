@@ -2,7 +2,7 @@
 ir.py - Intermediate Representation (AST) for the Physics Compiler.
 
 This module defines the node types that form the IR. All frontends (YAML,
-Verilog-A) produce this IR, and all backends (Scalar C++, AVX-512, WGSL)
+Verilog-A) produce this IR, and all backends (Scalar C++, AVX-512, AVX2, WGSL)
 consume it.
 
 Design Principles:
