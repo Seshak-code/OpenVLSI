@@ -163,8 +163,8 @@ CodeEditor::CodeEditor(const QString& filePath, QWidget *parent)
             });
         }
         
-        menu->exec(textEdit_->mapToGlobal(pos));
-        delete menu;
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        menu->popup(textEdit_->mapToGlobal(pos));
     });
 
     // CRITICAL: Actually load the file content

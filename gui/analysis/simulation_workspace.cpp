@@ -673,7 +673,9 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     stopBtn_->setEnabled(true);
     findChild<QLabel*>("statusLabel")->setText("Running...");
     findChild<QLabel*>("statusLabel")->setStyleSheet("color: #dcdcaa;");
-    
+
+    emit simulationStarted(profileId);
+
     auto* profile = currentProfile();
     Simulation::SimulationProfile profCopy = *profile; // Copy
     

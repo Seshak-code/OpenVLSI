@@ -174,34 +174,35 @@ void SimulationExplorer::showContextMenu(const QPoint& pos) {
     QString profileId = item->data(0, Qt::UserRole).toString();
     QString tag = item->data(0, Qt::UserRole + 1).toString();
     
-    QMenu menu(this);
-    
+    QMenu* menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+
     if (tag != "run") {
         // Profile context menu
-        QAction* runAction = menu.addAction("Run");
+        QAction* runAction = menu->addAction("Run");
         connect(runAction, &QAction::triggered, this, [this, profileId]() {
             emit runRequested(profileId);
         });
-        
-        menu.addSeparator();
-        
-        QAction* dupAction = menu.addAction("Duplicate");
+
+        menu->addSeparator();
+
+        QAction* dupAction = menu->addAction("Duplicate");
         connect(dupAction, &QAction::triggered, this, [this, profileId]() {
             emit profileDuplicateRequested(profileId);
         });
-        
-        QAction* delAction = menu.addAction("Delete");
+
+        QAction* delAction = menu->addAction("Delete");
         connect(delAction, &QAction::triggered, this, [this, profileId]() {
             emit profileDeleteRequested(profileId);
         });
     } else {
         // Run history context menu
-        QAction* viewAction = menu.addAction("View Results");
+        QAction* viewAction = menu->addAction("View Results");
         // TODO: Connect to results viewer
         Q_UNUSED(viewAction);
     }
-    
-    menu.exec(treeWidget_->mapToGlobal(pos));
+
+    menu->popup(treeWidget_->mapToGlobal(pos));
 }
 
 QIcon SimulationExplorer::getStatusIcon(Simulation::SimulationProfile::Status status) {

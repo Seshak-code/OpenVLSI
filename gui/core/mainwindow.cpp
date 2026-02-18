@@ -927,6 +927,62 @@ void MainWindow::onSimulationResults(const QJsonObject& results) {
             qDebug() << "[MainWindow] Raised outputDock_ for DC results";
         }
     }
+    else if (type == "AC") {
+        if (resultsTree_) {
+            resultsTree_->clear();
+            QJsonArray frequencies = results["frequencies"].toArray();
+            QJsonObject magnitudes = results["magnitudes"].toObject();
+            QJsonObject phases     = results["phases"].toObject();
+
+            for (auto it = magnitudes.begin(); it != magnitudes.end(); ++it) {
+                QString nodeName = it.key();
+                QJsonArray magArr   = it.value().toArray();
+                QJsonArray phaseArr = phases.value(nodeName).toArray();
+
+                QTreeWidgetItem* nodeItem = new QTreeWidgetItem(resultsTree_);
+                nodeItem->setText(0, QString("AC: %1").arg(nodeName));
+                nodeItem->setForeground(0, QBrush(QColor("#569cd6")));
+
+                for (int i = 0; i < frequencies.size(); ++i) {
+                    QTreeWidgetItem* row = new QTreeWidgetItem(nodeItem);
+                    row->setText(0, QString("%1 Hz").arg(frequencies[i].toDouble(), 0, 'g', 4));
+                    double mag = (i < magArr.size()) ? magArr[i].toDouble() : 0.0;
+                    double ph  = (i < phaseArr.size()) ? phaseArr[i].toDouble() : 0.0;
+                    row->setText(1, QString("Mag: %1 dB  Phase: %2 deg").arg(mag, 0, 'f', 3).arg(ph, 0, 'f', 2));
+                }
+            }
+        }
+        if (outputDock_) {
+            outputDock_->show();
+            outputDock_->raise();
+        }
+    }
+    else if (type == "Noise") {
+        if (resultsTree_) {
+            resultsTree_->clear();
+            double integratedVrms = results["integrated_vrms"].toDouble();
+            QJsonArray frequencies = results["frequencies"].toArray();
+            QJsonArray psd         = results["psd"].toArray();
+
+            QTreeWidgetItem* summaryItem = new QTreeWidgetItem(resultsTree_);
+            summaryItem->setText(0, "Integrated Noise");
+            summaryItem->setText(1, QString("%1 V(rms)").arg(integratedVrms, 0, 'g', 4));
+            summaryItem->setForeground(0, QBrush(QColor("#4ec9b0")));
+
+            QTreeWidgetItem* psdParent = new QTreeWidgetItem(resultsTree_);
+            psdParent->setText(0, "PSD (V^2/Hz)");
+            for (int i = 0; i < frequencies.size(); ++i) {
+                QTreeWidgetItem* row = new QTreeWidgetItem(psdParent);
+                row->setText(0, QString("%1 Hz").arg(frequencies[i].toDouble(), 0, 'g', 4));
+                double val = (i < psd.size()) ? psd[i].toDouble() : 0.0;
+                row->setText(1, QString("%1").arg(val, 0, 'g', 4));
+            }
+        }
+        if (outputDock_) {
+            outputDock_->show();
+            outputDock_->raise();
+        }
+    }
     else if (type == "TransientPoint") {
         // Note: Waveform data is now displayed via WaveformWidget (handled above)
         // Show waveform dock during transient analysis
@@ -942,15 +998,15 @@ void MainWindow::setupMenus() {
     
     // File
     QMenu* fileMenu = mb->addMenu("&File");
-    fileMenu->addAction(QIcon::fromTheme("document-new"), "New Project", this, &MainWindow::newProject);
-    fileMenu->addAction(QIcon::fromTheme("document-open"), "Open...", this, &MainWindow::openProject);
+    fileMenu->addAction(QIcon::fromTheme("document-new"), "New Project (Coming Soon)")->setEnabled(false);
+    fileMenu->addAction(QIcon::fromTheme("document-open"), "Open... (Coming Soon)")->setEnabled(false);
     fileMenu->addSeparator();
     fileMenu->addAction("Exit", this, &QWidget::close);
 
     // Edit
     QMenu* editMenu = mb->addMenu("&Edit");
-    editMenu->addAction("Undo");
-    editMenu->addAction("Redo");
+    editMenu->addAction("Undo (Coming Soon)")->setEnabled(false);
+    editMenu->addAction("Redo (Coming Soon)")->setEnabled(false);
     editMenu->addSeparator();
     editMenu->addAction("Keyboard Shortcuts...", this, &MainWindow::showKeybindingsDialog);
 
@@ -1436,7 +1492,17 @@ void MainWindow::setupCommandPalette() {
     cmd.label = "Run Simulation";
     cmd.category = "Simulation";
     cmd.shortcut = "F5";
-    cmd.callback = [this]() { runSimulation(); };
+    cmd.callback = [this]() {
+        if (simulationWorkspace && schematicEditor) {
+            simulationWorkspace->setSchematicEditor(schematicEditor);
+            simulationWorkspace->runCurrent();
+            if (simulationDock_ && !simulationDock_->isVisible()) {
+                simulationDock_->show();
+            }
+        } else {
+            statusBar()->showMessage("No schematic loaded for simulation", 3000);
+        }
+    };
     commandPalette_->registerCommand(cmd);
 
     cmd.id = "simulation.runQuickDC";
@@ -1675,16 +1741,23 @@ void MainWindow::setupKeybindings() {
     km.registerCallback("simulation.run", "Run Simulation", "Simulation",
                        QKeySequence("F5"),
                        [this]() {
-                           if (simulationWorkspace) {
-                               // Access simulation via workspace if available
-                               statusBar()->showMessage("Running simulation...", 2000);
+                           if (simulationWorkspace && schematicEditor) {
+                               simulationWorkspace->setSchematicEditor(schematicEditor);
+                               simulationWorkspace->runCurrent();
+                               if (simulationDock_ && !simulationDock_->isVisible()) {
+                                   simulationDock_->show();
+                               }
+                           } else {
+                               statusBar()->showMessage("No schematic loaded for simulation", 3000);
                            }
                        }, this, "global");
 
     km.registerCallback("simulation.stop", "Stop Simulation", "Simulation",
                        QKeySequence("Shift+F5"),
                        [this]() {
-                           statusBar()->showMessage("Stopping simulation...", 2000);
+                           if (simulationWorkspace) {
+                               simulationWorkspace->stopSimulation();
+                           }
                        }, this, "global");
 
     km.registerCallback("simulation.runERC", "Run ERC Check", "Simulation",

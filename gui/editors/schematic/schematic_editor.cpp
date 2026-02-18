@@ -616,21 +616,25 @@ void GridScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             // Context Menu
             QGraphicsItem* item = itemAt(event->scenePos(), QTransform());
             if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
-                QMenu menu;
-                QAction* rotateAction = menu.addAction("Rotate (R)");
-                QAction* flipAction = menu.addAction("Flip (F)");
-                QAction* deleteAction = menu.addAction("Delete (Del)");
-                
-                QAction* selected = menu.exec(QCursor::pos());
-                if (selected == rotateAction) {
+                QMenu* menu = new QMenu();
+                menu->setAttribute(Qt::WA_DeleteOnClose);
+                QAction* rotateAction = menu->addAction("Rotate (R)");
+                QAction* flipAction = menu->addAction("Flip (F)");
+                QAction* deleteAction = menu->addAction("Delete (Del)");
+
+                connect(rotateAction, &QAction::triggered, this, [comp]() {
                     comp->rotate90();
-                } else if (selected == flipAction) {
+                });
+                connect(flipAction, &QAction::triggered, this, [comp]() {
                     comp->flip();
-                } else if (selected == deleteAction) {
+                });
+                connect(deleteAction, &QAction::triggered, this, [this, comp]() {
                     removeItem(comp);
                     delete comp;
                     emit topologyChanged(QDateTime::currentMSecsSinceEpoch());
-                }
+                });
+
+                menu->popup(QCursor::pos());
             } else {
                  setTool(ComponentType::Select);
             }
