@@ -3,9 +3,13 @@
 #include <QTextBlock>
 #include <QHBoxLayout>
 #include <QFileInfo>
+#include <QFile>
+#include <QTextStream>
+#include <QDebug>
 #include <QMenu>
 #include <QAction>
 #include "gui/orchestration/worker_manager.h"
+#include "gui/core/storage_manager.h"
 
 using namespace acutesim::gui::editors;
 
@@ -162,6 +166,53 @@ CodeEditor::CodeEditor(const QString& filePath, QWidget *parent)
         menu->exec(textEdit_->mapToGlobal(pos));
         delete menu;
     });
+
+    // CRITICAL: Actually load the file content
+    loadContent();
+}
+
+void CodeEditor::loadContent() {
+    QFile file(filePath_);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QString content = QTextStream(&file).readAll();
+        file.close();
+        isDirty_ = false;  // Block dirty-flag from initial setText
+        textEdit_->setPlainText(content);
+        isDirty_ = false;
+        qDebug() << "[CodeEditor] Loaded" << filePath_ << "(" << content.size() << "chars)";
+        return;
+    }
+
+    // Fallback: try StorageManager (WASM / virtual paths)
+    auto& storage = acutesim::gui::core::StorageManager::instance();
+    QString project = storage.currentProject();
+    if (!project.isEmpty()) {
+        // Try to derive relative path from full path
+        QString projDir = storage.getProjectDirectory();
+        QString relPath = filePath_;
+        if (relPath.startsWith(projDir)) {
+            relPath = relPath.mid(projDir.length());
+            if (relPath.startsWith('/')) relPath = relPath.mid(1);
+            // Remove project name prefix if present
+            if (relPath.startsWith(project + '/')) relPath = relPath.mid(project.length() + 1);
+        }
+        QByteArray data = storage.loadFile(project, relPath);
+        if (!data.isEmpty()) {
+            isDirty_ = false;
+            textEdit_->setPlainText(QString::fromUtf8(data));
+            isDirty_ = false;
+            qDebug() << "[CodeEditor] Loaded via StorageManager:" << relPath << "(" << data.size() << "bytes)";
+            return;
+        }
+    }
+
+    qWarning() << "[CodeEditor] Could not load file:" << filePath_;
+}
+
+void CodeEditor::setContent(const QString& text) {
+    isDirty_ = false;
+    textEdit_->setPlainText(text);
+    isDirty_ = false;
 }
 
 void CodeEditor::setLanguage(CodeSyntaxHighlighter::Language lang) {

@@ -369,10 +369,8 @@ void MainWindow::setupDocks() {
     problemsPanel = dockingManager->problems();
     resultsTree_ = dockingManager->results();
 
-    // Note: streamingDock_ and resultsDock_ are now obsolete
+    // Note: streamingDock_ and resultsDock_ were removed (legacy, never used)
     // DockingManager handles all bottom panel docks
-    streamingDock_ = nullptr;
-    resultsDock_ = nullptr;
     
     // Worker Orchestration Dock
     qDebug() << "[MW] Creating Worker Dock...";
@@ -833,56 +831,8 @@ void MainWindow::createMessagesDock() {
     messagesDock->setWidget(problemsPanel);
 }
 
-void MainWindow::createOutputDock() {
-    outputDock_ = new QDockWidget("Output", this);
-    outputDock_->setObjectName("OutputDock");
-    // NASA: Allow all areas for flexible splitting within bottom panel
-    outputDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
-    
-    outputLog_ = new QPlainTextEdit(outputDock_);
-    outputLog_->setReadOnly(true);
-    outputLog_->setStyleSheet("background: #1e1e1e; color: #ccc; font-family: monospace;");
-    outputDock_->setWidget(outputLog_);
-}
-
-void MainWindow::createStreamingDock() {
-    streamingDock_ = new QDockWidget("Streaming", this);
-    streamingDock_->setObjectName("StreamingDock");
-    // NASA: Allow all areas for flexible splitting within bottom panel
-    streamingDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
-    
-    streamingLog_ = new QPlainTextEdit(streamingDock_);
-    streamingLog_->setReadOnly(true);
-    streamingLog_->setStyleSheet("background: #1e1e1e; color: #4ec9b0; font-family: monospace;");
-    streamingDock_->setWidget(streamingLog_);
-}
-
-void MainWindow::createResultsDock() {
-    resultsDock_ = new QDockWidget("Results", this);
-    resultsDock_->setObjectName("ResultsDock");
-    // NASA: Allow all areas for flexible splitting within bottom panel
-    resultsDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
-    
-    resultsTree_ = new QTreeWidget(resultsDock_);
-    resultsTree_->setHeaderLabels({"Node", "Value"});
-    resultsTree_->setColumnWidth(0, 150);
-    resultsTree_->setStyleSheet("QTreeWidget { background: #1e1e1e; color: #ccc; border: none; } "
-                               "QHeaderView::section { background: #2d2d2d; color: #888; border: none; padding: 4px; }");
-    resultsDock_->setWidget(resultsTree_);
-}
-
-void MainWindow::createWaveformDock() {
-    waveformDock_ = new QDockWidget("Waveforms", this);
-    waveformDock_->setObjectName("WaveformDock");
-    // NASA: Allow all areas for flexible splitting within bottom panel
-    waveformDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
-    
-    waveformLog_ = new QPlainTextEdit(waveformDock_);
-    waveformLog_->setReadOnly(true);
-    waveformLog_->setStyleSheet("background: #1e1e1e; color: #4ec9b0; font-family: monospace;");
-    waveformLog_->setPlaceholderText("Waveform data points will define trace here...");
-    waveformDock_->setWidget(waveformLog_);
-}
+// Legacy createOutputDock/createStreamingDock/createResultsDock/createWaveformDock
+// removed — DockingManager::createCoreDocks() creates all bottom panel widgets.
 
 void MainWindow::onSimulationResults(const QJsonObject& results) {
     QString type = results["type"].toString();
@@ -1013,8 +963,6 @@ void MainWindow::setupMenus() {
     
     // Bottom Panel Docks - allow restoring closed/split panels
     if (outputDock_) viewMenu->addAction(outputDock_->toggleViewAction());
-    if (streamingDock_) viewMenu->addAction(streamingDock_->toggleViewAction());
-    if (resultsDock_) viewMenu->addAction(resultsDock_->toggleViewAction());
     if (waveformDock_) viewMenu->addAction(waveformDock_->toggleViewAction());
     if (debugSuggestionsDock) viewMenu->addAction(debugSuggestionsDock->toggleViewAction());
     viewMenu->addSeparator();
@@ -1774,7 +1722,6 @@ void MainWindow::setupKeybindings() {
                            if (anyVisible) {
                                if (outputDock_) outputDock_->hide();
                                if (messagesDock) messagesDock->hide();
-                               if (resultsDock_) resultsDock_->hide();
                            } else {
                                if (outputDock_) outputDock_->show();
                            }

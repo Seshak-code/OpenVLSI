@@ -99,15 +99,10 @@ private:
     QDockWidget* debugSuggestionsDock;
     acutesim::gui::widgets::DebugSuggestionsPanel* debugSuggestionsPanel;
     
-    // Bottom dock panels for debug output
-    QDockWidget* outputDock_;
-    QPlainTextEdit* outputLog_;
-    QDockWidget* streamingDock_;
-    QPlainTextEdit* streamingLog_;
-    QDockWidget* resultsDock_;
-    QTreeWidget* resultsTree_;      // [NEW] Tree view for results
-    QDockWidget* waveformDock_;
-    QPlainTextEdit* waveformLog_;   // [NEW] Text view for waveform data dump (placeholder for plot)
+    // Bottom dock panels (managed by DockingManager)
+    QDockWidget* outputDock_;       // Points to DockingManager "logs" dock
+    QDockWidget* waveformDock_;     // Points to DockingManager "waveforms" dock
+    QTreeWidget* resultsTree_;      // Points to DockingManager results widget
 
     // Phase 12.3: Worker Orchestration
     QDockWidget* workerDock;
@@ -143,10 +138,6 @@ private slots:
     void createPropertiesDock();
     void createAiDock();
     void createMessagesDock();
-    void createOutputDock();
-    void createStreamingDock();
-    void createResultsDock();
-    void createWaveformDock();
     void createWorkerDock();
     void createDebugSuggestionsDock();
     void createSimulationDock();

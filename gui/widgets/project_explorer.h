@@ -3,9 +3,7 @@
 #include <QWidget>
 #include <QTreeView>
 #include <QVBoxLayout>
-#include <QLineEdit>
 #include <QToolButton>
-#include <QLabel>
 #include <QMenu>
 
 namespace acutesim {
@@ -22,7 +20,6 @@ class ProjectItem;
  * - Schematics, HDL, Scripts, Synthesis, Physical Design, Verification
  *
  * Features:
- * - Filter/search box
  * - Context menu for file operations
  * - Double-click to open files
  * - Drag & drop support (future)
@@ -63,7 +60,6 @@ signals:
 private slots:
     void onItemDoubleClicked(const QModelIndex& index);
     void onContextMenuRequested(const QPoint& pos);
-    void onFilterTextChanged(const QString& text);
 
 private:
     void setupUi();
@@ -72,10 +68,8 @@ private:
 
     QVBoxLayout* layout_;
     QWidget* headerWidget_;
-    QLabel* titleLabel_;
     QToolButton* collapseButton_;
     QToolButton* newFileButton_;
-    QLineEdit* filterEdit_;
     QTreeView* treeView_;
     ProjectModel* model_;
     QMenu* contextMenu_;

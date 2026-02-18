@@ -36,10 +36,6 @@ void ProjectExplorer::setupUi() {
     headerLayout->setContentsMargins(8, 6, 8, 6);
     headerLayout->setSpacing(4);
 
-    titleLabel_ = new QLabel("EXPLORER");
-    titleLabel_->setObjectName("explorerTitle");
-    headerLayout->addWidget(titleLabel_);
-
     headerLayout->addStretch();
 
     // New file button
@@ -75,14 +71,6 @@ void ProjectExplorer::setupUi() {
     headerLayout->addWidget(collapseButton_);
 
     layout_->addWidget(headerWidget_);
-
-    // Filter/search box
-    filterEdit_ = new QLineEdit();
-    filterEdit_->setPlaceholderText("Filter files...");
-    filterEdit_->setClearButtonEnabled(true);
-    filterEdit_->setObjectName("explorerFilter");
-    connect(filterEdit_, &QLineEdit::textChanged, this, &ProjectExplorer::onFilterTextChanged);
-    layout_->addWidget(filterEdit_);
 
     // Tree view
     treeView_ = new QTreeView();
@@ -205,15 +193,7 @@ void ProjectExplorer::onContextMenuRequested(const QPoint& pos) {
     contextMenu_->popup(treeView_->viewport()->mapToGlobal(pos));
 }
 
-void ProjectExplorer::onFilterTextChanged(const QString& text) {
-    // Simple filter: expand all and highlight matches
-    // A more sophisticated implementation would use QSortFilterProxyModel
-    Q_UNUSED(text);
-    // For now, just expand all when filtering
-    if (!text.isEmpty()) {
-        treeView_->expandAll();
-    }
-}
+
 
 void ProjectExplorer::expandAll() {
     treeView_->expandAll();
@@ -235,23 +215,6 @@ void ProjectExplorer::updateStyle() {
     setStyleSheet(QString(R"(
         ProjectExplorer {
             background-color: %1;
-        }
-        #explorerTitle {
-            color: %3;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 1px;
-        }
-        #explorerFilter {
-            background-color: %1;
-            border: 1px solid %4;
-            border-radius: 3px;
-            padding: 4px 8px;
-            margin: 4px 8px;
-            color: %2;
-        }
-        #explorerFilter:focus {
-            border-color: %5;
         }
         QTreeView {
             background-color: %1;

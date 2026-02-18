@@ -76,6 +76,8 @@ public:
 
     // Specific Methods
     void setLanguage(CodeSyntaxHighlighter::Language lang);
+    void loadContent();                         // Load file from filePath_
+    void setContent(const QString& text);       // Programmatic content set
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth();
 
