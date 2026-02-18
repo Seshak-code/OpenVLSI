@@ -9,6 +9,7 @@
 #include "../../physics/circuitsim.h"
 #include "../../physics/simulation_profile.h"
 #include "../../compute/solvers/ac_solver.h"
+#include "../../compute/infrastructure/compiled_block.h"
 #include "../analysis/erc_engine.h"
 
 class SimulationWorker : public QObject {
@@ -22,11 +23,17 @@ public:
     void stopAndJoin();
 
 public slots:
-    // Start methods - objects passed by value for thread safety
+    // ── Legacy API (TensorNetlist by value) ──────────────────────────────
     void startDC(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     void startTransient(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     void startAC(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     void startNoise(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    
+    // ── New API (pre-compiled block) ─────────────────────────────────────
+    void startDC(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startTransient(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startAC(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startNoise(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     
     // Request stop (Thread-safe)
     void stop();

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <cstring>
+#include "../infrastructure/netlist_compiler.h"
 
 // Helper for Dawn's new WGPUStringView API
 #ifdef __EMSCRIPTEN__
@@ -345,8 +346,9 @@ void WebGPUSolver::setupResources(const TensorNetlist& netlist) {
 void WebGPUSolver::uploadNetlist(const TensorNetlist& netlist) {
     if (!queue) return;
     
-    // Flatten hierarchy: Convert hierarchical TensorNetlist to flat TensorizedBlock (SoA)
-    TensorizedBlock block = tensorizeNetlist(netlist);
+    // Flatten hierarchy: Use NetlistCompiler to get compiled SoA block
+    auto compiled = NetlistCompiler::compile(netlist);
+    const TensorizedBlock& block = compiled->tensors;
 
     // 1. Diodes
     std::vector<DiodeDevice> diodeDevices;

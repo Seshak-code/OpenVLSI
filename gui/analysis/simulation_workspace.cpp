@@ -53,11 +53,27 @@ SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     qRegisterMetaType<TensorNetlist>("TensorNetlist");
     qRegisterMetaType<Simulation::SimulationProfile>("Simulation::SimulationProfile");
     qRegisterMetaType<acutesim::physics::RunMode>("acutesim::physics::RunMode");
+    qRegisterMetaType<std::shared_ptr<const CompiledTensorBlock>>("std::shared_ptr<const CompiledTensorBlock>");
     
-    connect(this, &SimulationWorkspace::startDCRequested, worker_, &SimulationWorker::startDC);
-    connect(this, &SimulationWorkspace::startTransientRequested, worker_, &SimulationWorker::startTransient);
-    connect(this, &SimulationWorkspace::startACRequested, worker_, &SimulationWorker::startAC);
-    connect(this, &SimulationWorkspace::startNoiseRequested, worker_, &SimulationWorker::startNoise);
+    // Legacy TensorNetlist connections (kept for backward compatibility)
+    connect(this, &SimulationWorkspace::startDCRequested, worker_, 
+        static_cast<void(SimulationWorker::*)(TensorNetlist, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startDC));
+    connect(this, &SimulationWorkspace::startTransientRequested, worker_, 
+        static_cast<void(SimulationWorker::*)(TensorNetlist, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startTransient));
+    connect(this, &SimulationWorkspace::startACRequested, worker_, 
+        static_cast<void(SimulationWorker::*)(TensorNetlist, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startAC));
+    connect(this, &SimulationWorkspace::startNoiseRequested, worker_, 
+        static_cast<void(SimulationWorker::*)(TensorNetlist, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startNoise));
+    
+    // Compiled-block connections (new path)
+    connect(this, &SimulationWorkspace::startDCCompiledRequested, worker_, 
+        static_cast<void(SimulationWorker::*)(std::shared_ptr<const CompiledTensorBlock>, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startDC));
+    connect(this, &SimulationWorkspace::startTransientCompiledRequested, worker_, 
+        static_cast<void(SimulationWorker::*)(std::shared_ptr<const CompiledTensorBlock>, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startTransient));
+    connect(this, &SimulationWorkspace::startACCompiledRequested, worker_, 
+        static_cast<void(SimulationWorker::*)(std::shared_ptr<const CompiledTensorBlock>, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startAC));
+    connect(this, &SimulationWorkspace::startNoiseCompiledRequested, worker_, 
+        static_cast<void(SimulationWorker::*)(std::shared_ptr<const CompiledTensorBlock>, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startNoise));
     
     // Results
     connect(worker_, &SimulationWorker::resultsReady, this, &SimulationWorkspace::onWorkerResults);
@@ -624,6 +640,20 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     // Get netlist (Main Thread)
     netlist_ = schematicEditor_->toNetlist();
     
+    // ── NetlistCompiler: Compile and cache ──────────────────────────────
+    netlist_.globalBlock.computeTopologyHash();
+    size_t currentHash = netlist_.globalBlock.topologyHash;
+    
+    if (!currentCompiledBlock_ || currentCompiledBlock_->topologyHash != currentHash) {
+        appendLog("[Compiler] Topology changed — recompiling netlist...");
+        currentCompiledBlock_ = NetlistCompiler::compile(netlist_);
+        appendLog(QString("[Compiler] Compiled block: %1 nodes, hash=%2")
+            .arg(currentCompiledBlock_->nodeCount)
+            .arg(currentCompiledBlock_->topologyHash));
+    } else {
+        appendLog("[Compiler] Using cached compiled block.");
+    }
+    
     // Create run object logic (UI State)
     currentRun_ = Simulation::SimulationRun();
     currentRun_.runId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
@@ -633,7 +663,6 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     if (runModeCombo_) {
         currentRun_.runMode = static_cast<acutesim::physics::RunMode>(runModeCombo_->currentData().toInt());
     }
-    // execMode passed to worker if needed, or part of profile?
     
     currentRun_.startTime = QDateTime::currentDateTime();
     currentRun_.status = Simulation::SimulationRun::Status::RUNNING;
@@ -648,20 +677,20 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     auto* profile = currentProfile();
     Simulation::SimulationProfile profCopy = *profile; // Copy
     
-    // Dispatch based on analysis type
+    // Dispatch using compiled block
     switch (profCopy.analysis) {
         case Simulation::AnalysisType::DC:
-            emit startDCRequested(netlist_, profCopy, currentRun_.runMode);
+            emit startDCCompiledRequested(currentCompiledBlock_, profCopy, currentRun_.runMode);
             break;
         case Simulation::AnalysisType::AC:
-            emit startACRequested(netlist_, profCopy, currentRun_.runMode);
+            emit startACCompiledRequested(currentCompiledBlock_, profCopy, currentRun_.runMode);
             break;
         case Simulation::AnalysisType::NOISE:
-            emit startNoiseRequested(netlist_, profCopy, currentRun_.runMode);
+            emit startNoiseCompiledRequested(currentCompiledBlock_, profCopy, currentRun_.runMode);
             break;
         case Simulation::AnalysisType::TRANSIENT:
         default:
-            emit startTransientRequested(netlist_, profCopy, currentRun_.runMode);
+            emit startTransientCompiledRequested(currentCompiledBlock_, profCopy, currentRun_.runMode);
             break;
     }
 }

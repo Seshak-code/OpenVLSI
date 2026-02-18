@@ -2,7 +2,11 @@
 #include <QTimer>
 #include <QDebug>
 #include <QDir>
+#ifdef EMSCRIPTEN
+// QProcess not supported on WASM
+#else
 #include <QProcess>
+#endif
 #include <QFile>
 #include <QTextStream>
 #include <QFileInfo>
@@ -287,6 +291,11 @@ void WorkerManager::runLocalSynthesis(
     const QString& jobId,
     const acutesim::compute::orchestration::SynthesisConfig& config) {
 
+#ifdef EMSCRIPTEN
+    emit jobLogReceived(jobId, "Local synthesis not supported in WebAssembly", true);
+    emit jobCompleted(jobId, false, "");
+    return;
+#else
     using namespace acutesim::compute::orchestration;
 
     auto* cancelFlag = new std::atomic<bool>(false);
@@ -309,7 +318,12 @@ void WorkerManager::runLocalSynthesis(
             emit synthesisResultReady(jobId, result);
             emit jobCompleted(jobId, result.success, "");
         }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, [this, jobId, result]() {
+            emit synthesisResultReady(jobId, result);
+            emit jobCompleted(jobId, result.success, "");
+        }, Qt::QueuedConnection);
     }).detach();
+#endif
 }
 
 void WorkerManager::runLocalPnR(
@@ -319,6 +333,11 @@ void WorkerManager::runLocalPnR(
     const acutesim::compute::orchestration::CTSConfig& ctsConfig,
     const acutesim::compute::orchestration::RoutingConfig& routeConfig) {
 
+#ifdef EMSCRIPTEN
+    emit jobLogReceived(jobId, "Local PnR not supported in WebAssembly", true);
+    emit jobCompleted(jobId, false, "");
+    return;
+#else
     using namespace acutesim::compute::orchestration;
 
     auto* cancelFlag = new std::atomic<bool>(false);
@@ -343,12 +362,18 @@ void WorkerManager::runLocalPnR(
             emit jobCompleted(jobId, result.success, "");
         }, Qt::QueuedConnection);
     }).detach();
+#endif
 }
 
 void WorkerManager::runLocalSignOff(
     const QString& jobId,
     const acutesim::compute::orchestration::DRCConfig& config) {
 
+#ifdef EMSCRIPTEN
+    emit jobLogReceived(jobId, "Local SignOff not supported in WebAssembly", true);
+    emit jobCompleted(jobId, false, "");
+    return;
+#else
     using namespace acutesim::compute::orchestration;
 
     auto* cancelFlag = new std::atomic<bool>(false);
@@ -372,6 +397,7 @@ void WorkerManager::runLocalSignOff(
             emit jobCompleted(jobId, result.success, "");
         }, Qt::QueuedConnection);
     }).detach();
+#endif
 }
 
 // ============================================================================
@@ -395,6 +421,11 @@ void WorkerManager::runLocalPhysicsCompilation(
     const QString& backend,
     bool stableTempNaming)
 {
+#ifdef EMSCRIPTEN
+    emit jobLogReceived(jobId, "Local Physics Compilation not supported in WebAssembly", true);
+    emit jobCompleted(jobId, false, "");
+    return;
+#else
     auto* cancelFlag = new std::atomic<bool>(false);
     m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
 
@@ -514,6 +545,7 @@ void WorkerManager::runLocalPhysicsCompilation(
             emit jobCompleted(jobId, success, sharedLibPath);
         }, Qt::QueuedConnection);
     }).detach();
+#endif
 }
 
 } // namespace acutesim::gui::orchestration

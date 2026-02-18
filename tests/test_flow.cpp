@@ -10,6 +10,7 @@
 #include "../compute/solvers/circuitsim_solver.cpp"
 #include "../compute/tensors/physics_tensors.cpp"
 #include "../compute/solvers/superposition.cpp"
+#include "../compute/infrastructure/netlist_compiler.cpp"
 
 /**
  * Automated flow testing for Raw State component integration.

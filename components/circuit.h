@@ -590,6 +590,16 @@ struct TensorBlock {
     int numInternalNodes = 0;
     std::vector<std::string> pinNames;      // Metadata for Verilog-A port naming
     std::vector<int> portNodeIndices;         // Pin index -> internal node index (for subcircuit blocks)
+
+    // Hierarchical interface pin metadata (populated during subcircuit resolution)
+    struct InterfacePin {
+        std::string name;        // Pin/PowerPort component name
+        std::string netUUIDStr;  // Serialized NetUUID (from NetUUID::toString())
+        int nodeIndex = 0;       // Solver node index inside this block
+        bool isPower = false;    // true for PowerPort-type boundary pins
+        std::string direction;   // "Input", "Output", "BiDir", "Power"
+    };
+    std::vector<InterfacePin> interfacePins;
     
     // Passive Components
     std::vector<Resistor> resistors;

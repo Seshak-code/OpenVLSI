@@ -2,7 +2,11 @@
 #include "../server/subprocess.h"
 #include <QTemporaryFile>
 #include <QDir>
+#ifdef EMSCRIPTEN
+// QProcess not supported on WASM
+#else
 #include <QProcess>
+#endif
 #include <thread>
 
 namespace acutesim::compute::orchestration {
@@ -40,10 +44,14 @@ bool ToolDriver::isMockMode() {
 bool ToolDriver::isToolAvailable(const QString& toolName) {
     if (s_mockMode) return true;
     
+#ifdef EMSCRIPTEN
+    return false;
+#else
     QProcess proc;
     proc.start("which", {toolName});
     proc.waitForFinished(3000);
     return proc.exitCode() == 0;
+#endif
 }
 
 // ============================================================================
@@ -86,6 +94,12 @@ SynthesisResult ToolDriver::runYosys(
         return YosysLogParser::parse(mockOutput);
     }
     
+#ifdef EMSCRIPTEN
+    SynthesisResult result;
+    result.success = false;
+    result.errors.append("Yosys not supported in WASM");
+    return result;
+#else
     // 1. Generate TCL script
     QString tcl = YosysTask::generateTcl(config);
     QString scriptPath = writeTempScript(tcl, ".tcl");
@@ -139,6 +153,7 @@ SynthesisResult ToolDriver::runYosys(
     QFile::remove(scriptPath);
     
     return result;
+#endif
 }
 
 // ============================================================================
@@ -208,6 +223,12 @@ Antenna violations: 0
         return OpenRoadReportParser::parse(mockOutput);
     }
     
+#ifdef EMSCRIPTEN
+    PnRResult result;
+    result.success = false;
+    result.errors.append("OpenROAD not supported in WASM");
+    return result;
+#else
     // 1. Generate full-flow TCL
     QString tcl = OpenRoadTask::generateFullFlowTcl(fpConfig, placeConfig, ctsConfig, routeConfig);
     QString scriptPath = writeTempScript(tcl, ".tcl");
@@ -257,6 +278,7 @@ Antenna violations: 0
     
     QFile::remove(scriptPath);
     return result;
+#endif
 }
 
 // ============================================================================
@@ -421,6 +443,12 @@ DRC clean
         return KLayoutReportParser::parseDRC(mockOutput);
     }
     
+#ifdef EMSCRIPTEN
+    DRCResult result;
+    result.success = false;
+    result.errors.append("KLayout not supported in WASM");
+    return result;
+#else
     // 1. Generate DRC script
     QString script = KLayoutTask::generateDRCScript(config);
     QString scriptPath = writeTempScript(script, ".rb");
@@ -466,6 +494,7 @@ DRC clean
     
     QFile::remove(scriptPath);
     return result;
+#endif
 }
 
 // ============================================================================
@@ -505,6 +534,12 @@ MATCH — Layout matches schematic.
         return KLayoutReportParser::parseLVS(mockOutput);
     }
     
+#ifdef EMSCRIPTEN
+    LVSResult result;
+    result.success = false;
+    result.errors.append("KLayout not supported in WASM");
+    return result;
+#else
     // 1. Generate LVS script
     QString script = KLayoutTask::generateLVSScript(config);
     QString scriptPath = writeTempScript(script, ".rb");
@@ -550,6 +585,7 @@ MATCH — Layout matches schematic.
     
     QFile::remove(scriptPath);
     return result;
+#endif
 }
 
 } // namespace acutesim::compute::orchestration

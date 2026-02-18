@@ -16,6 +16,8 @@
 #include "../core/sim_auto_detector.h"
 #include "simulation_worker.h"
 #include "../../physics/statistical_engine.h"
+#include "../../compute/infrastructure/netlist_compiler.h"
+#include "../../compute/infrastructure/compiled_block.h"
 
 #include "../editors/schematic/schematic_editor.h"
 #include "../analysis/erc_engine.h"
@@ -92,12 +94,17 @@ public slots:
     void stopSimulation();
     void configureCorners();
     
-    // New Signals for Worker
+    // Signals for compiled-block dispatch
 signals:
     void startDCRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     void startTransientRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     void startACRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
     void startNoiseRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+
+    void startDCCompiledRequested(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startTransientCompiledRequested(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startACCompiledRequested(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void startNoiseCompiledRequested(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
 
     
 private slots:
@@ -154,6 +161,9 @@ private:
     // CircuitSim sim_; // Moved to Worker
     TensorNetlist netlist_; 
     TensorNetlist lastNetlist_; // Cache for comparison?
+
+    // Compiled block cache — recompiled only when topology hash changes
+    std::shared_ptr<const CompiledTensorBlock> currentCompiledBlock_;
 
     
     // Threading

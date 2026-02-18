@@ -200,8 +200,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Create executable
-add_executable(${PROJECT_NAME} 
-    main.cpp
+set(ACUTESIM_SOURCES
     gui/core/mainwindow.cpp
     gui/core/mainwindow.h
     gui/core/layout_manager.cpp
@@ -321,6 +320,7 @@ add_executable(${PROJECT_NAME}
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
     compute/solvers/webgpu_solver.cpp
     compute/orchestration/grpc_worker_client.cpp
     compute/orchestration/drivers/yosys_task.cpp
@@ -394,6 +394,8 @@ add_executable(${PROJECT_NAME}
     gui/core/subcircuit_resolver.cpp
     gui/components/standard_cell_visualizer.cpp
 )
+
+add_executable(${PROJECT_NAME} main.cpp ${ACUTESIM_SOURCES})
 
 # Phase 12: Orchestration Library (gRPC Worker Client)
 if(NOT EMSCRIPTEN)
@@ -556,7 +558,8 @@ if(EMSCRIPTEN)
         target_compile_definitions(${PROJECT_NAME} PRIVATE ACUTESIM_THREADS_ENABLED)
     endif()
 
-    target_link_options(${PROJECT_NAME} PRIVATE "-sPROXY_TO_WORKER=0")
+    add_compile_options("-fexceptions")
+    target_link_options(${PROJECT_NAME} PRIVATE "-sPROXY_TO_WORKER=0" "-sDISABLE_EXCEPTION_CATCHING=0")
     # Ensure the output filename is predictable for the HTML shell
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
 endif()
@@ -586,6 +589,7 @@ add_executable(test_regression
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_regression PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -657,6 +661,7 @@ add_executable(test_sensitivity
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_sensitivity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -682,6 +687,7 @@ add_executable(test_superposition
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_superposition PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -706,6 +712,7 @@ add_executable(test_mode_ladder
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_mode_ladder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -773,6 +780,7 @@ if(NOT EMSCRIPTEN)
     compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
         gui/analysis/simulation_workspace.cpp
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
@@ -916,6 +924,7 @@ if(NOT EMSCRIPTEN)
     compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
         gui/analysis/simulation_workspace.cpp
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
@@ -1017,6 +1026,7 @@ add_executable(test_erc_rules
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_erc_rules PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -1056,6 +1066,7 @@ if(NOT EMSCRIPTEN)
         ai_api/simulation/speculative_runner.cpp
         ai_api/analysis/failure_classifier.cpp
         compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
         compute/solvers/superposition.cpp
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
@@ -1206,6 +1217,7 @@ add_executable(test_simulation
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_simulation PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -1230,6 +1242,7 @@ add_executable(verify_bjt_thermal
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(verify_bjt_thermal PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -1253,6 +1266,7 @@ add_executable(test_dependent_simulation
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_dependent_simulation PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -1276,6 +1290,7 @@ add_executable(test_soa_bridge
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_soa_bridge PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -1426,6 +1441,7 @@ if(NOT EMSCRIPTEN)
     compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
         gui/analysis/simulation_workspace.cpp
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
@@ -1560,6 +1576,7 @@ if(NOT EMSCRIPTEN)
     compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
         gui/analysis/simulation_workspace.cpp
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
@@ -1868,6 +1885,7 @@ add_executable(test_determinism
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_determinism PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -1899,7 +1917,30 @@ target_link_libraries(test_kernel_dispatch PRIVATE Qt6::Core)
 target_compile_features(test_kernel_dispatch PUBLIC cxx_std_17)
 add_test(NAME test_kernel_dispatch COMMAND test_kernel_dispatch)
 
-
+# Hierarchy headless unit test (no Qt::Gui — avoids dual-Qt runtime crash)
+# Covers: Pin::Direction::Power, TensorBlock::InterfacePin, CompiledInterfacePin,
+#         NetUUID round-trip, DesignDb snapshot, NetlistCompiler propagation.
+add_executable(test_hierarchy_headless
+    tests/test_hierarchy_headless.cpp
+    components/design_db.cpp
+    compute/infrastructure/netlist_compiler.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
+)
+target_include_directories(test_hierarchy_headless PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+)
+target_link_libraries(test_hierarchy_headless PRIVATE Qt6::Core)
+target_compile_features(test_hierarchy_headless PUBLIC cxx_std_17)
+add_test(NAME test_hierarchy_headless COMMAND test_hierarchy_headless)
+set_tests_properties(test_hierarchy_headless PROPERTIES LABELS "quick")
 
 # Verification Harness (Benchmarks, Alignment, Dense Batch)
 add_executable(test_verification_harness 
@@ -1911,6 +1952,7 @@ add_executable(test_verification_harness
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_verification_harness PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -1935,6 +1977,7 @@ add_executable(test_std_cells
     compute/tensors/physics_kernels_avx2.cpp
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
 )
 target_include_directories(test_std_cells PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -2011,6 +2054,7 @@ if(NOT EMSCRIPTEN)
     compute/tensors/physics_kernels_avx2.cpp
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
         gui/analysis/simulation_workspace.cpp
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
@@ -2284,3 +2328,90 @@ foreach(_t ${_heavy_tests})
         set_tests_properties(${_t} PROPERTIES LABELS "heavy")
     endif()
 endforeach()
+
+# ==============================================================================
+# HIERARCHY VERIFICATION TEST (GUI/Headless)
+# ==============================================================================
+if(NOT EMSCRIPTEN)
+    add_executable(test_hierarchy_gui 
+        tests/test_hierarchy_gui.cpp 
+        ${ACUTESIM_SOURCES}
+    )
+    
+    target_include_directories(test_hierarchy_gui PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors/schematic
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/styling
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
+        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/ai
+        ${CMAKE_CURRENT_SOURCE_DIR}/gui/panels
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${TCL_INCLUDE_PATH}
+    )
+    
+    target_link_libraries(test_hierarchy_gui PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Concurrent
+        Qt6::Svg
+        ${TCL_LIBRARY}
+    )
+    
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_hierarchy_gui PRIVATE OpenMP::OpenMP_CXX)
+    endif()
+
+    if(TARGET gRPC::grpc++)
+        target_link_libraries(test_hierarchy_gui PRIVATE 
+            gRPC::grpc++ 
+            protobuf::libprotobuf
+            absl::cord
+            absl::strings
+            absl::time
+            absl::synchronization
+            absl::status
+        )
+    endif()
+    
+    # Dawn if needed
+    if(TARGET dawn_native)
+        target_link_libraries(test_hierarchy_gui PRIVATE 
+            dawn_native 
+            dawn_proc
+            webgpu_cpp
+        )
+        target_compile_definitions(test_hierarchy_gui PRIVATE ACUTESIM_HAS_DAWN_NATIVE)
+    endif()
+    
+    if(Qt6Svg_FOUND)
+         target_compile_definitions(test_hierarchy_gui PRIVATE ACUTESIM_HAS_SVG)
+    endif()
+
+    # Definitions
+    target_compile_definitions(test_hierarchy_gui PRIVATE 
+        TEST_MODE 
+        ACUTESIM_THREADS_ENABLED
+    )
+endif()

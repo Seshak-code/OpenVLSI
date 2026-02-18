@@ -431,3 +431,35 @@ void SimulationWorker::startNoise(TensorNetlist netlist, Simulation::SimulationP
     running_ = false;
     emit simulationFinished();
 }
+
+// =============================================================================
+// COMPILED BLOCK OVERLOADS
+// =============================================================================
+// These delegate to the legacy TensorNetlist-based methods using the
+// embedded structural_ copy.  As internal solver methods migrate to use
+// only TensorizedBlock, these will become the sole implementation.
+
+void SimulationWorker::startDC(std::shared_ptr<const CompiledTensorBlock> block,
+                               Simulation::SimulationProfile profile,
+                               acutesim::physics::RunMode mode) {
+    // Delegate via structural copy
+    startDC(block->structural_, std::move(profile), mode);
+}
+
+void SimulationWorker::startTransient(std::shared_ptr<const CompiledTensorBlock> block,
+                                      Simulation::SimulationProfile profile,
+                                      acutesim::physics::RunMode mode) {
+    startTransient(block->structural_, std::move(profile), mode);
+}
+
+void SimulationWorker::startAC(std::shared_ptr<const CompiledTensorBlock> block,
+                               Simulation::SimulationProfile profile,
+                               acutesim::physics::RunMode mode) {
+    startAC(block->structural_, std::move(profile), mode);
+}
+
+void SimulationWorker::startNoise(std::shared_ptr<const CompiledTensorBlock> block,
+                                  Simulation::SimulationProfile profile,
+                                  acutesim::physics::RunMode mode) {
+    startNoise(block->structural_, std::move(profile), mode);
+}

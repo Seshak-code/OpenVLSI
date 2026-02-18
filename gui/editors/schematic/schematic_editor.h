@@ -100,6 +100,9 @@ public:
     // Check if a region is occupied by components or wires
     int getGridSnap() const { return GRID_STEP; }
     
+    // Spatial net lookup — valid after generateNetlist()
+    acutesim::components::NetUUID netUUIDAtPosition(QPointF scenePos) const;
+
     // Geometric Query
     bool isOccupied(const QRectF& rect, QGraphicsItem* exclude = nullptr);
     bool collidesWithAny(const QRectF& rect, const QGraphicsItem* ignore = nullptr) const;
@@ -161,6 +164,18 @@ signals:
 
 private:
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
+
+    // ─── Spatial Net State (populated by generateNetlist()) ────────────────
+    // Marked mutable so netUUIDAtPosition() can be const.
+    mutable QMap<QPair<int,int>, int> m_pointToNetID;
+    mutable QMap<int, int>            m_merges;
+    mutable int                       m_nextNetID = 1;
+    QMap<int, acutesim::components::NetUUID> m_spatialToDbNet;
+
+    // Spatial helpers — can be called from const context
+    int  spatialGetNetID(QPointF p) const;
+    int  spatialFindSet(int id) const;
+    void spatialUnionSets(int id1, int id2);
 
     bool gridVisible = true;
     bool snappingEnabled = true; // State

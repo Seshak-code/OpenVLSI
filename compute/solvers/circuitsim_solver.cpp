@@ -16,6 +16,7 @@
 #include "../../physics/device_physics.h"
 #include "../../physics/physics_constants.h"
 #include "../infrastructure/safe_utils.h"
+#include "../infrastructure/compiled_block.h"
 
 // =============================================================================
 // PHASE 1 HARDENING: Helper Method Implementations
@@ -585,4 +586,32 @@ SolverStep CircuitSim::stepTransient(TensorNetlist &netlist, double &timeStep,
         {lastResult.iterations, lastResult.finalResidual, simulationConverged},
         netlist.globalBlock.topologyHash
     };
+}
+
+
+// =============================================================================
+// COMPILED BLOCK API — Public entry points
+// =============================================================================
+// These overloads accept the pre-compiled, immutable CompiledTensorBlock.
+// They pre-load the SoA tensors and then delegate to the internal
+// TensorNetlist-based methods via the embedded structural_ copy.
+
+SolverStep CircuitSim::solveDC(const CompiledTensorBlock& block) {
+    // Pre-load the SoA tensors so tensorizeNetlist() inside is a no-op
+    soaBlock = block.tensors;
+
+    // Delegate to internal TensorNetlist-based solver
+    // A mutable copy is needed because the solver writes to instance states
+    TensorNetlist nl = block.structural_;
+    return solveDC(nl);
+}
+
+SolverStep CircuitSim::stepTransient(const CompiledTensorBlock& block,
+                                     double &timeStep, double currentTime) {
+    // Pre-load the SoA tensors
+    soaBlock = block.tensors;
+
+    // Delegate to internal TensorNetlist-based solver
+    TensorNetlist nl = block.structural_;
+    return stepTransient(nl, timeStep, currentTime);
 }

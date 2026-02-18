@@ -41,6 +41,7 @@ QString componentTypeToString(ComponentType t) {
         case ComponentType::SubCircuit: return "SubCircuit";
         case ComponentType::ICPackage: return "ICPackage";
         case ComponentType::Pin: return "Pin";
+        case ComponentType::PowerPort: return "PowerPort";
         case ComponentType::Generic: return "Generic";
         default: return "Unknown";
     }
@@ -58,7 +59,8 @@ ComponentType stringToComponentType(const QString& s) {
     if (s == "Mosfet" || s == "NMOS" || s == "PMOS") return ComponentType::Mosfet;
     if (s == "Bjt" || s == "NPN" || s == "PNP" || s == "BJT_NPN" || s == "BJT_PNP") return ComponentType::Bjt;
     if (s == "Wire") return ComponentType::Wire;
-    if (s == "Probe" || s == "PowerPort" || s == "Power Vdd" || s == "Power Vss") return ComponentType::Probe;
+    if (s == "Probe") return ComponentType::Probe;
+    if (s == "PowerPort" || s == "Power Vdd" || s == "Power Vss") return ComponentType::PowerPort;
     if (s == "RailDriver" || s == "WaveformGen") return ComponentType::VoltageSource;
     if (s == "PDK_NFET") return ComponentType::PDK_NFET;
     if (s == "PDK_PFET") return ComponentType::PDK_PFET;
@@ -326,6 +328,13 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
             params["direction"] = "Input";
             paramOptions["direction"] = {"Input", "Output", "BiDir"};
             break;
+        case ComponentType::PowerPort:
+            name = "POWER?";
+            value = "";
+            params["railName"] = "VDD";
+            params["direction"] = "Power";
+            paramOptions["direction"] = {"Power", "Input", "Output", "BiDir"};
+            break;
         case ComponentType::Generic:
             name = "U?";
             value = "Model";
@@ -371,10 +380,16 @@ void VisualComponent::loadPinsFromSchematic(const QString& schPath) {
     
     for (const auto& val : components) {
         QJsonObject c = val.toObject();
-        if (c["type"].toString() != "Pin") continue;
-        
+        QString ctype = c["type"].toString();
+        if (ctype != "Pin" && ctype != "PowerPort") continue;
+
         PinInfo pin;
         pin.name = c["name"].toString();
+        // PowerPort pins are always power-type
+        if (ctype == "PowerPort") {
+            pin.direction = PinInfo::Direction::Power;
+            pin.isPower   = true;
+        }
         
         QJsonObject props = c["properties"].toObject();
         
@@ -412,7 +427,10 @@ void VisualComponent::loadPinsFromSchematic(const QString& schPath) {
     }
     
     qDebug() << "[ICPackage] Loaded" << pinList.size() << "pins from" << schPath;
-    
+
+    // Re-validate symbol pins against updated schematic pin list
+    validateSymbolPins();
+
     // Trigger geometry recalculation
     prepareGeometryChange();
     update();
@@ -497,6 +515,13 @@ void VisualComponent::flip() {
 }
 
 QVector<QPointF> VisualComponent::getTerminals() const {
+    // If a symbol definition is loaded, use its pin positions
+    if (symbolDef.has_value()) {
+        QVector<QPointF> pts;
+        for (const auto& sp : symbolDef->pins)
+            pts.push_back(sp.pos);
+        return pts;
+    }
     // Terminals MUST land on 20px grid (GRID_STEP)
     QVector<QPointF> t;
     switch(type) {
@@ -607,7 +632,11 @@ QVector<QPointF> VisualComponent::getTerminals() const {
         case ComponentType::Pin:
             t << QPointF(0, 0); // Connection point at center of diamond
             break;
-        
+
+        case ComponentType::PowerPort:
+            t << QPointF(0, 20); // Single connection point below symbol (like VDD rail)
+            break;
+
         case ComponentType::ICPackage: {
             if (pinList.isEmpty()) {
                 // Fallback: single center terminal
@@ -1022,11 +1051,55 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
         painter->drawText(QRectF(-20, -25, 40, 15), Qt::AlignCenter, name);
         break;
     }
-    
+
+    case ComponentType::PowerPort: {
+        // Triangle rail glyph pointing up + rail name label
+        QString railName = params.value("railName", name);
+        painter->setPen(QPen(QColor("#FF5555"), 2));  // Red for power rails
+        painter->setBrush(QColor("#FF5555"));
+        QPolygonF tri;
+        tri << QPointF(-12, 0) << QPointF(12, 0) << QPointF(0, -18);
+        painter->drawPolygon(tri);
+        // Vertical lead from apex down to connection point
+        painter->drawLine(0, 0, 0, 20);
+        // Rail name above triangle
+        painter->setPen(Qt::white);
+        QFont f = painter->font();
+        f.setPointSize(8);
+        f.setBold(true);
+        painter->setFont(f);
+        painter->drawText(QRectF(-20, -32, 40, 12), Qt::AlignCenter, railName);
+        break;
+    }
+
     case ComponentType::ICPackage: {
+        // If a custom symbol is loaded, use it instead of the generic box
+        if (symbolDef.has_value()) {
+            for (const auto& g : symbolDef->graphics) {
+                if (g.debugOnly) continue; // skip debug-only primitives
+                if (g.type == SymbolGraphic::Type::Polygon)
+                    painter->drawPolygon(g.points);
+                else if (g.type == SymbolGraphic::Type::Rect)
+                    painter->drawRect(g.rect);
+            }
+            // Draw labels with token substitution
+            for (const auto& lbl : symbolDef->labels) {
+                QString text = lbl.text;
+                text.replace("{NAME}", name);
+                text.replace("{VALUE}", value);
+                painter->drawText(lbl.pos, text);
+            }
+            // Draw pin stubs (short lines from connection point outward)
+            for (const auto& sp : symbolDef->pins) {
+                QPointF stub = pinStubEndpoint(sp);
+                painter->drawLine(sp.pos, stub);
+            }
+            break;
+        }
+
         QRectF bounds = boundingRect();
         QRectF body = bounds.adjusted(10, 0, -10, 0);
-        
+
         // Body fill - always draw this so component is visible
         painter->setBrush(QColor("#2D2D30"));
         painter->setPen(QPen(Qt::white, 2));
@@ -1349,6 +1422,25 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
             break;
     }
     
+    // ── Symbol validation overlay ───────────────────────────────────────
+    if (m_symbolValidation == SymbolValidation::GhostPin) {
+        // Red error box — netlisting is blocked
+        painter->setPen(QPen(QColor("#FF3333"), 2, Qt::DashLine));
+        painter->setBrush(QColor(255, 0, 0, 30));
+        painter->drawRect(boundingRect().adjusted(2, 2, -2, -2));
+        painter->setPen(QColor("#FF3333"));
+        painter->setFont(QFont());
+        painter->drawText(boundingRect().topLeft() + QPointF(4, 14), "! GHOST PIN");
+    } else if (m_symbolValidation == SymbolValidation::HiddenPin) {
+        // Yellow warning badge — netlisting still works
+        painter->setPen(QPen(QColor("#FFAA00"), 2));
+        painter->setBrush(QColor(255, 170, 0, 50));
+        QRectF badge(boundingRect().right() - 18, boundingRect().top(), 16, 16);
+        painter->drawEllipse(badge);
+        painter->setFont(QFont());
+        painter->drawText(badge, Qt::AlignCenter, "!");
+    }
+
     // VISUAL INDICATORS (X Marks)
     if (type != ComponentType::Probe) {
         painter->setPen(QPen(Qt::red, 2));
@@ -1436,6 +1528,137 @@ void VisualComponent::hoverLeaveEvent(QGraphicsSceneHoverEvent* event) {
     unsetCursor();
     
     QGraphicsItem::hoverLeaveEvent(event);
+}
+
+// ============================================================================
+// SYMBOL (.sym) FILE SUPPORT
+// ============================================================================
+bool VisualComponent::loadSymbol(const QString& symPath) {
+    QFile f(symPath);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+    QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    if (!doc.isObject()) return false;
+    QJsonObject obj = doc.object();
+
+    SymbolDef def;
+
+    // Parse meta section
+    QJsonObject meta = obj["meta"].toObject();
+    def.symbolName        = meta["name"].toString();
+    def.designatorPrefix  = meta["designator_prefix"].toString();
+    def.version           = meta["version"].toString();
+
+    // Parse graphics[] — typed primitives (polygon, rect)
+    for (const auto& gVal : obj["graphics"].toArray()) {
+        QJsonObject g = gVal.toObject();
+        SymbolGraphic sg;
+        sg.debugOnly = (g["condition"].toString() == "debug_mode");
+
+        QString gtype = g["type"].toString();
+        if (gtype == "polygon") {
+            sg.type = SymbolGraphic::Type::Polygon;
+            for (const auto& pt : g["points"].toArray()) {
+                QJsonArray xy = pt.toArray();
+                sg.points << QPointF(xy[0].toDouble(), xy[1].toDouble());
+            }
+        } else if (gtype == "rect") {
+            sg.type = SymbolGraphic::Type::Rect;
+            sg.rect = QRectF(g["x"].toDouble(), g["y"].toDouble(),
+                             g["w"].toDouble(), g["h"].toDouble());
+        } else {
+            continue; // skip unknown types
+        }
+        def.graphics.push_back(sg);
+    }
+
+    // Legacy: parse flat "shape" array as a polygon for backwards compat
+    if (def.graphics.isEmpty() && obj.contains("shape")) {
+        SymbolGraphic sg;
+        sg.type = SymbolGraphic::Type::Polygon;
+        for (const auto& pt : obj["shape"].toArray()) {
+            QJsonArray xy = pt.toArray();
+            sg.points << QPointF(xy[0].toDouble(), xy[1].toDouble());
+        }
+        if (!sg.points.isEmpty())
+            def.graphics.push_back(sg);
+    }
+
+    // Parse pins[] — with orientation, length, electrical
+    for (const auto& pinVal : obj["pins"].toArray()) {
+        QJsonObject p = pinVal.toObject();
+        SymbolPin sp;
+        sp.name        = p["name"].toString();
+        sp.pos         = QPointF(p["x"].toDouble(), p["y"].toDouble());
+        sp.orientation = p["orientation"].toString("left");
+        sp.length      = p["length"].toInt(10);
+        sp.electrical  = p["electrical"].toString("signal");
+        def.pins.push_back(sp);
+    }
+
+    // Parse labels[] — with optional type field
+    for (const auto& lblVal : obj["labels"].toArray()) {
+        QJsonObject l = lblVal.toObject();
+        SymbolDef::Label lbl;
+        lbl.text = l["text"].toString();
+        lbl.pos  = QPointF(l["x"].toDouble(), l["y"].toDouble());
+        lbl.type = l["type"].toString("value");
+        def.labels.push_back(lbl);
+    }
+
+    symbolDef = def;
+
+    // Deferred pin validation — sets m_symbolValidation
+    validateSymbolPins();
+    update();
+    return true;
+}
+
+// ============================================================================
+// SYMBOL PIN STUB ENDPOINT HELPER
+// ============================================================================
+QPointF VisualComponent::pinStubEndpoint(const SymbolPin& sp) const {
+    QPointF offset;
+    if (sp.orientation == "left")        offset = QPointF(-sp.length, 0);
+    else if (sp.orientation == "right")  offset = QPointF(sp.length, 0);
+    else if (sp.orientation == "up")     offset = QPointF(0, -sp.length);
+    else if (sp.orientation == "down")   offset = QPointF(0, sp.length);
+    return sp.pos + offset;
+}
+
+// ============================================================================
+// THREE-STATE PIN VALIDATION
+// ============================================================================
+bool VisualComponent::validateSymbolPins() {
+    if (!symbolDef.has_value()) {
+        m_symbolValidation = SymbolValidation::Valid;
+        return true;
+    }
+
+    // Ghost pin: symbol has it, schematic doesn't → RED, netlisting blocked
+    for (const auto& sp : symbolDef->pins) {
+        bool inSch = std::any_of(pinList.begin(), pinList.end(),
+            [&](const PinInfo& pi){ return pi.name == sp.name; });
+        if (!inSch) {
+            m_symbolValidation = SymbolValidation::GhostPin;
+            qWarning() << "[SymbolValidation] Ghost pin:" << sp.name;
+            return false;
+        }
+    }
+
+    // Hidden pin: schematic has it, symbol doesn't → YELLOW, netlisting ok
+    for (const auto& pi : pinList) {
+        bool inSym = std::any_of(symbolDef->pins.begin(), symbolDef->pins.end(),
+            [&](const SymbolPin& sp){ return sp.name == pi.name; });
+        if (!inSym) {
+            m_symbolValidation = SymbolValidation::HiddenPin;
+            qWarning() << "[SymbolValidation] Hidden pin:" << pi.name;
+            return true;
+        }
+    }
+
+    m_symbolValidation = SymbolValidation::Valid;
+    return true;
 }
 
 void VisualComponent::keyPressEvent(QKeyEvent* event) {

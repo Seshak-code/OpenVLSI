@@ -1,6 +1,7 @@
 #pragma once
 #include "circuit.h"
 #include "linalg.h"
+#include "../compute/infrastructure/compiled_block.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -995,9 +996,13 @@ public:
       }
   }
 
+  // ── Legacy API (internal — used by compiled-block overloads) ─────────
   SolverStep solveDC(TensorNetlist &netlist);
-  
   SolverStep stepTransient(TensorNetlist &netlist, double &timeStep, double currentTime);
+  
+  // ── New API: Solver operates on pre-compiled block only ─────────────
+  SolverStep solveDC(const CompiledTensorBlock& block);
+  SolverStep stepTransient(const CompiledTensorBlock& block, double &timeStep, double currentTime);
   
   void resetArbiter() { arbiterInitialized = false; }
 

@@ -46,7 +46,10 @@ enum class ViolationType {
     SOLVER_EXPONENTIAL_OVERFLOW, // Device exponential overflow (voltage step > 100V)
 
     // Power Domain Violations
-    CROSS_DOMAIN_SIGNAL      // Signal crosses power domains without level shifter
+    CROSS_DOMAIN_SIGNAL,     // Signal crosses power domains without level shifter
+
+    // Hierarchy Violations
+    UNDRIVEN_POWER_PORT      // PowerPort component not connected to any net
 };
 
 enum class Severity {
@@ -71,6 +74,7 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::SOLVER_SLOW_CONVERGENCE:
         case ViolationType::SOLVER_EXPONENTIAL_OVERFLOW:
         case ViolationType::CROSS_DOMAIN_SIGNAL:
+        case ViolationType::UNDRIVEN_POWER_PORT:
             return Severity::WARNING;
         case ViolationType::NEAR_MISS:
             return Severity::INFO;
@@ -95,6 +99,7 @@ inline QString typeToString(ViolationType type) {
         case ViolationType::SOLVER_SLOW_CONVERGENCE: return "Slow Convergence (Solver)";
         case ViolationType::SOLVER_EXPONENTIAL_OVERFLOW: return "Exponential Overflow (Solver)";
         case ViolationType::CROSS_DOMAIN_SIGNAL: return "Cross-Domain Signal";
+        case ViolationType::UNDRIVEN_POWER_PORT: return "Undriven Power Port";
         default: return "Unknown";
     }
 }
@@ -147,6 +152,7 @@ public:
         checkNearMisses(scene);
         checkMultipleDrivers(scene);
         checkCrossDomainSignals(scene); // Power domain isolation check
+        checkPowerPorts(scene);         // Floating PowerPort detection
 
         // Mode-specific checks removed - unified component library
         // checkBlockModeRules() and checkSystemModeRules() are deprecated
@@ -628,6 +634,38 @@ private:
                     v.affectedItems = affectedItems;
                     violations_.append(v);
                 }
+            }
+        }
+    }
+
+    /**
+     * @brief Detect PowerPort components not connected to any net (floating rails).
+     * Emits UNDRIVEN_POWER_PORT warning (severity: Warning) for each such port.
+     */
+    void checkPowerPorts(QGraphicsScene* scene) {
+        for (auto* item : scene->items()) {
+            auto* c = dynamic_cast<VisualComponent*>(item);
+            if (!c || c->type != ComponentType::PowerPort) continue;
+
+            QVector<QPointF> terms = c->getTerminals();
+            if (terms.isEmpty()) continue;
+
+            QPointF sceneP = c->mapToScene(terms[0]);
+            QPair<int,int> key = {qRound(sceneP.x()), qRound(sceneP.y())};
+
+            // A PowerPort with no wire attached has no entry in pointToNetID_
+            // or has a net with only its own contribution (count <= 1)
+            int netID = pointToNetID_.value(key, -1);
+            if (netID == -1 || netConnectionCount_.value(netID, 0) <= 1) {
+                Violation v(
+                    ViolationType::UNDRIVEN_POWER_PORT,
+                    QString("PowerPort '%1' (rail: %2) is not connected to any net")
+                        .arg(c->name)
+                        .arg(c->params.value("railName", "?")),
+                    QPoint(key.first, key.second)
+                );
+                v.affectedItems.append(c);
+                violations_.append(v);
             }
         }
     }

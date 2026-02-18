@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <QGraphicsItem>
 #include <QGraphicsLineItem>
 #include <QPen>
@@ -46,6 +47,7 @@ enum class ComponentType {
     SubCircuit,      // Generic SubCircuit (Standard Cell)
     ICPackage,      // Hierarchical (File-Based)
     Pin,             // External Interface Pin
+    PowerPort,       // Power-rail interface pin (semantic marker, no source injection)
     Generic         // User-Defined Physics Model (Verilog-A)
 };
 
@@ -60,7 +62,8 @@ ComponentType stringToComponentType(const QString& s);
 // Supports any PDK-based design domain: Digital, Analog, RF, Mixed-Signal.
 struct PinInfo {
     QString name;                      // Pin name (e.g., "CLK", "VIN", "RF_OUT")
-    enum class Direction { Input, Output, BiDir, Power } direction = Direction::Input;
+    using Direction = acutesim::components::PinDirection;  // Shared enum (single source of truth)
+    Direction direction = Direction::Input;
     QString busGroup;                  // Bus group name (e.g., "ADDR", "DATA") 
     int busIndex = -1;                 // Index within bus (-1 if not a bus pin)
     bool isPower = false;              // VDD, VSS, VCC, GND, etc.
@@ -153,8 +156,8 @@ public:
     QString subCircuitName; // For Standard Cells / Library Items
     QString sourceFilePath; // For File-Based Hierarchical Blocks
     
-    // Pin Properties
-    enum class PinDirection { Input, Output, BiDir };
+    // Pin Properties (uses shared enum from design_db.h)
+    using PinDirection = acutesim::components::PinDirection;
     PinDirection pinDirection = PinDirection::Input;
     QMap<QString, QString> params; // Dynamic parameters
     QMap<QString, QStringList> paramOptions; // Options for parameters (Key -> List of Choices)
@@ -177,6 +180,41 @@ public:
     QVector<PinInfo> pinList;
     void loadPinsFromSchematic(const QString& schPath);
     QString displayName;  // User-friendly name for rendering
+
+    // Symbol (.sym) file support — overrides default paint/terminals when loaded
+    struct SymbolPin {
+        QString name;
+        QPointF pos;           // connection endpoint (relative to origin)
+        QString orientation;   // "left" | "right" | "up" | "down"
+        int length = 10;       // stub line length in px
+        QString electrical;    // "signal" | "power" | "gnd" | "passive" | "nc"
+    };
+    struct SymbolGraphic {
+        enum class Type { Polygon, Rect } type;
+        QPolygonF points;   // for Polygon
+        QRectF rect;        // for Rect
+        bool debugOnly = false;
+    };
+    struct SymbolDef {
+        // Meta
+        QString symbolName;
+        QString designatorPrefix;
+        QString version;
+        // Graphics
+        QVector<SymbolGraphic> graphics;
+        // Pins
+        QVector<SymbolPin> pins;
+        // Labels
+        struct Label { QString text; QPointF pos; QString type; };
+        QVector<Label> labels;
+    };
+    std::optional<SymbolDef> symbolDef;
+    bool loadSymbol(const QString& symPath);  // returns false on file error
+
+    // Three-state symbol pin validation
+    enum class SymbolValidation { Valid, HiddenPin, GhostPin };
+    SymbolValidation m_symbolValidation = SymbolValidation::Valid;
+    bool validateSymbolPins();
 
     VisualComponent(ComponentType t);
 
@@ -222,7 +260,7 @@ public:
     
     // Explicit exclusions for simulation
     bool isNetlistMember() const {
-        return !isGhost();
+        return !isGhost() && m_symbolValidation != SymbolValidation::GhostPin;
     }
 
     void updateCachedPens();
@@ -234,6 +272,9 @@ protected:
     QPen m_ghostPen;
     QBrush m_ghostBrush;
     QPen m_selectionPen; // Cached selection dash
+
+    // Symbol rendering helper
+    QPointF pinStubEndpoint(const SymbolPin& sp) const;
 
     // Hover events for quick preview tooltip
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;

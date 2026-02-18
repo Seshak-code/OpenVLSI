@@ -86,6 +86,36 @@ using InstUUID = UUID<InstTag>;
 using LayerUUID = UUID<LayerTag>;
 
 // ============================================================================
+// SHARED PIN DIRECTION ENUM (Single Source of Truth)
+// ============================================================================
+// Used by: DesignDb::Pin, CompiledInterfacePin, VisualComponent, ERC.
+// Do NOT define separate Direction enums elsewhere.
+enum class PinDirection { Input, Output, BiDir, Power };
+
+// ============================================================================
+// SCOPED NET UUID (Instance-Qualified Net Identity)
+// ============================================================================
+// Provides instance-scoped net identity without string concatenation.
+// Zero-allocation, deterministic, and suitable for use as map keys.
+struct ScopedNetUUID {
+    InstUUID instanceId;   // UUID{} (all-zero) for top-level scope
+    NetUUID  localNetId;   // The net's UUID within its defining scope
+
+    bool operator==(const ScopedNetUUID& o) const {
+        return instanceId == o.instanceId && localNetId == o.localNetId;
+    }
+    bool operator!=(const ScopedNetUUID& o) const { return !(*this == o); }
+    bool operator<(const ScopedNetUUID& o) const {
+        if (instanceId != o.instanceId) return instanceId < o.instanceId;
+        return localNetId < o.localNetId;
+    }
+
+    std::string toString() const {
+        return instanceId.toString() + ":" + localNetId.toString();
+    }
+};
+
+// ============================================================================
 // TOPOLOGICAL OBJECT MODELS
 // ============================================================================
 
@@ -98,9 +128,13 @@ struct Pin {
     InstUUID instanceId;
     int terminalIndex;      // 0=Drain, 1=Gate, etc. (Device-specific)
     NetUUID netId;          // The net this pin drives/loads
-    
+
     // Annotations
     std::string name;       // "A", "Y", "D", "G"
+
+    // Interface pin semantics (for subcircuit boundary pins)
+    PinDirection direction = PinDirection::Input;
+    bool isPower = false;   // true for PowerPort-type interface pins
 };
 
 /**

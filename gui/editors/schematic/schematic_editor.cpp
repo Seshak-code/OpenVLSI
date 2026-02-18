@@ -1198,6 +1198,38 @@ static double parseValue(const QString& str) {
     return val;
 }
 
+// ============================================================================
+// SPATIAL NET HELPERS (member implementations for const-safe access)
+// ============================================================================
+
+int GridScene::spatialGetNetID(QPointF p) const {
+    QPair<int,int> key = {(int)round(p.x()), (int)round(p.y())};
+    if (!m_pointToNetID.contains(key)) {
+        m_pointToNetID[key] = m_nextNetID++;
+    }
+    return m_pointToNetID[key];
+}
+
+int GridScene::spatialFindSet(int id) const {
+    while (m_merges.contains(id)) id = m_merges[id];
+    return id;
+}
+
+void GridScene::spatialUnionSets(int id1, int id2) {
+    int root1 = spatialFindSet(id1);
+    int root2 = spatialFindSet(id2);
+    if (root1 != root2) {
+        if (root1 < root2) m_merges[root2] = root1;
+        else               m_merges[root1] = root2;
+    }
+}
+
+acutesim::components::NetUUID GridScene::netUUIDAtPosition(QPointF p) const {
+    int rawID  = spatialGetNetID(p);
+    int rootID = spatialFindSet(rawID);
+    return m_spatialToDbNet.value(rootID, acutesim::components::NetUUID());
+}
+
 TensorNetlist GridScene::generateNetlist() {
     // Phase 6.1: Paradigm Bridge
     // 1. Populate/Update DesignDb from Spatial State (Migration Strategy)
@@ -1212,34 +1244,16 @@ TensorNetlist GridScene::generateNetlist() {
     }
 
     // --- Step 1: Connectivity Analysis (Spatial Approach) ---
-    QMap<QPair<int,int>, int> pointToNetID;
-    int nextNetID = 1; 
-    
-    // Function to get distinct net ID for a point, creating new if needed
-    auto getNetID = [&](QPointF p) -> int {
-        QPair<int,int> key = {(int)round(p.x()), (int)round(p.y())};
-        if (!pointToNetID.contains(key)) {
-            pointToNetID[key] = nextNetID++;
-        }
-        return pointToNetID[key];
-    };
-    
-    // Temporary structure to merge sets: map old_id -> new_id
-    QMap<int, int> merges;
-    
-    std::function<int(int)> findSet = [&](int id) {
-        while (merges.contains(id)) id = merges[id];
-        return id;
-    };
-    
-    auto unionSets = [&](int id1, int id2) {
-        int root1 = findSet(id1);
-        int root2 = findSet(id2);
-        if (root1 != root2) {
-            if (root1 < root2) merges[root2] = root1;
-            else merges[root1] = root2;
-        }
-    };
+    // Reset spatial net state (member variables)
+    m_pointToNetID.clear();
+    m_merges.clear();
+    m_spatialToDbNet.clear();
+    m_nextNetID = 1;
+
+    // Aliases to member helpers for readability within this function
+    auto getNetID  = [this](QPointF p) -> int { return spatialGetNetID(p); };
+    auto findSet   = [this](int id)    -> int { return spatialFindSet(id); };
+    auto unionSets = [this](int a, int b)     { spatialUnionSets(a, b); };
     
     QList<QGraphicsItem*> allItems = items();
     
@@ -1283,7 +1297,7 @@ TensorNetlist GridScene::generateNetlist() {
     using namespace acutesim::components;
     
     // 2.1 Map Spatial Nets to DB Nets
-    QMap<int, NetUUID> spatialToDbNet;
+    // m_spatialToDbNet already cleared above — use it directly.
     QMap<int, QString> spatialToName;
     
     // Predetermine names from labels
@@ -1298,11 +1312,12 @@ TensorNetlist GridScene::generateNetlist() {
         }
     }
     
-    // Phase 2.1: Extract names from Pin components (I/O Terminals)
+    // Phase 2.1: Extract names from Pin and PowerPort components (I/O Terminals)
     // This provides intuitive net naming for schematic ports.
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if (c->type == ComponentType::Pin && !c->name.isEmpty()) {
+            if ((c->type == ComponentType::Pin || c->type == ComponentType::PowerPort)
+                    && !c->name.isEmpty()) {
                 QVector<QPointF> terms = c->getTerminals();
                 if (!terms.isEmpty()) {
                     QPointF termPos = c->mapToScene(terms[0]);
@@ -1320,12 +1335,12 @@ TensorNetlist GridScene::generateNetlist() {
     auto getDbNet = [&](QPointF p) -> NetUUID {
         int rawID = getNetID(p);
         int rootID = findSet(rawID);
-        if (!spatialToDbNet.contains(rootID)) {
+        if (!m_spatialToDbNet.contains(rootID)) {
              QString name = spatialToName.value(rootID, "n" + QString::number(rootID));
              emit messageLogged(QString("DEBUG: Creating Net %1 (Root %2)").arg(name).arg(rootID));
-             spatialToDbNet[rootID] = designDb.createNet(name.toStdString());
+             m_spatialToDbNet[rootID] = designDb.createNet(name.toStdString());
         }
-        return spatialToDbNet[rootID];
+        return m_spatialToDbNet[rootID];
     };
     
     // Check Ground (and PDK_VSS)
@@ -1337,11 +1352,11 @@ TensorNetlist GridScene::generateNetlist() {
             if (c->type == ComponentType::Ground || c->type == ComponentType::PDK_VSS) {
                 QPointF termPos = c->mapToScene(c->getTerminals()[0]);
                 int rootID = findSet(getNetID(termPos));
-                if (!spatialToDbNet.contains(rootID)) {
+                if (!m_spatialToDbNet.contains(rootID)) {
                      // Create explicit GND net
-                     spatialToDbNet[rootID] = designDb.createNet("GND");
+                     m_spatialToDbNet[rootID] = designDb.createNet("GND");
                 }
-                groundNetId = spatialToDbNet[rootID];
+                groundNetId = m_spatialToDbNet[rootID];
                 groundFound = true;
             }
         }
@@ -1350,19 +1365,19 @@ TensorNetlist GridScene::generateNetlist() {
     // Force creation of all labeled nets (even if floating)
     for (auto it = spatialToName.begin(); it != spatialToName.end(); ++it) {
         int rootID = it.key();
-        if (!spatialToDbNet.contains(rootID)) {
+        if (!m_spatialToDbNet.contains(rootID)) {
              emit messageLogged(QString("DEBUG: Materializing floating labeled net %1 (Root %2)").arg(it.value()).arg(rootID));
-             spatialToDbNet[rootID] = designDb.createNet(it.value().toStdString());
+             m_spatialToDbNet[rootID] = designDb.createNet(it.value().toStdString());
         }
     }
 
     // 2.2 Populate Instances
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if (c->type == ComponentType::Select || c->type == ComponentType::Wire || 
-                c->type == ComponentType::Probe || c->type == ComponentType::Ground ||
+            if (c->type == ComponentType::Select || c->type == ComponentType::Wire ||
+                c->type == ComponentType::Probe  || c->type == ComponentType::Ground ||
                 c->type == ComponentType::PDK_VSS || c->type == ComponentType::PDK_VDD ||
-                c->type == ComponentType::PDK_VDDIO) continue;
+                c->type == ComponentType::PDK_VDDIO || c->type == ComponentType::PowerPort) continue;
 
              // Ensure Instance Exists
              if (c->dbId == InstUUID()) {
@@ -1494,29 +1509,44 @@ TensorNetlist GridScene::generateNetlist() {
                 TensorNetlist subNet = subScene.generateNetlist();
                 auto block = std::make_shared<TensorBlock>(subNet.globalBlock);
 
-                // Extract pin port interface from child's Pin components
+                // Extract pin port interface from child's Pin and PowerPort components.
+                // UUID-based lookup: use the net UUID at the pin's terminal position
+                // (avoids fragile string-name matching between net names and pin names).
                 auto snapResult = subScene.getDesignDb().snapshotWithNodeMap();
                 for (auto* subItem : subScene.items()) {
                     if (auto* sc = dynamic_cast<VisualComponent*>(subItem)) {
-                        if (sc->type == ComponentType::Pin && !sc->name.isEmpty()) {
-                            block->pinNames.push_back(sc->name.toStdString());
-                            // Find the node index for this pin's net
-                            QVector<QPointF> terms = sc->getTerminals();
-                            if (!terms.isEmpty()) {
-                                // Look up the net this pin connects to in the sub-scene's designDb
-                                // The pin's net was created during generateNetlist() and is in the sub's designDb
-                                int nodeIdx = 0; // Default to ground
-                                // Search for a net named after this pin
-                                for (const auto& [netId, netNode] : snapResult.netToNode) {
-                                    const auto* net = subScene.getDesignDb().getNet(netId);
-                                    if (net && net->name == sc->name.toStdString()) {
-                                        nodeIdx = netNode;
-                                        break;
-                                    }
-                                }
-                                block->portNodeIndices.push_back(nodeIdx);
+                        const bool isInterfacePin =
+                            (sc->type == ComponentType::Pin ||
+                             sc->type == ComponentType::PowerPort) && !sc->name.isEmpty();
+                        if (!isInterfacePin) continue;
+
+                        block->pinNames.push_back(sc->name.toStdString());
+
+                        // UUID-based node resolution
+                        QVector<QPointF> terms = sc->getTerminals();
+                        int nodeIdx = 0; // Default to ground
+                        if (!terms.isEmpty()) {
+                            QPointF termPos = sc->mapToScene(terms[0]);
+                            // Ask the sub-scene for the net UUID at this position
+                            NetUUID portNet = subScene.netUUIDAtPosition(termPos);
+                            auto nodeIt = snapResult.netToNode.find(portNet);
+                            if (nodeIt != snapResult.netToNode.end()) {
+                                nodeIdx = nodeIt->second;
                             }
                         }
+                        block->portNodeIndices.push_back(nodeIdx);
+
+                        // Populate interface pin metadata on the TensorBlock
+                        TensorBlock::InterfacePin ipin;
+                        ipin.name      = sc->name.toStdString();
+                        ipin.nodeIndex = nodeIdx;
+                        ipin.isPower   = (sc->type == ComponentType::PowerPort);
+                        ipin.direction = ipin.isPower ? "Power" : "Input"; // TODO: read from sc->pinDirection
+                        if (!terms.isEmpty()) {
+                            NetUUID portNet = subScene.netUUIDAtPosition(sc->mapToScene(terms[0]));
+                            ipin.netUUIDStr = portNet.toString();
+                        }
+                        block->interfacePins.push_back(ipin);
                     }
                 }
 
@@ -1536,7 +1566,7 @@ TensorNetlist GridScene::generateNetlist() {
 
     // Phase 2: Build DC annotation map (solver node ID → name + position)
     m_nodeAnnotations.clear();
-    for (auto it = spatialToDbNet.begin(); it != spatialToDbNet.end(); ++it) {
+    for (auto it = m_spatialToDbNet.begin(); it != m_spatialToDbNet.end(); ++it) {
         int rootID = it.key();
         NetUUID netId = it.value();
         auto nodeIt = topSnap.netToNode.find(netId);
@@ -1547,7 +1577,7 @@ TensorNetlist GridScene::generateNetlist() {
         ann.netName = spatialToName.value(rootID, "n" + QString::number(rootID));
 
         // Find representative position: first grid point belonging to this root net
-        for (auto pit = pointToNetID.begin(); pit != pointToNetID.end(); ++pit) {
+        for (auto pit = m_pointToNetID.begin(); pit != m_pointToNetID.end(); ++pit) {
             if (findSet(pit.value()) == rootID) {
                 ann.position = QPointF(pit.key().first, pit.key().second);
                 break;
@@ -1604,7 +1634,7 @@ TensorNetlist GridScene::generateNetlist() {
             for (int i = 0; i < numPorts; ++i) {
                 QPointF scenePos = c->mapToScene(terms[i]);
                 int spatialId = findSet(getNetID(scenePos));
-                NetUUID netId = spatialToDbNet.value(spatialId, NetUUID());
+                NetUUID netId = m_spatialToDbNet.value(spatialId, NetUUID());
                 int globalNode = 0; // default ground
                 if (netId != NetUUID()) {
                     auto nodeIt = topSnap.netToNode.find(netId);
@@ -1670,7 +1700,7 @@ TensorNetlist GridScene::generateNetlist() {
                 // Pin 0 of a probe is the "tip"
                 QPointF pArea = c->mapToScene(c->getTerminals()[0]);
                 int spatialId = findSet(getNetID(pArea)); 
-                NetUUID netId = spatialToDbNet.value(spatialId, NetUUID());
+                NetUUID netId = m_spatialToDbNet.value(spatialId, NetUUID());
                 
                 std::string netName = "0";
                 if (netId != NetUUID()) {
@@ -1712,8 +1742,8 @@ TensorNetlist GridScene::generateNetlist() {
             int spatialId2 = findSet(getNetID(sp2));
             int n1 = 0, n2 = 0;
             {
-                NetUUID nid1 = spatialToDbNet.value(spatialId1, NetUUID());
-                NetUUID nid2 = spatialToDbNet.value(spatialId2, NetUUID());
+                NetUUID nid1 = m_spatialToDbNet.value(spatialId1, NetUUID());
+                NetUUID nid2 = m_spatialToDbNet.value(spatialId2, NetUUID());
                 auto it1 = topSnap.netToNode.find(nid1);
                 auto it2 = topSnap.netToNode.find(nid2);
                 if (it1 != topSnap.netToNode.end()) n1 = it1->second;
