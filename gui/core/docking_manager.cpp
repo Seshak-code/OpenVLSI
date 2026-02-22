@@ -20,6 +20,7 @@ QDockWidget* DockingManager::createDock(const QString& id, const QString& title,
     QDockWidget* dock = new QDockWidget(title, mainWindow_);
     dock->setObjectName(id);
     dock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
     dock->setWidget(innerWidget);
     
     mainWindow_->addDockWidget(defaultArea, dock);
@@ -49,9 +50,7 @@ void DockingManager::createCoreDocks() {
     resultsTree_ = new QTreeWidget(mainWindow_);
     resultsTree_->setHeaderLabels({"Node", "Value"});
     resultsTree_->setColumnWidth(0, 150);
-    resultsTree_->setStyleSheet(
-        "QTreeWidget { background: #1e1e1e; color: #ccc; border: none; } "
-        "QHeaderView::section { background: #2d2d2d; color: #888; border: none; padding: 4px; }");
+    // Styling is handled by the global ThemeManager stylesheet
     
     outputWidget_ = new OutputDockWidget("Output", mainWindow_);
     

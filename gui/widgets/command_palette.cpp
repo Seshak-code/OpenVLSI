@@ -9,7 +9,11 @@ namespace gui {
 namespace widgets {
 
 CommandPalette::CommandPalette(QWidget* parent)
+#ifdef __EMSCRIPTEN__
+    : QDialog(parent, Qt::Widget | Qt::FramelessWindowHint)
+#else
     : QDialog(parent, Qt::Popup | Qt::FramelessWindowHint)
+#endif
 {
     setModal(true);
     setAttribute(Qt::WA_TranslucentBackground);

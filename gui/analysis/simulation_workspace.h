@@ -23,6 +23,7 @@
 #include "../analysis/erc_engine.h"
 #include "../widgets/problems_panel.h"
 #include "../widgets/trust_badge_widget.h"
+#include "../../compute/infrastructure/postproc_engine.h" // [NEW] For caching results
 #ifndef __EMSCRIPTEN__
 #include <QFutureWatcher>
 #include <QtConcurrent>
@@ -31,10 +32,13 @@
 #include "gui_types.h"
 #include "circuitsim.h"
 #include "statistical_dashboard.h"
+#include "variables_panel.h"
 #include <QDialog>
 #include <QSpinBox>
 #include <QFormLayout>
 
+class SimulationExplorer;
+class CornerSetupWidget;
 class StatisticalDashboard;
 
 /**
@@ -93,6 +97,7 @@ public slots:
     void runQuickDC();
     void stopSimulation();
     void configureCorners();
+    void openCalculator(); // [NEW] ViVA Parity
     
     // Signals for compiled-block dispatch
 signals:
@@ -110,8 +115,8 @@ signals:
 private slots:
     void onProfileSelected(const QString& profileId);
     void onRunRequested(const QString& profileId);
+    void onSweepRequested(); // [NEW]
 
-    // void stepSimulation(); // Removed
     void appendLog(const QString& msg);
     void appendStreamLog(const QString& msg);
     
@@ -125,11 +130,14 @@ private:
     // Layout
     QSplitter* mainSplitter_;
     
-    // Left panel - Explorer (VS Code style)
+    // Left panel - Explorer    // Docks / Sub-widgets
     SimulationExplorer* explorer_;
+    QTabWidget* outputTabs_;
+    CornerSetupWidget* cornersWidget_;
+    acutesim::gui::analysis::VariablesPanel* variablesPanel_; // [NEW] ADE Parity
     
-    /* Removed old primitive selector */
-    // QComboBox* schematicCombo_;
+    // Output Widgets
+    // QComboBox* schematicCombo_; // Removed old primitive selector
     
     // Center panel
     QWidget* profileEditor_;
@@ -152,6 +160,7 @@ private:
     // State
     SchematicEditor* schematicEditor_ = nullptr;
     acutesim::gui::core::SimulationContext currentContext_;
+    acutesim::orchestration::SimulationContext simParams_; // Design variables / simulation parameters
     QMap<QString, Simulation::SimulationProfile> profiles_;
     QString currentProfileId_;
     size_t currentTopologyHash_ = 0;
@@ -203,4 +212,7 @@ private:
     void runSensitivity();
     StatisticalDashboard* statsDashboard_ = nullptr;
     std::vector<double> lastMonteCarloResults_;
+    
+    // [NEW] Result Cache for Calculator
+    QMap<QString, acutesim::compute::postproc::Waveform> latestResults_;
 };

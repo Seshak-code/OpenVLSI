@@ -1,6 +1,7 @@
 #pragma once
 
 #include "compiled_block.h"
+#include "../orchestration/simulation_context.h"
 #include <memory>
 
 // Forward declaration — full definition in circuit.h
@@ -28,4 +29,16 @@ public:
      */
     static std::shared_ptr<const CompiledTensorBlock>
     compile(const TensorNetlist& netlist);
+
+    /**
+     * Variable-Aware Compilation.
+     * 
+     * Resolves all symbolic parameters in the TensorNetlist (e.g. R="Rload")
+     * using the values provided in the SimulationContext.
+     * 
+     * This ensures the resulting CompiledTensorBlock contains only raw doubles,
+     * keeping the solver fast and numeric-only.
+     */
+    static std::shared_ptr<const CompiledTensorBlock>
+    compile(const TensorNetlist& netlist, const acutesim::orchestration::SimulationContext& ctx);
 };

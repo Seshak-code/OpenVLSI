@@ -1,6 +1,5 @@
 #include "editor_manager.h"
-#include "gui/editors/schematic/schematic_editor.h"
-#include "gui/editors/code_editor.h"
+#include "editor_factory.h"
 #include <QFileInfo>
 #include "gui/widgets/inline_dialog.h"
 #include <QDebug>
@@ -46,16 +45,7 @@ void EditorManager::openFile(const QString& path, const QString& typeHint) {
 }
 
 IEditor* EditorManager::createEditorForFile(const QString& path, const QString& typeHint) {
-    QFileInfo fi(path);
-    QString ext = fi.suffix().toLower();
-    
-    // Type Hint override?
-    if (typeHint == "Schematics" || ext == "sch") {
-        return new SchematicEditor(path); // Parent is handled by TabWidget addition
-    } else {
-        // Default to Text/Code Editor for everything else (.v, .sv, .py, .tcl, .txt)
-        return new editors::CodeEditor(path);
-    }
+    return EditorFactory::instance().createEditor(path, typeHint);
 }
 
 void EditorManager::closeEditor(int index) {
@@ -141,15 +131,10 @@ void EditorManager::updateTabTitle(IEditor* editor) {
         if (editor->isDirty()) txt += " •";
         tabWidget_->setTabText(index, txt);
         
-        // Update Icon based on file type
+        // Update Icon based on file type (via EditorFactory registry)
         QFileInfo fi(editor->filePath());
         QString ext = fi.suffix().toLower();
-        QString iconName = "file";
-        
-        if (ext == "sch") iconName = "schematic";
-        else if (ext == "v" || ext == "sv" || ext == "vams") iconName = "hdl";
-        else if (ext == "tcl" || ext == "py") iconName = "file"; // Script?
-        
+        QString iconName = EditorFactory::instance().iconForExtension(ext);
         tabWidget_->setTabIcon(index, IconProvider::icon(iconName));
     }
 }

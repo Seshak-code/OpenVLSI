@@ -11,6 +11,7 @@ namespace gui {
 namespace widgets {
 
 class ProjectModel;
+class LibraryModel; // New
 class ProjectItem;
 
 /**
@@ -69,9 +70,11 @@ private:
     QVBoxLayout* layout_;
     QWidget* headerWidget_;
     QToolButton* collapseButton_;
+    QToolButton* libraryButton_; // New
     QToolButton* newFileButton_;
     QTreeView* treeView_;
     ProjectModel* model_;
+    LibraryModel* libraryModel_; // New
     QMenu* contextMenu_;
 
     // Context menu actions

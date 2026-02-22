@@ -4,8 +4,8 @@ import socketserver
 import os
 import mimetypes
 
-PORT = 8000
-DIRECTORY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build_wasm")
+PORT = 8080
+DIRECTORY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build-wasm")
 
 # Ensure proper MIME types for WASM (critical for Safari)
 mimetypes.add_type('application/wasm', '.wasm')

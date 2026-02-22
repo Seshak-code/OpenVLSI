@@ -13,32 +13,9 @@ SimulationExplorer::SimulationExplorer(QWidget* parent)
     treeWidget_->setRootIsDecorated(true);
     treeWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
     
-    // Style
-    treeWidget_->setStyleSheet(R"(
-        QTreeWidget {
-            border: none;
-            background-color: #252526;
-            color: #cccccc;
-            font-size: 12px;
-        }
-        QTreeWidget::item {
-            padding: 4px 2px;
-        }
-        QTreeWidget::item:selected {
-            background-color: #094771;
-        }
-        QTreeWidget::item:hover {
-            background-color: #2a2d2e;
-        }
-        QTreeWidget::branch:has-children:!has-siblings:closed,
-        QTreeWidget::branch:closed:has-children:has-siblings {
-            image: url(:/icons/chevron-right.png);
-        }
-        QTreeWidget::branch:open:has-children:!has-siblings,
-        QTreeWidget::branch:open:has-children:has-siblings {
-            image: url(:/icons/chevron-down.png);
-        }
-    )");
+    // Styling handled by global ThemeManager stylesheet; only keep structural tweaks
+    treeWidget_->setStyleSheet("QTreeWidget::item { padding: 4px 2px; } "
+                               "QTreeWidget { font-size: 12px; border: none; }");
     
     setupTree();
     

@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <QUuid>
 #include <QMap>
@@ -19,6 +20,19 @@
 namespace acutesim::gui::orchestration {
 
 enum class ExecutionMode { LOCAL, REMOTE, AUTO };
+
+/** Detected local EDA tools and PDKs. Empty on WASM. */
+struct ToolInventory {
+    bool hasYosys      = false;
+    bool hasOpenROAD   = false;
+    bool hasKLayout    = false;
+    bool hasDocker     = false;
+    QString yosysVersion;
+    QString openRoadVersion;
+    QString klayoutVersion;
+    QStringList installedPDKs;  // PDK names found under $PDK_ROOT or common paths
+    QString pdkRoot;            // Resolved PDK_ROOT path
+};
 
 struct WorkerState {
     QString workerId;
@@ -46,6 +60,10 @@ public:
     void connectToWorker(const QString& target = "localhost:50051");
     void disconnect();
 
+    // Tool detection (async on native; returns empty inventory on WASM immediately)
+    void detectLocalTools();
+    ToolInventory toolInventory() const { return m_inventory; }
+
     WorkerState currentState() const { return m_state; }
     bool isConnected() const { return m_state.isConnected; }
 
@@ -67,6 +85,7 @@ public:
     void cancelJob(const QString& jobId);
 
 signals:
+    void toolInventoryReady(const ToolInventory& inventory);
     void statusChanged(const WorkerState& state);
     void logReceived(const QString& msg, bool isError);
     void jobFinished(bool success, const QString& resultPath);
@@ -90,9 +109,12 @@ private:
 
     std::unique_ptr<acutesim::worker::WorkerClient> m_client;
     WorkerState m_state;
+    ToolInventory m_inventory;
     ExecutionMode m_executionMode = ExecutionMode::AUTO;
     std::atomic<bool> m_running { false };
+#ifndef EMSCRIPTEN
     std::thread m_pollThread;
+#endif
 
     // Active jobs
     std::map<std::string, std::atomic<bool>*> m_jobCancelFlags;

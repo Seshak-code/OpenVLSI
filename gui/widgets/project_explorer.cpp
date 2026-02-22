@@ -1,10 +1,12 @@
 #include "project_explorer.h"
 #include "project_model.h"
+#include "library_model.h"
 #include "gui/core/icon_provider.h"
 #include "gui/styling/theme_manager.h"
 #include <QHeaderView>
 #include <QDebug>
 #include <QSortFilterProxyModel>
+#include <QDir>
 
 namespace acutesim {
 namespace gui {
@@ -13,6 +15,7 @@ namespace widgets {
 ProjectExplorer::ProjectExplorer(QWidget* parent)
     : QWidget(parent)
     , model_(new ProjectModel(this))
+    , libraryModel_(new LibraryModel(this))
     , contextMenu_(new QMenu(this)) {
     setupUi();
     setupContextMenu();
@@ -60,6 +63,30 @@ void ProjectExplorer::setupUi() {
         }
     });
     headerLayout->addWidget(newFileButton_);
+
+    // Library View Toggle
+    libraryButton_ = new QToolButton();
+    libraryButton_->setIcon(core::IconProvider::icon("library")); // Fallback if missing
+    libraryButton_->setToolTip("Library View");
+    libraryButton_->setCheckable(true);
+    libraryButton_->setAutoRaise(true);
+    libraryButton_->setIconSize(QSize(16, 16));
+    connect(libraryButton_, &QToolButton::toggled, this, [this](bool checked) {
+        if (checked) {
+            // Switch to Library View
+            components::LibraryIndex::instance().scanProject(QDir::currentPath());
+            libraryModel_->refresh();
+            treeView_->setModel(libraryModel_);
+            newFileButton_->setEnabled(false);
+            collapseButton_->setEnabled(false); // Library hierarchy is simple
+        } else {
+            // Switch back to Project View
+            treeView_->setModel(model_);
+            newFileButton_->setEnabled(true);
+            collapseButton_->setEnabled(true);
+        }
+    });
+    headerLayout->insertWidget(1, libraryButton_); // Insert after stretch, before New File
 
     // Collapse all button
     collapseButton_ = new QToolButton();
@@ -154,6 +181,20 @@ void ProjectExplorer::setupContextMenu() {
 void ProjectExplorer::onItemDoubleClicked(const QModelIndex& index) {
     if (!index.isValid()) return;
 
+    if (treeView_->model() == libraryModel_) {
+         QString path = libraryModel_->getItemPath(index);
+         if (!path.isEmpty()) {
+             QFileInfo fi(path);
+             emit fileOpenRequested("Library", fi.fileName(), path);
+         }
+         // Handle expansion for Library/Cell nodes
+         QString type = libraryModel_->getItemType(index);
+         if (type == "Library" || type == "Cell") {
+             treeView_->setExpanded(index, !treeView_->isExpanded(index));
+         }
+         return;
+    }
+
     ProjectItem* item = model_->itemFromIndex(index);
     if (!item) return;
 
@@ -170,6 +211,8 @@ void ProjectExplorer::onItemDoubleClicked(const QModelIndex& index) {
 }
 
 void ProjectExplorer::onContextMenuRequested(const QPoint& pos) {
+    if (treeView_->model() == libraryModel_) return; // Context menu not supported for Library View
+
     QModelIndex index = treeView_->indexAt(pos);
 
     // Update action states based on selection

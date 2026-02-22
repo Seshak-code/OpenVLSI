@@ -12,8 +12,15 @@
 #include "../widgets/search_dock.h"
 #include "../styling/theme_manager.h"
 #include "../scripting/tcl_bridge.h"
+#include "../orchestration/worker_manager.h"
+#include "../orchestration/pdk_manager.h"
 #include "../editors/schematic/schematic_editor.h"
+#include "../editors/code_editor.h"
+#include "../editors/json_viewer.h"
+#include "../editors/image_viewer.h"
+#include "../editors/hex_viewer.h"
 #include "editor_manager.h"
+#include "editor_factory.h"
 #include <QApplication>
 #include <QHeaderView>
 #include <QStatusBar>
@@ -75,8 +82,10 @@ MainWindow::MainWindow(QWidget* parent)
     statusBar()->showMessage("Ready - RTL Design Stage");
     
     // 5. Restore Layout (Phase 11.2 State Persistence)
-    // We delay this slightly or call after UI init
+    // Disable layout restore in WebAssembly to prevent Qt geometry engine repaint loops
+#ifndef __EMSCRIPTEN__
     acutesim::gui::core::LayoutManager::instance().restoreWindowLayout("main_window", this);
+#endif
     
     qDebug() << "[MW INIT] Constructor complete";
 }
@@ -104,6 +113,24 @@ void MainWindow::setupCentralWidget() {
     
     // Editor Manager (Controller)
     editorManager = new acutesim::gui::core::EditorManager(editorTabs, this);
+
+    // Register built-in editor types (highest priority first)
+    {
+        using namespace acutesim::gui::core;
+        auto& ef = EditorFactory::instance();
+        ef.registerEditor({"schematic", {".sch"}, "Schematic", "schematic",
+            [](const QString& p) -> IEditor* { return new SchematicEditor(p); }, 100});
+        ef.registerEditor({"json", {".json"}, "JSON", "file",
+            [](const QString& p) -> IEditor* { return new acutesim::gui::editors::JsonViewer(p); }, 50});
+        ef.registerEditor({"image", {".png",".jpg",".jpeg",".svg",".bmp",".gif"}, "Image", "file",
+            [](const QString& p) -> IEditor* { return new acutesim::gui::editors::ImageViewer(p); }, 50});
+        ef.registerEditor({"hex", {".gds",".lib",".lef",".def",".bin"}, "Binary", "file",
+            [](const QString& p) -> IEditor* { return new acutesim::gui::editors::HexViewer(p); }, 20});
+        ef.registerEditor({"code",
+            {".v",".sv",".vams",".py",".tcl",".txt",".md",".cmake",".cfg",".yaml",".yml",".h",".cpp",".c"},
+            "Code", "hdl",
+            [](const QString& p) -> IEditor* { return new acutesim::gui::editors::CodeEditor(p); }, 0});
+    }
     
     // Welcome Widget (shown when no tabs)
     welcomeWidget = new WelcomeWidget(this);
@@ -376,6 +403,20 @@ void MainWindow::setupDocks() {
     qDebug() << "[MW] Creating Worker Dock...";
     createWorkerDock();
     addDockWidget(Qt::BottomDockWidgetArea, workerDock);
+#ifdef __EMSCRIPTEN__
+    workerDock->hide(); // No gRPC worker in WASM; avoid cluttering the bottom panel
+#endif
+
+    // Kick off local tool detection and wire result into PdkManager
+    {
+        using namespace acutesim::gui::orchestration;
+        auto* wm = WorkerManager::instance();
+        connect(wm, &WorkerManager::toolInventoryReady, this,
+            [](const ToolInventory& inv) {
+                PdkManager::instance().updateFromInventory(inv.pdkRoot, inv.installedPDKs);
+            });
+        wm->detectLocalTools();
+    }
 
     qDebug() << "[MW] Creating Debug Suggestions Dock...";
     createDebugSuggestionsDock();
@@ -618,6 +659,8 @@ void MainWindow::createPropertiesDock() {
     propertiesDock = new QDockWidget("Properties", this);
     propertiesDock->setObjectName("PropertiesDock");
     propertiesDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    propertiesDock->setTitleBarWidget(new QWidget());
+    propertiesDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     
     // Stack for Multi-Mode Support
     propertiesStack = new QStackedWidget(propertiesDock);
@@ -798,8 +841,9 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
 void MainWindow::createMessagesDock() {
     messagesDock = new QDockWidget("Problems", this);
     messagesDock->setObjectName("MessagesDock");
-    // NASA: Allow all areas for flexible splitting within bottom panel
     messagesDock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    messagesDock->setTitleBarWidget(new QWidget());
+    messagesDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     
     problemsPanel = new ProblemsPanel(messagesDock);
     
@@ -1243,6 +1287,8 @@ void MainWindow::createWorkerDock() {
     workerDock = new QDockWidget("Worker Status", this);
     workerDock->setObjectName("WorkerDock");
     workerDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::RightDockWidgetArea);
+    workerDock->setTitleBarWidget(new QWidget());
+    workerDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     workerPanel = new acutesim::gui::orchestration::WorkerStatusPanel(workerDock);
     workerDock->setWidget(workerPanel);
 }
@@ -1251,6 +1297,8 @@ void MainWindow::createDebugSuggestionsDock() {
     debugSuggestionsDock = new QDockWidget("AI Debug Hints", this);
     debugSuggestionsDock->setObjectName("DebugSuggestionsDock");
     debugSuggestionsDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::RightDockWidgetArea);
+    debugSuggestionsDock->setTitleBarWidget(new QWidget());
+    debugSuggestionsDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     
     debugSuggestionsPanel = new acutesim::gui::widgets::DebugSuggestionsPanel(debugSuggestionsDock);
     debugSuggestionsPanel->setEditor(schematicEditor); // Set initial editor
@@ -1262,7 +1310,7 @@ void MainWindow::createSimulationDock() {
     simulationDock_ = new QDockWidget("Simulation", this);
     simulationDock_->setObjectName("SimulationDock");
     simulationDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
-    simulationDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    simulationDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
 
     // simulationWorkspace is already created in setupCentralWidget
     simulationDock_->setWidget(simulationWorkspace);
@@ -1892,6 +1940,14 @@ void MainWindow::applyModernTabStyle(QTabWidget* tabWidget) {
     QString textColor = tm.getColor("ui.text").name();
     QString textDim = tm.getColor("ui.textDim").name();
 
+    // On WASM, SVG icon loading is bypassed (FreeType unreachable traps), so omit
+    // the close-button image reference and rely on the platform default "×".
+#ifdef __EMSCRIPTEN__
+    QString closeButtonImageRule;
+#else
+    QString closeButtonImageRule = "image: url(:/icons/close.svg);";
+#endif
+
     // Modern VS Code-style tab styling with rounded corners
     tabWidget->setStyleSheet(QString(R"(
         QTabWidget::pane {
@@ -1926,7 +1982,9 @@ void MainWindow::applyModernTabStyle(QTabWidget* tabWidget) {
             border-top: 2px solid %7;
         }
         QTabBar::close-button {
-            image: none;
+            %8
+            width: 14px;
+            height: 14px;
             subcontrol-position: right;
             padding: 2px;
         }
@@ -1934,7 +1992,8 @@ void MainWindow::applyModernTabStyle(QTabWidget* tabWidget) {
             background-color: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
         }
-    )").arg(tabBg, tabActiveBg, tabHoverBg, tabBorder, textColor, textDim, tabAccent));
+    )").arg(tabBg, tabActiveBg, tabHoverBg, tabBorder, textColor, textDim, tabAccent,
+            closeButtonImageRule));
 }
 
 void MainWindow::updateLayoutMenu() {

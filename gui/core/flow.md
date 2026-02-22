@@ -59,6 +59,11 @@ class LayoutManager : public QObject {
 };
 ```
 
+> [!WARNING] WebAssembly (WASM) Layout Constraints
+> Due to bugs in the Qt 6.9 WASM `QSettings` backend and `QBackingStore` event loop, attempting to dynamically restore complex sub-window geometry payloads will trigger an unrecoverable infinite recursive repaint cycle. 
+> *   **Constraint:** `restoreWindowLayout()` must be `#ifndef __EMSCRIPTEN__` guarded within `MainWindow` initialization. WASM platforms must rely on hardcoded static widget layouts.
+> *   **Constraint:** `icon_provider.cpp` `loadSvgIcon()` must return empty icons early in `#ifdef __EMSCRIPTEN__` to bypass `QSvgRenderer`, as the FreeType engine vectors cause out-of-bounds `RuntimeError: unreachable` traps within the fixed 16MB WebAssembly memory pool.
+
 ### 4. Keybinding Manager (`keybinding_manager.h`)
 **Role**: The Input Router. Centralizes keyboard shortcuts to prevent conflicts and enable customization.
 

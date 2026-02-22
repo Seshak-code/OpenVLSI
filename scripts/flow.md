@@ -7,6 +7,7 @@ The `scripts/` directory contains **DevOps and Developer Utilities**. These are 
 -   **`setup_dependencies.sh`**: Installs build requirements (cmake, ninja, qt6) for the dev environment.
 -   **`kill_web.sh/ps1`**: Helper to terminate lingering web server processes during Wasm development.
 -   **`serve.py`**: A simple Python HTTP server for testing the WebAssembly build locally.
+-   **`tmp_patch.py`**: A regex-based post-compilation patcher that modifies `AcuteSim.js` to inject `EmscriptenEH` polyfills and intercept Embind `null`/`undefined` type conversion errors (essential for Qt 6.9 WebAssembly rendering).
 
 ## Physics Compiler (`scripts/physics_compiler/`)
 

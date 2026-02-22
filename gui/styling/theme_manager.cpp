@@ -75,6 +75,30 @@ void ThemeManager::initTokenRegistry() {
     reg("dialog.scrim", QColor("#000000"), false, "Scrim overlay color");
     reg("dialog.buttonPrimary", QColor("#007acc"), false, "Primary action button");
     reg("dialog.buttonSecondary", QColor("#3c3c3c"), false, "Secondary action button");
+
+    // Toolbar / Statusbar
+    reg("toolbar.background", QColor("#333333"), false, "Toolbar background");
+    reg("statusbar.background", QColor("#007acc"), false, "Status bar accent background");
+
+    // Scrollbar
+    reg("scrollbar.track", QColor("#1e1e1e"), false, "Scrollbar track background");
+    reg("scrollbar.thumb", QColor("#424242"), false, "Scrollbar thumb color");
+    reg("scrollbar.thumbHover", QColor("#555555"), false, "Scrollbar thumb hover color");
+
+    // Buttons
+    reg("button.background", QColor("#3c3c3c"), false, "Generic button background");
+    reg("button.foreground", QColor("#cccccc"), false, "Generic button text");
+    reg("button.hoverBackground", QColor("#505050"), false, "Generic button hover background");
+
+    // Trees
+    reg("tree.hoverBackground", QColor("#2a2d2e"), false, "Tree item hover background");
+    reg("tree.selectedBackground", QColor("#094771"), false, "Tree item selected background");
+
+    // Editor
+    reg("editor.background", QColor("#1e1e1e"), false, "Code editor background");
+    reg("editor.foreground", QColor("#d4d4d4"), false, "Code editor text color");
+    reg("editor.lineNumber", QColor("#858585"), false, "Line number gutter color");
+    reg("editor.currentLine", QColor("#282828"), false, "Current line highlight");
 }
 
 bool ThemeManager::loadThemeFromJson(const QString& jsonPath) {
@@ -217,23 +241,125 @@ QFontMetrics ThemeManager::getScaledFontMetrics(const QString& usage, int pointS
 }
 
 QString ThemeManager::getStyleSheet() const {
-    // Generate global stylesheet based on tokens
-    // This allows QWidgets to respect the theme automatically
     QString css;
+
+    // ── Base ────────────────────────────────────────────────────────────────
     css += QString("QWidget { background-color: %1; color: %2; }")
-               .arg(getColor("ui.background").name())
-               .arg(getColor("ui.text").name());
-    
-    css += QString("QLineEdit, QTextEdit, QPlainTextEdit { background-color: %1; color: %2; border: 1px solid %3; }")
-               .arg(getColor("input.background").name())
-               .arg(getColor("input.text").name())
+               .arg(getColor("ui.background").name(), getColor("ui.text").name());
+
+    // ── Inputs ──────────────────────────────────────────────────────────────
+    css += QString("QLineEdit, QTextEdit, QPlainTextEdit {"
+                   "  background-color: %1; color: %2; border: 1px solid %3;"
+                   "  border-radius: 3px; padding: 2px 4px; }")
+               .arg(getColor("input.background").name(),
+                    getColor("input.text").name(),
+                    getColor("ui.border").name());
+
+    // ── Dock titles ─────────────────────────────────────────────────────────
+    css += QString("QDockWidget::title { background: %1; padding: 4px; }")
+               .arg(getColor("ui.header").name());
+
+    // ── Splitter ────────────────────────────────────────────────────────────
+    css += QString("QSplitter::handle { background-color: %1; }")
                .arg(getColor("ui.border").name());
 
-    css += QString("QDockWidget::title { background: %1; }")
-                .arg(getColor("ui.header").name());
+    // ── MenuBar / Menu ───────────────────────────────────────────────────────
+    css += QString(
+        "QMenuBar { background-color: %1; color: %2; border-bottom: 1px solid %3; }"
+        "QMenuBar::item { background: transparent; padding: 4px 8px; }"
+        "QMenuBar::item:selected { background: %4; border-radius: 3px; }"
+        "QMenu { background-color: %1; color: %2; border: 1px solid %3; border-radius: 4px; }"
+        "QMenu::item { padding: 6px 24px 6px 12px; border-radius: 3px; }"
+        "QMenu::item:selected { background-color: %4; }"
+        "QMenu::separator { height: 1px; background: %3; margin: 3px 0; }")
+        .arg(getColor("ui.header").name(), getColor("ui.text").name(),
+             getColor("ui.border").name(), getColor("ui.accent").name());
 
-    css += QString("QSplitter::handle { background-color: %1; }")
-                .arg(getColor("ui.border").name());
+    // ── Toolbar ──────────────────────────────────────────────────────────────
+    css += QString(
+        "QToolBar { background-color: %1; border: none; spacing: 4px; padding: 2px; }"
+        "QToolBar::separator { background: %2; width: 1px; margin: 4px 2px; }")
+        .arg(getColor("toolbar.background").name(), getColor("ui.border").name());
+
+    // ── StatusBar ────────────────────────────────────────────────────────────
+    css += QString(
+        "QStatusBar { background-color: %1; color: #ffffff; border-top: none; }"
+        "QStatusBar::item { border: none; }")
+        .arg(getColor("statusbar.background").name());
+
+    // ── ScrollBar ────────────────────────────────────────────────────────────
+    css += QString(
+        "QScrollBar:vertical   { background: %1; width: 8px;  border: none; }"
+        "QScrollBar:horizontal { background: %1; height: 8px; border: none; }"
+        "QScrollBar::handle:vertical, QScrollBar::handle:horizontal {"
+        "  background: %2; border-radius: 4px; min-height: 20px; min-width: 20px; }"
+        "QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {"
+        "  background: %3; }"
+        "QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; }"
+        "QScrollBar::add-page, QScrollBar::sub-page { background: none; }")
+        .arg(getColor("scrollbar.track").name(),
+             getColor("scrollbar.thumb").name(),
+             getColor("scrollbar.thumbHover").name());
+
+    // ── ToolTip ──────────────────────────────────────────────────────────────
+    css += QString(
+        "QToolTip { background-color: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 3px; padding: 4px 6px; }")
+        .arg(getColor("ui.header").name(), getColor("ui.text").name(),
+             getColor("ui.border").name());
+
+    // ── ComboBox ─────────────────────────────────────────────────────────────
+    css += QString(
+        "QComboBox { background-color: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 3px; padding: 2px 6px; }"
+        "QComboBox::drop-down { border: none; width: 18px; }"
+        "QComboBox QAbstractItemView { background: %4; color: %2; border: 1px solid %3;"
+        "  selection-background-color: %5; }")
+        .arg(getColor("input.background").name(), getColor("input.text").name(),
+             getColor("ui.border").name(), getColor("ui.header").name(),
+             getColor("tree.selectedBackground").name());
+
+    // ── PushButton ───────────────────────────────────────────────────────────
+    css += QString(
+        "QPushButton { background-color: %1; color: %2; border: 1px solid %3;"
+        "  border-radius: 3px; padding: 4px 10px; }"
+        "QPushButton:hover { background-color: %4; }"
+        "QPushButton:pressed { background-color: %3; }"
+        "QPushButton:disabled { color: %5; }")
+        .arg(getColor("button.background").name(), getColor("button.foreground").name(),
+             getColor("ui.border").name(), getColor("button.hoverBackground").name(),
+             getColor("ui.textDim").name());
+
+    // ── TreeWidget / TreeView ────────────────────────────────────────────────
+    css += QString(
+        "QTreeWidget, QTreeView { background-color: %1; color: %2; border: none;"
+        "  alternate-background-color: %1; }"
+        "QTreeWidget::item, QTreeView::item { padding: 3px 2px; }"
+        "QTreeWidget::item:hover, QTreeView::item:hover { background-color: %3; }"
+        "QTreeWidget::item:selected, QTreeView::item:selected { background-color: %4; }"
+        "QHeaderView::section { background: %5; color: %6; border: none;"
+        "  padding: 3px 4px; font-size: 10px; }")
+        .arg(getColor("ui.background").name(), getColor("ui.text").name(),
+             getColor("tree.hoverBackground").name(), getColor("tree.selectedBackground").name(),
+             getColor("table.header").name(), getColor("ui.textDim").name());
+
+    // ── TabWidget / TabBar (global baseline — per-widget can override) ────────
+    css += QString(
+        "QTabWidget::pane { background-color: %1; border: none; border-top: 1px solid %2; }"
+        "QTabBar { background-color: %3; border: none; }"
+        "QTabBar::tab { background-color: %3; color: %4; border: none;"
+        "  padding: 6px 14px; margin-right: 2px; border-top-left-radius: 4px;"
+        "  border-top-right-radius: 4px; }"
+        "QTabBar::tab:hover { background-color: %5; }"
+        "QTabBar::tab:selected { background-color: %1; color: %6;"
+        "  border-top: 2px solid %7; }"
+        "QTabBar::close-button { subcontrol-position: right; padding: 2px; }"
+        "QTabBar::close-button:hover { background: rgba(255,255,255,0.1);"
+        "  border-radius: 3px; }")
+        .arg(getColor("tab.activeBackground").name(), getColor("tab.border").name(),
+             getColor("tab.background").name(), getColor("ui.textDim").name(),
+             getColor("tab.hoverBackground").name(), getColor("ui.text").name(),
+             getColor("tab.activeBorderTop").name());
 
     return css;
 }
@@ -305,7 +431,23 @@ void ThemeManager::loadDarkTheme() {
     colors_["table.header"] = QColor("#252526");
     colors_["table.row_selected"] = QColor("#094771");
     colors_["table.grid"] = QColor("#333333");
-    
+
+    // Toolbar / Statusbar / Scrollbar / Buttons / Trees / Editor
+    colors_["toolbar.background"] = QColor("#333333");
+    colors_["statusbar.background"] = QColor("#007acc");
+    colors_["scrollbar.track"] = QColor("#1e1e1e");
+    colors_["scrollbar.thumb"] = QColor("#424242");
+    colors_["scrollbar.thumbHover"] = QColor("#555555");
+    colors_["button.background"] = QColor("#3c3c3c");
+    colors_["button.foreground"] = QColor("#cccccc");
+    colors_["button.hoverBackground"] = QColor("#505050");
+    colors_["tree.hoverBackground"] = QColor("#2a2d2e");
+    colors_["tree.selectedBackground"] = QColor("#094771");
+    colors_["editor.background"] = QColor("#1e1e1e");
+    colors_["editor.foreground"] = QColor("#d4d4d4");
+    colors_["editor.lineNumber"] = QColor("#858585");
+    colors_["editor.currentLine"] = QColor("#282828");
+
     // Fonts
     QFont defaultFont("Inter"); // Or system default
     if (defaultFont.exactMatch()) {
@@ -339,6 +481,22 @@ void ThemeManager::loadLightTheme() {
     colors_["table.header"] = QColor("#f3f3f3");
     colors_["table.row_selected"] = QColor("#0060c0");
     colors_["table.grid"] = QColor("#e0e0e0");
+
+    // Toolbar / Statusbar / Scrollbar / Buttons / Trees / Editor (Light)
+    colors_["toolbar.background"] = QColor("#f0f0f0");
+    colors_["statusbar.background"] = QColor("#007acc");
+    colors_["scrollbar.track"] = QColor("#f0f0f0");
+    colors_["scrollbar.thumb"] = QColor("#c0c0c0");
+    colors_["scrollbar.thumbHover"] = QColor("#a0a0a0");
+    colors_["button.background"] = QColor("#e8e8e8");
+    colors_["button.foreground"] = QColor("#333333");
+    colors_["button.hoverBackground"] = QColor("#d4d4d4");
+    colors_["tree.hoverBackground"] = QColor("#e8e8e8");
+    colors_["tree.selectedBackground"] = QColor("#0060c0");
+    colors_["editor.background"] = QColor("#ffffff");
+    colors_["editor.foreground"] = QColor("#333333");
+    colors_["editor.lineNumber"] = QColor("#999999");
+    colors_["editor.currentLine"] = QColor("#f5f5f5");
 }
 
 

@@ -154,14 +154,34 @@ void PinMappingPage::initializePage() {
     if (!schematicEditor) return;
     
     TensorNetlist netlist = schematicEditor->toNetlist();
+    std::set<int> usedNodes;
     
-    // Add all non-ground nodes
+    // Auto-populate from explicit Interface Pins (Pin/PowerPort components)
+    if (!netlist.globalBlock.interfacePins.empty()) {
+        for (const auto& pin : netlist.globalBlock.interfacePins) {
+            QString entry = QString("%1 → Node %2")
+                            .arg(QString::fromStdString(pin.name))
+                            .arg(pin.nodeIndex);
+            
+            auto* item = new QListWidgetItem(entry);
+            item->setData(Qt::UserRole, QString::fromStdString(pin.netUUIDStr));
+            selectedPinsList->addItem(item);
+            
+            usedNodes.insert(pin.nodeIndex);
+        }
+    }
+    
+    // Add all available non-ground nodes (excluding those already assigned)
     for (int i = 1; i <= netlist.numGlobalNodes; ++i) {
-        availableNodesList->addItem(QString("Node %1").arg(i));
+        if (usedNodes.find(i) == usedNodes.end()) {
+            availableNodesList->addItem(QString("Node %1").arg(i));
+        }
     }
     
     // Add ground as a special entry
-    availableNodesList->addItem("Node 0 (GND)");
+    if (usedNodes.find(0) == usedNodes.end()) {
+        availableNodesList->addItem("Node 0 (GND)");
+    }
 }
 
 void PinMappingPage::onAddPin() {
@@ -236,6 +256,12 @@ std::vector<PortInfo> PinMappingPage::getPortInfo() const {
             if (upperName.contains("VDD") || upperName.contains("VCC") || 
                 upperName.contains("VSS") || upperName.contains("GND")) {
                 port.isPowerPin = true;
+            }
+            
+            // Retrieve persistent UUID (if available)
+            QString uuid = selectedPinsList->item(i)->data(Qt::UserRole).toString();
+            if (!uuid.isEmpty()) {
+                port.netUUIDStr = uuid.toStdString();
             }
             
             ports.push_back(port);

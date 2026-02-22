@@ -65,6 +65,7 @@ struct Resistor {
     double tc2 = 0.0;
 
     double tolerance_percent = 0.0; // Monte Carlo Tolerance (e.g. 1.0 = 1%)
+    std::string expression;         // Symbolic override (e.g. "Rload", "2*Vbias/Iref")
 };
 
 /*
@@ -88,6 +89,7 @@ struct Capacitor {
     double m = 1.0;               // Multiplier
     
     double tolerance_percent = 0.0;
+    std::string expression;         // Symbolic override for capacitance
 };
 
 /*
@@ -113,6 +115,7 @@ struct Inductor {
     double area_m2 = 0.0;         // Spiral area
     int turns = 0;                // Number of turns
 
+    std::string expression;       // Symbolic override for inductance
 };
 
 /*
@@ -163,6 +166,8 @@ struct VoltageSource {
     double sine_td = 0.0;    // Delay
     double sine_theta = 0.0; // Damping factor
     double sine_phase = 0.0; // Phase [deg] (Extension)
+
+    std::string expression;  // Symbolic override for DC/main value
 };
 
 /*
@@ -194,6 +199,8 @@ struct CurrentSource {
     double sine_td = 0.0;
     double sine_theta = 0.0;
     double sine_phase = 0.0;
+
+    std::string expression;  // Symbolic override for DC/main value
 };
 
 // ============================================================================
@@ -964,6 +971,10 @@ struct SubCircuitDefinition {
     // Pin-to-Internal-Node Mapping
     // Key: pin index (0-based), Value: internal node index
     std::map<int, int> pinToInternalNode;
+
+    // Pin-to-NetUUID Mapping (Persistence)
+    // Stores the original NetUUID string of the net connected to this pin at creation time.
+    std::vector<std::string> pinNetUUIDs;
     
     // Helper to get internal node for a given pin
     int getInternalNode(int pinIndex) const {
@@ -1251,6 +1262,7 @@ struct PortInfo {
     std::string pinName;      // Name for the pin (e.g., "VIN", "VOUT", "GND")
     int globalNodeId;         // Node ID in the source TensorNetlist
     bool isPowerPin = false;  // True for VDD/VSS pins (affects symbol rendering)
+    std::string netUUIDStr;   // Serialized NetUUID for persistence
 };
 
 /**
@@ -1295,6 +1307,7 @@ inline SubCircuitDefinition extractSubCircuit(
     for (size_t i = 0; i < ports.size(); ++i) {
         const auto& port = ports[i];
         result.pinNames.push_back(port.pinName);
+        result.pinNetUUIDs.push_back(port.netUUIDStr);
         
         if (globalToLocal.find(port.globalNodeId) == globalToLocal.end()) {
             globalToLocal[port.globalNodeId] = nextLocalNode;

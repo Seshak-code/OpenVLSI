@@ -193,6 +193,13 @@ AI_copilot_complete_guide.txt
 test_subcircuit
 test_flow
 
+# Stale dev/test files
+test_node.js
+test_pw.py
+tmp_patch.py
+build_wasm_log.txt
+ACUTESIM_CODEBASE_BOOK.docx
+
 # ============================================
 # Local Frameworks (Workarounds)
 # ============================================

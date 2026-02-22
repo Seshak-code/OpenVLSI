@@ -98,10 +98,12 @@ private:
     QWidget *lineNumberArea;
     CodeSyntaxHighlighter *highlighter;
     
-    const QColor COL_BG = QColor(30, 30, 30);
-    const QColor COL_FG = QColor(220, 220, 220);
-    const QColor COL_LINE_NUM = QColor(100, 100, 100);
-    const QColor COL_CURRENT_LINE = QColor(40, 40, 40);
+    // Colors resolved from ThemeManager at runtime for live theme switching
+    QColor editorBg() const;
+    QColor editorFg() const;
+    QColor editorLineNum() const;
+    QColor editorCurrentLine() const;
+    void applyEditorTheme();
 };
 
 // Helper widget for line numbers

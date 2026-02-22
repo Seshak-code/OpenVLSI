@@ -1,6 +1,10 @@
 #include "simulation_workspace.h"
 #include "../../gui/styling/theme_manager.h"
 #include "monte_carlo_setup_widget.h"
+#include "variables_panel.h"
+#include "calculator_widget.h" // [NEW]
+#include "parametric_sweep_dialog.h" // [NEW]
+#include "../../compute/orchestration/batch_runner.h" // [NEW]
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -136,6 +140,13 @@ void SimulationWorkspace::setupUI() {
     helpLabel_->setText(getAnalysisHelp(Simulation::AnalysisType::DC));
     rightLayout->addWidget(helpLabel_);
     
+    // [NEW] Design Variables Panel (ADE Parity)
+    variablesPanel_ = new acutesim::gui::analysis::VariablesPanel(rightPanel);
+    // Remove dock features since it's embedded
+    variablesPanel_->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    variablesPanel_->setTitleBarWidget(new QWidget()); // Hide title bar
+    rightLayout->addWidget(variablesPanel_, 1); // Give it weight
+
     mainSplitter_->addWidget(rightPanel);
     mainSplitter_->setStretchFactor(0, 0);
     mainSplitter_->setStretchFactor(1, 1);
@@ -197,6 +208,14 @@ void SimulationWorkspace::setupToolbar() {
     configCornersBtn->setFixedWidth(30);
     connect(configCornersBtn, &QPushButton::clicked, this, &SimulationWorkspace::configureCorners);
     layout->addWidget(configCornersBtn);
+
+    // Calculator Button (Waveform Icon)
+    QPushButton* calcBtn = new QPushButton(toolbar_);
+    calcBtn->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon)); // Placeholder icon
+    calcBtn->setToolTip("Open Calculator (Expression Builder)");
+    calcBtn->setFixedWidth(30);
+    connect(calcBtn, &QPushButton::clicked, this, &SimulationWorkspace::openCalculator);
+    layout->addWidget(calcBtn);
     
     layout->addSpacing(15);
 
@@ -375,6 +394,15 @@ void SimulationWorkspace::setContext(const acutesim::gui::core::SimulationContex
          findChild<QLabel*>("statusLabel")->setText("Ready (Analog)");
     } else {
          findChild<QLabel*>("statusLabel")->setText("Ready");
+    }
+    
+    // Update Variables Panel
+    if (variablesPanel_) {
+        variablesPanel_->setContext(&simParams_);
+        
+        // Connect sweep signal (only once)
+        disconnect(variablesPanel_, &acutesim::gui::analysis::VariablesPanel::sweepRequested, this, nullptr);
+        connect(variablesPanel_, &acutesim::gui::analysis::VariablesPanel::sweepRequested, this, &SimulationWorkspace::onSweepRequested);
     }
 }
 
@@ -667,6 +695,9 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     currentRun_.startTime = QDateTime::currentDateTime();
     currentRun_.status = Simulation::SimulationRun::Status::RUNNING;
     
+    // Clear cache for new run
+    latestResults_.clear();
+    
     // Update UI
     isRunning_ = true;
     runBtn_->setEnabled(false);
@@ -701,14 +732,80 @@ void SimulationWorkspace::stopSimulation() {
     if (worker_) worker_->stop();
 }
 
+void SimulationWorkspace::openCalculator() {
+    auto* calc = new acutesim::gui::analysis::CalculatorWidget(nullptr); // Floating window
+    calc->setWindowTitle("Calculator");
+    calc->resize(400, 500);
+    calc->setWaveforms(latestResults_);
+    calc->show();
+    
+    // Clean up on close
+    calc->setAttribute(Qt::WA_DeleteOnClose);
+}
+
 void SimulationWorkspace::onWorkerResults(const QJsonObject& results) {
     QString type = results.value("type").toString();
 
-    // Per-step transient points: forward data but don't update run status yet
-    // (status is set by the TransientSummary at the end, or by solverViolation on failure)
+    // Per-step transient points: forward data and cache it
     if (type == "TransientPoint") {
+        double t = results.value("time").toDouble();
+        
+        // Cache Voltages
+        QJsonArray volts = results.value("voltages").toArray();
+        for (int i = 0; i < volts.size(); ++i) {
+            QString name = QString("v(node%1)").arg(i+1); // Node names? ideally we map map local ID->Name
+            // Initialize if new
+            if (!latestResults_.contains(name)) {
+                latestResults_[name].name = name;
+                latestResults_[name].unit = "V";
+            }
+            latestResults_[name].time.append(t);
+            latestResults_[name].values.append(volts[i].toDouble());
+        }
+        
+        // Cache Probes
+        QJsonObject probes = results.value("probes").toObject();
+        for (auto k : probes.keys()) {
+           QString name = QString("v(\"%1\")").arg(k); // Quote names
+           if (!latestResults_.contains(name)) {
+                latestResults_[name].name = name;
+                latestResults_[name].unit = "V";
+            }
+            latestResults_[name].time.append(t);
+            latestResults_[name].values.append(probes.value(k).toDouble());
+        }
+
         emit resultsReady(results);
         return;
+    }
+    
+    // DC Results
+    if (type == "DC") {
+        latestResults_.clear();
+        double dc_time = 0.0; // Pseudo-time
+        
+        QJsonArray volts = results.value("voltages").toArray();
+        for (int i = 0; i < volts.size(); ++i) {
+            QString name = QString("v(node%1)").arg(i+1);
+            acutesim::compute::postproc::Waveform w;
+            w.name = name; w.unit = "V"; w.time.append(dc_time); w.values.append(volts[i].toDouble());
+            latestResults_.insert(name, w);
+        }
+        
+        QJsonObject probes = results.value("probes").toObject();
+        for (auto k : probes.keys()) {
+           QString name = QString("v(\"%1\")").arg(k);
+           acutesim::compute::postproc::Waveform w;
+           w.name = name; w.unit = "V"; w.time.append(dc_time); w.values.append(probes.value(k).toDouble());
+           latestResults_.insert(name, w);
+        }
+    }
+    
+    // AC Results - TODO: Cache complex values
+    if (type == "AC") {
+        latestResults_.clear();
+        // For Phase 1, just stub or implement later when PostProc handles complex.
+        // Assuming PostProcEngine::Waveform has complex fields.
     }
 
     // DC result or TransientSummary: mark run as converged and extract stats
@@ -795,6 +892,87 @@ void SimulationWorkspace::appendLog(const QString& msg) {
 
 void SimulationWorkspace::appendStreamLog(const QString& msg) {
     emit streamMessage(msg);
+}
+
+void SimulationWorkspace::onSweepRequested() {
+    using namespace acutesim::gui::widgets;
+
+    if (simParams_.variableExprs.isEmpty()) {
+        InlineDialog::information(this, "Sweep", "No design variables defined.");
+        return;
+    }
+
+    auto* dlg = new acutesim::gui::analysis::ParametricSweepDialog(
+        simParams_.variableExprs.keys(), this);
+
+    InlineDialog::showCustom(this, "Parametric Sweep", dlg,
+        DialogButton::Ok | DialogButton::Cancel,
+        [this, dlg](const DialogResult& r) {
+            if (r.clickedButton != DialogButton::Ok) return;
+
+            auto sweepParam = dlg->getSweepParameter();
+
+            // Prepare Runner
+            acutesim::compute::orchestration::BatchRunner runner;
+            runner.setContext(simParams_);
+
+            // Get fresh netlist
+            if (!schematicEditor_) return;
+            netlist_ = schematicEditor_->toNetlist();
+            runner.setBaseNetlist(netlist_);
+            runner.setSweep(sweepParam);
+
+            // Progress Dialog (non-blocking show; runner.run is synchronous V1)
+            QProgressDialog progress("Running Sweep...", "Cancel", 0, 100, this);
+            progress.setWindowModality(Qt::WindowModal);
+            progress.show();
+
+            connect(&runner, &acutesim::compute::orchestration::BatchRunner::progressChanged,
+                    &progress, &QProgressDialog::setValue);
+            connect(&runner, &acutesim::compute::orchestration::BatchRunner::stepCompleted,
+                    this, [this](int step, int total) {
+                appendLog(QString("Sweep step %1/%2 completed.").arg(step).arg(total));
+            });
+
+            emit logMessage("Starting Parametric Sweep...");
+
+            auto solverFn = [&](std::shared_ptr<const CompiledTensorBlock> block) -> QJsonObject {
+                if (progress.wasCanceled()) return {};
+
+                CircuitSim sim;
+                SolverStep res = sim.solveDC(*block);
+
+                QJsonObject json;
+                json["type"] = "DC";
+                QJsonArray vArr;
+                for (double v : res.nodeVoltages) vArr.append(v);
+                json["voltages"] = vArr;
+
+                QJsonObject pObj;
+                for (auto& p : block->structural_.globalBlock.probes) {
+                    double v_pos = (p.nodePositive > 0) ? res.nodeVoltages[p.nodePositive-1] : 0.0;
+                    double v_neg = (p.nodeNegative > 0) ? res.nodeVoltages[p.nodeNegative-1] : 0.0;
+                    pObj[QString::fromStdString(p.name)] = v_pos - v_neg;
+                }
+                json["probes"] = pObj;
+
+                QCoreApplication::processEvents();
+                return json;
+            };
+
+            auto results = runner.run(solverFn);
+
+            latestResults_.clear();
+            for (auto k : results.families.keys()) {
+                auto& fam = results.families[k];
+                if (!fam.members.isEmpty()) {
+                    latestResults_.insert(k, fam.members.first());
+                }
+            }
+
+            emit logMessage("Sweep Completed.");
+            openCalculator();
+        });
 }
 
 void SimulationWorkspace::configureCorners() {

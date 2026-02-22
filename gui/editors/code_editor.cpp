@@ -10,6 +10,7 @@
 #include <QAction>
 #include "gui/orchestration/worker_manager.h"
 #include "gui/core/storage_manager.h"
+#include "gui/styling/theme_manager.h"
 
 using namespace acutesim::gui::editors;
 
@@ -113,8 +114,10 @@ CodeEditor::CodeEditor(const QString& filePath, QWidget *parent)
 
     // Text Edit
     textEdit_ = new InternalCodeEditor(this);
-    textEdit_->setStyleSheet(QString("background-color: %1; color: %2; border: none;")
-                             .arg(COL_BG.name(), COL_FG.name()));
+    applyEditorTheme();
+    connect(&acutesim::gui::styling::ThemeManager::instance(),
+            &acutesim::gui::styling::ThemeManager::themeChanged,
+            this, &CodeEditor::applyEditorTheme);
     
     // Font
     QFont font("Monaco", 12); // Fallback
@@ -280,7 +283,7 @@ void CodeEditor::updateLineNumberArea(const QRect &rect, int dy) {
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
     QPainter painter(lineNumberArea);
-    painter.fillRect(event->rect(), COL_BG.darker(110));
+    painter.fillRect(event->rect(), editorBg().darker(110));
 
     QTextBlock block = textEdit_->firstVisibleBlockPublic();
     int blockNumber = block.blockNumber();
@@ -290,7 +293,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {
             QString number = QString::number(blockNumber + 1);
-            painter.setPen(COL_LINE_NUM);
+            painter.setPen(editorLineNum());
             painter.drawText(0, top, lineNumberArea->width() - 5, textEdit_->fontMetrics().height(),
                              Qt::AlignRight, number);
         }
@@ -313,7 +316,7 @@ void CodeEditor::highlightCurrentLine() {
     if (!textEdit_->isReadOnly()) {
         QTextEdit::ExtraSelection selection;
 
-        QColor lineColor = COL_CURRENT_LINE;
+        QColor lineColor = editorCurrentLine();
 
         selection.format.setBackground(lineColor);
         selection.format.setProperty(QTextFormat::FullWidthSelection, true);
@@ -323,4 +326,30 @@ void CodeEditor::highlightCurrentLine() {
     }
 
     textEdit_->setExtraSelections(extraSelections);
+}
+
+// ─── ThemeManager helpers ──────────────────────────────────────────────────
+
+QColor CodeEditor::editorBg() const {
+    return acutesim::gui::styling::ThemeManager::instance().getColor("editor.background");
+}
+
+QColor CodeEditor::editorFg() const {
+    return acutesim::gui::styling::ThemeManager::instance().getColor("editor.foreground");
+}
+
+QColor CodeEditor::editorLineNum() const {
+    return acutesim::gui::styling::ThemeManager::instance().getColor("editor.lineNumber");
+}
+
+QColor CodeEditor::editorCurrentLine() const {
+    return acutesim::gui::styling::ThemeManager::instance().getColor("editor.currentLine");
+}
+
+void CodeEditor::applyEditorTheme() {
+    textEdit_->setStyleSheet(
+        QString("background-color: %1; color: %2; border: none;")
+            .arg(editorBg().name(), editorFg().name()));
+    highlightCurrentLine();
+    lineNumberArea->update();
 }

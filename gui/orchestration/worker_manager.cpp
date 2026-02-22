@@ -22,16 +22,28 @@ WorkerManager* WorkerManager::instance() {
 WorkerManager::WorkerManager(QObject* parent) : QObject(parent) {
     m_state.isConnected = false;
     m_state.workerId = "Disconnected";
+#ifdef EMSCRIPTEN
+    // Browser: all tasks must go to a remote worker
+    m_executionMode = ExecutionMode::REMOTE;
+#endif
     // Start polling loop
+    // Start polling loop
+#ifdef EMSCRIPTEN
+    m_running = true;
+    QTimer::singleShot(0, this, &WorkerManager::pollStatus);
+#else
     m_running = true;
     m_pollThread = std::thread(&WorkerManager::pollStatus, this);
+#endif
 }
 
 WorkerManager::~WorkerManager() {
     m_running = false;
+#ifndef EMSCRIPTEN
     if (m_pollThread.joinable()) {
         m_pollThread.join();
     }
+#endif
 
     // Signal all outstanding jobs to stop and clean up cancel flags
     for (auto& [id, flag] : m_jobCancelFlags) {
@@ -55,6 +67,28 @@ void WorkerManager::disconnect() {
 }
 
 void WorkerManager::pollStatus() {
+#ifdef EMSCRIPTEN
+    if (!m_running) return;
+    
+    if (m_client) {
+        try {
+            auto status = m_client->getStatus();
+            m_state.workerId = QString::fromStdString(status.workerId);
+            m_state.version = QString::fromStdString(status.version);
+            m_state.isConnected = status.ready;
+            m_state.cpuUsage = status.cpuUsage;
+            m_state.capabilities.clear();
+            for (const auto& tool : status.supportedTools) {
+                m_state.capabilities << QString::fromStdString(tool);
+            }
+        } catch (const std::exception& e) {
+             m_state.isConnected = false;
+        }
+        emit statusChanged(m_state);
+    }
+    
+    QTimer::singleShot(2000, this, &WorkerManager::pollStatus);
+#else
     while (m_running) {
         if (!m_client) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -78,6 +112,7 @@ void WorkerManager::pollStatus() {
         emit statusChanged(m_state);
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
+#endif
 }
 
 QString WorkerManager::submitSynthesis(const acutesim::compute::orchestration::SynthesisConfig& config) {
@@ -114,6 +149,22 @@ QString WorkerManager::submitSynthesis(const acutesim::compute::orchestration::S
 
     // Capture by value for thread safety
     auto client = m_client.get();
+#ifdef EMSCRIPTEN
+    // WASM: Run synchronously (client is stubbed anyway)
+    // Note: If client implementation blocks, this blocks UI.
+    // But wasm_worker_client.cpp stub is non-blocking.
+    client->runSynthesis(
+        grpcConfig,
+        [this, jobId, cancelFlag](const std::string& line, bool isError) {
+            if (cancelFlag->load()) return;
+            emit jobLogReceived(jobId, QString::fromStdString(line), isError);
+        },
+        [this, jobId, cancelFlag](bool success, const std::string& artifactPath) {
+            if (cancelFlag->load()) return;
+            emit jobCompleted(jobId, success, QString::fromStdString(artifactPath));
+        }
+    );
+#else
     std::thread([this, grpcConfig, jobId, client, cancelFlag]() {
         client->runSynthesis(
             grpcConfig,
@@ -131,6 +182,7 @@ QString WorkerManager::submitSynthesis(const acutesim::compute::orchestration::S
             }
         );
     }).detach();
+#endif
 
     return jobId;
 }
@@ -172,6 +224,23 @@ QString WorkerManager::submitPlaceAndRoute(
     m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
 
     auto client = m_client.get();
+#ifdef EMSCRIPTEN
+    client->runPlaceAndRoute(
+        grpcConfig,
+        [this, jobId, cancelFlag](const std::string& line, bool isError) {
+            if (cancelFlag->load()) return;
+            emit jobLogReceived(jobId, QString::fromStdString(line), isError);
+        },
+        [this, jobId, cancelFlag](float progress) {
+            if (cancelFlag->load()) return;
+            emit jobProgress(jobId, progress);
+        },
+        [this, jobId, cancelFlag](bool success, const std::string& artifactPath) {
+            if (cancelFlag->load()) return;
+            emit jobCompleted(jobId, success, QString::fromStdString(artifactPath));
+        }
+    );
+#else
     std::thread([this, grpcConfig, jobId, client, cancelFlag]() {
         client->runPlaceAndRoute(
             grpcConfig,
@@ -195,6 +264,7 @@ QString WorkerManager::submitPlaceAndRoute(
             }
         );
     }).detach();
+#endif
 
     return jobId;
 }
@@ -227,6 +297,19 @@ QString WorkerManager::submitSignOff(const acutesim::compute::orchestration::DRC
     m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
 
     auto client = m_client.get();
+#ifdef EMSCRIPTEN
+    client->runSignOff(
+        grpcConfig,
+        [this, jobId, cancelFlag](const std::string& line, bool isError) {
+            if (cancelFlag->load()) return;
+            emit jobLogReceived(jobId, QString::fromStdString(line), isError);
+        },
+        [this, jobId, cancelFlag](bool success, const std::string& artifactPath) {
+            if (cancelFlag->load()) return;
+            emit jobCompleted(jobId, success, QString::fromStdString(artifactPath));
+        }
+    );
+#else
     std::thread([this, grpcConfig, jobId, client, cancelFlag]() {
         client->runSignOff(
             grpcConfig,
@@ -244,6 +327,7 @@ QString WorkerManager::submitSignOff(const acutesim::compute::orchestration::DRC
             }
         );
     }).detach();
+#endif
 
     return jobId;
 }
@@ -543,6 +627,64 @@ void WorkerManager::runLocalPhysicsCompilation(
         QMetaObject::invokeMethod(this, [this, jobId, success, headerPath, sharedLibPath]() {
             emit physicsCompilationReady(jobId, success, headerPath, sharedLibPath);
             emit jobCompleted(jobId, success, sharedLibPath);
+        }, Qt::QueuedConnection);
+    }).detach();
+#endif
+}
+
+// ─── Tool Detection ───────────────────────────────────────────────────────────
+
+void WorkerManager::detectLocalTools() {
+#ifdef EMSCRIPTEN
+    // WASM: no local tools; emit empty inventory immediately
+    emit toolInventoryReady(m_inventory);
+    m_executionMode = ExecutionMode::REMOTE;
+#else
+    // Run detection off the main thread to avoid blocking
+    std::thread([this]() {
+        ToolInventory inv;
+
+        auto probe = [](const QString& cmd, const QString& arg) -> QString {
+            QProcess p;
+            p.start(cmd, {arg});
+            if (p.waitForFinished(3000)) {
+                return QString::fromLocal8Bit(p.readAllStandardOutput())
+                    .trimmed()
+                    .section('\n', 0, 0); // first line
+            }
+            return {};
+        };
+
+        QString v;
+        v = probe("yosys", "--version");
+        if (!v.isEmpty()) { inv.hasYosys = true; inv.yosysVersion = v; }
+
+        v = probe("openroad", "-version");
+        if (!v.isEmpty()) { inv.hasOpenROAD = true; inv.openRoadVersion = v; }
+
+        v = probe("klayout", "--version");
+        if (!v.isEmpty()) { inv.hasKLayout = true; inv.klayoutVersion = v; }
+
+        v = probe("docker", "--version");
+        if (!v.isEmpty()) inv.hasDocker = true;
+
+        // PDK root discovery
+        QString pdkRoot = qEnvironmentVariable("PDK_ROOT");
+        if (pdkRoot.isEmpty()) {
+            for (const QString& candidate : QStringList{"/opt/pdks", QDir::homePath() + "/pdks"}) {
+                if (QDir(candidate).exists()) { pdkRoot = candidate; break; }
+            }
+        }
+        inv.pdkRoot = pdkRoot;
+
+        if (!pdkRoot.isEmpty()) {
+            QDir dir(pdkRoot);
+            inv.installedPDKs = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        }
+
+        QMetaObject::invokeMethod(this, [this, inv]() {
+            m_inventory = inv;
+            emit toolInventoryReady(m_inventory);
         }, Qt::QueuedConnection);
     }).detach();
 #endif

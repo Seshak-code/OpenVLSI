@@ -221,6 +221,8 @@ set(ACUTESIM_SOURCES
     gui/core/icon_provider.h
     gui/core/editor_manager.cpp
     gui/core/editor_manager.h
+    gui/core/editor_factory.cpp
+    gui/core/editor_factory.h
     gui/core/hierarchy_path.cpp
     gui/core/hierarchy_path.h
     resources/icons.qrc
@@ -230,6 +232,12 @@ set(ACUTESIM_SOURCES
     gui/editors/schematic/schematic_editor.h
     gui/editors/code_editor.cpp
     gui/editors/code_editor.h
+    gui/editors/json_viewer.cpp
+    gui/editors/json_viewer.h
+    gui/editors/image_viewer.cpp
+    gui/editors/image_viewer.h
+    gui/editors/hex_viewer.cpp
+    gui/editors/hex_viewer.h
     gui/core/sim_auto_detector.cpp
     gui/core/sim_auto_detector.h
     gui/editors/schematic/schematic_view.cpp
@@ -274,6 +282,12 @@ set(ACUTESIM_SOURCES
     gui/analysis/monte_carlo_setup_widget.h
     gui/analysis/statistical_dashboard.cpp
     gui/analysis/statistical_dashboard.h
+    gui/analysis/variables_panel.cpp
+    gui/analysis/variables_panel.h
+    gui/analysis/calculator_widget.cpp
+    gui/analysis/calculator_widget.h
+    gui/analysis/parametric_sweep_dialog.cpp
+    gui/analysis/parametric_sweep_dialog.h
     physics/simulation_profile.h
     physics/quick_analysis.h
     physics/quick_analysis.cpp
@@ -321,8 +335,15 @@ set(ACUTESIM_SOURCES
     compute/solvers/superposition.cpp
     compute/solvers/circuitsim_solver.cpp
     compute/infrastructure/netlist_compiler.cpp
+    compute/infrastructure/netlist_compiler_ctx.cpp
+    compute/infrastructure/postproc_engine.cpp
+    compute/infrastructure/postproc_engine.h
     compute/solvers/webgpu_solver.cpp
-    compute/orchestration/grpc_worker_client.cpp
+
+    compute/orchestration/batch_runner.cpp
+    compute/orchestration/batch_runner.h
+    compute/orchestration/simulation_context.cpp
+    compute/orchestration/simulation_context.h
     compute/orchestration/drivers/yosys_task.cpp
     compute/orchestration/drivers/yosys_task.h
     compute/orchestration/drivers/openroad_task.cpp
@@ -340,6 +361,10 @@ set(ACUTESIM_SOURCES
     compute/orchestration/server/subprocess.cpp
     gui/orchestration/worker_manager.cpp
     gui/orchestration/worker_manager.h
+    gui/orchestration/pdk_manager.cpp
+    gui/orchestration/pdk_manager.h
+    gui/orchestration/pdk_browser_panel.cpp
+    gui/orchestration/pdk_browser_panel.h
     gui/orchestration/worker_status_panel.cpp
     gui/orchestration/worker_status_panel.h
     gui/orchestration/rtl_pipeline_panel.cpp
@@ -383,19 +408,23 @@ set(ACUTESIM_SOURCES
     gui/widgets/inline_progress.h
     gui/widgets/project_model.cpp
     gui/widgets/project_model.h
+    gui/widgets/library_model.cpp
+    gui/widgets/library_model.h
     gui/widgets/project_explorer.cpp
     gui/widgets/project_explorer.h
     gui/widgets/search_dock.cpp
     gui/widgets/search_dock.h
     components/circuit.h
     components/design_db.cpp
+    components/library_index.cpp
+    components/library_index.h
     gui/scripting/tcl_bridge.cpp
     gui/scripting/tcl_bridge.h
     gui/core/subcircuit_resolver.cpp
     gui/components/standard_cell_visualizer.cpp
 )
 
-add_executable(${PROJECT_NAME} main.cpp ${ACUTESIM_SOURCES})
+qt_add_executable(${PROJECT_NAME} main.cpp ${ACUTESIM_SOURCES})
 
 # Phase 12: Orchestration Library (gRPC Worker Client)
 if(NOT EMSCRIPTEN)
@@ -427,6 +456,11 @@ if(NOT EMSCRIPTEN)
     
     # Enable defining the WorkerClient implementation
     target_compile_definitions(${PROJECT_NAME} PRIVATE ACUTESIM_ENABLE_ORCHESTRATION)
+    target_sources(${PROJECT_NAME} PRIVATE compute/orchestration/grpc_worker_client.cpp)
+endif()
+
+if(EMSCRIPTEN)
+    target_sources(${PROJECT_NAME} PRIVATE compute/orchestration/wasm_worker_client.cpp compute/orchestration/wasm_stubs.cpp)
 endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -501,7 +535,7 @@ if(NOT EMSCRIPTEN)
 else()
     # Export runtime methods but do NOT generate HTML (we manage it manually)
     set_target_properties(${PROJECT_NAME} PROPERTIES 
-        LINK_OPTIONS "SHELL:-s EXPORTED_RUNTIME_METHODS=['printErr','ccall','cwrap'] -s ALLOW_MEMORY_GROWTH=1 -s ASSERTIONS=1"
+        LINK_OPTIONS "SHELL:-s ALLOW_MEMORY_GROWTH=1 -s ASSERTIONS=1"
     )
 endif()
 
@@ -540,12 +574,12 @@ if(EMSCRIPTEN)
         "--bind" 
         "-sWASM=1"
         "-sALLOW_MEMORY_GROWTH=1"
-        "-sEXIT_RUNTIME=1"
         "-sERROR_ON_UNDEFINED_SYMBOLS=0"
-        "-sUSE_WEBGPU=1"
+        "-sMIN_WEBGL_VERSION=2"
+        "-sMAX_WEBGL_VERSION=2"
         "-sMODULARIZE=1"
         "-sEXPORT_NAME=AcuteSim"
-        "-sEXPORTED_RUNTIME_METHODS=['specialHTMLTargets','UTF8ToString','UTF16ToString','stringToUTF8','stringToUTF16','ccall','cwrap','wasmMemory','FS','callMain','ENV']"
+        "-sEXPORTED_RUNTIME_METHODS=specialHTMLTargets,UTF8ToString,UTF16ToString,stringToUTF8,stringToUTF16,ccall,cwrap,wasmMemory,FS,callMain,ENV,noExitRuntime,printErr"
         "-sEXPORTED_FUNCTIONS=['_main','_dumpStorageFile','_malloc','_free']"
         "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/resources@/resources"
     )
@@ -558,8 +592,15 @@ if(EMSCRIPTEN)
         target_compile_definitions(${PROJECT_NAME} PRIVATE ACUTESIM_THREADS_ENABLED)
     endif()
 
-    add_compile_options("-fexceptions")
-    target_link_options(${PROJECT_NAME} PRIVATE "-sPROXY_TO_WORKER=0" "-sDISABLE_EXCEPTION_CATCHING=0")
+    # Qt 6.9.3 wasm_singlethread was built WITHOUT -fwasm-exceptions (wasm_exceptions is in
+    # QT_DISABLED_PUBLIC_FEATURES). Using old-style Emscripten exception handling (invoke_)
+    # to match Qt's ABI. -fwasm-exceptions and -sSUPPORT_LONGJMP=wasm must NOT be used.
+    target_link_options(${PROJECT_NAME} PRIVATE
+        "-sPROXY_TO_WORKER=0"
+    )
+    # Force error on undefined symbols to 0 at the end
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sERROR_ON_UNDEFINED_SYMBOLS=0")
+    set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".js")
     # Ensure the output filename is predictable for the HTML shell
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "AcuteSim")
 endif()
@@ -728,6 +769,38 @@ target_include_directories(test_mode_ladder PRIVATE
 target_link_libraries(test_mode_ladder PRIVATE Qt6::Core)
 target_compile_features(test_mode_ladder PUBLIC cxx_std_17)
 
+# Virtuoso Parity Verification Test
+if(NOT EMSCRIPTEN)
+    add_executable(test_virtuoso_parity
+        tests/test_virtuoso_parity.cpp
+        compute/orchestration/simulation_context.cpp
+        compute/orchestration/batch_runner.cpp
+        compute/infrastructure/postproc_engine.cpp
+        compute/infrastructure/netlist_compiler.cpp
+        compute/infrastructure/netlist_compiler_ctx.cpp
+        compute/tensors/physics_tensors.cpp
+        compute/tensors/kernel_dispatch.cpp
+        compute/tensors/physics_kernels_avx512.cpp
+        compute/tensors/physics_kernels_avx2.cpp
+        compute/solvers/superposition.cpp
+        compute/solvers/circuitsim_solver.cpp
+    )
+    target_include_directories(test_virtuoso_parity PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(test_virtuoso_parity PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent)
+    target_compile_features(test_virtuoso_parity PUBLIC cxx_std_17)
+endif()
+
 # Auto-Validation Harness Test (ERC + AI API)
 if(NOT EMSCRIPTEN)
     add_executable(test_auto_harness
@@ -747,7 +820,11 @@ if(NOT EMSCRIPTEN)
         gui/analysis/system_inspector.cpp
         gui/analysis/logic_analyzer.cpp
         gui/editors/code_editor.cpp
+        gui/editors/json_viewer.cpp
+        gui/editors/image_viewer.cpp
+        gui/editors/hex_viewer.cpp
         gui/core/editor_manager.cpp
+        gui/core/editor_factory.cpp
         gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
@@ -755,6 +832,8 @@ if(NOT EMSCRIPTEN)
         gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
+        gui/orchestration/pdk_manager.cpp
+        gui/orchestration/pdk_browser_panel.cpp
     gui/scripting/tcl_bridge.cpp
     components/pdk_compliance.cpp
     gui/widgets/compliance_report_widget.cpp
@@ -781,7 +860,17 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
     compute/infrastructure/netlist_compiler.cpp
+        compute/orchestration/simulation_context.cpp
+        compute/orchestration/batch_runner.cpp
+        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
+        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/variables_panel.cpp
+        gui/analysis/variables_panel.h
+        gui/analysis/calculator_widget.cpp
+        gui/analysis/calculator_widget.h
+        gui/analysis/parametric_sweep_dialog.cpp
+        gui/analysis/parametric_sweep_dialog.h
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
@@ -845,6 +934,10 @@ if(NOT EMSCRIPTEN)
         gui/widgets/project_model.h
         gui/widgets/project_explorer.cpp
         gui/widgets/project_explorer.h
+        gui/widgets/library_model.cpp
+        gui/widgets/library_model.h
+        components/library_index.cpp
+        components/library_index.h
     )
     target_include_directories(test_auto_harness PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -891,7 +984,11 @@ if(NOT EMSCRIPTEN)
         gui/analysis/system_inspector.cpp
         gui/analysis/logic_analyzer.cpp
         gui/editors/code_editor.cpp
+        gui/editors/json_viewer.cpp
+        gui/editors/image_viewer.cpp
+        gui/editors/hex_viewer.cpp
         gui/core/editor_manager.cpp
+        gui/core/editor_factory.cpp
         gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/subcircuit_resolver.cpp
@@ -902,6 +999,8 @@ if(NOT EMSCRIPTEN)
         gui/core/welcome_widget.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
+        gui/orchestration/pdk_manager.cpp
+        gui/orchestration/pdk_browser_panel.cpp
         components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
@@ -925,7 +1024,17 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
     compute/infrastructure/netlist_compiler.cpp
+        compute/orchestration/simulation_context.cpp
+        compute/orchestration/batch_runner.cpp
+        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
+        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/variables_panel.cpp
+        gui/analysis/variables_panel.h
+        gui/analysis/calculator_widget.cpp
+        gui/analysis/calculator_widget.h
+        gui/analysis/parametric_sweep_dialog.cpp
+        gui/analysis/parametric_sweep_dialog.h
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
@@ -990,6 +1099,10 @@ if(NOT EMSCRIPTEN)
         gui/widgets/project_model.h
         gui/widgets/project_explorer.cpp
         gui/widgets/project_explorer.h
+        gui/widgets/library_model.cpp
+        gui/widgets/library_model.h
+        components/library_index.cpp
+        components/library_index.h
     )
     target_include_directories(test_copilot_validate PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -1346,10 +1459,17 @@ add_executable(test_pdk_swap
     components/design_db.cpp
     gui/editors/schematic/schematic_editor.h # Triggers MOC for GridScene
     gui/core/editor_manager.cpp
+    gui/core/editor_factory.cpp
+    gui/core/storage_manager.cpp
     gui/core/sim_auto_detector.cpp
     gui/editors/code_editor.cpp
+    gui/editors/json_viewer.cpp
+    gui/editors/image_viewer.cpp
+    gui/editors/hex_viewer.cpp
     gui/core/icon_provider.cpp
     gui/orchestration/worker_manager.cpp
+    gui/orchestration/pdk_manager.cpp
+    gui/orchestration/pdk_browser_panel.cpp
     compute/orchestration/grpc_worker_client.cpp
     gui/widgets/inline_dialog.cpp
     gui/widgets/inline_progress.cpp
@@ -1411,7 +1531,11 @@ if(NOT EMSCRIPTEN)
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
         gui/editors/code_editor.cpp
+        gui/editors/json_viewer.cpp
+        gui/editors/image_viewer.cpp
+        gui/editors/hex_viewer.cpp
         gui/core/editor_manager.cpp
+        gui/core/editor_factory.cpp
         gui/core/sim_auto_detector.cpp
         gui/core/mainwindow.cpp
         gui/core/welcome_widget.cpp
@@ -1419,6 +1543,8 @@ if(NOT EMSCRIPTEN)
         gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
+        gui/orchestration/pdk_manager.cpp
+        gui/orchestration/pdk_browser_panel.cpp
         components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
@@ -1442,7 +1568,17 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
     compute/infrastructure/netlist_compiler.cpp
+        compute/orchestration/simulation_context.cpp
+        compute/orchestration/batch_runner.cpp
+        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
+        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/variables_panel.cpp
+        gui/analysis/variables_panel.h
+        gui/analysis/calculator_widget.cpp
+        gui/analysis/calculator_widget.h
+        gui/analysis/parametric_sweep_dialog.cpp
+        gui/analysis/parametric_sweep_dialog.h
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
@@ -1493,7 +1629,11 @@ if(NOT EMSCRIPTEN)
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
-        gui/widgets/project_explorer.cpp
+        gui/widgets/project_explorer.h
+        gui/widgets/library_model.cpp
+        gui/widgets/library_model.h
+        components/library_index.cpp
+        components/library_index.h
         components/pdk_compliance.cpp
         components/pdk_manager.cpp
         components/design_db.cpp
@@ -1577,7 +1717,17 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
     compute/infrastructure/netlist_compiler.cpp
+        compute/orchestration/simulation_context.cpp
+        compute/orchestration/batch_runner.cpp
+        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
+        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/variables_panel.cpp
+        gui/analysis/variables_panel.h
+        gui/analysis/calculator_widget.cpp
+        gui/analysis/calculator_widget.h
+        gui/analysis/parametric_sweep_dialog.cpp
+        gui/analysis/parametric_sweep_dialog.h
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
@@ -1630,10 +1780,21 @@ if(NOT EMSCRIPTEN)
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
+        gui/widgets/project_explorer.h
+        gui/widgets/library_model.cpp
+        gui/widgets/library_model.h
+        components/library_index.cpp
+        components/library_index.h
         components/design_db.cpp
         components/pdk_manager.cpp
         components/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
+        gui/editors/json_viewer.cpp
+        gui/editors/image_viewer.cpp
+        gui/editors/hex_viewer.cpp
+        gui/core/editor_factory.cpp
+        gui/orchestration/pdk_manager.cpp
+        gui/orchestration/pdk_browser_panel.cpp
     )
     target_include_directories(test_hierarchical_sim PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -1707,20 +1868,28 @@ if(NOT EMSCRIPTEN)
         gui/components/probe_tip.cpp
         gui/styling/theme_manager.cpp
         gui/core/editor_manager.cpp
+        gui/core/editor_factory.cpp
+        gui/core/storage_manager.cpp
         gui/core/sim_auto_detector.cpp
         gui/core/hierarchy_path.cpp
         gui/widgets/breadcrumb_widget.cpp
         gui/editors/code_editor.cpp
+        gui/editors/json_viewer.cpp
+        gui/editors/image_viewer.cpp
+        gui/editors/hex_viewer.cpp
         gui/core/icon_provider.cpp
         gui/widgets/compliance_report_widget.cpp
         gui/components/standard_cell_visualizer.cpp
         gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
         components/pdk_manager.cpp
+        components/library_index.cpp
         components/netlist_export.cpp
         components/pdk_compliance.cpp
         gui/scripting/tcl_bridge.cpp
         gui/orchestration/worker_manager.cpp
+        gui/orchestration/pdk_manager.cpp
+        gui/orchestration/pdk_browser_panel.cpp
         gui/orchestration/synthesis_result_dialog.cpp
         gui/orchestration/pnr_result_dialog.cpp
         gui/orchestration/signoff_result_dialog.cpp
@@ -2055,7 +2224,17 @@ if(NOT EMSCRIPTEN)
         compute/solvers/superposition.cpp
         compute/solvers/circuitsim_solver.cpp
     compute/infrastructure/netlist_compiler.cpp
+        compute/orchestration/simulation_context.cpp
+        compute/orchestration/batch_runner.cpp
+        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
+        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/variables_panel.cpp
+        gui/analysis/variables_panel.h
+        gui/analysis/calculator_widget.cpp
+        gui/analysis/calculator_widget.h
+        gui/analysis/parametric_sweep_dialog.cpp
+        gui/analysis/parametric_sweep_dialog.h
         gui/analysis/simulation_worker.cpp
         gui/analysis/simulation_worker.h
         gui/analysis/simulation_explorer.cpp
@@ -2108,10 +2287,21 @@ if(NOT EMSCRIPTEN)
         gui/widgets/search_dock.cpp
         gui/widgets/project_model.cpp
         gui/widgets/project_explorer.cpp
+        gui/widgets/project_explorer.h
+        gui/widgets/library_model.cpp
+        gui/widgets/library_model.h
+        components/library_index.cpp
+        components/library_index.h
         components/design_db.cpp
         components/pdk_manager.cpp
         components/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
+        gui/editors/json_viewer.cpp
+        gui/editors/image_viewer.cpp
+        gui/editors/hex_viewer.cpp
+        gui/core/editor_factory.cpp
+        gui/orchestration/pdk_manager.cpp
+        gui/orchestration/pdk_browser_panel.cpp
     )
     target_include_directories(test_introspection PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -2157,11 +2347,12 @@ endif()
 
 # GPU Connectivity Verification (Native Dawn)
 if(NOT EMSCRIPTEN)
-    add_executable(test_gpu_connectivity 
+    add_executable(test_gpu_connectivity
         tests/test_gpu_connectivity.cpp
         compute/solvers/webgpu_solver.cpp
         compute/tensors/physics_tensors.cpp
         compute/tensors/kernel_dispatch.cpp
+        compute/infrastructure/netlist_compiler.cpp
     )
     target_include_directories(test_gpu_connectivity PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}

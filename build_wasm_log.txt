@@ -1,0 +1,401 @@
+-- Using Qt6_DIR hint: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/cmake/Qt6
+-- CMAKE_PREFIX_PATH = 
+-- Using Qt bundled ZLIB.
+-- Using Qt bundled PCRE2.
+-- Using Qt bundled PNG.
+-- Using Qt bundled Harfbuzz.
+-- Using Qt bundled Freetype.
+-- Using Qt bundled Jpeg.
+-- Could NOT find OpenMP_CXX (missing: OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES) 
+-- Could NOT find OpenMP (missing: OpenMP_CXX_FOUND) 
+-- Configuring done (3.2s)
+-- Generating done (0.5s)
+-- Build files have been written to: /Users/seshak/Desktop/CuteApp/build-wasm
+[  0%] Built target test_convergence_engine_autogen_timestamp_deps
+[  0%] Built target test_regression_autogen_timestamp_deps
+[  0%] Built target test_ad_integration_autogen_timestamp_deps
+[  0%] Built target test_adk_tool_registry_autogen_timestamp_deps
+[  0%] Built target AcuteSim_autogen_timestamp_deps
+[  0%] Built target test_noise_analysis_autogen_timestamp_deps
+[  0%] Built target test_rag_pipeline_autogen_timestamp_deps
+[  0%] Built target test_session_manager_autogen_timestamp_deps
+[  0%] Built target test_safe_io_autogen_timestamp_deps
+[  0%] Built target test_superposition_autogen_timestamp_deps
+[  0%] Built target test_erc_rules_autogen_timestamp_deps
+[  0%] Built target test_context_budget_autogen_timestamp_deps
+[  0%] Built target test_sensitivity_autogen_timestamp_deps
+[  0%] Built target test_mode_ladder_autogen_timestamp_deps
+[  0%] Built target test_simulation_autogen_timestamp_deps
+[  0%] Built target test_soa_bridge_autogen_timestamp_deps
+[  0%] Built target verify_bjt_thermal_autogen_timestamp_deps
+[  0%] Built target test_dependent_simulation_autogen_timestamp_deps
+[  0%] Built target test_pdk_manager_autogen_timestamp_deps
+[  0%] Built target test_pdk_swap_autogen_timestamp_deps
+[  0%] Built target test_physics_kernels_autogen_timestamp_deps
+[  0%] Built target test_spef_export_autogen_timestamp_deps
+[  0%] Built target test_verilog_export_autogen_timestamp_deps
+[  0%] Built target test_gui_logic_autogen_timestamp_deps
+[  0%] Built target test_multi_domain_power_autogen_timestamp_deps
+[  0%] Built target test_hierarchy_path_autogen_timestamp_deps
+[  0%] Built target test_docking_interaction_autogen_timestamp_deps
+[  0%] Built target test_export_consistency_autogen_timestamp_deps
+[  0%] Built target test_determinism_autogen_timestamp_deps
+[  0%] Built target test_fpu_determinism_autogen_timestamp_deps
+[  0%] Built target test_kernel_dispatch_autogen_timestamp_deps
+[  0%] Built target test_emulated_f64_autogen_timestamp_deps
+[  0%] Built target test_dual_emulated_autogen_timestamp_deps
+[  0%] Built target test_hierarchy_headless_autogen_timestamp_deps
+[  0%] Built target test_verification_harness_autogen_timestamp_deps
+[  0%] Built target test_std_cells_autogen_timestamp_deps
+[  0%] Built target test_eda_drivers_autogen_timestamp_deps
+[  0%] Automatic MOC and UIC for target test_convergence_engine
+[  0%] Automatic MOC and UIC for target test_regression
+[  1%] Automatic MOC and UIC for target test_ad_integration
+[  1%] Automatic MOC and UIC for target test_noise_analysis
+[  1%] Built target test_convergence_engine_autogen
+[  1%] Built target test_regression_autogen
+[  1%] Built target test_ad_integration_autogen
+[  1%] Built target test_noise_analysis_autogen
+[  2%] Automatic MOC and UIC for target AcuteSim
+[  2%] Automatic MOC and UIC for target test_mode_ladder
+[  2%] Automatic MOC and UIC for target test_erc_rules
+[  2%] Automatic MOC and UIC for target test_sensitivity
+[  2%] Automatic MOC and UIC for target test_superposition
+[  2%] Automatic MOC and UIC for target test_rag_pipeline
+[  2%] Automatic MOC and UIC for target test_context_budget
+[  2%] Automatic MOC and UIC for target test_safe_io
+[  2%] Automatic MOC and UIC for target test_session_manager
+[  2%] Automatic MOC and UIC for target test_adk_tool_registry
+[  2%] Built target test_sensitivity_autogen
+[  2%] Built target test_superposition_autogen
+[  2%] Built target test_rag_pipeline_autogen
+[  2%] Built target test_mode_ladder_autogen
+[  2%] Built target test_erc_rules_autogen
+[  2%] Built target test_context_budget_autogen
+[  2%] Built target test_safe_io_autogen
+[  2%] Built target test_adk_tool_registry_autogen
+[  2%] Built target test_session_manager_autogen
+[  2%] Built target AcuteSim_autogen
+[  2%] Automatic MOC and UIC for target test_simulation
+[  3%] Automatic MOC and UIC for target verify_bjt_thermal
+[  3%] Automatic MOC and UIC for target test_dependent_simulation
+[  3%] Automatic MOC and UIC for target test_soa_bridge
+[  3%] Built target verify_bjt_thermal_autogen
+[  3%] Built target test_simulation_autogen
+[  3%] Built target test_dependent_simulation_autogen
+[  3%] Built target test_soa_bridge_autogen
+[  3%] Automatic MOC and UIC for target test_pdk_manager
+[  3%] Automatic MOC and UIC for target test_hierarchy_path
+[  3%] Built target test_pdk_manager_autogen
+[  3%] Automatic MOC and UIC for target test_spef_export
+[  3%] Automatic MOC and UIC for target test_verilog_export
+[  3%] Automatic MOC and UIC for target test_export_consistency
+[  3%] Automatic MOC and UIC for target test_multi_domain_power
+[  3%] Automatic MOC and UIC for target test_docking_interaction
+[  3%] Automatic MOC and UIC for target test_gui_logic
+[  3%] Automatic MOC and UIC for target test_physics_kernels
+[  3%] Automatic MOC and UIC for target test_pdk_swap
+[  3%] Built target test_hierarchy_path_autogen
+[  3%] Automatic MOC and UIC for target test_dual_emulated
+[  4%] Automatic MOC and UIC for target test_determinism
+[  5%] Automatic MOC and UIC for target test_emulated_f64
+[  5%] Automatic MOC and UIC for target test_fpu_determinism
+[  5%] Built target test_spef_export_autogen
+[  5%] Built target test_verilog_export_autogen
+[  5%] Built target test_export_consistency_autogen
+[  5%] Built target test_multi_domain_power_autogen
+[  5%] Built target test_docking_interaction_autogen
+[  5%] Built target test_gui_logic_autogen
+[  5%] Built target test_physics_kernels_autogen
+[  5%] Built target test_determinism_autogen
+[  5%] Automatic MOC and UIC for target test_kernel_dispatch
+[  5%] Built target test_dual_emulated_autogen
+[  5%] Built target test_emulated_f64_autogen
+[  5%] Built target test_fpu_determinism_autogen
+[  5%] Built target test_pdk_swap_autogen
+[  6%] Automatic MOC and UIC for target test_hierarchy_headless
+[  6%] Built target test_kernel_dispatch_autogen
+[  6%] Built target test_hierarchy_headless_autogen
+[  6%] Automatic MOC and UIC for target test_std_cells
+[  7%] Automatic MOC and UIC for target test_verification_harness
+[  8%] Automatic MOC and UIC for target test_eda_drivers
+[  8%] Built target test_std_cells_autogen
+[  8%] Built target test_verification_harness_autogen
+[  8%] Built target test_eda_drivers_autogen
+[  9%] Built target test_convergence_engine
+[ 10%] Built target test_noise_analysis
+[ 10%] Built target test_ad_integration
+[ 10%] Linking CXX executable test_safe_io.js
+[ 10%] Linking CXX executable test_context_budget.js
+[ 15%] Built target test_regression
+[ 15%] Built target test_sensitivity
+[ 18%] Built target test_superposition
+[ 20%] Built target test_mode_ladder
+[ 22%] Built target test_erc_rules
+[ 22%] Linking CXX executable test_session_manager.js
+[ 24%] Built target verify_bjt_thermal
+[ 28%] Built target test_dependent_simulation
+[ 25%] Linking CXX executable test_simulation.js
+[ 28%] Linking CXX executable test_adk_tool_registry.js
+[ 29%] Linking CXX executable test_pdk_manager.js
+[ 30%] Linking CXX executable test_rag_pipeline.js
+[ 32%] Built target test_soa_bridge
+[ 33%] Linking CXX executable test_hierarchy_path.js
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+[ 33%] Linking CXX executable test_gui_logic.js
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld -o test_context_budget.wasm CMakeFiles/test_context_budget.dir/test_context_budget_autogen/mocs_compilation.cpp.o CMakeFiles/test_context_budget.dir/tests/test_context_budget.cpp.o CMakeFiles/test_context_budget.dir/ai_api/context/context_budget.cpp.o /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Test.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledZLIB.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledPcre2.a -L/Users/seshak/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten --whole-archive -lfetch --no-whole-archive -lGL-webgl2 -lal -lhtml5 -lbulkmemory -lstubs-debug -lnoexit -lc-debug -ldlmalloc -lcompiler_rt-wasm-sjlj -lc++-except -lc++abi-debug-except -lunwind-except -lsockets -mllvm -combiner-global-alias-analysis=false -mllvm -wasm-enable-sjlj -mllvm -disable-lsr -mllvm -wasm-enable-eh -mllvm -exception-model=wasm /var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/tmp7ghxylvvlibemscripten_js_symbols.so --strip-debug --export-if-defined=main --export-if-defined=__get_exception_message --export-if-defined=free --export-if-defined=__cpp_exception --export-if-defined=__cxa_increment_exception_refcount --export-if-defined=__cxa_decrement_exception_refcount --export-if-defined=__thrown_object_from_unwind_exception --export-if-defined=__start_em_asm --export-if-defined=__stop_em_asm --export-if-defined=__start_em_lib_deps --export-if-defined=__stop_em_lib_deps --export-if-defined=__start_em_js --export-if-defined=__stop_em_js --export-if-defined=__main_argc_argv --export-if-defined=fflush --export=emscripten_stack_get_end --export=emscripten_stack_get_free --export=emscripten_stack_get_base --export=emscripten_stack_get_current --export=emscripten_stack_init --export=stackSave --export=stackRestore --export=stackAlloc --export=__errno_location --export=__trap --export=__wasm_call_ctors --export=__get_exception_message --export=free --export=__thrown_object_from_unwind_exception --export=__cxa_increment_exception_refcount --export=__cxa_decrement_exception_refcount --export-table -z stack-size=5242880 --initial-memory=16777216 --max-memory=2147483648 --no-entry --stack-first --table-base=1' failed (returned 1)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld -o test_session_manager.wasm CMakeFiles/test_session_manager.dir/test_session_manager_autogen/mocs_compilation.cpp.o CMakeFiles/test_session_manager.dir/tests/test_session_manager.cpp.o CMakeFiles/test_session_manager.dir/ai_api/adk/session_manager.cpp.o /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Test.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledZLIB.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledPcre2.a -L/Users/seshak/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten --whole-archive -lfetch --no-whole-archive -lGL-webgl2 -lal -lhtml5 -lbulkmemory -lstubs-debug -lnoexit -lc-debug -ldlmalloc -lcompiler_rt-wasm-sjlj -lc++-except -lc++abi-debug-except -lunwind-except -lsockets -mllvm -combiner-global-alias-analysis=false -mllvm -wasm-enable-sjlj -mllvm -disable-lsr -mllvm -wasm-enable-eh -mllvm -exception-model=wasm /var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/tmp2chjm5zolibemscripten_js_symbols.so --strip-debug --export-if-defined=main --export-if-defined=__get_exception_message --export-if-defined=free --export-if-defined=__cpp_exception --export-if-defined=__cxa_increment_exception_refcount --export-if-defined=__cxa_decrement_exception_refcount --export-if-defined=__thrown_object_from_unwind_exception --export-if-defined=__start_em_asm --export-if-defined=__stop_em_asm --export-if-defined=__start_em_lib_deps --export-if-defined=__stop_em_lib_deps --export-if-defined=__start_em_js --export-if-defined=__stop_em_js --export-if-defined=__main_argc_argv --export-if-defined=fflush --export=emscripten_stack_get_end --export=emscripten_stack_get_free --export=emscripten_stack_get_base --export=emscripten_stack_get_current --export=emscripten_stack_init --export=stackSave --export=stackRestore --export=stackAlloc --export=__errno_location --export=__trap --export=__wasm_call_ctors --export=__get_exception_message --export=free --export=__thrown_object_from_unwind_exception --export=__cxa_increment_exception_refcount --export=__cxa_decrement_exception_refcount --export-table -z stack-size=5242880 --initial-memory=16777216 --max-memory=2147483648 --no-entry --stack-first --table-base=1' failed (returned 1)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld -o test_safe_io.wasm CMakeFiles/test_safe_io.dir/test_safe_io_autogen/mocs_compilation.cpp.o CMakeFiles/test_safe_io.dir/tests/test_safe_io.cpp.o /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Test.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledZLIB.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledPcre2.a -L/Users/seshak/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten --whole-archive -lfetch --no-whole-archive -lGL-webgl2 -lal -lhtml5 -lbulkmemory -lstubs-debug -lnoexit -lc-debug -ldlmalloc -lcompiler_rt-wasm-sjlj -lc++-except -lc++abi-debug-except -lunwind-except -lsockets -mllvm -combiner-global-alias-analysis=false -mllvm -wasm-enable-sjlj -mllvm -disable-lsr -mllvm -wasm-enable-eh -mllvm -exception-model=wasm /var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/tmpz_ptgqm_libemscripten_js_symbols.so --strip-debug --export-if-defined=main --export-if-defined=__get_exception_message --export-if-defined=free --export-if-defined=__cpp_exception --export-if-defined=__cxa_increment_exception_refcount --export-if-defined=__cxa_decrement_exception_refcount --export-if-defined=__thrown_object_from_unwind_exception --export-if-defined=__start_em_asm --export-if-defined=__stop_em_asm --export-if-defined=__start_em_lib_deps --export-if-defined=__stop_em_lib_deps --export-if-defined=__start_em_js --export-if-defined=__stop_em_js --export-if-defined=__main_argc_argv --export-if-defined=fflush --export=emscripten_stack_get_end --export=emscripten_stack_get_free --export=emscripten_stack_get_base --export=emscripten_stack_get_current --export=emscripten_stack_init --export=stackSave --export=stackRestore --export=stackAlloc --export=__errno_location --export=__trap --export=__wasm_call_ctors --export=__get_exception_message --export=free --export=__thrown_object_from_unwind_exception --export=__cxa_increment_exception_refcount --export=__cxa_decrement_exception_refcount --export-table -z stack-size=5242880 --initial-memory=16777216 --max-memory=2147483648 --no-entry --stack-first --table-base=1' failed (returned 1)
+[ 34%] Built target test_verilog_export
+make[2]: *** [test_context_budget.js] Error 1
+make[1]: *** [CMakeFiles/test_context_budget.dir/all] Error 2
+make[1]: *** Waiting for unfinished jobs....
+make[2]: *** [test_safe_io.js] Error 1
+make[1]: *** [CMakeFiles/test_safe_io.dir/all] Error 2
+make[2]: *** [test_session_manager.js] Error 1
+make[1]: *** [CMakeFiles/test_session_manager.dir/all] Error 2
+[ 35%] Built target test_spef_export
+[ 35%] Linking CXX executable test_docking_interaction.js
+[ 36%] Built target test_export_consistency
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld -o test_adk_tool_registry.wasm CMakeFiles/test_adk_tool_registry.dir/test_adk_tool_registry_autogen/mocs_compilation.cpp.o CMakeFiles/test_adk_tool_registry.dir/tests/test_adk_tool_registry.cpp.o CMakeFiles/test_adk_tool_registry.dir/tests/stubs/ai_api_test_stubs.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/adk/tool_registry.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/adk/tool_handlers.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/adk/session_manager.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/context/context_budget.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/context/rag_context.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/context/prompt_builder.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/system/feedback_loop.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/simulation/simulation_trace.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/analysis/failure_classifier.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/analysis/topology_analyzer.cpp.o CMakeFiles/test_adk_tool_registry.dir/ai_api/pipeline/rag_pipeline.cpp.o /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Test.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledZLIB.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledPcre2.a -L/Users/seshak/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten --whole-archive -lfetch --no-whole-archive -lGL-webgl2 -lal -lhtml5 -lbulkmemory -lstubs-debug -lnoexit -lc-debug -ldlmalloc -lcompiler_rt-wasm-sjlj -lc++-except -lc++abi-debug-except -lunwind-except -lsockets -mllvm -combiner-global-alias-analysis=false -mllvm -wasm-enable-sjlj -mllvm -disable-lsr -mllvm -wasm-enable-eh -mllvm -exception-model=wasm /var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/tmp1kskral4libemscripten_js_symbols.so --strip-debug --export-if-defined=main --export-if-defined=__get_exception_message --export-if-defined=free --export-if-defined=__cpp_exception --export-if-defined=__cxa_increment_exception_refcount --export-if-defined=__cxa_decrement_exception_refcount --export-if-defined=__thrown_object_from_unwind_exception --export-if-defined=__start_em_asm --export-if-defined=__stop_em_asm --export-if-defined=__start_em_lib_deps --export-if-defined=__stop_em_lib_deps --export-if-defined=__start_em_js --export-if-defined=__stop_em_js --export-if-defined=__main_argc_argv --export-if-defined=fflush --export=emscripten_stack_get_end --export=emscripten_stack_get_free --export=emscripten_stack_get_base --export=emscripten_stack_get_current --export=emscripten_stack_init --export=stackSave --export=stackRestore --export=stackAlloc --export=__errno_location --export=__trap --export=__wasm_call_ctors --export=__get_exception_message --export=free --export=__thrown_object_from_unwind_exception --export=__cxa_increment_exception_refcount --export=__cxa_decrement_exception_refcount --export-table -z stack-size=5242880 --initial-memory=16777216 --max-memory=2147483648 --no-entry --stack-first --table-base=1' failed (returned 1)
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld -o test_hierarchy_path.wasm CMakeFiles/test_hierarchy_path.dir/test_hierarchy_path_autogen/mocs_compilation.cpp.o CMakeFiles/test_hierarchy_path.dir/tests/test_hierarchy_path.cpp.o CMakeFiles/test_hierarchy_path.dir/gui/core/hierarchy_path.cpp.o /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Test.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledZLIB.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledPcre2.a -L/Users/seshak/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten --whole-archive -lfetch --no-whole-archive -lGL-webgl2 -lal -lhtml5 -lbulkmemory -lstubs-debug -lnoexit -lc-debug -ldlmalloc -lcompiler_rt-wasm-sjlj -lc++-except -lc++abi-debug-except -lunwind-except -lsockets -mllvm -combiner-global-alias-analysis=false -mllvm -wasm-enable-sjlj -mllvm -disable-lsr -mllvm -wasm-enable-eh -mllvm -exception-model=wasm /var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/tmpgcuujkl6libemscripten_js_symbols.so --strip-debug --export-if-defined=main --export-if-defined=__get_exception_message --export-if-defined=free --export-if-defined=__cpp_exception --export-if-defined=__cxa_increment_exception_refcount --export-if-defined=__cxa_decrement_exception_refcount --export-if-defined=__thrown_object_from_unwind_exception --export-if-defined=__start_em_asm --export-if-defined=__stop_em_asm --export-if-defined=__start_em_lib_deps --export-if-defined=__stop_em_lib_deps --export-if-defined=__start_em_js --export-if-defined=__stop_em_js --export-if-defined=__main_argc_argv --export-if-defined=fflush --export=emscripten_stack_get_end --export=emscripten_stack_get_free --export=emscripten_stack_get_base --export=emscripten_stack_get_current --export=emscripten_stack_init --export=stackSave --export=stackRestore --export=stackAlloc --export=__errno_location --export=__trap --export=__wasm_call_ctors --export=__get_exception_message --export=free --export=__thrown_object_from_unwind_exception --export=__cxa_increment_exception_refcount --export=__cxa_decrement_exception_refcount --export-table -z stack-size=5242880 --initial-memory=16777216 --max-memory=2147483648 --no-entry --stack-first --table-base=1' failed (returned 1)
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld -o test_simulation.wasm CMakeFiles/test_simulation.dir/test_simulation_autogen/mocs_compilation.cpp.o CMakeFiles/test_simulation.dir/tests/simulation_test_main.cpp.o CMakeFiles/test_simulation.dir/physics/quick_analysis.cpp.o CMakeFiles/test_simulation.dir/compute/tensors/physics_tensors.cpp.o CMakeFiles/test_simulation.dir/compute/tensors/kernel_dispatch.cpp.o CMakeFiles/test_simulation.dir/compute/tensors/physics_kernels_avx512.cpp.o CMakeFiles/test_simulation.dir/compute/tensors/physics_kernels_avx2.cpp.o CMakeFiles/test_simulation.dir/compute/solvers/superposition.cpp.o CMakeFiles/test_simulation.dir/compute/solvers/circuitsim_solver.cpp.o CMakeFiles/test_simulation.dir/compute/infrastructure/netlist_compiler.cpp.o /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledZLIB.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledPcre2.a -L/Users/seshak/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten --whole-archive -lfetch -lembind-rtti --no-whole-archive -lGL-webgl2 -lal -lhtml5 -lbulkmemory -lstubs-debug -lc-debug -ldlmalloc -lcompiler_rt-wasm-sjlj -lc++-except -lc++abi-debug-except -lunwind-except -lsockets -mllvm -combiner-global-alias-analysis=false -mllvm -wasm-enable-sjlj -mllvm -disable-lsr -mllvm -wasm-enable-eh -mllvm -exception-model=wasm /var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/tmpz3zpaab1libemscripten_js_symbols.so --strip-debug --export-if-defined=main --export-if-defined=__get_exception_message --export-if-defined=free --export-if-defined=__cpp_exception --export-if-defined=__cxa_increment_exception_refcount --export-if-defined=__cxa_decrement_exception_refcount --export-if-defined=__thrown_object_from_unwind_exception --export-if-defined=__start_em_asm --export-if-defined=__stop_em_asm --export-if-defined=__start_em_lib_deps --export-if-defined=__stop_em_lib_deps --export-if-defined=__start_em_js --export-if-defined=__stop_em_js --export-if-defined=__main_argc_argv --export-if-defined=fflush --export=emscripten_stack_get_end --export=emscripten_stack_get_free --export=emscripten_stack_get_base --export=emscripten_stack_get_current --export=emscripten_stack_init --export=stackSave --export=stackRestore --export=stackAlloc --export=__errno_location --export=__funcs_on_exit --export=__trap --export=__wasm_call_ctors --export=__get_exception_message --export=free --export=__thrown_object_from_unwind_exception --export=__cxa_increment_exception_refcount --export=__cxa_decrement_exception_refcount --export-table -z stack-size=5242880 --initial-memory=16777216 --max-memory=2147483648 --no-entry --stack-first --table-base=1' failed (returned 1)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld -o test_rag_pipeline.wasm CMakeFiles/test_rag_pipeline.dir/test_rag_pipeline_autogen/mocs_compilation.cpp.o CMakeFiles/test_rag_pipeline.dir/tests/test_rag_pipeline.cpp.o CMakeFiles/test_rag_pipeline.dir/tests/stubs/ai_api_test_stubs.cpp.o CMakeFiles/test_rag_pipeline.dir/ai_api/pipeline/rag_pipeline.cpp.o CMakeFiles/test_rag_pipeline.dir/ai_api/context/context_budget.cpp.o CMakeFiles/test_rag_pipeline.dir/ai_api/context/rag_context.cpp.o CMakeFiles/test_rag_pipeline.dir/ai_api/context/prompt_builder.cpp.o CMakeFiles/test_rag_pipeline.dir/ai_api/system/feedback_loop.cpp.o CMakeFiles/test_rag_pipeline.dir/ai_api/simulation/simulation_trace.cpp.o CMakeFiles/test_rag_pipeline.dir/ai_api/analysis/failure_classifier.cpp.o CMakeFiles/test_rag_pipeline.dir/ai_api/analysis/topology_analyzer.cpp.o /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Test.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledZLIB.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledPcre2.a -L/Users/seshak/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten --whole-archive -lfetch --no-whole-archive -lGL-webgl2 -lal -lhtml5 -lbulkmemory -lstubs-debug -lnoexit -lc-debug -ldlmalloc -lcompiler_rt-wasm-sjlj -lc++-except -lc++abi-debug-except -lunwind-except -lsockets -mllvm -combiner-global-alias-analysis=false -mllvm -wasm-enable-sjlj -mllvm -disable-lsr -mllvm -wasm-enable-eh -mllvm -exception-model=wasm /var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/tmpa9uzufeqlibemscripten_js_symbols.so --strip-debug --export-if-defined=main --export-if-defined=__get_exception_message --export-if-defined=free --export-if-defined=__cpp_exception --export-if-defined=__cxa_increment_exception_refcount --export-if-defined=__cxa_decrement_exception_refcount --export-if-defined=__thrown_object_from_unwind_exception --export-if-defined=__start_em_asm --export-if-defined=__stop_em_asm --export-if-defined=__start_em_lib_deps --export-if-defined=__stop_em_lib_deps --export-if-defined=__start_em_js --export-if-defined=__stop_em_js --export-if-defined=__main_argc_argv --export-if-defined=fflush --export=emscripten_stack_get_end --export=emscripten_stack_get_free --export=emscripten_stack_get_base --export=emscripten_stack_get_current --export=emscripten_stack_init --export=stackSave --export=stackRestore --export=stackAlloc --export=__errno_location --export=__trap --export=__wasm_call_ctors --export=__get_exception_message --export=free --export=__thrown_object_from_unwind_exception --export=__cxa_increment_exception_refcount --export=__cxa_decrement_exception_refcount --export-table -z stack-size=5242880 --initial-memory=16777216 --max-memory=2147483648 --no-entry --stack-first --table-base=1' failed (returned 1)
+make[2]: *** [test_adk_tool_registry.js] Error 1
+make[1]: *** [CMakeFiles/test_adk_tool_registry.dir/all] Error 2
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld -o test_pdk_manager.wasm CMakeFiles/test_pdk_manager.dir/test_pdk_manager_autogen/mocs_compilation.cpp.o CMakeFiles/test_pdk_manager.dir/tests/test_pdk_manager.cpp.o CMakeFiles/test_pdk_manager.dir/components/pdk_manager.cpp.o /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Test.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Test.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledZLIB.a /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6BundledPcre2.a -L/Users/seshak/emsdk/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten --whole-archive -lfetch --no-whole-archive -lGL-webgl2 -lal -lhtml5 -lbulkmemory -lstubs-debug -lnoexit -lc-debug -ldlmalloc -lcompiler_rt-wasm-sjlj -lc++-except -lc++abi-debug-except -lunwind-except -lsockets -mllvm -combiner-global-alias-analysis=false -mllvm -wasm-enable-sjlj -mllvm -disable-lsr -mllvm -wasm-enable-eh -mllvm -exception-model=wasm /var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/tmpla_ly_cklibemscripten_js_symbols.so --strip-debug --export-if-defined=main --export-if-defined=__get_exception_message --export-if-defined=free --export-if-defined=__cpp_exception --export-if-defined=__cxa_increment_exception_refcount --export-if-defined=__cxa_decrement_exception_refcount --export-if-defined=__thrown_object_from_unwind_exception --export-if-defined=__start_em_asm --export-if-defined=__stop_em_asm --export-if-defined=__start_em_lib_deps --export-if-defined=__stop_em_lib_deps --export-if-defined=__start_em_js --export-if-defined=__stop_em_js --export-if-defined=__main_argc_argv --export-if-defined=fflush --export=emscripten_stack_get_end --export=emscripten_stack_get_free --export=emscripten_stack_get_base --export=emscripten_stack_get_current --export=emscripten_stack_init --export=stackSave --export=stackRestore --export=stackAlloc --export=__errno_location --export=__trap --export=__wasm_call_ctors --export=__get_exception_message --export=free --export=__thrown_object_from_unwind_exception --export=__cxa_increment_exception_refcount --export=__cxa_decrement_exception_refcount --export-table -z stack-size=5242880 --initial-memory=16777216 --max-memory=2147483648 --no-entry --stack-first --table-base=1' failed (returned 1)
+make[2]: *** [test_hierarchy_path.js] Error 1
+make[1]: *** [CMakeFiles/test_hierarchy_path.dir/all] Error 2
+make[2]: *** [test_simulation.js] Error 1
+make[2]: *** [test_rag_pipeline.js] Error 1
+make[1]: *** [CMakeFiles/test_simulation.dir/all] Error 2
+make[1]: *** [CMakeFiles/test_rag_pipeline.dir/all] Error 2
+make[2]: *** [test_pdk_manager.js] Error 1
+make[1]: *** [CMakeFiles/test_pdk_manager.dir/all] Error 2
+[ 37%] Linking CXX executable test_pdk_swap.js
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld @/var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/emscripten_jpvcrfnk.rsp.utf-8' failed (returned 1)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld @/var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/emscripten_8p5n79lu.rsp.utf-8' failed (returned 1)
+make[2]: *** [test_gui_logic.js] Error 1
+make[2]: *** [test_docking_interaction.js] Error 1
+make[1]: *** [CMakeFiles/test_gui_logic.dir/all] Error 2
+make[1]: *** [CMakeFiles/test_docking_interaction.dir/all] Error 2
+[ 37%] Linking CXX executable AcuteSim.js
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qfilesystemengine_unix.cpp.o): undefined symbol: statx
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_global
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_new_cstring
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_as
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_run_destructors
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_take_value
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qlocale_wasm.cpp.o): undefined symbol: _emval_get_property
+wasm-ld: error: /Users/seshak/Qt/6.9.3/wasm_singlethread/lib/libQt6Core.a(qbytearray.cpp.o): undefined symbol: _emval_decref
+wasm-ld: error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+em++: error: '/Users/seshak/emsdk/upstream/bin/wasm-ld @/var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/emscripten_1hzwl0i0.rsp.utf-8' failed (returned 1)
+make[2]: *** [test_pdk_swap.js] Error 1
+make[1]: *** [CMakeFiles/test_pdk_swap.dir/all] Error 2
+warning: deprecated item in EXPORTED_RUNTIME_METHODS: printErr use err instead.
+em++: warning: warnings in JS library compilation [-Wjs-compiler]
+[ 61%] Built target AcuteSim
+make: *** [all] Error 2

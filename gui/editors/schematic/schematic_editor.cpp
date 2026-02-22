@@ -1777,6 +1777,41 @@ TensorNetlist GridScene::generateNetlist() {
         }
     }
 
+    // 6. Extract Top-Level Interface Pins (for ComponentWizard & Symbol Generation)
+    // Identify explicit Pin/PowerPort components to define the external interface.
+    for (auto* item : allItems) {
+        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
+            if ((c->type == ComponentType::Pin || c->type == ComponentType::PowerPort) && !c->name.isEmpty()) {
+                netlist.globalBlock.pinNames.push_back(c->name.toStdString());
+
+                QVector<QPointF> terms = c->getTerminals();
+                int nodeIdx = 0;
+                std::string netUUIDStr;
+                
+                if (!terms.isEmpty()) {
+                    QPointF termPos = c->mapToScene(terms[0]);
+                    int spatialId = findSet(getNetID(termPos));
+                    NetUUID netId = m_spatialToDbNet.value(spatialId, NetUUID());
+                    if (netId != NetUUID()) {
+                        auto it = topSnap.netToNode.find(netId);
+                        if (it != topSnap.netToNode.end()) nodeIdx = it->second;
+                        netUUIDStr = netId.toString();
+                    }
+                }
+                netlist.globalBlock.portNodeIndices.push_back(nodeIdx);
+
+                TensorBlock::InterfacePin ipin;
+                ipin.name = c->name.toStdString();
+                ipin.nodeIndex = nodeIdx;
+                ipin.isPower = (c->type == ComponentType::PowerPort);
+                ipin.direction = ipin.isPower ? "Power" : "Input"; // Default to Input, TODO: read c->direction
+                ipin.netUUIDStr = netUUIDStr;
+                
+                netlist.globalBlock.interfacePins.push_back(ipin);
+            }
+        }
+    }
+
     netlist.globalState.initialize(netlist.globalBlock);
     return netlist;
 }
@@ -1853,30 +1888,46 @@ QWidget* SchematicEditor::createRibbon() {
     // Extract as Component button (Phase 1.7)
     QPushButton* extractBtn = new QPushButton("[ ] Extract Component");
     extractBtn->setFixedHeight(35);
-    extractBtn->setStyleSheet(
-        "QPushButton { background: #333; color: #4CAF50; border: 1px solid #4CAF50; border-radius: 3px; padding: 5px 10px; }"
-        "QPushButton:hover { background: #3a5a3a; }"
-    );
+    {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        extractBtn->setStyleSheet(QString(
+            "QPushButton { background: %1; color: #4CAF50; border: 1px solid #4CAF50; border-radius: 3px; padding: 5px 10px; }"
+            "QPushButton:hover { background: %2; }")
+            .arg(tm.getColor("button.background").name(),
+                 tm.getColor("button.hoverBackground").name()));
+    }
     connect(extractBtn, &QPushButton::clicked, this, [this](){
-        ComponentWizard wizard(this, this);
-        if (wizard.exec() == QDialog::Accepted && wizard.wasSuccessful()) {
-            SubCircuitDefinition def = wizard.getResult();
-            // TODO: Save to library file
-            // For now, just log success
-            statusLabel->setText(QString("Extracted: %1 (%2 pins)")
-                .arg(QString::fromStdString(def.name))
-                .arg(def.pinCount));
-        }
+#ifdef __EMSCRIPTEN__
+        using namespace acutesim::gui::widgets;
+        InlineDialog::information(this, "Extract Component",
+            "Component extraction requires the native desktop build.");
+#else
+        auto* wizard = new ComponentWizard(this, this);
+        wizard->setAttribute(Qt::WA_DeleteOnClose);
+        connect(wizard, &QDialog::accepted, this, [this, wizard]() {
+            if (wizard->wasSuccessful()) {
+                SubCircuitDefinition def = wizard->getResult();
+                statusLabel->setText(QString("Extracted: %1 (%2 pins)")
+                    .arg(QString::fromStdString(def.name))
+                    .arg(def.pinCount));
+            }
+        });
+        wizard->open();
+#endif
     });
     layout->addWidget(extractBtn);
     
     // PDK Audit button
     QPushButton* auditBtn = new QPushButton("🔍 Audit PDK");
     auditBtn->setFixedHeight(35);
-    auditBtn->setStyleSheet(
-        "QPushButton { background: #333; color: #569CD6; border: 1px solid #569CD6; border-radius: 3px; padding: 5px 10px; }"
-        "QPushButton:hover { background: #264f78; }"
-    );
+    {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        auditBtn->setStyleSheet(QString(
+            "QPushButton { background: %1; color: #569CD6; border: 1px solid #569CD6; border-radius: 3px; padding: 5px 10px; }"
+            "QPushButton:hover { background: %2; }")
+            .arg(tm.getColor("button.background").name(),
+                 tm.getColor("button.hoverBackground").name()));
+    }
     connect(auditBtn, &QPushButton::clicked, this, [this](){
         ComplianceReport report = PDKComplianceChecker::checkCompliance(scene);
         auto* widget = new ComplianceReportWidget(report);
@@ -1893,11 +1944,18 @@ QPushButton* SchematicEditor::createToolButton(const QString& text, ComponentTyp
     QPushButton* btn = new QPushButton(text);
     btn->setCheckable(true);
     btn->setFixedHeight(35);
-    btn->setStyleSheet(
-        "QPushButton { background: #333; color: white; border: 1px solid #555; border-radius: 3px; padding: 5px; }"
-        "QPushButton:checked { background: #007ACC; border: 1px solid #0099FF; }"
-        "QPushButton:hover { background: #444; }"
-    );
+    {
+        auto& tm = acutesim::gui::styling::ThemeManager::instance();
+        btn->setStyleSheet(QString(
+            "QPushButton { background: %1; color: %2; border: 1px solid %3; border-radius: 3px; padding: 5px; }"
+            "QPushButton:checked { background: %4; border: 1px solid %4; }"
+            "QPushButton:hover { background: %5; }")
+            .arg(tm.getColor("button.background").name(),
+                 tm.getColor("button.foreground").name(),
+                 tm.getColor("ui.border").name(),
+                 tm.getColor("ui.accent").name(),
+                 tm.getColor("button.hoverBackground").name()));
+    }
     connect(btn, &QPushButton::clicked, this, [this, type](){
         scene->setTool(type);
     });
@@ -1910,7 +1968,8 @@ void SchematicEditor::setupUi() {
     mainLayout->setSpacing(0);
 
     QWidget* topArea = new QWidget();
-    topArea->setStyleSheet("background-color: #252526;");
+    topArea->setStyleSheet(QString("background-color: %1;")
+        .arg(acutesim::gui::styling::ThemeManager::instance().getColor("ui.header").name()));
     QVBoxLayout* topLayout = new QVBoxLayout(topArea);
 
     // Phase 5: Breadcrumb widget for hierarchical navigation (placed above ribbon)
