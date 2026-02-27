@@ -11,7 +11,7 @@
 // ============================================================================
 
 #include <string>
-#include "components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 
 namespace acutesim {
 namespace compute {
