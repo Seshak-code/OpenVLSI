@@ -15,9 +15,8 @@ import sys
 
 # ─── Direction 1: Engine dirs must be Qt-free ──────────────────────────────
 ENGINE_DIRS = [
-    'compute',
-    'physics',
-    'autodiff',
+    'acutesim_engine',   # NEW canonical engine location
+    'compute',           # orchestration layer still here
     'engine_api',
 ]
 
@@ -38,8 +37,9 @@ ENGINE_QT_ALLOWLIST = {
     # Qt-version of simulation_context — transitional, coexists with engine_api/ version
     'compute/orchestration/simulation_context.h',
     'compute/orchestration/simulation_context.cpp',
-    # corner_config.h is correctly conditionally guarded per CLAUDE.md
-    'physics/corner_config.h',
+    # corner_config.h: Qt types are inside #if defined(QT_CORE_LIB) guards
+    # Valid: engine builds without Qt define, GUI gets Qt helpers when linked with Qt
+    'acutesim_engine/physics/corner_config.h',
     # batch_runner is in acutesim_orchestration (which links Qt6::Core PUBLIC)
     'compute/orchestration/batch_runner.h',
     'compute/orchestration/batch_runner.cpp',
@@ -53,20 +53,39 @@ GUI_DIRS = ['gui']
 # it is the service-interface layer designed for GUI consumption.
 # Block the deep implementation layers only.
 ENGINE_INTERNAL_INCLUDE_PATTERNS = [
+    # Old paths (kept during transition period — remove once CMake is fully updated)
     re.compile(r'^\s*#\s*include\s*[<"]compute/tensors/'),
     re.compile(r'^\s*#\s*include\s*[<"]compute/solvers/'),
     re.compile(r'^\s*#\s*include\s*[<"]compute/math/'),
     re.compile(r'^\s*#\s*include\s*[<"]compute/infrastructure/'),
     re.compile(r'^\s*#\s*include\s*[<"]physics/'),
     re.compile(r'^\s*#\s*include\s*[<"]autodiff/'),
-    # Relative back-traversal from gui/ into the blocked dirs
-    re.compile(r'^\s*#\s*include\s*"\.\./(\.\./)*(compute/tensors|compute/solvers|compute/math|compute/infrastructure|physics|autodiff)/'),
+    # New canonical engine paths — GUI must NEVER bypass engine_api/
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/physics/'),
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/solvers/'),
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/math/'),
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/tensors/'),
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/infrastructure/'),
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/autodiff/'),
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/netlist/'),
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/internal/'),
+    # Relative back-traversal
+    re.compile(r'^\s*#\s*include\s*"\.\./(\.\./)*(acutesim_engine/(physics|solvers|math|tensors|infrastructure|autodiff|netlist|internal)|compute/tensors|compute/solvers|compute/math|compute/infrastructure|physics|autodiff)/'),
 ]
 
-# Allowlist: files that are PERMITTED to include engine internals (adapter pattern).
+# Allowlist: files PERMITTED to include engine internals (adapter pattern).
 ENGINE_INTERNAL_ALLOWLIST = {
     'gui/analysis/simulation_driver_adapter.h',
 }
+
+# ─── Direction 3: engine_api must NOT include acutesim_engine internals ────
+# The API must remain header-pure forever. This is the reverse firewall.
+API_TO_ENGINE_PATTERNS = [
+    re.compile(r'^\s*#\s*include\s*[<"]acutesim_engine/(?!engine_export)'),
+]
+
+# ─── Direction 4: AI/Connectivity must not include acutesim_engine directly ─
+CLIENT_DIRS = ['ai_api', 'connectivity']
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
