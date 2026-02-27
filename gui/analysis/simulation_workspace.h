@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
 #include <QWidget>
 #include <QThread>
 #include <QSplitter>
@@ -14,23 +16,23 @@
 #include "simulation_explorer.h"
 #include "simulation_profile.h"
 #include "../core/sim_auto_detector.h"
-#include "simulation_worker.h"
-#include "../../physics/statistical_engine.h"
-#include "../../compute/infrastructure/netlist_compiler.h"
-#include "../../compute/infrastructure/compiled_block.h"
+
+// ── ORCHESTRATION LAYER (DTO boundary — NO physics includes) ────────────────
+#include "simulation_driver_adapter.h"
+#include "engine_api/simulation_dto.h"
 
 #include "../editors/schematic/schematic_editor.h"
+#include "../editors/code_editor.h"
 #include "../analysis/erc_engine.h"
 #include "../widgets/problems_panel.h"
 #include "../widgets/trust_badge_widget.h"
-#include "../../compute/infrastructure/postproc_engine.h" // [NEW] For caching results
+#include "../../engine_api/postproc_types.h" // For caching results
 #ifndef __EMSCRIPTEN__
 #include <QFutureWatcher>
 #include <QtConcurrent>
 #endif
 #include <QProgressDialog>
 #include "gui_types.h"
-#include "circuitsim.h"
 #include "statistical_dashboard.h"
 #include "variables_panel.h"
 #include <QDialog>
@@ -64,6 +66,9 @@ public:
 
     explicit SimulationWorkspace(QWidget* parent = nullptr);
     ~SimulationWorkspace();
+
+    // Accessor for the driver adapter (allows MainWindow to wire engine event signals)
+    acutesim::gui::analysis::SimulationDriverAdapter* driverAdapter() const { return driverAdapter_; }
     
     // Set active simulation context
     void setContext(const acutesim::gui::core::SimulationContext& context);
@@ -99,17 +104,9 @@ public slots:
     void configureCorners();
     void openCalculator(); // [NEW] ViVA Parity
     
-    // Signals for compiled-block dispatch
+    // ── Orchestration Layer signals (DTO-based, no physics types) ────────
 signals:
-    void startDCRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
-    void startTransientRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
-    void startACRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
-    void startNoiseRequested(TensorNetlist netlist, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
-
-    void startDCCompiledRequested(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
-    void startTransientCompiledRequested(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
-    void startACCompiledRequested(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
-    void startNoiseCompiledRequested(std::shared_ptr<const CompiledTensorBlock> block, Simulation::SimulationProfile profile, acutesim::physics::RunMode mode);
+    void simulationSubmitted(quint64 jobId);
 
     
 private slots:
@@ -120,10 +117,11 @@ private slots:
     void appendLog(const QString& msg);
     void appendStreamLog(const QString& msg);
     
-    // Worker Slots
-    void onWorkerResults(const QJsonObject& results);
-    void onWorkerViolation(const ERC::Violation& violation);
-    void onWorkerFinished();
+    // Orchestration Layer Slots
+    void onDriverJobCompleted(quint64 jobId, const acutesim::compute::orchestration::SimulationResponseDTO& response);
+    void onDriverJobProgress(quint64 jobId, float percent, const QString& message);
+    void onDriverBatchCompleted(quint64 jobId, const acutesim::compute::orchestration::SimulationBatchResponseDTO& response);
+    void onDriverBatchProgress(quint64 jobId, quint32 completedRuns, quint32 totalRuns);
 
     
 private:
@@ -166,18 +164,9 @@ private:
     size_t currentTopologyHash_ = 0;
     // currentMode_ removed - unified component library
     
-    // Simulation engine
-    // CircuitSim sim_; // Moved to Worker
-    TensorNetlist netlist_; 
-    TensorNetlist lastNetlist_; // Cache for comparison?
-
-    // Compiled block cache — recompiled only when topology hash changes
-    std::shared_ptr<const CompiledTensorBlock> currentCompiledBlock_;
-
-    
-    // Threading
-    QThread* workerThread_ = nullptr;
-    SimulationWorker* worker_ = nullptr;
+    // ── Orchestration Layer (GUI owns ONLY the adapter, never CircuitSim) ──
+    acutesim::gui::analysis::SimulationDriverAdapter* driverAdapter_ = nullptr;
+    quint64 currentJobId_ = 0;
     
     // QTimer* simTimer_; // Removed
     // double currentTime_ = 0.0;
@@ -206,13 +195,21 @@ private:
     // Statistical Analysis
     void setupStatisticalDashboard();
     void runMonteCarlo();
-    void continueMonteCarloRun(int nRuns,
-        const std::map<std::string, Statistics::Distribution>& variations,
-        int targetNode, Statistics::SamplingStrategy strategy);
     void runSensitivity();
     StatisticalDashboard* statsDashboard_ = nullptr;
     std::vector<double> lastMonteCarloResults_;
-    
+
+    // Netlist JSON serialization (produces JSON for the DTO, NOT physics types)
+    [[deprecated("Use generateSimulationSource() instead — migrating to Verilog-A (Phase C4)")]]
+    std::string serializeSchematicToJson();
+
+    // [NEW] Verilog-A transport — preferred over JSON; populates both fields.
+    acutesim::compute::orchestration::SimulationSourceDTO generateSimulationSource();
+
+    // [NEW] Read-only Verilog-A dock showing the exact source sent to driver
+    acutesim::gui::editors::CodeEditor* verilogADock_ = nullptr;
+    void updateVerilogADock(const std::string& verilogASource);
+
     // [NEW] Result Cache for Calculator
-    QMap<QString, acutesim::compute::postproc::Waveform> latestResults_;
+    std::unordered_map<std::string, acutesim::compute::postproc::Waveform> latestResults_;
 };

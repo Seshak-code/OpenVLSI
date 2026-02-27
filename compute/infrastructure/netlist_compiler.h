@@ -1,7 +1,7 @@
 #pragma once
 
 #include "compiled_block.h"
-#include "../orchestration/simulation_context.h"
+#include "engine_api/simulation_context.h"
 #include <memory>
 
 // Forward declaration — full definition in circuit.h

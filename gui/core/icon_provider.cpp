@@ -70,36 +70,6 @@ QIcon IconProvider::loadSvgIcon(const QString& path, const QColor& color) {
         return QIcon();
     }
 
-#ifdef __EMSCRIPTEN__
-    // SVG rasterization via FreeType causes unreachable traps in WASM.
-    // Generate a simple letter-based colored icon as a visual fallback.
-    file.close();
-    QString baseName = QFileInfo(path).baseName(); // e.g. "explorer" from ":/icons/icons/explorer.svg"
-    QString label = baseName.left(1).toUpper();
-
-    QIcon fallbackIcon;
-    for (int sz : {16, 24, 28, 32, 48}) {
-        QPixmap pix(sz, sz);
-        pix.fill(Qt::transparent);
-        QPainter p(&pix);
-        p.setRenderHint(QPainter::Antialiasing);
-        // Filled rounded rect in the icon's tint color
-        p.setBrush(color);
-        p.setPen(Qt::NoPen);
-        p.drawRoundedRect(QRectF(1, 1, sz - 2, sz - 2), 3, 3);
-        // Single letter label in dark ink
-        p.setPen(QColor(15, 15, 15));
-        QFont f;
-        f.setPixelSize(qMax(8, sz / 2));
-        f.setBold(true);
-        p.setFont(f);
-        p.drawText(QRect(0, 0, sz, sz), Qt::AlignCenter, label);
-        p.end();
-        fallbackIcon.addPixmap(pix);
-    }
-    return fallbackIcon;
-#endif
-
     qDebug() << "[IconProvider] Loaded icon:" << path << "color:" << color.name();
 
     QString svgContent = file.readAll();

@@ -1,4 +1,5 @@
 #pragma once
+#include "gui_boundary_guard.h"
 #include "circuit.h"
 #include "linalg.h"
 #include "../compute/infrastructure/compiled_block.h"
@@ -296,6 +297,13 @@ public:
   bool arbiterInitialized = false;
   std::unique_ptr<IIntegrationMethod> integrator;
   ExecutionMode execMode = ExecutionMode::LEGACY_AOS;
+
+  // CSR pattern cache (Sparse Merge — Phase D5): frozen per topology change
+  std::unique_ptr<CachedCsrPattern> cachedPattern_;
+  uint64_t cachedPatternHash_ = 0;  // topology hash when pattern was last built
+
+  // Phase 2.10: Expose cached pattern for AC solver fast-path
+  const CachedCsrPattern* getCachedPattern() const { return cachedPattern_.get(); }
 
   // Model card library pointer (set before stamping, for per-model parameter lookup)
   const std::map<std::string, ModelCard>* currentModelCards = nullptr;
@@ -1412,19 +1420,9 @@ public:
       }
     }
 
-    // 5. Hierarchical Instances (Phase 1: Structural Abstraction)
-    // PARALLEL STAMPING: Process jobs concurrently.
-    // Use atomic updates for the residual vector to avoid race conditions on shared nodes.
-    
-    // Redefine addRes for thread-safety within the parallel region
-    auto addResAtomic = [&](int nodeIdx, double val) {
-        if (nodeIdx > 0 && nodeIdx <= n) {
-            #pragma omp atomic
-            node_residuals[nodeIdx - 1] += val;
-        }
-    };
-
-    #pragma omp parallel for
+    // 5. Hierarchical Instances
+    // Sequential accumulation required for bit-identical determinism.
+    // Parallel atomic updates are non-deterministic due to non-associative float addition.
     for (int i = 0; i < (int)scheduler.jobs.size(); ++i) {
       const auto &job = scheduler.jobs[i];
       const TensorBlock &block = *job.blockTmpl;
@@ -1435,23 +1433,24 @@ public:
         };
 
         // Resistors
+        // Resistors
         for (const auto &r : block.resistors) {
           double i_r = (getV(mapNode(r.nodeTerminal1)) -
                         getV(mapNode(r.nodeTerminal2))) /
                        r.resistance_ohms;
-          addResAtomic(mapNode(r.nodeTerminal1), -i_r);
-          addResAtomic(mapNode(r.nodeTerminal2), i_r);
+          addRes(mapNode(r.nodeTerminal1), -i_r);
+          addRes(mapNode(r.nodeTerminal2), i_r);
         }
 
         // Diodes
         for (const auto &d : block.diodes) {
           double v_d = getV(mapNode(d.anode)) - getV(mapNode(d.cathode));
           DiodeParams<double> params = {d.saturationCurrent_I_S_A,
-                                d.emissionCoefficient_N,
-                                d.thermalVoltage_V_T_V};
+                                 d.emissionCoefficient_N,
+                                 d.thermalVoltage_V_T_V};
           double i_d = diode_current(v_d, params);
-          addResAtomic(mapNode(d.anode), -i_d);
-          addResAtomic(mapNode(d.cathode), i_d);
+          addRes(mapNode(d.anode), -i_d);
+          addRes(mapNode(d.cathode), i_d);
         }
 
         // Dependent Sources
@@ -1459,33 +1458,33 @@ public:
             double v_ctrl = getV(mapNode(vcvs.ctrlPos)) - getV(mapNode(vcvs.ctrlNeg));
             double v_out = getV(mapNode(vcvs.outPos)) - getV(mapNode(vcvs.outNeg));
             double i_vcvs = (vcvs.gain * v_ctrl - v_out) / 1e-4;
-            addResAtomic(mapNode(vcvs.outPos), i_vcvs);
-            addResAtomic(mapNode(vcvs.outNeg), -i_vcvs);
+            addRes(mapNode(vcvs.outPos), i_vcvs);
+            addRes(mapNode(vcvs.outNeg), -i_vcvs);
         }
         for (const auto &vccs : block.voltageControlledCurrentSources) {
             double v_ctrl = getV(mapNode(vccs.ctrlPos)) - getV(mapNode(vccs.ctrlNeg));
             double i_vccs = vccs.gm * v_ctrl;
-            addResAtomic(mapNode(vccs.outPos), -i_vccs);
-            addResAtomic(mapNode(vccs.outNeg), i_vccs);
+            addRes(mapNode(vccs.outPos), -i_vccs);
+            addRes(mapNode(vccs.outNeg), i_vccs);
         }
         for (const auto &ccvs : block.currentControlledVoltageSources) {
             double v_sense = getV(mapNode(ccvs.ctrlPos)) - getV(mapNode(ccvs.ctrlNeg));
             double i_sense = v_sense / 1.0;
-            addResAtomic(mapNode(ccvs.ctrlPos), -i_sense);
-            addResAtomic(mapNode(ccvs.ctrlNeg), i_sense);
+            addRes(mapNode(ccvs.ctrlPos), -i_sense);
+            addRes(mapNode(ccvs.ctrlNeg), i_sense);
             double v_out = getV(mapNode(ccvs.outPos)) - getV(mapNode(ccvs.outNeg));
             double i_out = (ccvs.rm * i_sense - v_out) / 1e-4;
-            addResAtomic(mapNode(ccvs.outPos), i_out);
-            addResAtomic(mapNode(ccvs.outNeg), -i_out);
+            addRes(mapNode(ccvs.outPos), i_out);
+            addRes(mapNode(ccvs.outNeg), -i_out);
         }
         for (const auto &cccs : block.currentControlledCurrentSources) {
             double v_sense = getV(mapNode(cccs.ctrlPos)) - getV(mapNode(cccs.ctrlNeg));
             double i_sense = v_sense / 1.0;
-            addResAtomic(mapNode(cccs.ctrlPos), -i_sense);
-            addResAtomic(mapNode(cccs.ctrlNeg), i_sense);
+            addRes(mapNode(cccs.ctrlPos), -i_sense);
+            addRes(mapNode(cccs.ctrlNeg), i_sense);
             double i_cccs = cccs.alpha * i_sense;
-            addResAtomic(mapNode(cccs.outPos), -i_cccs);
-            addResAtomic(mapNode(cccs.outNeg), i_cccs);
+            addRes(mapNode(cccs.outPos), -i_cccs);
+            addRes(mapNode(cccs.outNeg), i_cccs);
         }
 
         // MOSFETs (Instance)
@@ -1505,12 +1504,11 @@ public:
             double sign = isPMOS ? -1.0 : 1.0;
             double ids = sign * mosfet_ids(sign * (v_g - v_s), sign * (v_d - v_s), p);
             
-            addResAtomic(mapNode(m.drain), -ids);
-            addResAtomic(mapNode(m.source), ids);
+            addRes(mapNode(m.drain), -ids);
+            addRes(mapNode(m.source), ids);
         }
 
         // BJTs (Instance)
-        // BJTs (temperature-aware)
         for (const auto &q : block.bjts) {
             double v_c = getV(mapNode(q.nodeCollector));
             double v_b = getV(mapNode(q.base));
@@ -1522,9 +1520,9 @@ public:
             params.Is *= std::pow(ts_par, 3.0) * exp(1.11 / q.thermalVoltage_V_T_V - 1.11 / params.Vt);
             BJTCurrents currents = bjt_ebers_moll(v_c, v_b, v_e, q.isNPN, params);
 
-            addResAtomic(mapNode(q.nodeCollector), -currents.Ic);
-            addResAtomic(mapNode(q.base), -currents.Ib);
-            addResAtomic(mapNode(q.emitter), -currents.Ie);
+            addRes(mapNode(q.nodeCollector), -currents.Ic);
+            addRes(mapNode(q.base), -currents.Ib);
+            addRes(mapNode(q.emitter), -currents.Ie);
         }
 
         // Capacitors (Transient)
@@ -1543,61 +1541,23 @@ public:
 
             if (type == IntegrationType::TRAPEZOIDAL) {
               double g_eq = (2.0 * c.capacitance_farads) / h;
-              i_c =
-                  g_eq * (v_curr - hist.v[0]) - hist.i[0];
+              i_c = g_eq * (v_curr - hist.v[0]) - hist.i[0];
             } else if (type == IntegrationType::GEAR_1_EULER) {
-              i_c =
-                  (c.capacitance_farads / h) * (v_curr - hist.v[0]);
+              i_c = (c.capacitance_farads / h) * (v_curr - hist.v[0]);
             } else if (type == IntegrationType::GEAR_2) {
               if (hist.v.size() >= 2) {
                 i_c = (c.capacitance_farads / h) *
                       (1.5 * v_curr - 2.0 * hist.v[0] +
                        0.5 * hist.v[1]);
               } else {
-                i_c = (c.capacitance_farads / h) *
-                      (v_curr - hist.v[0]);
+                i_c = (c.capacitance_farads / h) * (v_curr - hist.v[0]);
               }
             }
-            addResAtomic(mapNode(c.nodePlate1), -i_c);
-            addResAtomic(mapNode(c.nodePlate2), i_c);
+            addRes(mapNode(c.nodePlate1), -i_c);
+            addRes(mapNode(c.nodePlate2), i_c);
           }
         }
-
-        // DYNAMIC COMPONENTS (Generic Physics Models)
-        // Note: Generic models are stored in soaBlock (TensorizedBlock), not in the structural netlist directly.
-        // We iterate the dynamic tensors in soaBlock.
-        if (job.blockTmpl == &netlist.globalBlock) { // Only do this once per structural pass, or better: outside the job loop
-            // Actually, dynamic tensors are aggregated in soaBlock. 
-            // The scheduler jobs iterate structural instances.
-            // Dynamic tensors are already flattened in soaBlock.dynamicTensors.
-            // So we should stamp them OUTSIDE the scheduler loop to avoid double counting?
-            // YES. soaBlock.dynamicTensors contains GLOBAL tensors for the whole netlist (populated by tensorizeNetlist).
-            // So we should move this loop to AFTER the scheduler loop.
-        }
       }
-    }
-
-    // 7. Stamp Dynamic Models (Type-Erased)
-    // These are flattened and live in this->soaBlock
-    for (auto& [modelType, dynEntry] : soaBlock.dynamicTensors) {
-        if (!dynEntry.tensor) continue;
-
-        auto& registry = ModelRegistry::instance();
-        const ModelInfo* info = registry.getModel(modelType, modelType);
-
-        if (info && info->batchPhysics && info->stampJacobian) {
-            info->batchPhysics(dynEntry.tensor, v_candidate);
-
-            struct ConcreteTarget : public SparseStampTarget {
-                MatrixConstructor& mat;
-                std::vector<double>& rhs;
-                ConcreteTarget(MatrixConstructor& m, std::vector<double>& r) : mat(m), rhs(r) {}
-                void add(int r, int c, double v) override { mat.add(r, c, v); }
-                void addRhs(int r, double v) override { rhs[r] += v; }
-            };
-            ConcreteTarget target(matrixBuilder, rhsVector);
-            info->stampJacobian(dynEntry.tensor, dynEntry.count, &target);
-        }
     }
 
     // 6. Find Max Residual
@@ -1605,6 +1565,60 @@ public:
     for (double val : node_residuals) {
       max_err = std::max(max_err, std::abs(val));
     }
+    return max_err;
+  }
+
+  /**
+   * calculatePhysicalResiduals (per-node overload) — Phase 2.9
+   * Like the scalar overload but also populates perNodeResiduals with the
+   * raw KCL violation at each node. Used for RMS/worst-node computation.
+   * Calling this on every NR iteration is expensive — invoke only at final step.
+   */
+  double calculatePhysicalResiduals(const TensorNetlist &netlist,
+                                    const std::vector<double> &v_candidate,
+                                    std::vector<double> &perNodeResiduals,
+                                    double h = 0.0) {
+    // Delegate to scalar overload to compute node_residuals, then expose them.
+    // We re-implement inline to avoid code duplication vs. exposing internals.
+    double max_err = calculatePhysicalResiduals(netlist, v_candidate, h);
+
+    // Re-build per-node vector (the scalar overload already built it internally;
+    // we rebuild here to keep the scalar overload self-contained).
+    int n = netlist.numGlobalNodes;
+    perNodeResiduals.assign(n, 0.0);
+
+    auto getV = [&](int nodeIdx) -> double {
+      if (nodeIdx <= 0 || nodeIdx > (int)v_candidate.size()) return 0.0;
+      return v_candidate[nodeIdx - 1];
+    };
+    auto addRes = [&](int nodeIdx, double val) {
+      if (nodeIdx > 0 && nodeIdx <= n) perNodeResiduals[nodeIdx - 1] += val;
+    };
+
+    for (const auto &r : netlist.globalBlock.resistors) {
+      double i_r = (getV(r.nodeTerminal1) - getV(r.nodeTerminal2)) / r.resistance_ohms;
+      addRes(r.nodeTerminal1, -i_r); addRes(r.nodeTerminal2, i_r);
+    }
+    for (const auto &v : netlist.globalBlock.voltageSources) {
+      double i_src = (v.voltage_V - (getV(v.nodePositive) - getV(v.nodeNegative))) / 1e-3;
+      addRes(v.nodePositive, i_src); addRes(v.nodeNegative, -i_src);
+    }
+    for (const auto &cs : netlist.globalBlock.currentSources) {
+      addRes(cs.nodePositive, -cs.current_A); addRes(cs.nodeNegative, cs.current_A);
+    }
+    for (const auto &d : netlist.globalBlock.diodes) {
+      DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N, d.thermalVoltage_V_T_V};
+      double id = diode_current_clamped(getV(d.anode) - getV(d.cathode), params);
+      addRes(d.anode, -id); addRes(d.cathode, id);
+    }
+    for (const auto &q : netlist.globalBlock.bjts) {
+      BJTParams<double> p; p.Is = q.saturationCurrent_I_S_A; p.BetaF = q.betaF;
+      p.BetaR = q.betaR; p.Vt = q.thermalVoltage_V_T_V;
+      BJTCurrents<double> res = bjt_ebers_moll(getV(q.nodeCollector), getV(q.base), getV(q.emitter), q.isNPN, p);
+      addRes(q.nodeCollector, -res.Ic); addRes(q.base, -res.Ib);
+      addRes(q.emitter, res.Ic + res.Ib);
+    }
+
     return max_err;
   }
 
@@ -2433,8 +2447,8 @@ public:
         vals.reserve(nD * 4);
         
         for (size_t i = 0; i < nD; ++i) {
-            int nA = block.diodes.anodes[i];
-            int nC = block.diodes.cathodes[i];
+            int nA = block.diodes.node_a[i];
+            int nC = block.diodes.node_c[i];
             double g = block.diodes.g_d[i];
             double i_eq = block.diodes.i_d[i] - g * block.diodes.v_d[i];
             

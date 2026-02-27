@@ -4,8 +4,7 @@
 #include <QVariantMap>
 #include <QStringList>
 #include <QDateTime>
-// #include "../gui/core/gui_types.h"  // AppMode Deprecated
-#include "corner_config.h"          // For CornerConfig and RunMode
+#include "engine_api/simulation_dto.h"
 
 // Forward declaration - full definition in simulation_intent.h
 namespace Simulation { struct TrustSignature; }
@@ -140,10 +139,7 @@ struct SimulationProfile {
     }
     
     // Corner configurations for PVT analysis
-    QList<acutesim::physics::CornerConfig> corners;  // Default: empty = typical corner only
-    
-    // Run mode preference
-    acutesim::physics::RunMode runMode = acutesim::physics::RunMode::FULL;
+    QList<acutesim::compute::orchestration::CornerParametersDTO> corners;  // Default: empty = typical corner only
 };
 
 // ============================================================================
@@ -165,9 +161,6 @@ struct SimulationRun {
         CANCELLED 
     };
     Status status = Status::PENDING;
-    
-    // Execution mode from corner_config.h
-    acutesim::physics::RunMode runMode = acutesim::physics::RunMode::FULL;
     
     // Timing metrics
     double setupTime_ms = 0.0;

@@ -45,22 +45,29 @@ QWizardPage* ComponentWizard::createSummaryPage() {
 
 void ComponentWizard::onFinished(int result) {
     if (result == QDialog::Accepted) {
-        // Gather all data and create the SubCircuitDefinition
+        // Gather all data and build JSON metadata directly
         auto* infoPage = qobject_cast<ComponentInfoPage*>(page(0));
         auto* pinPage = qobject_cast<PinMappingPage*>(page(1));
         auto* packagePage = qobject_cast<PackageSelectionPage*>(page(2));
         
         if (infoPage && pinPage && schematicEditor) {
-            TensorNetlist netlist = schematicEditor->toNetlist();
-            std::vector<PortInfo> ports = pinPage->getPortInfo();
+            auto hierDto = schematicEditor->toSchematicGraph();
+            QList<QPair<QString, QString>> ports = pinPage->getPortInfo();
             
-            resultDefinition = extractSubCircuit(
-                netlist,
-                infoPage->componentName().toStdString(),
-                infoPage->componentDescription().toStdString(),
-                ports
-            );
+            QJsonObject def;
+            def["name"] = infoPage->componentName();
+            def["description"] = infoPage->componentDescription();
             
+            QJsonArray portsArray;
+            for (const auto& p : ports) {
+                 QJsonObject port;
+                 port["name"] = p.first;
+                 port["nodeName"] = p.second;
+                 portsArray.append(port);
+            }
+            def["ports"] = portsArray;
+            
+            resultDefinition = def;
             success = true;
         }
     }
@@ -153,34 +160,31 @@ void PinMappingPage::initializePage() {
     
     if (!schematicEditor) return;
     
-    TensorNetlist netlist = schematicEditor->toNetlist();
-    std::set<int> usedNodes;
+    auto hierDto = schematicEditor->toSchematicGraph();
+    std::set<std::string> usedNets;
     
-    // Auto-populate from explicit Interface Pins (Pin/PowerPort components)
-    if (!netlist.globalBlock.interfacePins.empty()) {
-        for (const auto& pin : netlist.globalBlock.interfacePins) {
-            QString entry = QString("%1 → Node %2")
-                            .arg(QString::fromStdString(pin.name))
-                            .arg(pin.nodeIndex);
-            
-            auto* item = new QListWidgetItem(entry);
-            item->setData(Qt::UserRole, QString::fromStdString(pin.netUUIDStr));
-            selectedPinsList->addItem(item);
-            
-            usedNodes.insert(pin.nodeIndex);
-        }
+    // Auto-populate from explicit Interface Pins
+    for (const auto& pinName : hierDto.topGraph.portNames) {
+        QString entry = QString("%1 → Net %2")
+                        .arg(QString::fromStdString(pinName))
+                        .arg(QString::fromStdString(pinName));
+        
+        auto* item = new QListWidgetItem(entry);
+        selectedPinsList->addItem(item);
+        
+        usedNets.insert(pinName);
     }
     
-    // Add all available non-ground nodes (excluding those already assigned)
-    for (int i = 1; i <= netlist.numGlobalNodes; ++i) {
-        if (usedNodes.find(i) == usedNodes.end()) {
-            availableNodesList->addItem(QString("Node %1").arg(i));
+    // Add all available nets (excluding those already assigned)
+    for (const auto& net : hierDto.topGraph.nets) {
+        if (usedNets.find(net.name) == usedNets.end()) {
+            availableNodesList->addItem(QString("Net %1").arg(QString::fromStdString(net.name)));
         }
     }
     
     // Add ground as a special entry
-    if (usedNodes.find(0) == usedNodes.end()) {
-        availableNodesList->addItem("Node 0 (GND)");
+    if (usedNets.find("GND") == usedNets.end() && usedNets.find("0") == usedNets.end()) {
+        availableNodesList->addItem("Net GND");
     }
 }
 
@@ -226,45 +230,27 @@ void PinMappingPage::onMoveDown() {
     }
 }
 
-std::vector<PortInfo> PinMappingPage::getPortInfo() const {
-    std::vector<PortInfo> ports;
+QList<QPair<QString, QString>> PinMappingPage::getPortInfo() const {
+    QList<QPair<QString, QString>> ports;
     
     for (int i = 0; i < selectedPinsList->count(); ++i) {
         QString text = selectedPinsList->item(i)->text();
-        // Parse "PIN_NAME → Node X"
+        // Parse "PIN_NAME → Net X"
         QStringList parts = text.split(" → ");
         if (parts.size() >= 2) {
-            PortInfo port;
-            port.pinName = parts[0].toStdString();
+            QString pinName = parts[0];
             
-            // Extract node number
+            // Extract net name
             QString nodePart = parts[1];
-            if (nodePart.contains("GND")) {
-                port.globalNodeId = 0;
-                port.isPowerPin = true;
-            } else {
-                // "Node X" -> extract X
-                QRegularExpression rx("Node (\\d+)");
-                QRegularExpressionMatch match = rx.match(nodePart);
-                if (match.hasMatch()) {
-                    port.globalNodeId = match.captured(1).toInt();
-                }
+            QString netName = "0";
+            QRegularExpression rx("Net (.+)");
+            QRegularExpressionMatch match = rx.match(nodePart);
+            if (match.hasMatch()) {
+                netName = match.captured(1);
             }
+            if (netName == "GND") netName = "0";
             
-            // Check if it's a power pin by name
-            QString upperName = parts[0].toUpper();
-            if (upperName.contains("VDD") || upperName.contains("VCC") || 
-                upperName.contains("VSS") || upperName.contains("GND")) {
-                port.isPowerPin = true;
-            }
-            
-            // Retrieve persistent UUID (if available)
-            QString uuid = selectedPinsList->item(i)->data(Qt::UserRole).toString();
-            if (!uuid.isEmpty()) {
-                port.netUUIDStr = uuid.toStdString();
-            }
-            
-            ports.push_back(port);
+            ports.append(qMakePair(pinName, netName));
         }
     }
     
@@ -564,10 +550,9 @@ void SummaryPage::initializePage() {
         auto ports = pinPage->getPortInfo();
         summary += QString("<p><b>Pins:</b> %1</p><ul>").arg(ports.size());
         for (const auto& p : ports) {
-            summary += QString("<li>%1 (Node %2)%3</li>")
-                .arg(QString::fromStdString(p.pinName))
-                .arg(p.globalNodeId)
-                .arg(p.isPowerPin ? " ⚡" : "");
+            summary += QString("<li>%1 (Node %2)</li>")
+                .arg(p.first)
+                .arg(p.second);
         }
         summary += "</ul>";
     }

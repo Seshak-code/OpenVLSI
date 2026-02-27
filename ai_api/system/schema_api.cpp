@@ -1,7 +1,6 @@
 #include "schema_api.h"
 #include "mainwindow.h"
 #include "schematic_editor.h"
-#include "../simulation/auto_harness.h"
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -133,44 +132,13 @@ QJsonObject getFullCircuitState() {
 }
 
 QJsonObject validateComponent(const QString& componentId, const QJsonObject& stimuli) {
-    // Convert JSON inputs to AutoValidator structs
-    QVector<AutoValidator::Stimulus> stimVec;
-    QJsonArray stimArr = stimuli["stimuli"].toArray();
-    for(const auto& val : stimArr) {
-        QJsonObject s = val.toObject();
-        AutoValidator::Stimulus stim;
-        stim.portName = s["port"].toString();
-        stim.type = s["type"].toString();
-        QJsonObject p = s["params"].toObject();
-        for(auto it = p.begin(); it != p.end(); ++it) {
-            stim.params[it.key()] = it.value().toDouble();
-        }
-        stimVec.append(stim);
-    }
-    
-    // Get Block Definition (Normally we'd fetch from Library, assuming passed here for now or fetching from Editor)
-    // For this prototype, we'll assume we can get it from the component instance or it's passed in stimuli for now.
-    // In a real flow: ComponentLibrary::instance()->getComponentDef(componentId);
-    // Let's create a temporary connection.
-    
-    AutoValidator validator;
-    QJsonObject blockDef; 
-    
-    // If validating current canvas, fetch state from editor
-    if (componentId == "CurrentCanvas") {
-        if (SchematicEditor* editor = getEditor()) {
-            blockDef = editor->getCircuitState();
-        }
-    } else {
-        blockDef["components"] = QJsonArray(); 
-    }
-    
-    auto result = validator.validateBlock(blockDef, stimVec);
-    
+    // STUBBED out to preserve GUI -> Physics isolation.
+    // In a compliant architecture, this must delegate to the compute orchestration layer
+    // via an ISimulationDriver DTO request.
     QJsonObject jsonRes;
-    jsonRes["passed"] = result.passed;
-    jsonRes["report"] = result.report;
-    jsonRes["trace"] = result.traceData;
+    jsonRes["passed"] = false;
+    jsonRes["report"] = "Validation blocked: AI API must use ISimulationDriver for block validation.";
+    jsonRes["trace"] = QJsonObject();
     return jsonRes;
 }
 

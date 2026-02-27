@@ -5,6 +5,14 @@
 #include <intrin.h>
 #endif
 
+// GPU adapter probing via Dawn (native builds only, not EMSCRIPTEN)
+#if !defined(__EMSCRIPTEN__) && defined(ACUTESIM_HAS_DAWN_NATIVE)
+#include <webgpu/webgpu.h>
+#include <dawn/native/DawnNative.h>
+#include <dawn/dawn_proc.h>
+#define ACUTESIM_GPU_PROBE_AVAILABLE 1
+#endif
+
 // Forward declare the generic kernels (implemented in physics_tensors.cpp)
 void batchDiodePhysics_generic(DiodeTensor& tensor, const std::vector<double>& voltages);
 void batchMosfetPhysics_generic(MosfetTensor& tensor, const std::vector<double>& voltages);
@@ -84,6 +92,45 @@ void KernelDispatcher::detectCpuAndBind() {
     if (architecture == SimdArch::Generic) {
         std::cout << "[INFO] Compute: Using Generic C++ Kernels." << std::endl;
     }
+
+    bestCpuArch = architecture;
+
+    // Probe GPU adapters (non-EMSCRIPTEN + Dawn available)
+    probeGpuAdapters();
+}
+
+void KernelDispatcher::probeGpuAdapters() {
+#ifdef ACUTESIM_GPU_PROBE_AVAILABLE
+    // Use the Dawn native instance to enumerate adapters
+    // We create a lightweight temporary instance just for enumeration
+    try {
+        dawnProcSetProcs(&dawn::native::GetProcs());
+        auto nativeInstance = std::make_unique<dawn::native::Instance>();
+        auto adapters = nativeInstance->EnumerateAdapters();
+
+        for (auto& adapter : adapters) {
+            WGPUAdapterInfo info = {};
+            wgpuAdapterGetInfo(adapter.Get(), &info);
+
+            if (info.adapterType == WGPUAdapterType_IntegratedGPU) {
+                hasIntegratedGPU = true;
+                if (bestGpuArch == SimdArch::Generic) {
+                    bestGpuArch = SimdArch::GPU_Integrated;
+                }
+                std::cout << "[INFO] Compute: Detected integrated GPU adapter." << std::endl;
+            } else if (info.adapterType == WGPUAdapterType_DiscreteGPU) {
+                hasDiscreteGPU = true;
+                bestGpuArch = SimdArch::GPU_Discrete; // Discrete takes precedence
+                std::cout << "[INFO] Compute: Detected discrete GPU adapter." << std::endl;
+            }
+        }
+    } catch (...) {
+        // Graceful fallback: GPU probing is best-effort
+        std::cout << "[WARN] Compute: GPU adapter probe failed (Dawn not initialized)." << std::endl;
+    }
+#else
+    // EMSCRIPTEN or no Dawn: GPU presence must be determined at runtime by the browser
+#endif
 }
 
 } // namespace compute

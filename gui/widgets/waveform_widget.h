@@ -7,6 +7,7 @@
 #include <QMenu>
 #include <QPointer>
 #include <QNativeGestureEvent>
+#include <QLabel>
 #include "../../components/design_db.h"
 
 namespace acutesim {
@@ -44,6 +45,22 @@ public:
     int dataPointCount() const;
     int traceCount() const { return traceData_.size(); }
 
+    // Cursor measurement
+    struct CursorMeasurement {
+        double x = 0.0;
+        double y = 0.0;
+        int traceIndex = 0;
+        bool valid = false;
+    };
+    CursorMeasurement lastCursorMeasurement() const { return lastMeasurement_; }
+
+    // CSV Export
+    bool exportToCsv(const QString& path) const;
+
+    // Batch overlay: load multiple response trace sets
+    void addBatchOverlay(int batchIndex, const QMap<int, QVector<QPointF>>& traces);
+    void clearBatchOverlays();
+
 signals:
     void promoteToTabRequested();
     void returnToDockRequested();
@@ -62,9 +79,15 @@ private:
     QMap<int, QVector<QPointF>> traceData_;
     
     // Mapping for Renaming
-    // We need to map NetUUID -> traceIndex to know which trace to rename.
     QMap<acutesim::components::NetUUID, int> netTraceMap_; // Optimized Lookup
     QMap<int, QString> traceNames_; // Store names for legend/tooltip
+
+    // Cursor
+    CursorMeasurement lastMeasurement_;
+    QLabel* cursorLabel_ = nullptr;
+
+    // Batch overlays: batchIndex -> (traceIndex -> data)
+    QMap<int, QMap<int, QVector<QPointF>>> batchOverlays_;
 };
 
 // Specialized View for Graphics/Gestures
@@ -76,13 +99,17 @@ public:
     void setMultiTraceData(const QMap<int, QVector<QPointF>>& traces);
     void clearAll();
 
+    // Cursor crosshair
+    void setCursorEnabled(bool enabled) { cursorEnabled_ = enabled; }
+
 signals:
     void zoomChanged(double newScale);
+    void cursorMoved(double x, double y, int nearestTrace);
 
 protected:
-    // Navigation Gestures (Phase 11.3 Requirement)
     void wheelEvent(QWheelEvent* event) override;
-    bool viewportEvent(QEvent* event) override; // For native Pinch gestures
+    bool viewportEvent(QEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
 
 private:
     QGraphicsScene* scene_;
@@ -91,6 +118,11 @@ private:
 
     QColor getTraceColor(int traceIndex) const;
     void handlePinch(class QNativeGestureEvent* event);
+
+    // Cursor
+    bool cursorEnabled_ = true;
+    QGraphicsLineItem* cursorVLine_ = nullptr;
+    QGraphicsLineItem* cursorHLine_ = nullptr;
 };
 
 } // namespace widgets

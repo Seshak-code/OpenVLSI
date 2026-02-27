@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../components/circuit.h"
+#include "../../compute/orchestration/dto/schematic_dto.h"
 #include "../editors/schematic/schematic_editor.h"
 
 namespace acutesim {
@@ -19,7 +19,7 @@ public:
      * @param block The internal TensorBlock of the standard cell.
      * @param cellName The name of the cell for display purposes.
      */
-    static void populateScene(GridScene* scene, const TensorBlock& block, const QString& cellName);
+    static void populateScene(GridScene* scene, const acutesim::compute::orchestration::SchematicGraphDTO& graph, const QString& cellName);
 };
 
 } // namespace components

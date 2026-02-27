@@ -1,10 +1,10 @@
-#include "benchmark_suite.h"
 #include "mainwindow.h"
-#include "monte_carlo.h"
-#include "stress_test.h"
 #include <iostream>
 #include <string>
 #include "gui/styling/theme_manager.h"
+#ifndef __EMSCRIPTEN__
+#include "compute/hardware_capabilities.h"
+#endif
 
 #include <QApplication>
 #include <QScreen>
@@ -44,22 +44,7 @@ int main(int argc, char *argv[]) {
   // Explicitly initialize Qt resources before QApplication
   Q_INIT_RESOURCE(icons);
 
-  if (argc > 1) {
-    std::string arg = argv[1];
-    if (arg == "--stress") {
-      int numTrials = 100;
-      if (argc > 2)
-        numTrials = std::stoi(argv[2]);
-      StressHarness::run(numTrials);
-      return 0;
-    } else if (arg == "--monte-carlo") {
-      MonteCarloRunner::run();
-      return 0;
-    } else if (arg == "--benchmark") {
-      GoldBench::run();
-      return 0;
-    }
-  }
+  // CLI Test hooks removed to preserve GUI -> Physics hermetic boundary
 
 #ifndef __EMSCRIPTEN__
   // Force use of matching 6.9.0 plugins BEFORE QApplication constructor loads the platform plugin
@@ -72,6 +57,17 @@ int main(int argc, char *argv[]) {
   qputenv("QT_DEBUG_PLUGINS", "1");
   QApplication app(argc, argv);
   printf("### AFTER QAPPLICATION ###\n"); fflush(stdout);
+
+#ifndef __EMSCRIPTEN__
+  {
+      auto caps = acutesim::compute::detectCapabilities();
+      std::cout << "[Engine] CPU: " << acutesim::compute::simdTierName(caps.simdTier)
+                << " | Cores: " << caps.physicalCpuCores;
+      if (caps.hasGPU)
+          std::cout << " | GPU: " << caps.gpuAdapterName;
+      std::cout << std::endl;
+  }
+#endif
   
   // Explicit Version Log
   qDebug() << "==========================================";
@@ -104,7 +100,19 @@ int main(int argc, char *argv[]) {
   // Force a full repaint once the Emscripten event loop starts processing.
   // Without this, widgets created during construction are not painted until
   // a mouse hover triggers an update() on each one individually.
-  QTimer::singleShot(0, [&w]() { w.repaint(); });
+  // Use two-phase approach: process layout events first, then repaint every
+  // visible child. w.repaint() only covers the top-level frame; findChildren
+  // ensures dock contents, splitter panels, and tab widgets all get updated.
+  QTimer::singleShot(0, [&w]() {
+      QApplication::processEvents();
+      const auto children = w.findChildren<QWidget*>();
+      for (QWidget* child : children) {
+          if (child->isVisible()) {
+              child->update();
+          }
+      }
+      w.update();
+  });
 #else
   w.showMaximized();
 #endif

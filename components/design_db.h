@@ -12,8 +12,7 @@
 #include <cassert>
 #include <random>
 
-// Forward Declaration
-struct TensorBlock;
+#include "../compute/orchestration/dto/schematic_dto.h"
 
 namespace acutesim {
 namespace components {
@@ -401,56 +400,7 @@ public:
     virtual void onNetRenamed(NetUUID id, const std::string& oldName, const std::string& newName) {}
 };
 
-// ============================================================================
-// HIERARCHICAL SNAPSHOT (Phase 5)
-// ============================================================================
-
-/**
- * @brief Global Hierarchical Node Identity.
- * Guarantees uniqueness across all schematic depths.
- */
-struct HierNodeId {
-    std::vector<std::string> path; // e.g. ["X1", "X2"]
-    std::string localNodeName;     // Local net name (e.g. "VOUT")
-
-    bool operator<(const HierNodeId& other) const {
-        if (path != other.path) return path < other.path;
-        return localNodeName < other.localNodeName;
-    }
-    
-    std::string toGlobalString() const {
-        std::string full;
-        for (const auto& p : path) {
-            full += p + ".";
-        }
-        full += localNodeName;
-        return full;
-    }
-};
-
-/**
- * @brief Captures a complete hierarchical view of a design for simulation.
- * Includes the top-level block and all resolved subcircuit blocks.
- * Note: Uses shared_ptr to TensorBlock to work with forward declaration.
- */
-struct HierarchicalSnapshot {
-    std::shared_ptr<TensorBlock> topBlock;                              // Top-level flattened netlist
-    std::map<std::string, std::shared_ptr<TensorBlock>> subBlocks;      // Subcircuit name -> TensorBlock
-    
-    // Caching Invariant: One snapshot per unique (path, parameters)
-    struct CacheKey {
-        std::string path;
-        std::map<std::string, double> params;
-        bool operator<(const CacheKey& other) const {
-            if (path != other.path) return path < other.path;
-            return params < other.params;
-        }
-    };
-    std::map<CacheKey, std::shared_ptr<TensorBlock>> subBlockCache;
-
-    std::vector<std::string> loadOrder;                                 // Order in which subcircuits were loaded
-    int maxDepthReached = 0;                                            // Actual depth traversed
-};
+// HierNodeId and HierarchicalSnapshot have been replaced by HierarchicalSchematicDTO in orchestration/dto/schematic_dto.h
 
 class DesignDb {
 public:
@@ -486,27 +436,29 @@ public:
     const Instance* getInstance(InstUUID id) const;
     const Pin* getPin(PinUUID id) const;
 
-    // Snapshot Generation (Paradigm Bridge)
-    // Generates an immutable TensorBlock for the solver
-    TensorBlock snapshot() const;
-
-    // Extended snapshot that also returns the NetUUID->node index mapping
-    // Used by generateNetlist() to build BlockInstance nodeMapping
-    struct SnapshotResult {
-        std::shared_ptr<TensorBlock> block;
+    // Internal snapshot result: graph + net-to-node-index mapping
+    struct GraphSnapshotResult {
+        acutesim::compute::orchestration::SchematicGraphDTO graph;
         std::map<NetUUID, int> netToNode;
     };
-    SnapshotResult snapshotWithNodeMap() const;
+
+    // Snapshot Generation (Paradigm Bridge)
+    // Generates an immutable DTO representing the topology
+    acutesim::compute::orchestration::SchematicGraphDTO buildGraphDTO() const;
+
+    // Returns graph + net-to-node-index map (used by tests and netlist export)
+    GraphSnapshotResult snapshotWithNodeMap() const;
 
     /**
-     * @brief Generate a hierarchical snapshot by recursively resolving subcircuits.
-     * @param resolver Function that maps a master/subcircuit name and its parameters to a TensorBlock.
-     *                 Returns nullptr if the subcircuit cannot be resolved (primitive).
+     * @brief Generate a hierarchical DTO by recursively resolving subcircuits.
+     * @param resolver Function that maps a master/subcircuit name and its parameters to a HierarchicalSchematicDTO.
+     *                 Returns std::nullopt if the subcircuit cannot be resolved.
      * @param maxDepth Maximum recursion depth (default 16 to prevent infinite loops).
-     * @return HierarchicalSnapshot containing all resolved blocks.
+     * @return HierarchicalSchematicDTO containing the top graph and all subcircuits.
      */
-    HierarchicalSnapshot recursiveSnapshot(
-        std::function<std::shared_ptr<TensorBlock>(const std::string& masterName, const std::map<std::string, double>& params)> resolver,
+    acutesim::compute::orchestration::HierarchicalSchematicDTO recursiveBuild(
+        std::function<std::optional<acutesim::compute::orchestration::HierarchicalSchematicDTO>(
+            const std::string& masterName, const std::map<std::string, double>& params)> resolver,
         int maxDepth = 16
     ) const;
 

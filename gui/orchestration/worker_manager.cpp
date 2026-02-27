@@ -131,17 +131,17 @@ QString WorkerManager::submitSynthesis(const acutesim::compute::orchestration::S
     }
 
     // Generate TCL script from config
-    QString tclScript = acutesim::compute::orchestration::YosysTask::generateTcl(config);
+    std::string tclScript = acutesim::compute::orchestration::YosysTask::generateTcl(config);
 
     // Build gRPC config
     acutesim::worker::SynthesisJobConfig grpcConfig;
     grpcConfig.jobId = jobId.toStdString();
-    grpcConfig.topModule = config.topModule.toStdString();
-    grpcConfig.targetLibrary = config.targetLibrary.toStdString();
-    grpcConfig.tclScript = tclScript.toStdString();
+    grpcConfig.topModule = config.topModule;
+    grpcConfig.targetLibrary = config.targetLibrary;
+    grpcConfig.tclScript = tclScript;
 
     for (const auto& src : config.sourceFiles) {
-        grpcConfig.sourceFiles.push_back(src.toStdString());
+        grpcConfig.sourceFiles.push_back(src);
     }
 
     auto* cancelFlag = new std::atomic<bool>(false);
@@ -208,17 +208,17 @@ QString WorkerManager::submitPlaceAndRoute(
     }
 
     // Generate full PnR TCL
-    QString tclScript = acutesim::compute::orchestration::OpenRoadTask::generateFullFlowTcl(
+    std::string tclScript = acutesim::compute::orchestration::OpenRoadTask::generateFullFlowTcl(
         fpConfig, placeConfig, ctsConfig, routeConfig);
 
     // Build gRPC config
     acutesim::worker::PnRJobConfig grpcConfig;
     grpcConfig.jobId = jobId.toStdString();
-    grpcConfig.tclScript = tclScript.toStdString();
-    grpcConfig.dieWidth = fpConfig.dieArea.width();
-    grpcConfig.dieHeight = fpConfig.dieArea.height();
-    grpcConfig.coreWidth = fpConfig.dieArea.width() * fpConfig.coreUtilization;
-    grpcConfig.coreHeight = fpConfig.dieArea.height() * fpConfig.coreUtilization;
+    grpcConfig.tclScript = tclScript;
+    grpcConfig.dieWidth = fpConfig.dieArea.width;
+    grpcConfig.dieHeight = fpConfig.dieArea.height;
+    grpcConfig.coreWidth = fpConfig.dieArea.width * fpConfig.coreUtilization;
+    grpcConfig.coreHeight = fpConfig.dieArea.height * fpConfig.coreUtilization;
 
     auto* cancelFlag = new std::atomic<bool>(false);
     m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
@@ -284,13 +284,13 @@ QString WorkerManager::submitSignOff(const acutesim::compute::orchestration::DRC
     }
 
     // Generate DRC script
-    QString drcScript = acutesim::compute::orchestration::KLayoutTask::generateDRCScript(drcConfig);
+    std::string drcScript = acutesim::compute::orchestration::KLayoutTask::generateDRCScript(drcConfig);
 
     // Build gRPC config
     acutesim::worker::SignOffJobConfig grpcConfig;
     grpcConfig.jobId = jobId.toStdString();
-    grpcConfig.layoutFile = drcConfig.layoutFile.toStdString();
-    grpcConfig.scriptContent = drcScript.toStdString();
+    grpcConfig.layoutFile = drcConfig.layoutFile;
+    grpcConfig.scriptContent = drcScript;
     grpcConfig.checkType = "DRC";
 
     auto* cancelFlag = new std::atomic<bool>(false);
@@ -386,14 +386,14 @@ void WorkerManager::runLocalSynthesis(
     m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
 
     std::thread([this, jobId, config, cancelFlag]() {
-        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const QString& line, bool isError) {
+        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const std::string& line, bool isError) {
             if (cancelFlag->load()) return;
             QMetaObject::invokeMethod(this, [this, jobId, line, isError]() {
-                emit jobLogReceived(jobId, line, isError);
+                emit jobLogReceived(jobId, QString::fromStdString(line), isError);
             }, Qt::QueuedConnection);
         };
 
-        QString workDir = QDir::currentPath();
+        std::string workDir = QDir::currentPath().toStdString();
         SynthesisResult result = ToolDriver::runYosys(config, workDir, "yosys", logCb);
 
         if (cancelFlag->load()) return;
@@ -428,14 +428,14 @@ void WorkerManager::runLocalPnR(
     m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
 
     std::thread([this, jobId, fpConfig, placeConfig, ctsConfig, routeConfig, cancelFlag]() {
-        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const QString& line, bool isError) {
+        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const std::string& line, bool isError) {
             if (cancelFlag->load()) return;
             QMetaObject::invokeMethod(this, [this, jobId, line, isError]() {
-                emit jobLogReceived(jobId, line, isError);
+                emit jobLogReceived(jobId, QString::fromStdString(line), isError);
             }, Qt::QueuedConnection);
         };
 
-        QString workDir = QDir::currentPath();
+        std::string workDir = QDir::currentPath().toStdString();
         PnRResult result = ToolDriver::runOpenROAD(
             fpConfig, placeConfig, ctsConfig, routeConfig, workDir, "openroad", logCb);
 
@@ -464,14 +464,14 @@ void WorkerManager::runLocalSignOff(
     m_jobCancelFlags[jobId.toStdString()] = cancelFlag;
 
     std::thread([this, jobId, config, cancelFlag]() {
-        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const QString& line, bool isError) {
+        ToolDriver::LogCallback logCb = [this, jobId, cancelFlag](const std::string& line, bool isError) {
             if (cancelFlag->load()) return;
             QMetaObject::invokeMethod(this, [this, jobId, line, isError]() {
-                emit jobLogReceived(jobId, line, isError);
+                emit jobLogReceived(jobId, QString::fromStdString(line), isError);
             }, Qt::QueuedConnection);
         };
 
-        QString workDir = QDir::currentPath();
+        std::string workDir = QDir::currentPath().toStdString();
         DRCResult result = ToolDriver::runKLayoutDRC(config, workDir, "klayout", logCb);
 
         if (cancelFlag->load()) return;

@@ -390,6 +390,7 @@ struct SimulationEnvironment {
  *   I_eq = I(V_k) - g_eq * V_k
  */
 struct Diode {
+    std::string instanceName;         // e.g. "D1"
     int anode;                        // P-type side (+)
     int cathode;                      // N-type side (-)
     double saturationCurrent_I_S_A;       // I_S [A]
@@ -811,12 +812,22 @@ struct TensorBlock {
         signalSources.push_back(src);
         updateNodeCount(nPos); updateNodeCount(nNeg);
     }
-    void addDiode(int anode, int cathode, double Is, double N = 1.0, double Vt = 0.02585) {
+    void addDiode(const std::string& name, int anode, int cathode, double Is, double N = 1.0, double Vt = 0.02585) {
         if (isFrozen) return;
-        Diode d = {anode, cathode, Is, N, Vt};
+        Diode d;
+        d.instanceName = name;
+        d.anode = anode;
+        d.cathode = cathode;
+        d.saturationCurrent_I_S_A = Is;
+        d.emissionCoefficient_N = N;
+        d.thermalVoltage_V_T_V = Vt;
         d.modelName = "diode_generic"; // Default PDK model
         diodes.push_back(d);
         updateNodeCount(anode); updateNodeCount(cathode);
+    }
+    void addDiode(int anode, int cathode, double Is, double N = 1.0, double Vt = 0.02585) {
+        static int d_count = 0;
+        addDiode("D_AUTO_" + std::to_string(++d_count), anode, cathode, Is, N, Vt);
     }
     void addMosfet(const std::string& name, int D, int G, int S, int B, 
                    const std::string& model, double W, double L) {
@@ -1180,6 +1191,11 @@ public:
         globalBlock.addSignalSource(name, nPos, nNeg, type, amp, freq);
         if (nPos > numGlobalNodes) numGlobalNodes = nPos;
         if (nNeg > numGlobalNodes) numGlobalNodes = nNeg;
+    }
+    void addDiode(const std::string& name, int anode, int cathode, double Is) {
+        globalBlock.addDiode(name, anode, cathode, Is);
+        if (anode > numGlobalNodes) numGlobalNodes = anode;
+        if (cathode > numGlobalNodes) numGlobalNodes = cathode;
     }
     void addDiode(int anode, int cathode, double Is) {
         globalBlock.addDiode(anode, cathode, Is);

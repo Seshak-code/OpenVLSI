@@ -35,6 +35,7 @@ private:
 
     void setupUi();
     void populateLists();
+    bool loadFromJsonRegistry();
     void addComponentItem(QListWidget* list, const QString& name, const QString& iconName, ComponentType type);
     void filterList(QListWidget* list, const QString& pattern);
 };

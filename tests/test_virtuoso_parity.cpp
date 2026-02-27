@@ -15,7 +15,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "compute/orchestration/simulation_context.h"
+#include "engine_api/simulation_context.h"
 #include "compute/infrastructure/postproc_engine.h"
 #include "compute/orchestration/batch_runner.h"
 

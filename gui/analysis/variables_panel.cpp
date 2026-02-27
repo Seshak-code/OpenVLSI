@@ -17,17 +17,19 @@ void VariablesModel::setContext(acutesim::orchestration::SimulationContext* ctx)
     entries_.clear();
     
     if (ctx_) {
-        // Load from context
-        auto keys = ctx_->variableExprs.keys();
-        // Sort keys for stability
+        // Load from context — collect and sort keys for stability
+        std::vector<std::string> keys;
+        for (const auto& [k, _] : ctx_->variableExprs) keys.push_back(k);
         std::sort(keys.begin(), keys.end());
-        
+
         for (const auto& key : keys) {
             VariableEntry e;
-            e.name = key;
-            e.expression = ctx_->variableExprs.value(key);
-            e.enabled = ctx_->variableEnabled.value(key, true);
-            e.resolvedValue = ctx_->variables.value(key, 0.0);
+            e.name       = QString::fromStdString(key);
+            e.expression = QString::fromStdString(ctx_->variableExprs.at(key));
+            auto eit = ctx_->variableEnabled.find(key);
+            e.enabled    = (eit != ctx_->variableEnabled.end()) ? eit->second : true;
+            auto vit = ctx_->variables.find(key);
+            e.resolvedValue = (vit != ctx_->variables.end()) ? vit->second : 0.0;
             entries_.append(e);
         }
     }
@@ -42,8 +44,8 @@ void VariablesModel::applyToContext(acutesim::orchestration::SimulationContext* 
     ctx->variableEnabled.clear();
     
     for (const auto& e : entries_) {
-        ctx->variableExprs.insert(e.name, e.expression);
-        ctx->variableEnabled.insert(e.name, e.enabled);
+        ctx->variableExprs[e.name.toStdString()]    = e.expression.toStdString();
+        ctx->variableEnabled[e.name.toStdString()]  = e.enabled;
     }
     
     // Trigger resolution in context
@@ -146,13 +148,15 @@ void VariablesModel::revalidate() {
     applyToContext(ctx_);
     
     // 2. Resolve
-    QString errorMsg;
-    bool ok = ctx_->resolveVariables(&errorMsg);
+    std::string errorMsgStd;
+    bool ok = ctx_->resolveVariables(&errorMsgStd);
+    QString errorMsg = QString::fromStdString(errorMsgStd);
     
     // 3. Update Model with resolved values and statuses
     for (auto& e : entries_) {
         if (ok) {
-            e.resolvedValue = ctx_->variables.value(e.name, 0.0);
+            auto vit2 = ctx_->variables.find(e.name.toStdString());
+            e.resolvedValue = (vit2 != ctx_->variables.end()) ? vit2->second : 0.0;
             e.isValid = true;
             e.errorMsg.clear();
         } else {

@@ -1,74 +1,96 @@
 #include "klayout_report_parser.h"
-#include <QRegularExpression>
+#include <regex>
+#include <sstream>
 
 namespace acutesim::compute::orchestration {
+
+namespace {
+
+std::vector<std::string> splitLines(const std::string& s) {
+    std::vector<std::string> result;
+    std::istringstream iss(s);
+    std::string line;
+    while (std::getline(iss, line)) result.push_back(line);
+    return result;
+}
+
+std::string trimStr(const std::string& s) {
+    size_t start = s.find_first_not_of(" \t\r\n");
+    size_t end   = s.find_last_not_of(" \t\r\n");
+    if (start == std::string::npos) return "";
+    return s.substr(start, end - start + 1);
+}
+
+bool containsCI(const std::string& haystack, const std::string& needle) {
+    // Case-insensitive substring search
+    auto it = std::search(haystack.begin(), haystack.end(),
+                          needle.begin(), needle.end(),
+                          [](char a, char b) { return std::tolower(a) == std::tolower(b); });
+    return it != haystack.end();
+}
+
+} // anonymous namespace
 
 // ============================================================================
 // DRC PARSER
 // ============================================================================
 
-DRCResult KLayoutReportParser::parseDRC(const QString& output) {
+DRCResult KLayoutReportParser::parseDRC(const std::string& output) {
     DRCResult result;
     result.rawOutput = output;
     result.success = true;
 
-    if (output.trimmed().isEmpty()) {
+    if (trimStr(output).empty()) {
         result.success = false;
-        result.errors.append("Empty DRC output");
+        result.errors.push_back("Empty DRC output");
         return result;
     }
 
-    // Parse individual violations
-    // KLayout DRC output format (marker DB summary):
-    //   Rule: metal1.width | Category: Width | Layer: metal1 | Violations: 3
-    //   Rule: via1.enclosure | Category: Enclosure | Layer: via1 | Violations: 1
-    QRegularExpression violationRe(
+    // Rule: metal1.width | Category: Width | Layer: metal1 | Violations: 3
+    static const std::regex violationRe(
         R"(Rule:\s*(\S+)\s*\|\s*Category:\s*([^|]+)\|\s*Layer:\s*(\S+)\s*\|\s*Violations:\s*(\d+))",
-        QRegularExpression::CaseInsensitiveOption);
-    
-    auto it = violationRe.globalMatch(output);
-    while (it.hasNext()) {
-        auto match = it.next();
+        std::regex::icase);
+
+    auto begin = std::sregex_iterator(output.begin(), output.end(), violationRe);
+    auto end   = std::sregex_iterator();
+    for (auto it = begin; it != end; ++it) {
+        const std::smatch& match = *it;
         DRCViolation v;
-        v.ruleName = match.captured(1).trimmed();
-        v.category = match.captured(2).trimmed();
-        v.layer = match.captured(3).trimmed();
-        v.count = match.captured(4).toInt();
-        v.severity = "error"; // Default to error for DRC violations
-        v.description = QString("%1 violation on %2 (%3 instances)")
-            .arg(v.category, v.layer).arg(v.count);
-        result.violations.append(v);
+        v.ruleName = trimStr(match[1].str());
+        v.category = trimStr(match[2].str());
+        v.layer    = trimStr(match[3].str());
+        v.count    = std::stoi(match[4].str());
+        v.severity = "error";
+        v.description = v.category + " violation on " + v.layer +
+                        " (" + std::to_string(v.count) + " instances)";
+        result.violations.push_back(v);
         result.totalViolations += v.count;
         result.errorCount += v.count;
     }
 
-    // Parse summary line: "Total DRC violations: N"
-    QRegularExpression totalRe(R"(Total\s+DRC\s+violations:\s*(\d+))",
-        QRegularExpression::CaseInsensitiveOption);
-    auto totalMatch = totalRe.match(output);
-    if (totalMatch.hasMatch()) {
-        result.totalViolations = totalMatch.captured(1).toInt();
-    }
+    // Total DRC violations: N
+    static const std::regex totalRe(R"(Total\s+DRC\s+violations:\s*(\d+))", std::regex::icase);
+    std::smatch totalMatch;
+    if (std::regex_search(output, totalMatch, totalRe))
+        result.totalViolations = std::stoi(totalMatch[1].str());
 
-    // Parse "DRC clean" indicator
-    if (output.contains("DRC clean", Qt::CaseInsensitive) ||
-        output.contains("No DRC violations", Qt::CaseInsensitive) ||
+    if (containsCI(output, "DRC clean") ||
+        containsCI(output, "No DRC violations") ||
         result.totalViolations == 0) {
         result.cleanDRC = true;
     }
 
-    // Parse warning-level violations
-    QRegularExpression warningRe(R"(Warning:\s*(.+))",
-        QRegularExpression::CaseInsensitiveOption);
-    auto warnIt = warningRe.globalMatch(output);
-    while (warnIt.hasNext()) {
-        auto match = warnIt.next();
+    // Warning lines
+    static const std::regex warningRe(R"(Warning:\s*(.+))", std::regex::icase);
+    auto wb = std::sregex_iterator(output.begin(), output.end(), warningRe);
+    for (auto it = wb; it != end; ++it) {
+        const std::smatch& match = *it;
         DRCViolation v;
-        v.severity = "warning";
-        v.description = match.captured(1).trimmed();
-        v.ruleName = "warning";
-        v.count = 1;
-        result.violations.append(v);
+        v.severity    = "warning";
+        v.description = trimStr(match[1].str());
+        v.ruleName    = "warning";
+        v.count       = 1;
+        result.violations.push_back(v);
         result.warningCount++;
     }
 
@@ -79,73 +101,63 @@ DRCResult KLayoutReportParser::parseDRC(const QString& output) {
 // LVS PARSER
 // ============================================================================
 
-LVSResult KLayoutReportParser::parseLVS(const QString& output) {
+LVSResult KLayoutReportParser::parseLVS(const std::string& output) {
     LVSResult result;
     result.rawOutput = output;
     result.success = true;
 
-    if (output.trimmed().isEmpty()) {
+    if (trimStr(output).empty()) {
         result.success = false;
-        result.errors.append("Empty LVS output");
+        result.errors.push_back("Empty LVS output");
         return result;
     }
 
-    // Parse match status
-    if (output.contains("MATCH", Qt::CaseInsensitive) &&
-        !output.contains("MISMATCH", Qt::CaseInsensitive)) {
+    if (containsCI(output, "MATCH") && !containsCI(output, "MISMATCH"))
         result.matched = true;
-    }
-    if (output.contains("MISMATCH", Qt::CaseInsensitive) ||
-        output.contains("NOT MATCH", Qt::CaseInsensitive)) {
+    if (containsCI(output, "MISMATCH") || containsCI(output, "NOT MATCH"))
         result.matched = false;
+
+    // Layout devices: 42 | Schematic devices: 42
+    static const std::regex deviceRe(
+        R"(Layout\s+devices:\s*(\d+)\s*\|\s*Schematic\s+devices:\s*(\d+))", std::regex::icase);
+    std::smatch dm;
+    if (std::regex_search(output, dm, deviceRe)) {
+        result.deviceCountLayout    = std::stoi(dm[1].str());
+        result.deviceCountSchematic = std::stoi(dm[2].str());
     }
 
-    // Parse device counts
-    // "Layout devices: 42 | Schematic devices: 42"
-    QRegularExpression deviceRe(
-        R"(Layout\s+devices:\s*(\d+)\s*\|\s*Schematic\s+devices:\s*(\d+))",
-        QRegularExpression::CaseInsensitiveOption);
-    auto deviceMatch = deviceRe.match(output);
-    if (deviceMatch.hasMatch()) {
-        result.deviceCountLayout = deviceMatch.captured(1).toInt();
-        result.deviceCountSchematic = deviceMatch.captured(2).toInt();
+    // Layout nets: 28 | Schematic nets: 28
+    static const std::regex netRe(
+        R"(Layout\s+nets:\s*(\d+)\s*\|\s*Schematic\s+nets:\s*(\d+))", std::regex::icase);
+    std::smatch nm;
+    if (std::regex_search(output, nm, netRe)) {
+        result.netCountLayout    = std::stoi(nm[1].str());
+        result.netCountSchematic = std::stoi(nm[2].str());
     }
 
-    // Parse net counts
-    // "Layout nets: 28 | Schematic nets: 28"
-    QRegularExpression netRe(
-        R"(Layout\s+nets:\s*(\d+)\s*\|\s*Schematic\s+nets:\s*(\d+))",
-        QRegularExpression::CaseInsensitiveOption);
-    auto netMatch = netRe.match(output);
-    if (netMatch.hasMatch()) {
-        result.netCountLayout = netMatch.captured(1).toInt();
-        result.netCountSchematic = netMatch.captured(2).toInt();
-    }
-
-    // Parse mismatch details
-    // "Mismatch: net | Layout: NET_A | Schematic: net_a | Extra net in layout"
-    QRegularExpression mismatchRe(
+    // Mismatch: net | Layout: NET_A | Schematic: net_a | Extra net in layout
+    static const std::regex mismatchRe(
         R"(Mismatch:\s*(\w+)\s*\|\s*Layout:\s*([^|]+)\|\s*Schematic:\s*([^|]+)\|\s*(.+))",
-        QRegularExpression::CaseInsensitiveOption);
-    auto mmIt = mismatchRe.globalMatch(output);
-    while (mmIt.hasNext()) {
-        auto match = mmIt.next();
-        LVSMismatch mm;
-        mm.type = match.captured(1).trimmed();
-        mm.layoutName = match.captured(2).trimmed();
-        mm.schematicName = match.captured(3).trimmed();
-        mm.details = match.captured(4).trimmed();
-        result.mismatches.append(mm);
-    }
-    result.mismatchCount = result.mismatches.size();
+        std::regex::icase);
 
-    // Parse total mismatch count if provided
-    QRegularExpression totalMmRe(R"(Total\s+mismatches:\s*(\d+))",
-        QRegularExpression::CaseInsensitiveOption);
-    auto totalMmMatch = totalMmRe.match(output);
-    if (totalMmMatch.hasMatch()) {
-        result.mismatchCount = totalMmMatch.captured(1).toInt();
+    auto begin = std::sregex_iterator(output.begin(), output.end(), mismatchRe);
+    auto end   = std::sregex_iterator();
+    for (auto it = begin; it != end; ++it) {
+        const std::smatch& match = *it;
+        LVSMismatch mm;
+        mm.type           = trimStr(match[1].str());
+        mm.layoutName     = trimStr(match[2].str());
+        mm.schematicName  = trimStr(match[3].str());
+        mm.details        = trimStr(match[4].str());
+        result.mismatches.push_back(mm);
     }
+    result.mismatchCount = static_cast<int>(result.mismatches.size());
+
+    // Total mismatches: N
+    static const std::regex totalMmRe(R"(Total\s+mismatches:\s*(\d+))", std::regex::icase);
+    std::smatch tmm;
+    if (std::regex_search(output, tmm, totalMmRe))
+        result.mismatchCount = std::stoi(tmm[1].str());
 
     return result;
 }
@@ -154,31 +166,23 @@ LVSResult KLayoutReportParser::parseLVS(const QString& output) {
 // ERROR PARSING
 // ============================================================================
 
-void KLayoutReportParser::parseDRCErrors(const QString& stderrOutput, DRCResult& result) {
-    if (stderrOutput.trimmed().isEmpty()) return;
-
-    for (const QString& line : stderrOutput.split('\n')) {
-        QString trimmed = line.trimmed();
-        if (trimmed.isEmpty()) continue;
-        if (trimmed.contains("error", Qt::CaseInsensitive) ||
-            trimmed.contains("fatal", Qt::CaseInsensitive) ||
-            trimmed.contains("exception", Qt::CaseInsensitive)) {
-            result.errors.append(trimmed);
-        }
+void KLayoutReportParser::parseDRCErrors(const std::string& stderrOutput, DRCResult& result) {
+    if (trimStr(stderrOutput).empty()) return;
+    for (const auto& line : splitLines(stderrOutput)) {
+        std::string t = trimStr(line);
+        if (t.empty()) continue;
+        if (containsCI(t, "error") || containsCI(t, "fatal") || containsCI(t, "exception"))
+            result.errors.push_back(t);
     }
 }
 
-void KLayoutReportParser::parseLVSErrors(const QString& stderrOutput, LVSResult& result) {
-    if (stderrOutput.trimmed().isEmpty()) return;
-
-    for (const QString& line : stderrOutput.split('\n')) {
-        QString trimmed = line.trimmed();
-        if (trimmed.isEmpty()) continue;
-        if (trimmed.contains("error", Qt::CaseInsensitive) ||
-            trimmed.contains("fatal", Qt::CaseInsensitive) ||
-            trimmed.contains("exception", Qt::CaseInsensitive)) {
-            result.errors.append(trimmed);
-        }
+void KLayoutReportParser::parseLVSErrors(const std::string& stderrOutput, LVSResult& result) {
+    if (trimStr(stderrOutput).empty()) return;
+    for (const auto& line : splitLines(stderrOutput)) {
+        std::string t = trimStr(line);
+        if (t.empty()) continue;
+        if (containsCI(t, "error") || containsCI(t, "fatal") || containsCI(t, "exception"))
+            result.errors.push_back(t);
     }
 }
 

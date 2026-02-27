@@ -80,11 +80,10 @@ void CornerSetupWidget::setupUi() {
     if(m_monteCarloEnable) connect(m_monteCarloEnable, &QAbstractButton::toggled, this, &CornerSetupWidget::configurationChanged);
 }
 
-QVector<acutesim::physics::CornerConfig> CornerSetupWidget::getCorners() const {
-    QVector<acutesim::physics::CornerConfig> corners;
-    using namespace acutesim::physics;
+QVector<acutesim::compute::orchestration::CornerParametersDTO> CornerSetupWidget::getCorners() const {
+    QVector<acutesim::compute::orchestration::CornerParametersDTO> corners;
     
-    ProcessCorner p = static_cast<ProcessCorner>(m_processCombo->currentIndex());
+    QString processStr = m_processCombo->currentText().split(" ").first();
     double v = m_voltageScale->value();
     
     // Monte Carlo Override
@@ -101,14 +100,11 @@ QVector<acutesim::physics::CornerConfig> CornerSetupWidget::getCorners() const {
         std::mt19937 rng(12345); // Fixed seed for reproducibility base
         
         for (int i = 0; i < runs; ++i) {
-            CornerConfig c;
-            c.name = QString("MC Run #%1").arg(i+1).toStdString();
-            c.temperatureC = m_tempMin->value(); // Use Min as Nominal for MC usually, or fix it
-            c.voltageScale = v;
-            c.process = p;
-            c.mode = VariationMode::MONTE_CARLO;
-            c.monteCarloSeed = static_cast<int>(rng());
-            c.iterationIndex = i;
+            acutesim::compute::orchestration::CornerParametersDTO c;
+            c.temperature = m_tempMin->value();
+            c.supplyVoltage = v;
+            c.processCorner = processStr.toStdString();
+            // Note: variationMode and seed are no longer in CornerDTO; MC config handles that now.
             corners.push_back(c);
         }
         return corners;
@@ -131,12 +127,10 @@ QVector<acutesim::physics::CornerConfig> CornerSetupWidget::getCorners() const {
         double temp = tStart + (i * tStep);
         if (tStop < tStart) temp = tStart; // Safety
         
-        CornerConfig c;
-        c.name = QString("T=%1C %2 V=%3").arg(temp).arg(m_processCombo->currentText().left(2)).arg(v).toStdString();
-        c.temperatureC = temp;
-        c.voltageScale = v;
-        c.process = p;
-        c.mode = VariationMode::NONE;
+        acutesim::compute::orchestration::CornerParametersDTO c;
+        c.temperature = temp;
+        c.supplyVoltage = v;
+        c.processCorner = processStr.toStdString();
         corners.push_back(c);
     }
     

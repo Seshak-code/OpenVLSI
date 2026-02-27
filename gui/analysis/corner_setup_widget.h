@@ -7,7 +7,8 @@
 #include <QSpinBox>
 #include <QCheckBox>
 #include <QVector>
-#include "physics/corner_config.h"
+#include <QVector>
+#include "engine_api/simulation_dto.h"
 
 namespace acutesim::gui::analysis {
 
@@ -18,7 +19,7 @@ public:
     explicit CornerSetupWidget(QWidget* parent = nullptr);
     
     // Returns the list of corners to run
-    QVector<acutesim::physics::CornerConfig> getCorners() const;
+    QVector<acutesim::compute::orchestration::CornerParametersDTO> getCorners() const;
 
 signals:
     void configurationChanged();

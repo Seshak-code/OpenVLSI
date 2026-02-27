@@ -27,7 +27,13 @@ static const char* WorkerService_method_names[] = {
   "/acutesim.worker.WorkerService/GetStatus",
   "/acutesim.worker.WorkerService/RunSynthesis",
   "/acutesim.worker.WorkerService/RunPlaceAndRoute",
-  "/acutesim.worker.WorkerService/RunSimulation",
+  "/acutesim.worker.WorkerService/RunHDLSimulation",
+  "/acutesim.worker.WorkerService/RunCircuitSimulation",
+  "/acutesim.worker.WorkerService/RunSignOff",
+  "/acutesim.worker.WorkerService/RunLVS",
+  "/acutesim.worker.WorkerService/RunPEX",
+  "/acutesim.worker.WorkerService/RunGDSExport",
+  "/acutesim.worker.WorkerService/RunRegression",
 };
 
 std::unique_ptr< WorkerService::Stub> WorkerService::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -40,7 +46,13 @@ WorkerService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& chan
   : channel_(channel), rpcmethod_GetStatus_(WorkerService_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_RunSynthesis_(WorkerService_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
   , rpcmethod_RunPlaceAndRoute_(WorkerService_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
-  , rpcmethod_RunSimulation_(WorkerService_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
+  , rpcmethod_RunHDLSimulation_(WorkerService_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
+  , rpcmethod_RunCircuitSimulation_(WorkerService_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
+  , rpcmethod_RunSignOff_(WorkerService_method_names[5], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
+  , rpcmethod_RunLVS_(WorkerService_method_names[6], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
+  , rpcmethod_RunPEX_(WorkerService_method_names[7], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
+  , rpcmethod_RunGDSExport_(WorkerService_method_names[8], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
+  , rpcmethod_RunRegression_(WorkerService_method_names[9], options.suffix_for_stats(),::grpc::internal::RpcMethod::SERVER_STREAMING, channel)
   {}
 
 ::grpc::Status WorkerService::Stub::GetStatus(::grpc::ClientContext* context, const ::acutesim::worker::StatusRequest& request, ::acutesim::worker::StatusResponse* response) {
@@ -98,20 +110,116 @@ void WorkerService::Stub::async::RunPlaceAndRoute(::grpc::ClientContext* context
   return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::PnRLog>::Create(channel_.get(), cq, rpcmethod_RunPlaceAndRoute_, context, request, false, nullptr);
 }
 
-::grpc::ClientReader< ::acutesim::worker::SimulationLog>* WorkerService::Stub::RunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request) {
-  return ::grpc::internal::ClientReaderFactory< ::acutesim::worker::SimulationLog>::Create(channel_.get(), rpcmethod_RunSimulation_, context, request);
+::grpc::ClientReader< ::acutesim::worker::HDLSimulationLog>* WorkerService::Stub::RunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request) {
+  return ::grpc::internal::ClientReaderFactory< ::acutesim::worker::HDLSimulationLog>::Create(channel_.get(), rpcmethod_RunHDLSimulation_, context, request);
 }
 
-void WorkerService::Stub::async::RunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SimulationLog>* reactor) {
-  ::grpc::internal::ClientCallbackReaderFactory< ::acutesim::worker::SimulationLog>::Create(stub_->channel_.get(), stub_->rpcmethod_RunSimulation_, context, request, reactor);
+void WorkerService::Stub::async::RunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::HDLSimulationLog>* reactor) {
+  ::grpc::internal::ClientCallbackReaderFactory< ::acutesim::worker::HDLSimulationLog>::Create(stub_->channel_.get(), stub_->rpcmethod_RunHDLSimulation_, context, request, reactor);
 }
 
-::grpc::ClientAsyncReader< ::acutesim::worker::SimulationLog>* WorkerService::Stub::AsyncRunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
-  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SimulationLog>::Create(channel_.get(), cq, rpcmethod_RunSimulation_, context, request, true, tag);
+::grpc::ClientAsyncReader< ::acutesim::worker::HDLSimulationLog>* WorkerService::Stub::AsyncRunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::HDLSimulationLog>::Create(channel_.get(), cq, rpcmethod_RunHDLSimulation_, context, request, true, tag);
 }
 
-::grpc::ClientAsyncReader< ::acutesim::worker::SimulationLog>* WorkerService::Stub::PrepareAsyncRunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SimulationLog>::Create(channel_.get(), cq, rpcmethod_RunSimulation_, context, request, false, nullptr);
+::grpc::ClientAsyncReader< ::acutesim::worker::HDLSimulationLog>* WorkerService::Stub::PrepareAsyncRunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::HDLSimulationLog>::Create(channel_.get(), cq, rpcmethod_RunHDLSimulation_, context, request, false, nullptr);
+}
+
+::grpc::ClientReader< ::acutesim::worker::CircuitSimulationLog>* WorkerService::Stub::RunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request) {
+  return ::grpc::internal::ClientReaderFactory< ::acutesim::worker::CircuitSimulationLog>::Create(channel_.get(), rpcmethod_RunCircuitSimulation_, context, request);
+}
+
+void WorkerService::Stub::async::RunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::CircuitSimulationLog>* reactor) {
+  ::grpc::internal::ClientCallbackReaderFactory< ::acutesim::worker::CircuitSimulationLog>::Create(stub_->channel_.get(), stub_->rpcmethod_RunCircuitSimulation_, context, request, reactor);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::CircuitSimulationLog>* WorkerService::Stub::AsyncRunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::CircuitSimulationLog>::Create(channel_.get(), cq, rpcmethod_RunCircuitSimulation_, context, request, true, tag);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::CircuitSimulationLog>* WorkerService::Stub::PrepareAsyncRunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::CircuitSimulationLog>::Create(channel_.get(), cq, rpcmethod_RunCircuitSimulation_, context, request, false, nullptr);
+}
+
+::grpc::ClientReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::RunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request) {
+  return ::grpc::internal::ClientReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), rpcmethod_RunSignOff_, context, request);
+}
+
+void WorkerService::Stub::async::RunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) {
+  ::grpc::internal::ClientCallbackReaderFactory< ::acutesim::worker::SignOffLog>::Create(stub_->channel_.get(), stub_->rpcmethod_RunSignOff_, context, request, reactor);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::AsyncRunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), cq, rpcmethod_RunSignOff_, context, request, true, tag);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::PrepareAsyncRunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), cq, rpcmethod_RunSignOff_, context, request, false, nullptr);
+}
+
+::grpc::ClientReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::RunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request) {
+  return ::grpc::internal::ClientReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), rpcmethod_RunLVS_, context, request);
+}
+
+void WorkerService::Stub::async::RunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) {
+  ::grpc::internal::ClientCallbackReaderFactory< ::acutesim::worker::SignOffLog>::Create(stub_->channel_.get(), stub_->rpcmethod_RunLVS_, context, request, reactor);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::AsyncRunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), cq, rpcmethod_RunLVS_, context, request, true, tag);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::PrepareAsyncRunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), cq, rpcmethod_RunLVS_, context, request, false, nullptr);
+}
+
+::grpc::ClientReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::RunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request) {
+  return ::grpc::internal::ClientReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), rpcmethod_RunPEX_, context, request);
+}
+
+void WorkerService::Stub::async::RunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) {
+  ::grpc::internal::ClientCallbackReaderFactory< ::acutesim::worker::SignOffLog>::Create(stub_->channel_.get(), stub_->rpcmethod_RunPEX_, context, request, reactor);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::AsyncRunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), cq, rpcmethod_RunPEX_, context, request, true, tag);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::PrepareAsyncRunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), cq, rpcmethod_RunPEX_, context, request, false, nullptr);
+}
+
+::grpc::ClientReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::RunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request) {
+  return ::grpc::internal::ClientReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), rpcmethod_RunGDSExport_, context, request);
+}
+
+void WorkerService::Stub::async::RunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) {
+  ::grpc::internal::ClientCallbackReaderFactory< ::acutesim::worker::SignOffLog>::Create(stub_->channel_.get(), stub_->rpcmethod_RunGDSExport_, context, request, reactor);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::AsyncRunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), cq, rpcmethod_RunGDSExport_, context, request, true, tag);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* WorkerService::Stub::PrepareAsyncRunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::SignOffLog>::Create(channel_.get(), cq, rpcmethod_RunGDSExport_, context, request, false, nullptr);
+}
+
+::grpc::ClientReader< ::acutesim::worker::RegressionLog>* WorkerService::Stub::RunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request) {
+  return ::grpc::internal::ClientReaderFactory< ::acutesim::worker::RegressionLog>::Create(channel_.get(), rpcmethod_RunRegression_, context, request);
+}
+
+void WorkerService::Stub::async::RunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::RegressionLog>* reactor) {
+  ::grpc::internal::ClientCallbackReaderFactory< ::acutesim::worker::RegressionLog>::Create(stub_->channel_.get(), stub_->rpcmethod_RunRegression_, context, request, reactor);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::RegressionLog>* WorkerService::Stub::AsyncRunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::RegressionLog>::Create(channel_.get(), cq, rpcmethod_RunRegression_, context, request, true, tag);
+}
+
+::grpc::ClientAsyncReader< ::acutesim::worker::RegressionLog>* WorkerService::Stub::PrepareAsyncRunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncReaderFactory< ::acutesim::worker::RegressionLog>::Create(channel_.get(), cq, rpcmethod_RunRegression_, context, request, false, nullptr);
 }
 
 WorkerService::Service::Service() {
@@ -148,12 +256,72 @@ WorkerService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       WorkerService_method_names[3],
       ::grpc::internal::RpcMethod::SERVER_STREAMING,
-      new ::grpc::internal::ServerStreamingHandler< WorkerService::Service, ::acutesim::worker::SimulationRequest, ::acutesim::worker::SimulationLog>(
+      new ::grpc::internal::ServerStreamingHandler< WorkerService::Service, ::acutesim::worker::HDLSimulationRequest, ::acutesim::worker::HDLSimulationLog>(
           [](WorkerService::Service* service,
              ::grpc::ServerContext* ctx,
-             const ::acutesim::worker::SimulationRequest* req,
-             ::grpc::ServerWriter<::acutesim::worker::SimulationLog>* writer) {
-               return service->RunSimulation(ctx, req, writer);
+             const ::acutesim::worker::HDLSimulationRequest* req,
+             ::grpc::ServerWriter<::acutesim::worker::HDLSimulationLog>* writer) {
+               return service->RunHDLSimulation(ctx, req, writer);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      WorkerService_method_names[4],
+      ::grpc::internal::RpcMethod::SERVER_STREAMING,
+      new ::grpc::internal::ServerStreamingHandler< WorkerService::Service, ::acutesim::worker::CircuitSimulationRequest, ::acutesim::worker::CircuitSimulationLog>(
+          [](WorkerService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::acutesim::worker::CircuitSimulationRequest* req,
+             ::grpc::ServerWriter<::acutesim::worker::CircuitSimulationLog>* writer) {
+               return service->RunCircuitSimulation(ctx, req, writer);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      WorkerService_method_names[5],
+      ::grpc::internal::RpcMethod::SERVER_STREAMING,
+      new ::grpc::internal::ServerStreamingHandler< WorkerService::Service, ::acutesim::worker::SignOffRequest, ::acutesim::worker::SignOffLog>(
+          [](WorkerService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::acutesim::worker::SignOffRequest* req,
+             ::grpc::ServerWriter<::acutesim::worker::SignOffLog>* writer) {
+               return service->RunSignOff(ctx, req, writer);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      WorkerService_method_names[6],
+      ::grpc::internal::RpcMethod::SERVER_STREAMING,
+      new ::grpc::internal::ServerStreamingHandler< WorkerService::Service, ::acutesim::worker::LVSRequest, ::acutesim::worker::SignOffLog>(
+          [](WorkerService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::acutesim::worker::LVSRequest* req,
+             ::grpc::ServerWriter<::acutesim::worker::SignOffLog>* writer) {
+               return service->RunLVS(ctx, req, writer);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      WorkerService_method_names[7],
+      ::grpc::internal::RpcMethod::SERVER_STREAMING,
+      new ::grpc::internal::ServerStreamingHandler< WorkerService::Service, ::acutesim::worker::PEXRequest, ::acutesim::worker::SignOffLog>(
+          [](WorkerService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::acutesim::worker::PEXRequest* req,
+             ::grpc::ServerWriter<::acutesim::worker::SignOffLog>* writer) {
+               return service->RunPEX(ctx, req, writer);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      WorkerService_method_names[8],
+      ::grpc::internal::RpcMethod::SERVER_STREAMING,
+      new ::grpc::internal::ServerStreamingHandler< WorkerService::Service, ::acutesim::worker::GDSExportRequest, ::acutesim::worker::SignOffLog>(
+          [](WorkerService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::acutesim::worker::GDSExportRequest* req,
+             ::grpc::ServerWriter<::acutesim::worker::SignOffLog>* writer) {
+               return service->RunGDSExport(ctx, req, writer);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      WorkerService_method_names[9],
+      ::grpc::internal::RpcMethod::SERVER_STREAMING,
+      new ::grpc::internal::ServerStreamingHandler< WorkerService::Service, ::acutesim::worker::RegressionRequest, ::acutesim::worker::RegressionLog>(
+          [](WorkerService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::acutesim::worker::RegressionRequest* req,
+             ::grpc::ServerWriter<::acutesim::worker::RegressionLog>* writer) {
+               return service->RunRegression(ctx, req, writer);
              }, this)));
 }
 
@@ -181,7 +349,49 @@ WorkerService::Service::~Service() {
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status WorkerService::Service::RunSimulation(::grpc::ServerContext* context, const ::acutesim::worker::SimulationRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SimulationLog>* writer) {
+::grpc::Status WorkerService::Service::RunHDLSimulation(::grpc::ServerContext* context, const ::acutesim::worker::HDLSimulationRequest* request, ::grpc::ServerWriter< ::acutesim::worker::HDLSimulationLog>* writer) {
+  (void) context;
+  (void) request;
+  (void) writer;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status WorkerService::Service::RunCircuitSimulation(::grpc::ServerContext* context, const ::acutesim::worker::CircuitSimulationRequest* request, ::grpc::ServerWriter< ::acutesim::worker::CircuitSimulationLog>* writer) {
+  (void) context;
+  (void) request;
+  (void) writer;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status WorkerService::Service::RunSignOff(::grpc::ServerContext* context, const ::acutesim::worker::SignOffRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* writer) {
+  (void) context;
+  (void) request;
+  (void) writer;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status WorkerService::Service::RunLVS(::grpc::ServerContext* context, const ::acutesim::worker::LVSRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* writer) {
+  (void) context;
+  (void) request;
+  (void) writer;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status WorkerService::Service::RunPEX(::grpc::ServerContext* context, const ::acutesim::worker::PEXRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* writer) {
+  (void) context;
+  (void) request;
+  (void) writer;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status WorkerService::Service::RunGDSExport(::grpc::ServerContext* context, const ::acutesim::worker::GDSExportRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* writer) {
+  (void) context;
+  (void) request;
+  (void) writer;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status WorkerService::Service::RunRegression(::grpc::ServerContext* context, const ::acutesim::worker::RegressionRequest* request, ::grpc::ServerWriter< ::acutesim::worker::RegressionLog>* writer) {
   (void) context;
   (void) request;
   (void) writer;

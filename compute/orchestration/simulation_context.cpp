@@ -1,72 +1,81 @@
-#include "simulation_context.h"
-#include <QStack>
-#include <QSet>
-#include <QRegularExpression>
-#include <QtMath>
+#include "engine_api/simulation_context.h"
+#include <cmath>
+#include <cctype>
 #include <limits>
+#include <unordered_set>
+#include <functional>
 
 namespace acutesim::orchestration {
 
-// ─── Minimal expression evaluator (no Qt::Qml dependency) ────────────────────
+// ─── Minimal expression evaluator (no Qt dependency) ─────────────────────────
 namespace {
 
 struct MiniEval {
-    const QString& s;
-    const QHash<QString, double>& vars;
+    const std::string& s;
+    const std::unordered_map<std::string, double>& vars;
     int pos = 0;
     bool valid = true;
 
-    void skipWS() { while (pos < s.size() && s[pos].isSpace()) ++pos; }
+    void skipWS() {
+        while (pos < (int)s.size() && std::isspace((unsigned char)s[pos])) ++pos;
+    }
 
     double parseNumber() {
         skipWS();
         int start = pos;
-        if (pos < s.size() && (s[pos] == '+' || s[pos] == '-')) ++pos;
-        while (pos < s.size() && (s[pos].isDigit() || s[pos] == '.')) ++pos;
-        if (pos < s.size() && (s[pos] == 'e' || s[pos] == 'E')) {
+        if (pos < (int)s.size() && (s[pos] == '+' || s[pos] == '-')) ++pos;
+        while (pos < (int)s.size() && (std::isdigit((unsigned char)s[pos]) || s[pos] == '.')) ++pos;
+        if (pos < (int)s.size() && (s[pos] == 'e' || s[pos] == 'E')) {
             ++pos;
-            if (pos < s.size() && (s[pos] == '+' || s[pos] == '-')) ++pos;
-            while (pos < s.size() && s[pos].isDigit()) ++pos;
+            if (pos < (int)s.size() && (s[pos] == '+' || s[pos] == '-')) ++pos;
+            while (pos < (int)s.size() && std::isdigit((unsigned char)s[pos])) ++pos;
         }
-        bool ok;
-        double v = s.mid(start, pos - start).toDouble(&ok);
-        if (!ok) valid = false;
-        return ok ? v : 0.0;
+        std::string sub = s.substr(start, pos - start);
+        try {
+            size_t idx = 0;
+            double v = std::stod(sub, &idx);
+            if (idx != sub.size()) { valid = false; return 0.0; }
+            return v;
+        } catch (...) {
+            valid = false;
+            return 0.0;
+        }
     }
 
     double parseAtom() {
         skipWS();
-        if (pos >= s.size()) { valid = false; return 0.0; }
+        if (pos >= (int)s.size()) { valid = false; return 0.0; }
         if (s[pos] == '(') {
             ++pos;
             double v = parseExpr();
             skipWS();
-            if (pos < s.size() && s[pos] == ')') ++pos;
+            if (pos < (int)s.size() && s[pos] == ')') ++pos;
             else valid = false;
             return v;
         }
         if (s[pos] == '-') { ++pos; return -parseAtom(); }
         // Identifier (variable name or function keyword)
-        if (s[pos].isLetter() || s[pos] == '_') {
+        if (std::isalpha((unsigned char)s[pos]) || s[pos] == '_') {
             int start = pos;
-            while (pos < s.size() && (s[pos].isLetterOrNumber() || s[pos] == '_')) ++pos;
-            QString name = s.mid(start, pos - start);
+            while (pos < (int)s.size() &&
+                   (std::isalnum((unsigned char)s[pos]) || s[pos] == '_')) ++pos;
+            std::string name = s.substr(start, pos - start);
             skipWS();
-            if (pos < s.size() && s[pos] == '(') {
-                // Function call: sin, cos, log, sqrt, pow (no-op: return 0 for unsupported)
+            if (pos < (int)s.size() && s[pos] == '(') {
+                // Function call
                 ++pos;
                 double arg = parseExpr();
                 skipWS();
-                if (pos < s.size() && s[pos] == ')') ++pos;
+                if (pos < (int)s.size() && s[pos] == ')') ++pos;
                 if (name == "sin")  return std::sin(arg);
                 if (name == "cos")  return std::cos(arg);
                 if (name == "sqrt") return std::sqrt(arg);
                 if (name == "log" || name == "log10") return std::log10(arg);
                 if (name == "exp")  return std::exp(arg);
-                // Second arg for pow
                 return 0.0;
             }
-            if (vars.contains(name)) return vars[name];
+            auto it = vars.find(name);
+            if (it != vars.end()) return it->second;
             valid = false;
             return 0.0;
         }
@@ -77,8 +86,8 @@ struct MiniEval {
         double v = parseAtom();
         while (valid) {
             skipWS();
-            if (pos >= s.size()) break;
-            if (s[pos] == '*')     { ++pos; v *= parseAtom(); }
+            if (pos >= (int)s.size()) break;
+            if (s[pos] == '*')      { ++pos; v *= parseAtom(); }
             else if (s[pos] == '/') {
                 ++pos; double d = parseAtom();
                 v = (d != 0.0) ? v / d : std::numeric_limits<double>::quiet_NaN();
@@ -92,7 +101,7 @@ struct MiniEval {
         double v = parseTerm();
         while (valid) {
             skipWS();
-            if (pos >= s.size()) break;
+            if (pos >= (int)s.size()) break;
             if      (s[pos] == '+') { ++pos; v += parseTerm(); }
             else if (s[pos] == '-') { ++pos; v -= parseTerm(); }
             else break;
@@ -107,71 +116,109 @@ struct MiniEval {
     }
 };
 
+// Collapse multiple whitespace chars to single space, trim leading/trailing
+static std::string simplified(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    bool inSpace = true; // start true to trim leading
+    for (char c : s) {
+        if (std::isspace((unsigned char)c)) {
+            if (!inSpace) { out += ' '; inSpace = true; }
+        } else {
+            out += c;
+            inSpace = false;
+        }
+    }
+    // Trim trailing space
+    if (!out.empty() && out.back() == ' ') out.pop_back();
+    return out;
+}
+
 } // anonymous namespace
 
-static double evalSimple(const QString& expr, const QHash<QString, double>& vars, bool* ok = nullptr) {
-    MiniEval ev{expr.simplified(), vars};
+static double evalSimple(const std::string& expr,
+                         const std::unordered_map<std::string, double>& vars,
+                         bool* ok = nullptr) {
+    std::string s = simplified(expr);
+    MiniEval ev{s, vars};
     return ev.eval(ok);
+}
+
+// Check if word `key` appears as a whole word (word-boundary check) in `expr`
+static bool containsWordBoundary(const std::string& expr, const std::string& key) {
+    size_t pos = 0;
+    while ((pos = expr.find(key, pos)) != std::string::npos) {
+        bool leftOk  = (pos == 0) || !std::isalnum((unsigned char)expr[pos - 1]) && expr[pos - 1] != '_';
+        bool rightOk = (pos + key.size() >= expr.size()) ||
+                       (!std::isalnum((unsigned char)expr[pos + key.size()]) &&
+                        expr[pos + key.size()] != '_');
+        if (leftOk && rightOk) return true;
+        pos += key.size();
+    }
+    return false;
 }
 
 // ─── SimulationContext methods ────────────────────────────────────────────────
 
-double SimulationContext::evaluate(const QString& expr) const {
+double SimulationContext::evaluate(const std::string& expr) const {
     return evalSimple(expr, variables);
 }
 
-bool SimulationContext::resolveVariables(QString* errorMsg) {
-    QHash<QString, QSet<QString>> dependencies;
+bool SimulationContext::resolveVariables(std::string* errorMsg) {
+    // Build dependency graph: var -> set of variables it depends on
+    std::unordered_map<std::string, std::unordered_set<std::string>> dependencies;
 
-    QHashIterator<QString, QString> i(variableExprs);
-    while (i.hasNext()) {
-        i.next();
-        QString var = i.key();
-        QString expr = i.value();
-        if (!variableEnabled.value(var, true)) continue;
-        for (auto key : variableExprs.keys()) {
+    for (const auto& [var, expr] : variableExprs) {
+        auto enabledIt = variableEnabled.find(var);
+        if (enabledIt != variableEnabled.end() && !enabledIt->second) continue;
+        for (const auto& [key, _] : variableExprs) {
             if (key == var) continue;
-            QRegularExpression re(QString("\\b%1\\b").arg(QRegularExpression::escape(key)));
-            if (expr.contains(re)) {
+            if (containsWordBoundary(expr, key)) {
                 dependencies[var].insert(key);
             }
         }
     }
 
-    QList<QString> sorted;
-    QSet<QString> visited;
-    QSet<QString> tempVisited;
+    // Topological sort (DFS)
+    std::vector<std::string> sorted;
+    std::unordered_set<std::string> visited;
+    std::unordered_set<std::string> tempVisited;
 
-    std::function<bool(const QString&)> visit = [&](const QString& n) -> bool {
-        if (tempVisited.contains(n)) {
-            if (errorMsg) *errorMsg = QString("Circular dependency detected involving '%1'").arg(n);
+    std::function<bool(const std::string&)> visit = [&](const std::string& n) -> bool {
+        if (tempVisited.count(n)) {
+            if (errorMsg) *errorMsg = "Circular dependency detected involving '" + n + "'";
             return false;
         }
-        if (visited.contains(n)) return true;
+        if (visited.count(n)) return true;
         tempVisited.insert(n);
-        for (const QString& m : dependencies.value(n)) {
-            if (!visit(m)) return false;
+        auto depIt = dependencies.find(n);
+        if (depIt != dependencies.end()) {
+            for (const std::string& m : depIt->second) {
+                if (!visit(m)) return false;
+            }
         }
-        tempVisited.remove(n);
+        tempVisited.erase(n);
         visited.insert(n);
-        sorted.append(n);
+        sorted.push_back(n);
         return true;
     };
 
-    auto keys = variableExprs.keys();
-    for (const auto& key : keys) {
-        if (!variableEnabled.value(key, true)) continue;
-        if (!visited.contains(key)) {
+    for (const auto& [key, _] : variableExprs) {
+        auto enabledIt = variableEnabled.find(key);
+        if (enabledIt != variableEnabled.end() && !enabledIt->second) continue;
+        if (!visited.count(key)) {
             if (!visit(key)) return false;
         }
     }
 
     for (const auto& var : sorted) {
-        QString expr = variableExprs.value(var);
+        auto exprIt = variableExprs.find(var);
+        if (exprIt == variableExprs.end()) continue;
         bool ok = false;
-        double val = evalSimple(expr, variables, &ok);
+        double val = evalSimple(exprIt->second, variables, &ok);
         if (!ok) {
-            if (errorMsg) *errorMsg = QString("Failed to evaluate variable '%1': %2").arg(var, expr);
+            if (errorMsg)
+                *errorMsg = "Failed to evaluate variable '" + var + "': " + exprIt->second;
             return false;
         }
         variables[var] = val;

@@ -2,7 +2,7 @@
 #include "../component_wizard.h"
 #include "../../widgets/compliance_report_widget.h"
 #include "../../widgets/breadcrumb_widget.h"
-#include "../../../components/pdk_compliance.h"
+#include "../../analysis/pdk_compliance.h"
 #include "../../../ai_api/system/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
@@ -20,7 +20,7 @@
 #include "../physical_overlay_item.h"
 #include "../../analysis/erc_engine.h"
 #include "../../analysis/erc_autofix.h"
-#include "../../../physics/simulation_profile.h"
+#include "../../analysis/simulation_profile.h"
 #include "../../../components/design_db.h"
 #include "../../components/standard_cell_visualizer.h" // Phase 14: Visualizer
 #include <QFileInfo>
@@ -1234,7 +1234,7 @@ acutesim::components::NetUUID GridScene::netUUIDAtPosition(QPointF p) const {
     return m_spatialToDbNet.value(rootID, acutesim::components::NetUUID());
 }
 
-TensorNetlist GridScene::generateNetlist() {
+acutesim::compute::orchestration::HierarchicalSchematicDTO GridScene::generateSchematicGraph() {
     // Phase 6.1: Paradigm Bridge
     // 1. Populate/Update DesignDb from Spatial State (Migration Strategy)
     // 2. Snapshot DesignDb to TensorBlock
@@ -1479,10 +1479,8 @@ TensorNetlist GridScene::generateNetlist() {
         }
     }
     
-    // 3. Hierarchical Snapshot
-    // 3. Hierarchical Snapshot
-    auto resolver = [&](const std::string& masterName, const std::map<std::string, double>& params) -> std::shared_ptr<TensorBlock> {
-        // Phase 14: Use Centralized Resolver
+    // 3. Hierarchical Extraction
+    auto resolver = [&](const std::string& masterName, const std::map<std::string, double>& params) -> std::optional<acutesim::compute::orchestration::HierarchicalSchematicDTO> {
         QString qMasterName = QString::fromStdString(masterName);
         QString contextDir;
         if (!m_filePath.isEmpty()) {
@@ -1491,329 +1489,68 @@ TensorNetlist GridScene::generateNetlist() {
         
         auto result = acutesim::gui::core::SubcircuitResolver::resolve(qMasterName, contextDir);
         
-        // CASE A: Standard Library (Code-Defined) - HIGHEST PRIORITY for Physics integrity
+        // CASE A: Standard Library (Code-Defined)
         if (result.source == acutesim::gui::core::ResolvedSubcircuit::Source::StandardLibrary) {
-            // Return copy of the internal block definition from the library
-            return std::make_shared<TensorBlock>(result.stdCellDef->internalBlock);
+            // Built-in standard cells do not currently have a .sch definition, they are mapped
+            // purely by their masterName in Verilog-A generation logic. 
+            // Return empty to signal atomic primitive logic will take over.
+            return std::nullopt;
         }
         
         // CASE B: Filesystem (Schematic File)
         if (result.source == acutesim::gui::core::ResolvedSubcircuit::Source::FileSystem) {
-            // Headless Scene for nested netlisting
             GridScene subScene(GridScene::Mode::Headless);
             subScene.setFilePath(result.filePath);
 
-            // Load the sub-circuit from its JSON source
             QFile file(result.filePath);
             if (file.open(QIODevice::ReadOnly)) {
                 QJsonObject state = QJsonDocument::fromJson(file.readAll()).object();
                 subScene.loadState(state);
 
-                // RECURSIVE CALL via generateNetlist on the sub-scene
-                TensorNetlist subNet = subScene.generateNetlist();
-                auto block = std::make_shared<TensorBlock>(subNet.globalBlock);
-
-                // Extract pin port interface from child's Pin and PowerPort components.
-                // UUID-based lookup: use the net UUID at the pin's terminal position
-                // (avoids fragile string-name matching between net names and pin names).
-                auto snapResult = subScene.getDesignDb().snapshotWithNodeMap();
-                for (auto* subItem : subScene.items()) {
-                    if (auto* sc = dynamic_cast<VisualComponent*>(subItem)) {
-                        const bool isInterfacePin =
-                            (sc->type == ComponentType::Pin ||
-                             sc->type == ComponentType::PowerPort) && !sc->name.isEmpty();
-                        if (!isInterfacePin) continue;
-
-                        block->pinNames.push_back(sc->name.toStdString());
-
-                        // UUID-based node resolution
-                        QVector<QPointF> terms = sc->getTerminals();
-                        int nodeIdx = 0; // Default to ground
-                        if (!terms.isEmpty()) {
-                            QPointF termPos = sc->mapToScene(terms[0]);
-                            // Ask the sub-scene for the net UUID at this position
-                            NetUUID portNet = subScene.netUUIDAtPosition(termPos);
-                            auto nodeIt = snapResult.netToNode.find(portNet);
-                            if (nodeIt != snapResult.netToNode.end()) {
-                                nodeIdx = nodeIt->second;
-                            }
-                        }
-                        block->portNodeIndices.push_back(nodeIdx);
-
-                        // Populate interface pin metadata on the TensorBlock
-                        TensorBlock::InterfacePin ipin;
-                        ipin.name      = sc->name.toStdString();
-                        ipin.nodeIndex = nodeIdx;
-                        ipin.isPower   = (sc->type == ComponentType::PowerPort);
-                        ipin.direction = ipin.isPower ? "Power" : "Input"; // TODO: read from sc->pinDirection
-                        if (!terms.isEmpty()) {
-                            NetUUID portNet = subScene.netUUIDAtPosition(sc->mapToScene(terms[0]));
-                            ipin.netUUIDStr = portNet.toString();
-                        }
-                        block->interfacePins.push_back(ipin);
-                    }
-                }
-
-                return block;
+                // RECURSIVE CALL
+                return subScene.generateSchematicGraph();
             }
         }
         
-        // CASE C: Unresolved
-        emit messageLogged(QString("EROR: Could not resolve subcircuit '%1'").arg(qMasterName));
-        return nullptr;
+        emit messageLogged(QString("ERROR: Could not resolve subcircuit '%1'").arg(qMasterName));
+        return std::nullopt;
     };
 
-    HierarchicalSnapshot snapshot = designDb.recursiveSnapshot(resolver);
+    auto hierDto = designDb.recursiveBuild(resolver);
 
-    // Get the netToNode mapping for building BlockInstance nodeMapping
-    auto topSnap = designDb.snapshotWithNodeMap();
-
-    // Phase 2: Build DC annotation map (solver node ID → name + position)
-    m_nodeAnnotations.clear();
-    for (auto it = m_spatialToDbNet.begin(); it != m_spatialToDbNet.end(); ++it) {
-        int rootID = it.key();
-        NetUUID netId = it.value();
-        auto nodeIt = topSnap.netToNode.find(netId);
-        if (nodeIt == topSnap.netToNode.end() || nodeIt->second == 0) continue;
-
-        NodeAnnotation ann;
-        ann.solverNodeId = nodeIt->second;
-        ann.netName = spatialToName.value(rootID, "n" + QString::number(rootID));
-
-        // Find representative position: first grid point belonging to this root net
-        for (auto pit = m_pointToNetID.begin(); pit != m_pointToNetID.end(); ++pit) {
-            if (findSet(pit.value()) == rootID) {
-                ann.position = QPointF(pit.key().first, pit.key().second);
-                break;
-            }
-        }
-        m_nodeAnnotations.append(ann);
-    }
-
-    // 4. Wrap and resolve Probes
-    TensorNetlist netlist;
-    if (snapshot.topBlock) {
-        netlist.globalBlock = *snapshot.topBlock;
-    }
-    netlist.subBlocks = snapshot.subBlocks;
-
-    // 4a. Register resolved subBlocks as blockDefinitions and create BlockInstance entries
-    for (const auto& [blockName, block] : snapshot.subBlocks) {
-        if (block) {
-            netlist.defineBlock(*block);
-        }
-    }
-
-    // 4b. Create BlockInstance for each SubCircuit/ICPackage
+    // 4. Extract Top-Level Interface Ports
+    // Identify explicit Pin/PowerPort components to define the external interface of THIS graph
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if (c->type != ComponentType::SubCircuit && c->type != ComponentType::ICPackage)
-                continue;
-
-            // Determine masterName (same logic as Phase 1)
-            std::string masterName;
-            if (c->type == ComponentType::ICPackage && !c->sourceFilePath.isEmpty()) {
-                masterName = c->sourceFilePath.toStdString();
-            } else if (c->type == ComponentType::SubCircuit && !c->subCircuitName.isEmpty()) {
-                masterName = c->subCircuitName.toStdString();
-            } else {
-                continue; // No valid master - skip
-            }
-
-            // Check if this block was resolved
-            auto defIt = netlist.blockDefinitions.find(masterName);
-            if (defIt == netlist.blockDefinitions.end()) continue;
-
-            const TensorBlock& blockDef = defIt->second;
-
-            // Build nodeMapping: for each terminal of the visual component,
-            // map the block's port node index to the parent's global node index
-            QVector<QPointF> terms = c->getTerminals();
-            int mapSize = std::max((int)blockDef.portNodeIndices.size(),
-                                   blockDef.numInternalNodes + 1);
-            std::vector<int> nodeMapping(mapSize, 0);
-
-            // Map port pins to parent global nodes
-            int numPorts = std::min((int)blockDef.portNodeIndices.size(), (int)terms.size());
-            for (int i = 0; i < numPorts; ++i) {
-                QPointF scenePos = c->mapToScene(terms[i]);
-                int spatialId = findSet(getNetID(scenePos));
-                NetUUID netId = m_spatialToDbNet.value(spatialId, NetUUID());
-                int globalNode = 0; // default ground
-                if (netId != NetUUID()) {
-                    auto nodeIt = topSnap.netToNode.find(netId);
-                    if (nodeIt != topSnap.netToNode.end()) {
-                        globalNode = nodeIt->second;
-                    }
-                }
-                int localNode = blockDef.portNodeIndices[i];
-                if (localNode >= 0 && localNode < mapSize) {
-                    nodeMapping[localNode] = globalNode;
-                }
-            }
-
-            netlist.addInstance(masterName, nodeMapping);
-            emit messageLogged(QString("DEBUG: Created BlockInstance for '%1' (%2) with %3 port mappings")
-                .arg(c->name).arg(QString::fromStdString(masterName)).arg(numPorts));
-        }
-    }
-
-    // 4c. Floating pin validation for hierarchical components
-    for (auto* item : allItems) {
-        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if (c->type != ComponentType::SubCircuit && c->type != ComponentType::ICPackage)
-                continue;
-
-            QVector<QPointF> terms = c->getTerminals();
-            QStringList floatingPins;
-            for (int i = 0; i < terms.size(); ++i) {
-                QPointF scenePos = c->mapToScene(terms[i]);
-                int spatialId = findSet(getNetID(scenePos));
-                // A pin is "floating" if no wire connects to the same net
-                // Check if any wire endpoint shares this net
-                bool connected = false;
-                for (auto* wItem : allItems) {
-                    if (auto* w = dynamic_cast<VisualWire*>(wItem)) {
-                        if (!w->isVisible()) continue;
-                        QLineF line = w->line();
-                        QPointF sp1 = w->mapToScene(line.p1());
-                        QPointF sp2 = w->mapToScene(line.p2());
-                        int wNet1 = findSet(getNetID(sp1));
-                        int wNet2 = findSet(getNetID(sp2));
-                        if (wNet1 == spatialId || wNet2 == spatialId) {
-                            connected = true;
-                            break;
-                        }
-                    }
-                }
-                if (!connected) {
-                    floatingPins.append(QString("pin%1").arg(i));
-                }
-            }
-            if (!floatingPins.isEmpty()) {
-                emit messageLogged(QString("WARNING: %1 has %2 floating pin(s): %3")
-                    .arg(c->name).arg(floatingPins.size()).arg(floatingPins.join(", ")));
+            if ((c->type == ComponentType::Pin || c->type == ComponentType::PowerPort) && !c->name.isEmpty()) {
+                hierDto.topGraph.portNames.push_back(c->name.toStdString());
             }
         }
     }
 
-    // Late-bind Probes to unique TensorNetlist nodes
+    // 5. Annotate Probes directly onto the connected nodes
     for (auto* item : allItems) {
         if (auto* c = dynamic_cast<VisualComponent*>(item)) {
             if (c->type == ComponentType::Probe) {
-                // Pin 0 of a probe is the "tip"
                 QPointF pArea = c->mapToScene(c->getTerminals()[0]);
                 int spatialId = findSet(getNetID(pArea)); 
                 NetUUID netId = m_spatialToDbNet.value(spatialId, NetUUID());
                 
                 std::string netName = "0";
-                if (netId != NetUUID()) {
-                    netName = designDb.getNetName(netId);
-                }
+                if (netId != NetUUID()) netName = designDb.getNetName(netId);
                 
-                HierNodeId probeNode;
-                for(const auto& p : c->probeBinding.hierarchicalPath) {
-                    probeNode.path.push_back(p.toStdString());
-                }
-                probeNode.localNodeName = netName;
+                // Represent probes as instances of "Probe" tied to the net
+                acutesim::compute::orchestration::SchematicInstanceDTO probeDto;
+                probeDto.type = "Probe";
+                probeDto.instanceName = c->name.toStdString();
+                probeDto.connectedNets.push_back(netName);
                 
-                netlist.probes.push_back({
-                    c->name.toStdString(),
-                    probeNode.toGlobalString()
-                });
+                hierDto.topGraph.instances.push_back(probeDto);
             }
         }
     }
 
-    // 5. Wire Segment Extraction (Phase 1.5: Parasitic-Aware)
-    // Convert VisualWires into WireSegments for parasitic extraction
-    constexpr double PIXEL_TO_UM = 0.1; // 1 pixel = 0.1 um
-    constexpr double PARASITIC_R_PER_UM = 0.1; // Default sheet resistance
-    constexpr double PARASITIC_LENGTH_THRESHOLD = 15.0; // um, inject R_WIRE above this
-    int wireSegIdx = 0;
-    for (auto* item : allItems) {
-        if (auto* w = dynamic_cast<VisualWire*>(item)) {
-            if (!w->isVisible()) continue;
-            QLineF line = w->line();
-            QPointF sp1 = w->mapToScene(line.p1());
-            QPointF sp2 = w->mapToScene(line.p2());
-
-            double lengthPx = line.length();
-            double lengthUm = lengthPx * PIXEL_TO_UM;
-
-            // Look up node indices for endpoints
-            int spatialId1 = findSet(getNetID(sp1));
-            int spatialId2 = findSet(getNetID(sp2));
-            int n1 = 0, n2 = 0;
-            {
-                NetUUID nid1 = m_spatialToDbNet.value(spatialId1, NetUUID());
-                NetUUID nid2 = m_spatialToDbNet.value(spatialId2, NetUUID());
-                auto it1 = topSnap.netToNode.find(nid1);
-                auto it2 = topSnap.netToNode.find(nid2);
-                if (it1 != topSnap.netToNode.end()) n1 = it1->second;
-                if (it2 != topSnap.netToNode.end()) n2 = it2->second;
-            }
-
-            TensorBlock::WireSegment seg;
-            seg.layer = w->layer.toStdString();
-            seg.node1 = n1;
-            seg.node2 = n2;
-            seg.width_um = w->width_um;
-            seg.length_um = lengthUm;
-            seg.r_per_um = PARASITIC_R_PER_UM;
-            netlist.globalBlock.wireSegments.push_back(seg);
-
-            // Inject parasitic resistor for long wires
-            if (lengthUm > PARASITIC_LENGTH_THRESHOLD) {
-                double R = lengthUm * PARASITIC_R_PER_UM;
-                TensorBlock::ParasiticResistor pr;
-                pr.name = "R_WIRE_" + std::to_string(wireSegIdx);
-                pr.node1 = n1;
-                pr.node2 = n2;
-                pr.R = R;
-                netlist.globalBlock.parasiticResistors.push_back(pr);
-            }
-            ++wireSegIdx;
-        }
-    }
-
-    // 6. Extract Top-Level Interface Pins (for ComponentWizard & Symbol Generation)
-    // Identify explicit Pin/PowerPort components to define the external interface.
-    for (auto* item : allItems) {
-        if (auto* c = dynamic_cast<VisualComponent*>(item)) {
-            if ((c->type == ComponentType::Pin || c->type == ComponentType::PowerPort) && !c->name.isEmpty()) {
-                netlist.globalBlock.pinNames.push_back(c->name.toStdString());
-
-                QVector<QPointF> terms = c->getTerminals();
-                int nodeIdx = 0;
-                std::string netUUIDStr;
-                
-                if (!terms.isEmpty()) {
-                    QPointF termPos = c->mapToScene(terms[0]);
-                    int spatialId = findSet(getNetID(termPos));
-                    NetUUID netId = m_spatialToDbNet.value(spatialId, NetUUID());
-                    if (netId != NetUUID()) {
-                        auto it = topSnap.netToNode.find(netId);
-                        if (it != topSnap.netToNode.end()) nodeIdx = it->second;
-                        netUUIDStr = netId.toString();
-                    }
-                }
-                netlist.globalBlock.portNodeIndices.push_back(nodeIdx);
-
-                TensorBlock::InterfacePin ipin;
-                ipin.name = c->name.toStdString();
-                ipin.nodeIndex = nodeIdx;
-                ipin.isPower = (c->type == ComponentType::PowerPort);
-                ipin.direction = ipin.isPower ? "Power" : "Input"; // Default to Input, TODO: read c->direction
-                ipin.netUUIDStr = netUUIDStr;
-                
-                netlist.globalBlock.interfacePins.push_back(ipin);
-            }
-        }
-    }
-
-    netlist.globalState.initialize(netlist.globalBlock);
-    return netlist;
+    return hierDto;
 }
 // ============================================================================
 // ERC (Electrical Rule Check)
@@ -1906,10 +1643,10 @@ QWidget* SchematicEditor::createRibbon() {
         wizard->setAttribute(Qt::WA_DeleteOnClose);
         connect(wizard, &QDialog::accepted, this, [this, wizard]() {
             if (wizard->wasSuccessful()) {
-                SubCircuitDefinition def = wizard->getResult();
+                QJsonObject def = wizard->getResult();
                 statusLabel->setText(QString("Extracted: %1 (%2 pins)")
-                    .arg(QString::fromStdString(def.name))
-                    .arg(def.pinCount));
+                    .arg(def["name"].toString())
+                    .arg(def["pinCount"].toInt()));
             }
         });
         wizard->open();
@@ -2713,10 +2450,10 @@ void SchematicEditor::continueDescendInto(const QString& filePath, const QString
 
     if (filePath.startsWith("std://")) {
         QString cellName = filePath.mid(6);
-        const auto* def = StandardCells::StandardCellLibrary::instance().get(cellName.toStdString());
+        auto dto = StandardCells::StandardCellLibrary::instance().getDto(cellName.toStdString());
 
-        if (def) {
-            acutesim::gui::components::StandardCellVisualizer::populateScene(scene, def->internalBlock, QString::fromStdString(def->name));
+        if (dto) {
+            acutesim::gui::components::StandardCellVisualizer::populateScene(scene, *dto, QString::fromStdString(dto->name));
             loadSuccess = true;
             if (statusLabel) {
                  statusLabel->setText(QString("Viewing: %1 [READ-ONLY]").arg(displayName));
@@ -2907,7 +2644,7 @@ void SchematicEditor::showPhysicalOverlay(const QString& defPath) {
     QString content = QString::fromUtf8(f.readAll());
     
     using namespace acutesim::compute::orchestration;
-    DEFDesign design = DEFParser::parse(content);
+    DEFDesign design = DEFParser::parse(content.toStdString());
     
     if (!m_overlay) {
         m_overlay = new acutesim::gui::editors::PhysicalOverlayItem();
@@ -2931,12 +2668,12 @@ void SchematicEditor::showPhysicalOverlay(const QString& defPath) {
     // Calculate canvas height from die size to ensure correct Y-flip relative to die bottom
     // We treat the "canvas" for the die as exactly the die height.
     double fullScale = pxPerMicronIsScale * design.unitsPerMicron;
-    double canvasHeight = design.dieArea.height() / fullScale;
-    
+    double canvasHeight = design.dieArea.height / fullScale;
+
     m_overlay->setDEFData(design, pxPerMicronIsScale, canvasHeight);
-    
+
     // Center the overlay on the scene (0,0 is center)
-    double canvasWidth = design.dieArea.width() / fullScale;
+    double canvasWidth = design.dieArea.width / fullScale;
     m_overlay->setPos(-canvasWidth / 2.0, -canvasHeight / 2.0);
     
     m_overlay->setVisible(true);

@@ -20,8 +20,8 @@ void batchDiodePhysics_generic(DiodeTensor& tensor, const std::vector<double>& v
     const double GMIN = 1e-12;
     
     for (size_t i = 0; i < n; ++i) {
-        int nA = tensor.anodes[i];
-        int nC = tensor.cathodes[i];
+        int nA = tensor.node_a[i];
+        int nC = tensor.node_c[i];
         
         double v_a = (nA > 0 && nA <= (int)voltages.size()) ? voltages[nA - 1] : 0.0;
         double v_c = (nC > 0 && nC <= (int)voltages.size()) ? voltages[nC - 1] : 0.0;
@@ -307,8 +307,16 @@ TensorizedBlock tensorizeNetlist(const TensorNetlist& netlist) {
     TensorizedBlock result = tensorizeBlock(netlist.globalBlock, cards);
     
     // -------------------------------------------------------------------------
-    // DYNAMIC MODEL PASS 1: COUNTING
+    // BUCKETING STAGING AREA: Group devices by model to maximize SIMD efficiency
     // -------------------------------------------------------------------------
+    struct DiodeJob { int a, c; double is, n, vt; std::string model; };
+    struct MosfetJob { int d, g, s, b; double w, l, kp, vth, lam; bool pmos; std::string model; };
+    struct BjtJob { int c, b, e; double is, bf, br, vt; bool npn; std::string model; };
+
+    std::map<std::string, std::vector<DiodeJob>> diodeBuckets;
+    std::map<std::string, std::vector<MosfetJob>> mosfetBuckets;
+    std::map<std::string, std::vector<BjtJob>> bjtBuckets;
+
     std::map<std::string, size_t> typeCounts;
     auto& registry = ModelRegistry::instance();
 
@@ -404,95 +412,80 @@ TensorizedBlock tensorizeNetlist(const TensorNetlist& netlist) {
         }
     };
 
-    // Populate Global
-    populateGeneric(netlist.globalBlock, [](int n){ return n; });
-
-    // 2. Add all instances, remapping local nodes to global nodes
-    for (size_t i = 0; i < netlist.instances.size(); ++i) {
-        const auto& instance = netlist.instances[i];
-        
-        auto it = netlist.blockDefinitions.find(instance.blockName);
-        if (it == netlist.blockDefinitions.end()) continue;
-        
-        const TensorBlock& block = it->second;
-        const auto& nodeMap = instance.nodeMapping;
-        
-        auto remap = [&](int localNode) -> int {
-            if (localNode <= 0) return 0; // Ground or invalid
-            if (localNode > (int)nodeMap.size()) return 0;
-            return nodeMap[localNode - 1];
-        };
-        
-        // STANDARD COMPONENTS
-        // Append Resistors
-        for (const auto& r : block.resistors) {
-            result.resistors.push(remap(r.nodeTerminal1), remap(r.nodeTerminal2), r.resistance_ohms);
-        }
-        
-        // Append Capacitors
-        for (const auto& c : block.capacitors) {
-            result.capacitors.push(remap(c.nodePlate1), remap(c.nodePlate2), c.capacitance_farads);
-        }
-        
-        // Append Inductors
-        for (const auto& ind : block.inductors) {
-            result.inductors.push(remap(ind.nodeCoil1), remap(ind.nodeCoil2), ind.inductance_henries);
-        }
-        
-        // Append Diodes
+    auto collectFromBlock = [&](const TensorBlock& block, const std::function<int(int)>& remap) {
+        // Collect Diodes
         for (const auto& d : block.diodes) {
-            double vt_scaled = d.thermalVoltage_V_T_V * (netlist.environment.ambient_temp_K / 300.15);
-            result.diodes.push(remap(d.anode), remap(d.cathode), 
-                              d.saturationCurrent_I_S_A, d.emissionCoefficient_N, vt_scaled,
-                              0.0, netlist.environment.ambient_temp_K);
+            double vts = d.thermalVoltage_V_T_V * (netlist.environment.ambient_temp_K / 300.15);
+            diodeBuckets[d.modelName].push_back({remap(d.anode), remap(d.cathode), 
+                                                d.saturationCurrent_I_S_A, d.emissionCoefficient_N, vts, d.modelName});
         }
-        
-        // Append MOSFETs (with model card lookup)
+        // Collect MOSFETs
         for (const auto& m : block.mosfets) {
             bool isPMOS = false;
             double kp = 200e-6, vth = 0.7, lam = 0.02;
-
             if (cards) {
                 auto cit = cards->find(m.modelName);
                 if (cit != cards->end()) {
-                    const auto& card = cit->second;
-                    isPMOS = (card.type == "PMOS");
-                    kp  = card.get("KP", isPMOS ? 100e-6 : 200e-6);
-                    vth = card.get("VTO", isPMOS ? -0.7 : 0.7);
-                    lam = card.get("LAMBDA", 0.02);
+                    isPMOS = (cit->second.type == "PMOS");
+                    kp  = cit->second.get("KP", isPMOS ? 100e-6 : 200e-6);
+                    vth = cit->second.get("VTO", isPMOS ? -0.7 : 0.7);
+                    lam = cit->second.get("LAMBDA", 0.02);
                 } else {
-                    isPMOS = (m.modelName.find("PMOS") != std::string::npos ||
-                              m.modelName.find("pmos") != std::string::npos);
+                    isPMOS = (m.modelName.find("PMOS") != std::string::npos || m.modelName.find("pmos") != std::string::npos);
                     if (isPMOS) { kp = 100e-6; vth = -0.7; }
                 }
-            } else {
-                isPMOS = (m.modelName.find("PMOS") != std::string::npos ||
-                          m.modelName.find("pmos") != std::string::npos);
-                if (isPMOS) { kp = 100e-6; vth = -0.7; }
             }
-
-            result.mosfets.push(remap(m.drain), remap(m.gate), remap(m.source), remap(m.body),
-                               m.w, m.l, kp, vth, lam, isPMOS, netlist.environment.ambient_temp_K);
+            mosfetBuckets[m.modelName].push_back({remap(m.drain), remap(m.gate), remap(m.source), remap(m.body),
+                                                 m.w, m.l, kp, vth, lam, isPMOS, m.modelName});
         }
-        
-        // Append BJTs
+        // Collect BJTs
         for (const auto& q : block.bjts) {
-            double vt_scaled = q.thermalVoltage_V_T_V * (netlist.environment.ambient_temp_K / 300.15);
-            result.bjts.push(remap(q.nodeCollector), remap(q.base), remap(q.emitter),
-                            q.saturationCurrent_I_S_A, q.betaF, q.betaR, vt_scaled,
-                            q.isNPN, netlist.environment.ambient_temp_K);
+            double vts = q.thermalVoltage_V_T_V * (netlist.environment.ambient_temp_K / 300.15);
+            bjtBuckets[q.instanceName].push_back({remap(q.nodeCollector), remap(q.base), remap(q.emitter),
+                                                 q.saturationCurrent_I_S_A, q.betaF, q.betaR, vts,
+                                                 q.isNPN, q.instanceName});
         }
 
-        // Append Sources
-        for (const auto& v : block.voltageSources) {
+        // Linear components (Resistors, Capacitors, Inductors)
+        for (const auto& r : block.resistors) 
+            result.resistors.push(remap(r.nodeTerminal1), remap(r.nodeTerminal2), r.resistance_ohms);
+        for (const auto& c : block.capacitors)
+            result.capacitors.push(remap(c.nodePlate1), remap(c.nodePlate2), c.capacitance_farads);
+        for (const auto& ind : block.inductors)
+            result.inductors.push(remap(ind.nodeCoil1), remap(ind.nodeCoil2), ind.inductance_henries);
+        for (const auto& v : block.voltageSources)
             result.voltageSources.push(remap(v.nodePositive), remap(v.nodeNegative), v.voltage_V);
-        }
-        for (const auto& i : block.currentSources) {
+        for (const auto& i : block.currentSources)
             result.currentSources.push(remap(i.nodePositive), remap(i.nodeNegative), i.current_A);
-        }
+    };
 
-        // DYNAMIC COMPONENTS (Populate)
-        populateGeneric(block, remap);
+    // 2. Gather & Populate
+    // Reset result to start clean (tensorizeBlock at 307 already pushed some things)
+    result.clear(); 
+    
+    // Global
+    auto identity = [](int n){ return n; };
+    collectFromBlock(netlist.globalBlock, identity);
+    populateGeneric(netlist.globalBlock, identity);
+
+    // Instances
+    for (const auto& inst : netlist.instances) {
+        auto it = netlist.blockDefinitions.find(inst.blockName);
+        if (it == netlist.blockDefinitions.end()) continue;
+        auto remap = [&](int n) { return (n <= 0 || n > (int)inst.nodeMapping.size()) ? 0 : inst.nodeMapping[n-1]; };
+        collectFromBlock(it->second, remap);
+        populateGeneric(it->second, remap);
+    }
+
+    // 3. Flush Buckets (Deterministic sort by model name)
+    for (auto& [model, bucket] : diodeBuckets) {
+        for (auto& d : bucket) result.diodes.push(d.a, d.c, d.is, d.n, d.vt, 0.0, netlist.environment.ambient_temp_K);
+    }
+    for (auto& [model, bucket] : mosfetBuckets) {
+        for (auto& m : bucket) result.mosfets.push(m.d, m.g, m.s, m.b, m.w, m.l, m.kp, m.vth, m.lam, m.pmos, netlist.environment.ambient_temp_K);
+    }
+    for (auto& [model, bucket] : bjtBuckets) {
+        for (auto& q : bucket) result.bjts.push(q.c, q.b, q.e, q.is, q.bf, q.br, q.vt, q.npn, netlist.environment.ambient_temp_K);
     }
     
     return result;

@@ -6,8 +6,9 @@
 #include <QFormLayout>
 #include <QVBoxLayout>
 #include <QHeaderView>
-#include "../../physics/statistical_engine.h"
-#include "../../components/circuit.h"
+#include <QHeaderView>
+#include "engine_api/simulation_dto.h"
+#include "../../../compute/orchestration/dto/schematic_dto.h"
 
 namespace acutesim::gui::analysis {
 
@@ -24,18 +25,17 @@ namespace acutesim::gui::analysis {
 class MonteCarloSetupWidget : public QWidget {
     Q_OBJECT
 public:
-    explicit MonteCarloSetupWidget(const TensorNetlist& netlist, QWidget* parent = nullptr);
+    explicit MonteCarloSetupWidget(const acutesim::compute::orchestration::HierarchicalSchematicDTO& hierDto, QWidget* parent = nullptr);
 
     int numRuns() const;
     int targetNode() const;
-    Statistics::SamplingStrategy strategy() const;
-    std::map<std::string, Statistics::Distribution> variations() const;
+    std::vector<acutesim::compute::orchestration::MonteCarloVariationDTO> variations() const;
 
 private:
     void setupUI();
     void populateTable();
 
-    const TensorNetlist& netlist_;
+    const acutesim::compute::orchestration::HierarchicalSchematicDTO& hierDto_;
     QTableWidget* table_;
     QSpinBox* spinRuns_;
     QComboBox* comboStrategy_;

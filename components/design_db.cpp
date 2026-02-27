@@ -1,5 +1,4 @@
 #include "design_db.h"
-#include "circuit.h"
 #include <iostream>
 #include <algorithm>
 #include <map>
@@ -147,20 +146,15 @@ void DesignDb::removeObserver(DesignDbObserver* obs) {
 // SNAPSHOT GENERATION (Paradigm Bridge)
 // ============================================================================
 
-DesignDb::SnapshotResult DesignDb::snapshotWithNodeMap() const {
-    SnapshotResult result;
-    result.block = std::make_shared<TensorBlock>();
-    TensorBlock& block = *result.block;
-    std::map<NetUUID, int>& netToNode = result.netToNode;
+DesignDb::GraphSnapshotResult DesignDb::snapshotWithNodeMap() const {
+    GraphSnapshotResult result;
+    auto& graph = result.graph;
+    auto& netToNode = result.netToNode;
 
-    // Uses a distinct name to ensure cache uniqueness
-    block.name = "DesignDb_Snapshot";
+    graph.name = "DesignDb_Snapshot";
 
-    // 1. Connectivity Mapping (Contextual Node IDs)
-    // DesignDb NetUUID -> Solver int NodeIndex
+    // 1. Connectivity Mapping
     int nextNode = 1;
-
-    // Ensure "0", "GND", "gnd" map to 0
     std::vector<const Net*> sortedNets;
     for (const auto& kv : nets_) sortedNets.push_back(&kv.second);
     std::sort(sortedNets.begin(), sortedNets.end(), [](const Net* a, const Net* b){
@@ -168,37 +162,29 @@ DesignDb::SnapshotResult DesignDb::snapshotWithNodeMap() const {
     });
 
     for (const Net* net : sortedNets) {
+        acutesim::compute::orchestration::SchematicNodeDTO nodeDto;
+        nodeDto.name = net->name;
+        
         if (net->name == "0" || net->name == "GND" || net->name == "gnd" || net->name == "VSS") {
+            nodeDto.index = 0;
             netToNode[net->id] = 0;
         } else {
-            netToNode[net->id] = nextNode++;
+            nodeDto.index = nextNode++;
+            netToNode[net->id] = nodeDto.index;
         }
+        graph.nets.push_back(nodeDto);
     }
 
-    block.numInternalNodes = nextNode - 1;
-
-    // 2. Build Instance Connectivity Map (InstUUID -> Terminal -> NodeIndex)
-    std::map<InstUUID, std::map<int, int>> instConn;
+    // 2. Build Instance Connectivity Map (InstUUID -> Terminal -> NetName)
+    std::map<InstUUID, std::map<int, std::string>> instConn;
     for (const auto& kv : pins_) {
         const Pin& pin = kv.second;
-        auto it = netToNode.find(pin.netId);
-        int nodeIdx = (it != netToNode.end()) ? it->second : 0;
-        instConn[pin.instanceId][pin.terminalIndex] = nodeIdx;
+        auto netIt = nets_.find(pin.netId);
+        std::string netName = (netIt != nets_.end()) ? netIt->second.name : "0";
+        instConn[pin.instanceId][pin.terminalIndex] = netName;
     }
 
-    // Helper to safely get parameter
-    auto getParam = [](const Instance& inst, const std::string& key, double def) {
-        auto it = inst.parameters.find(key);
-        return (it != inst.parameters.end()) ? it->second : def;
-    };
-
-    // Helper to safely get string parameter
-    auto getStrParam = [](const Instance& inst, const std::string& key, const std::string& def) {
-        auto it = inst.stringParameters.find(key);
-        return (it != inst.stringParameters.end()) ? it->second : def;
-    };
-
-    // 3. Instantiate Components (Technology Mapping)
+    // 3. Instantiate Components
     std::vector<const Instance*> sortedInsts;
     for (const auto& kv : instances_) sortedInsts.push_back(&kv.second);
     std::sort(sortedInsts.begin(), sortedInsts.end(), [](const Instance* a, const Instance* b){
@@ -207,74 +193,35 @@ DesignDb::SnapshotResult DesignDb::snapshotWithNodeMap() const {
 
     for (const Instance* instPtr : sortedInsts) {
         const Instance& inst = *instPtr;
+        acutesim::compute::orchestration::SchematicInstanceDTO instDto;
+        instDto.type = inst.masterName;
+        instDto.instanceName = inst.name;
+
+        for (const auto& p : inst.parameters) {
+            instDto.parameters[p.first] = std::to_string(p.second);
+        }
+        for (const auto& p : inst.stringParameters) {
+            instDto.parameters[p.first] = p.second;
+        }
+
         const auto& nodes = instConn[inst.id];
+        int maxTerm = -1;
+        for (const auto& n : nodes) {
+            if (n.first > maxTerm) maxTerm = n.first;
+        }
+        for (int i = 0; i <= maxTerm; ++i) {
+            auto it = nodes.find(i);
+            instDto.connectedNets.push_back((it != nodes.end()) ? it->second : "0");
+        }
 
-        auto getN = [&](int t) {
-            auto it = nodes.find(t);
-            return (it != nodes.end()) ? it->second : 0;
-        };
-
-        std::string m = inst.masterName;
-
-        if (m == "R" || m == "res_generic" || m == "Resistor") {
-            block.addResistor(inst.name, getN(0), getN(1), getParam(inst, "R", 1000.0));
-            if (!block.resistors.empty()) {
-                auto& r = block.resistors.back();
-                r.model_name = getStrParam(inst, "Model", "poly_res");
-                r.width_m = getParam(inst, "W", 0.0);
-            }
-        }
-        else if (m == "C" || m == "cap_generic" || m == "Capacitor") {
-            block.addCapacitor(inst.name, getN(0), getN(1), getParam(inst, "C", 1e-12));
-            if (!block.capacitors.empty()) {
-                auto& c = block.capacitors.back();
-                c.model_name = getStrParam(inst, "Model", "mim_cap");
-            }
-        }
-        else if (m == "L" || m == "ind_generic" || m == "Inductor") {
-            block.addInductor(inst.name, getN(0), getN(1), getParam(inst, "L", 1e-9));
-            if (!block.inductors.empty()) {
-                auto& l = block.inductors.back();
-                l.model_name = getStrParam(inst, "Model", "ind_generic");
-                l.width_m = getParam(inst, "W", 0.0);
-                l.area_m2 = getParam(inst, "Area", 0.0);
-            }
-        }
-        else if (m == "V" || m == "vsource" || m == "vdc" || m == "VoltageSource") {
-            block.addVoltageSource(getN(0), getN(1), getParam(inst, "V", 0.0), "DC");
-        }
-        else if (m == "I" || m == "isource" || m == "idc" || m == "CurrentSource") {
-            block.addCurrentSource(getN(0), getN(1), getParam(inst, "I", 0.0));
-        }
-        else if (m == "D" || m == "diode" || m == "diode_generic" || m == "Diode") {
-            block.addDiode(getN(0), getN(1), getParam(inst, "Is", 1e-14));
-        }
-        else if (m == "nfet" || m == "nfet_01v8" || m == "Mosfet" || m == "PDK_NFET") {
-            std::string model = getStrParam(inst, "Model", "nfet");
-            block.addMosfet(inst.name, getN(0), getN(1), getN(2), getN(3),
-                            model, getParam(inst, "W", 1e-6), getParam(inst, "L", 1e-6));
-        }
-        else if (m == "pfet" || m == "pfet_01v8" || m == "PDK_PFET") {
-            std::string model = getStrParam(inst, "Model", "pfet");
-            block.addMosfet(inst.name, getN(0), getN(1), getN(2), getN(3),
-                            model, getParam(inst, "W", 1e-6), getParam(inst, "L", 1e-6));
-        }
-        else if (m == "Bjt") {
-             std::string model = getStrParam(inst, "Model", "2N2222");
-             block.addBJT(inst.name, getN(0), getN(1), getN(2), model, true);
-        }
-        else if (m == "VCVS") {
-             block.addVCVS(getN(2), getN(3), getN(0), getN(1), getParam(inst, "Gain", 1.0));
-        }
-        // ... (Other dependent sources)
+        graph.instances.push_back(instDto);
     }
 
-    block.freeze();
     return result;
 }
 
-TensorBlock DesignDb::snapshot() const {
-    return *snapshotWithNodeMap().block;
+acutesim::compute::orchestration::SchematicGraphDTO DesignDb::buildGraphDTO() const {
+    return snapshotWithNodeMap().graph;
 }
 
 } // namespace components
@@ -323,24 +270,27 @@ acutesim::components::MutationResult acutesim::components::DesignDb::renameNet(c
 // HIERARCHICAL SNAPSHOT (Phase 5)
 // ============================================================================
 
-acutesim::components::HierarchicalSnapshot acutesim::components::DesignDb::recursiveSnapshot(
-    std::function<std::shared_ptr<TensorBlock>(const std::string& masterName, const std::map<std::string, double>& params)> resolver,
+acutesim::compute::orchestration::HierarchicalSchematicDTO acutesim::components::DesignDb::recursiveBuild(
+    std::function<std::optional<acutesim::compute::orchestration::HierarchicalSchematicDTO>(
+        const std::string& masterName, const std::map<std::string, double>& params)> resolver,
     int maxDepth
 ) const {
-    HierarchicalSnapshot result;
+    acutesim::compute::orchestration::HierarchicalSchematicDTO result;
 
-    // 1. Snapshot the top-level block
-    result.topBlock = std::make_shared<TensorBlock>(snapshot());
-    result.maxDepthReached = 0;
+    result.topGraph = buildGraphDTO();
 
     if (maxDepth <= 0) {
         return result;
     }
 
-    // 2. Resolve sub-blocks recursively
+    // Cache to avoid resolving the same subcircuit type/params multiple times
+    // Key is just masterName for basic compatibility; in a real scenario you might
+    // key by a hash of param values too, but SchematicGraphDTO natively represents
+    // instantiated graphs anyway.
+    std::set<std::string> resolvedSubcircuits;
+
     std::function<void(const DesignDb&, int)> processDb = [&](const DesignDb& db, int depth) {
         if (depth > maxDepth) return;
-        result.maxDepthReached = std::max(result.maxDepthReached, depth);
 
         for (const auto& [id, inst] : db.instances_) {
             const std::string& masterName = inst.masterName;
@@ -355,24 +305,26 @@ acutesim::components::HierarchicalSnapshot acutesim::components::DesignDb::recur
                 masterName == "CCVS" || masterName == "CCCS" ||
                 masterName == "nfet" || masterName == "pfet" || masterName == "PDK_NFET" || masterName == "PDK_PFET" ||
                 masterName == "res_generic" || masterName == "cap_generic" || masterName == "ind_generic") {
-                continue;
+                continue; // Primitive
             }
 
-            // Check Cache
-            HierarchicalSnapshot::CacheKey key = {masterName, inst.parameters};
-            if (result.subBlockCache.count(key)) {
-                continue;
+            if (resolvedSubcircuits.count(masterName)) {
+                continue; // Already resolved
             }
 
             // Try to resolve
-            auto subBlock = resolver(masterName, inst.parameters);
-            if (subBlock) {
-                result.subBlockCache[key] = subBlock;
-                result.subBlocks[masterName] = subBlock; // For convenience
-                result.loadOrder.push_back(masterName);
+            auto subHierOpt = resolver(masterName, inst.parameters);
+            if (subHierOpt) {
+                resolvedSubcircuits.insert(masterName);
+                result.subcircuits[masterName] = subHierOpt->topGraph;
                 
-                // Note: The resolver should handle the recursion for the sub-schematic's internal instances
-                // by calling its own generateNetlist() -> recursiveSnapshot().
+                // Merge nested subcircuits into the global map
+                for (const auto& [name, subGraph] : subHierOpt->subcircuits) {
+                    if (!resolvedSubcircuits.count(name)) {
+                        result.subcircuits[name] = subGraph;
+                        resolvedSubcircuits.insert(name);
+                    }
+                }
             }
         }
     };

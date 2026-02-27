@@ -23,13 +23,14 @@
 
 struct DiodeTensor {
     // Node indices (global node IDs)
-    std::vector<int> anodes;
-    std::vector<int> cathodes;
+    std::vector<int> node_a;
+    std::vector<int> node_c;
     
     // Device parameters
     std::vector<double> Is;   // Saturation current [A]
     std::vector<double> N;    // Emission coefficient
     std::vector<double> Vt;   // Thermal voltage [V]
+    std::vector<double> GMIN; // Minimum conductance [S]
     
     // Thermal parameters (static model)
     std::vector<double> Rs;   // Series resistance [Ω] (parasitic)
@@ -47,36 +48,37 @@ struct DiodeTensor {
     static constexpr uint8_t DR_THERMAL_VIOLATION = 1 << 0;
     static constexpr uint8_t DR_REVERSE_BIAS_LIMIT = 1 << 1;
     
-    size_t size() const { return anodes.size(); }
+    size_t size() const { return node_a.size(); }
     
     void reserve(size_t n) {
-        anodes.reserve(n); cathodes.reserve(n);
-        Is.reserve(n); N.reserve(n); Vt.reserve(n);
+        node_a.reserve(n); node_c.reserve(n);
+        Is.reserve(n); N.reserve(n); Vt.reserve(n); GMIN.reserve(n);
         Rs.reserve(n); Temp.reserve(n);
         v_d.reserve(n); i_d.reserve(n); g_d.reserve(n);
         dr_validity.reserve(n);
     }
     
     void clear() {
-        anodes.clear(); cathodes.clear();
-        Is.clear(); N.clear(); Vt.clear();
+        node_a.clear(); node_c.clear();
+        Is.clear(); N.clear(); Vt.clear(); GMIN.clear();
         Rs.clear(); Temp.clear();
         v_d.clear(); i_d.clear(); g_d.clear();
         dr_validity.clear();
     }
     
     void push(int anode, int cathode, double is, double n, double vt, 
-              double rs = 0.0, double temp = 300.0) {
-        anodes.push_back(anode);
-        cathodes.push_back(cathode);
+              double rs = 0.0, double temp = 300.0, double gmin = 1e-12) {
+        node_a.push_back(anode);
+        node_c.push_back(cathode);
         Is.push_back(is);
         N.push_back(n);
         Vt.push_back(vt);
+        GMIN.push_back(gmin);
         Rs.push_back(rs);
         Temp.push_back(temp);
         v_d.push_back(0.0);
         i_d.push_back(0.0);
-        g_d.push_back(1e-12); // GMIN default
+        g_d.push_back(gmin); 
         dr_validity.push_back(DR_OK);
     }
 };
@@ -157,7 +159,7 @@ struct MosfetTensor {
         ids.push_back(0.0);
         gm.push_back(0.0);
         gmb.push_back(0.0);
-        gds.push_back(1e-12);
+        gds.push_back(1e-12); // MOSFET GMIN
         dr_validity.push_back(DR_OK);
     }
 };

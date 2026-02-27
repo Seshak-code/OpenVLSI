@@ -35,12 +35,12 @@ static QPointF centroid(const QVector<TerminalRef>& refs) {
     return QPointF(sumX / refs.size(), sumY / refs.size());
 }
 
-void StandardCellVisualizer::populateScene(GridScene* scene, const TensorBlock& block, const QString& cellName) {
+void StandardCellVisualizer::populateScene(GridScene* scene, const acutesim::compute::orchestration::SchematicGraphDTO& graph, const QString& cellName) {
     // 1. Clear existing items
     scene->clear();
     
-    // 2. Node-to-Terminal Map
-    std::map<int, QVector<TerminalRef>> nodeToTerminals;
+    // 2. Net-to-Terminal Map
+    std::map<std::string, QVector<TerminalRef>> netToTerminals;
     
     // 3. Layout Variables
     double spacing = 150.0;
@@ -48,7 +48,7 @@ void StandardCellVisualizer::populateScene(GridScene* scene, const TensorBlock& 
     int index = 0;
     
     // Helper: Place component and register terminals
-    auto placeAndTrack = [&](const QString& type, const std::vector<int>& nodes, const QString& label = "") {
+    auto placeAndTrack = [&](const QString& type, const std::vector<std::string>& nets, const QString& label = "") {
         // Calculate Grid Position
         double curX = (index % cols) * spacing;
         double curY = (index / cols) * spacing;
@@ -65,72 +65,49 @@ void StandardCellVisualizer::populateScene(GridScene* scene, const TensorBlock& 
         VisualComponent* comp = scene->findComponent(compId);
         if (!comp) return;
         
-        // Register terminals to node map
+        // Register terminals to net map
         auto terminals = comp->getTerminals();
-        for (int i = 0; i < std::min(static_cast<int>(nodes.size()), static_cast<int>(terminals.size())); ++i) {
-            int nodeIdx = nodes[i];
-            nodeToTerminals[nodeIdx].append({comp, i});
+        for (int i = 0; i < std::min(static_cast<int>(nets.size()), static_cast<int>(terminals.size())); ++i) {
+            std::string netName = nets[i];
+            netToTerminals[netName].append({comp, i});
         }
     };
     
     // =========================================================================
-    // 4. REGISTER EXTERNAL PINS FIRST
+    // 4. REGISTER INTERFACE PORTS FIRST
     // =========================================================================
-    for (size_t i = 0; i < block.pinNames.size(); ++i) {
-        int internalNode = (i < block.portNodeIndices.size()) 
-            ? block.portNodeIndices[i] 
-            : static_cast<int>(i + 1);
-        
-        QString pinName = QString::fromStdString(block.pinNames[i]);
-        placeAndTrack("Pin", {internalNode}, pinName);
+    for (const auto& portName : graph.portNames) {
+        placeAndTrack("Pin", {portName}, QString::fromStdString(portName));
     }
     
     // =========================================================================
-    // 5. PLACE INTERNAL COMPONENTS
+    // 5. PLACE INSTANCES
     // =========================================================================
-    
-    // Resistors: 2 terminals (n1, n2)
-    for (const auto& r : block.resistors) {
-        placeAndTrack("Resistor", {r.nodeTerminal1, r.nodeTerminal2}, 
-                      QString::fromStdString(r.name));
-    }
-    
-    // Capacitors: 2 terminals (plate1, plate2)
-    for (const auto& c : block.capacitors) {
-        placeAndTrack("Capacitor", {c.nodePlate1, c.nodePlate2},
-                      QString::fromStdString(c.name));
-    }
-    
-    // MOSFETs: 4 terminals (D, G, S, B)
-    for (const auto& m : block.mosfets) {
-        QString visualType = "PDK_NFET";
-        if (m.modelName.find("pfet") != std::string::npos || 
-            m.modelName.find("pmos") != std::string::npos) {
-            visualType = "PDK_PFET";
-        }
-        // Terminal ordering: D=0, G=1, S=2, B=3
-        placeAndTrack(visualType, {m.drain, m.gate, m.source, m.body},
-                      QString::fromStdString(m.instanceName));
-    }
-    
-    // BJTs: 3 terminals (C, B, E)
-    for (const auto& q : block.bjts) {
-        QString visualType = q.isNPN ? "NPN" : "PNP";
-        // Terminal ordering: C=0, B=1, E=2
-        placeAndTrack(visualType, {q.nodeCollector, q.base, q.emitter},
-                      QString::fromStdString(q.instanceName));
-    }
-    
-    // Diodes: 2 terminals (anode, cathode)
-    for (const auto& d : block.diodes) {
-        placeAndTrack("Diode", {d.anode, d.cathode});
+    for (const auto& inst : graph.instances) {
+        QString visualType = "Generic";
+        if (inst.type == "Resistor") visualType = "Resistor";
+        else if (inst.type == "Capacitor") visualType = "Capacitor";
+        else if (inst.type == "Mosfet") {
+             auto itModel = inst.parameters.find("model");
+             if (itModel != inst.parameters.end() && (itModel->second.find("pfet") != std::string::npos || itModel->second.find("pmos") != std::string::npos)) {
+                 visualType = "PDK_PFET";
+             } else {
+                 visualType = "PDK_NFET";
+             }
+        } else if (inst.type == "BJT") {
+             auto itNPN = inst.parameters.find("isNPN");
+             bool isNPN = itNPN != inst.parameters.end() && itNPN->second == "1";
+             visualType = isNPN ? "NPN" : "PNP";
+        } else if (inst.type == "Diode") visualType = "Diode";
+
+        placeAndTrack(visualType, inst.connectedNets, QString::fromStdString(inst.instanceName));
     }
     
     // =========================================================================
     // 6. CREATE WIRES (Junction-Based for 3+ terminals)
     // =========================================================================
-    for (const auto& [nodeIdx, termList] : nodeToTerminals) {
-        if (nodeIdx == 0) continue; // Skip ground node (handled separately)
+    for (const auto& [netName, termList] : netToTerminals) {
+        if (netName == "0" || netName == "GND" || netName == "gnd") continue; 
         if (termList.size() < 2) continue;
         
         if (termList.size() == 2) {

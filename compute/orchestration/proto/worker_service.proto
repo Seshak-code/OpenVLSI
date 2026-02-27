@@ -21,8 +21,13 @@ service WorkerService {
   // Analog/Mixed-Signal Circuit Simulation (Tensor MNA)
   rpc RunCircuitSimulation (CircuitSimulationRequest) returns (stream CircuitSimulationLog);
 
-  // Sign-Off (DRC/LVS/PEX via KLayout)
+  // Sign-Off (DRC/LVS/PEX via KLayout) — generic unified RPC
   rpc RunSignOff (SignOffRequest) returns (stream SignOffLog);
+
+  // Explicit Sign-Off stages (Phase 3.5) — typed results vs generic SignOffLog
+  rpc RunLVS        (LVSRequest)       returns (stream SignOffLog);
+  rpc RunPEX        (PEXRequest)       returns (stream SignOffLog);
+  rpc RunGDSExport  (GDSExportRequest) returns (stream SignOffLog);
 
   // Parity Validation (Regression Harness)
   rpc RunRegression (RegressionRequest) returns (stream RegressionLog);
@@ -199,4 +204,38 @@ message SignOffLog {
 
   // Result artifacts (only in final message)
   FileData report = 5;
+}
+
+// ============================================================================
+// EXPLICIT SIGN-OFF STAGES (Phase 3.5)
+// ============================================================================
+
+// LVS: Layout vs Schematic
+message LVSRequest {
+  string job_id = 1;
+  FileData layout_file = 2;         // GDS/OASIS input
+  FileData schematic_netlist = 3;   // Reference SPICE/Verilog netlist
+  string rule_deck = 4;             // LVS rule deck path (on worker)
+  string top_cell = 5;              // Top cell name (optional)
+  string mode = 6;                  // "flat" | "hierarchical" | "device_level"
+}
+
+// PEX: Parasitic extraction (OpenROAD RCX or KLayout)
+message PEXRequest {
+  string job_id = 1;
+  FileData layout_file = 2;         // Routed DEF or GDS
+  FileData tech_file = 3;           // RC extraction rule deck
+  string output_spef = 4;           // Desired output SPEF path on worker
+  bool coupling_caps = 5;           // Include coupling capacitances
+  string engine = 6;                // "openroad_rcx" | "klayout_pex"
+}
+
+// GDSII export
+message GDSExportRequest {
+  string job_id = 1;
+  FileData input_file = 2;          // Input DEF, OASIS, or GDS
+  FileData tech_file = 3;           // Layer mapping / tech file
+  string output_gds = 4;            // Desired output .gds[.gz] path on worker
+  string top_cell = 5;              // Top cell name (optional)
+  bool compress = 6;                // Write .gds.gz
 }

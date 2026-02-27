@@ -1,6 +1,6 @@
 #include <QTest>
 #include <QTemporaryFile>
-#include "../components/pdk_manager.h"
+#include "../gui/analysis/pdk_manager.h"
 
 class TestPDKManager : public QObject {
     Q_OBJECT

@@ -10,7 +10,8 @@
 #include <iostream>
 #include <cassert>
 #include <string>
-#include "../physics/simulation_profile.h"
+#include <unordered_map>
+#include "../gui/analysis/simulation_profile.h"
 #include "../physics/quick_analysis.h"
 #include "../components/circuit.h"
 
@@ -77,11 +78,8 @@ inline bool test_run_creation() {
     run.profileId = "quick_dc";
     run.topologyHash = 0xABCD1234;
     run.status = Simulation::SimulationRun::Status::PENDING;
-    run.runMode = acutesim::physics::RunMode::FULL;
-    
     assert(run.runId == "test123");
     assert(run.status == Simulation::SimulationRun::Status::PENDING);
-    assert(run.runMode == acutesim::physics::RunMode::FULL);
     
     std::cout << "PASS\n";
     return true;
@@ -143,84 +141,84 @@ inline bool test_corner_config() {
 
 inline bool test_quick_analysis_empty_netlist() {
     std::cout << "  [QuickAnalysis Empty Netlist] ";
-    
+
     TensorNetlist emptyNet;
     emptyNet.numGlobalNodes = 0;
-    
+
     auto result = QuickAnalysis::estimateDC(emptyNet);
-    assert(result.isEmpty());
-    
+    assert(result.empty());
+
     std::cout << "PASS\n";
     return true;
 }
 
 inline bool test_quick_analysis_simple_circuit() {
     std::cout << "  [QuickAnalysis Simple Circuit] ";
-    
+
     TensorNetlist net;
     net.numGlobalNodes = 3;
-    
+
     // Add a 5V source to node 1
     net.addVoltageSource(1, 0, 5.0);
-    
+
     auto result = QuickAnalysis::estimateDC(net);
-    
+
     // Should have estimate for node 1
-    assert(result.contains(1));
-    assert(std::abs(result[1] - 5.0) < 0.001);  // V(1) ≈ 5V
-    
+    assert(result.count(1) > 0);
+    assert(std::abs(result.at(1) - 5.0) < 0.001);  // V(1) ≈ 5V
+
     assert(QuickAnalysis::isValid(result));
-    
+
     std::cout << "PASS\n";
     return true;
 }
 
 inline bool test_quick_analysis_caching() {
     std::cout << "  [QuickAnalysis Caching] ";
-    
+
     // Clear cache first
     QuickAnalysis::invalidate();
-    
+
     TensorNetlist net;
     net.numGlobalNodes = 2;
     net.addVoltageSource(1, 0, 3.3);
-    
+
     // First call - computes
     auto result1 = QuickAnalysis::estimateDC(net);
     size_t hash = net.globalBlock.topologyHash;
-    
+
     // Get cached - should match
     auto cached = QuickAnalysis::getCached(hash);
-    assert(!cached.isEmpty());
+    assert(!cached.empty());
     assert(cached == result1);
-    
+
     // After invalidate, cache should be empty
     QuickAnalysis::invalidate();
     cached = QuickAnalysis::getCached(hash);
-    assert(cached.isEmpty());
-    
+    assert(cached.empty());
+
     std::cout << "PASS\n";
     return true;
 }
 
 inline bool test_quick_analysis_validation() {
     std::cout << "  [QuickAnalysis Validation] ";
-    
+
     // Valid result
-    QMap<int, double> valid;
+    std::unordered_map<int, double> valid;
     valid[1] = 3.3;
     valid[2] = 1.8;
     assert(QuickAnalysis::isValid(valid));
-    
+
     // Empty is invalid
-    QMap<int, double> empty;
+    std::unordered_map<int, double> empty;
     assert(!QuickAnalysis::isValid(empty));
-    
+
     // Extreme value is invalid
-    QMap<int, double> extreme;
+    std::unordered_map<int, double> extreme;
     extreme[1] = 2000.0;  // > 1000V
     assert(!QuickAnalysis::isValid(extreme));
-    
+
     std::cout << "PASS\n";
     return true;
 }

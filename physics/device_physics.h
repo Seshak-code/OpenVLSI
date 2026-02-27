@@ -1,4 +1,5 @@
 #pragma once
+#include "gui_boundary_guard.h"
 #include <cmath>
 #include <algorithm>
 

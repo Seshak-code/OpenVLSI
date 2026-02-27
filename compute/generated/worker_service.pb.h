@@ -29,6 +29,10 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/map.h"  // IWYU pragma: export
+#include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
+#include "google/protobuf/map_entry.h"
+#include "google/protobuf/map_field.h"
 #include "google/protobuf/unknown_field_set.h"
 // @@protoc_insertion_point(includes)
 
@@ -55,10 +59,42 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_work
 }  // extern "C"
 namespace acutesim {
 namespace worker {
+class CircuitSimulationLog;
+struct CircuitSimulationLogDefaultTypeInternal;
+extern CircuitSimulationLogDefaultTypeInternal _CircuitSimulationLog_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull CircuitSimulationLog_class_data_;
+class CircuitSimulationRequest;
+struct CircuitSimulationRequestDefaultTypeInternal;
+extern CircuitSimulationRequestDefaultTypeInternal _CircuitSimulationRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull CircuitSimulationRequest_class_data_;
+class CircuitSimulationRequest_Analysis;
+struct CircuitSimulationRequest_AnalysisDefaultTypeInternal;
+extern CircuitSimulationRequest_AnalysisDefaultTypeInternal _CircuitSimulationRequest_Analysis_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull CircuitSimulationRequest_Analysis_class_data_;
 class FileData;
 struct FileDataDefaultTypeInternal;
 extern FileDataDefaultTypeInternal _FileData_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull FileData_class_data_;
+class GDSExportRequest;
+struct GDSExportRequestDefaultTypeInternal;
+extern GDSExportRequestDefaultTypeInternal _GDSExportRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull GDSExportRequest_class_data_;
+class HDLSimulationLog;
+struct HDLSimulationLogDefaultTypeInternal;
+extern HDLSimulationLogDefaultTypeInternal _HDLSimulationLog_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull HDLSimulationLog_class_data_;
+class HDLSimulationRequest;
+struct HDLSimulationRequestDefaultTypeInternal;
+extern HDLSimulationRequestDefaultTypeInternal _HDLSimulationRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull HDLSimulationRequest_class_data_;
+class LVSRequest;
+struct LVSRequestDefaultTypeInternal;
+extern LVSRequestDefaultTypeInternal _LVSRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull LVSRequest_class_data_;
+class PEXRequest;
+struct PEXRequestDefaultTypeInternal;
+extern PEXRequestDefaultTypeInternal _PEXRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull PEXRequest_class_data_;
 class PnRLog;
 struct PnRLogDefaultTypeInternal;
 extern PnRLogDefaultTypeInternal _PnRLog_default_instance_;
@@ -71,14 +107,22 @@ class PnRRequest_Floorplan;
 struct PnRRequest_FloorplanDefaultTypeInternal;
 extern PnRRequest_FloorplanDefaultTypeInternal _PnRRequest_Floorplan_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull PnRRequest_Floorplan_class_data_;
-class SimulationLog;
-struct SimulationLogDefaultTypeInternal;
-extern SimulationLogDefaultTypeInternal _SimulationLog_default_instance_;
-extern const ::google::protobuf::internal::ClassDataFull SimulationLog_class_data_;
-class SimulationRequest;
-struct SimulationRequestDefaultTypeInternal;
-extern SimulationRequestDefaultTypeInternal _SimulationRequest_default_instance_;
-extern const ::google::protobuf::internal::ClassDataFull SimulationRequest_class_data_;
+class RegressionLog;
+struct RegressionLogDefaultTypeInternal;
+extern RegressionLogDefaultTypeInternal _RegressionLog_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull RegressionLog_class_data_;
+class RegressionRequest;
+struct RegressionRequestDefaultTypeInternal;
+extern RegressionRequestDefaultTypeInternal _RegressionRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull RegressionRequest_class_data_;
+class SignOffLog;
+struct SignOffLogDefaultTypeInternal;
+extern SignOffLogDefaultTypeInternal _SignOffLog_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SignOffLog_class_data_;
+class SignOffRequest;
+struct SignOffRequestDefaultTypeInternal;
+extern SignOffRequestDefaultTypeInternal _SignOffRequest_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull SignOffRequest_class_data_;
 class StatusRequest;
 struct StatusRequestDefaultTypeInternal;
 extern StatusRequestDefaultTypeInternal _StatusRequest_default_instance_;
@@ -87,6 +131,10 @@ class StatusResponse;
 struct StatusResponseDefaultTypeInternal;
 extern StatusResponseDefaultTypeInternal _StatusResponse_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull StatusResponse_class_data_;
+class StatusResponse_ToolsEntry_DoNotUse;
+struct StatusResponse_ToolsEntry_DoNotUseDefaultTypeInternal;
+extern StatusResponse_ToolsEntry_DoNotUseDefaultTypeInternal _StatusResponse_ToolsEntry_DoNotUse_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull StatusResponse_ToolsEntry_DoNotUse_class_data_;
 class SynthesisLog;
 struct SynthesisLogDefaultTypeInternal;
 extern SynthesisLogDefaultTypeInternal _SynthesisLog_default_instance_;
@@ -169,7 +217,7 @@ class SynthesisRequest_Constraints final : public ::google::protobuf::Message
     return *reinterpret_cast<const SynthesisRequest_Constraints*>(
         &_SynthesisRequest_Constraints_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(SynthesisRequest_Constraints& a, SynthesisRequest_Constraints& b) { a.Swap(&b); }
   inline void Swap(SynthesisRequest_Constraints* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -333,276 +381,43 @@ class SynthesisRequest_Constraints final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull SynthesisRequest_Constraints_class_data_;
 // -------------------------------------------------------------------
 
-class StatusResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:acutesim.worker.StatusResponse) */ {
+class StatusResponse_ToolsEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::std::string, ::std::string,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_STRING> {
  public:
-  inline StatusResponse() : StatusResponse(nullptr) {}
-  ~StatusResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(StatusResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(StatusResponse));
-  }
-#endif
-
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::std::string, ::std::string,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING>;
+  StatusResponse_ToolsEntry_DoNotUse();
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR StatusResponse(::google::protobuf::internal::ConstantInitialized);
-
-  inline StatusResponse(const StatusResponse& from) : StatusResponse(nullptr, from) {}
-  inline StatusResponse(StatusResponse&& from) noexcept
-      : StatusResponse(nullptr, ::std::move(from)) {}
-  inline StatusResponse& operator=(const StatusResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline StatusResponse& operator=(StatusResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
+  explicit PROTOBUF_CONSTEXPR StatusResponse_ToolsEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized);
+  explicit StatusResponse_ToolsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_default_instance() {
+    return &_StatusResponse_ToolsEntry_DoNotUse_default_instance_;
   }
 
-  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
 
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  static const StatusResponse& default_instance() {
-    return *reinterpret_cast<const StatusResponse*>(
-        &_StatusResponse_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages = 1;
-  friend void swap(StatusResponse& a, StatusResponse& b) { a.Swap(&b); }
-  inline void Swap(StatusResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(StatusResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
+  static constexpr auto InternalGenerateClassData_();
 
-  // implements Message ----------------------------------------------
-
-  StatusResponse* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<StatusResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const StatusResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const StatusResponse& from) { StatusResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  ::size_t ByteSizeLong() const final;
-  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(StatusResponse* PROTOBUF_NONNULL other);
  private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "acutesim.worker.StatusResponse"; }
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_worker_5fservice_2eproto;
 
-  explicit StatusResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  StatusResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StatusResponse& from);
-  StatusResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StatusResponse&& from) noexcept
-      : StatusResponse(arena) {
-    *this = ::std::move(from);
-  }
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 58,
+                                   2>
+      _table_;
+
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
   static void* PROTOBUF_NONNULL PlacementNew_(
       const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
       ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_();
-
-  ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kSupportedToolsFieldNumber = 6,
-    kWorkerIdFieldNumber = 1,
-    kVersionFieldNumber = 2,
-    kCpuUsageFieldNumber = 4,
-    kMemoryUsageFieldNumber = 5,
-    kReadyFieldNumber = 3,
-  };
-  // repeated string supported_tools = 6;
-  int supported_tools_size() const;
-  private:
-  int _internal_supported_tools_size() const;
-
-  public:
-  void clear_supported_tools() ;
-  const ::std::string& supported_tools(int index) const;
-  ::std::string* PROTOBUF_NONNULL mutable_supported_tools(int index);
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_supported_tools(int index, Arg_&& value, Args_... args);
-  ::std::string* PROTOBUF_NONNULL add_supported_tools();
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void add_supported_tools(Arg_&& value, Args_... args);
-  const ::google::protobuf::RepeatedPtrField<::std::string>& supported_tools() const;
-  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL mutable_supported_tools();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::std::string>& _internal_supported_tools() const;
-  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL _internal_mutable_supported_tools();
-
-  public:
-  // string worker_id = 1;
-  void clear_worker_id() ;
-  const ::std::string& worker_id() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_worker_id(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_worker_id();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_worker_id();
-  void set_allocated_worker_id(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_worker_id() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_worker_id(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_worker_id();
-
-  public:
-  // string version = 2;
-  void clear_version() ;
-  const ::std::string& version() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_version(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_version();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_version();
-  void set_allocated_version(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_version() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_version(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_version();
-
-  public:
-  // double cpu_usage = 4;
-  void clear_cpu_usage() ;
-  double cpu_usage() const;
-  void set_cpu_usage(double value);
-
-  private:
-  double _internal_cpu_usage() const;
-  void _internal_set_cpu_usage(double value);
-
-  public:
-  // double memory_usage = 5;
-  void clear_memory_usage() ;
-  double memory_usage() const;
-  void set_memory_usage(double value);
-
-  private:
-  double _internal_memory_usage() const;
-  void _internal_set_memory_usage(double value);
-
-  public:
-  // bool ready = 3;
-  void clear_ready() ;
-  bool ready() const;
-  void set_ready(bool value);
-
-  private:
-  bool _internal_ready() const;
-  void _internal_set_ready(bool value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:acutesim.worker.StatusResponse)
- private:
-  class _Internal;
-  friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
-                                   0, 70,
-                                   2>
-      _table_;
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const StatusResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField<::std::string> supported_tools_;
-    ::google::protobuf::internal::ArenaStringPtr worker_id_;
-    ::google::protobuf::internal::ArenaStringPtr version_;
-    double cpu_usage_;
-    double memory_usage_;
-    bool ready_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_worker_5fservice_2eproto;
 };
-
-extern const ::google::protobuf::internal::ClassDataFull StatusResponse_class_data_;
+extern const ::google::protobuf::internal::ClassDataFull StatusResponse_ToolsEntry_DoNotUse_class_data_;
 // -------------------------------------------------------------------
 
 class StatusRequest final : public ::google::protobuf::internal::ZeroFieldsBase
@@ -739,30 +554,30 @@ class StatusRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 extern const ::google::protobuf::internal::ClassDataFull StatusRequest_class_data_;
 // -------------------------------------------------------------------
 
-class SimulationLog final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:acutesim.worker.SimulationLog) */ {
+class RegressionRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.RegressionRequest) */ {
  public:
-  inline SimulationLog() : SimulationLog(nullptr) {}
-  ~SimulationLog() PROTOBUF_FINAL;
+  inline RegressionRequest() : RegressionRequest(nullptr) {}
+  ~RegressionRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(SimulationLog* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(RegressionRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(SimulationLog));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RegressionRequest));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR SimulationLog(::google::protobuf::internal::ConstantInitialized);
+  explicit PROTOBUF_CONSTEXPR RegressionRequest(::google::protobuf::internal::ConstantInitialized);
 
-  inline SimulationLog(const SimulationLog& from) : SimulationLog(nullptr, from) {}
-  inline SimulationLog(SimulationLog&& from) noexcept
-      : SimulationLog(nullptr, ::std::move(from)) {}
-  inline SimulationLog& operator=(const SimulationLog& from) {
+  inline RegressionRequest(const RegressionRequest& from) : RegressionRequest(nullptr, from) {}
+  inline RegressionRequest(RegressionRequest&& from) noexcept
+      : RegressionRequest(nullptr, ::std::move(from)) {}
+  inline RegressionRequest& operator=(const RegressionRequest& from) {
     CopyFrom(from);
     return *this;
   }
-  inline SimulationLog& operator=(SimulationLog&& from) noexcept {
+  inline RegressionRequest& operator=(RegressionRequest&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -790,13 +605,13 @@ class SimulationLog final : public ::google::protobuf::Message
   static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const SimulationLog& default_instance() {
-    return *reinterpret_cast<const SimulationLog*>(
-        &_SimulationLog_default_instance_);
+  static const RegressionRequest& default_instance() {
+    return *reinterpret_cast<const RegressionRequest*>(
+        &_RegressionRequest_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 10;
-  friend void swap(SimulationLog& a, SimulationLog& b) { a.Swap(&b); }
-  inline void Swap(SimulationLog* PROTOBUF_NONNULL other) {
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(RegressionRequest& a, RegressionRequest& b) { a.Swap(&b); }
+  inline void Swap(RegressionRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -804,7 +619,7 @@ class SimulationLog final : public ::google::protobuf::Message
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(SimulationLog* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(RegressionRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -812,13 +627,13 @@ class SimulationLog final : public ::google::protobuf::Message
 
   // implements Message ----------------------------------------------
 
-  SimulationLog* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<SimulationLog>(arena);
+  RegressionRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RegressionRequest>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const SimulationLog& from);
+  void CopyFrom(const RegressionRequest& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const SimulationLog& from) { SimulationLog::MergeImpl(*this, from); }
+  void MergeFrom(const RegressionRequest& from) { RegressionRequest::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -854,17 +669,263 @@ class SimulationLog final : public ::google::protobuf::Message
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(SimulationLog* PROTOBUF_NONNULL other);
+  void InternalSwap(RegressionRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "acutesim.worker.SimulationLog"; }
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.RegressionRequest"; }
 
-  explicit SimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  SimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SimulationLog& from);
-  SimulationLog(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SimulationLog&& from) noexcept
-      : SimulationLog(arena) {
+  explicit RegressionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RegressionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RegressionRequest& from);
+  RegressionRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RegressionRequest&& from) noexcept
+      : RegressionRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kSuiteNameFieldNumber = 2,
+    kSolverModeFieldNumber = 3,
+    kPrecisionFieldNumber = 4,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string suite_name = 2;
+  void clear_suite_name() ;
+  const ::std::string& suite_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_suite_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_suite_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_suite_name();
+  void set_allocated_suite_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_suite_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_suite_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_suite_name();
+
+  public:
+  // string solver_mode = 3;
+  void clear_solver_mode() ;
+  const ::std::string& solver_mode() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_solver_mode(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_solver_mode();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_solver_mode();
+  void set_allocated_solver_mode(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_solver_mode() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_solver_mode(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_solver_mode();
+
+  public:
+  // string precision = 4;
+  void clear_precision() ;
+  const ::std::string& precision() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_precision(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_precision();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_precision();
+  void set_allocated_precision(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_precision() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_precision(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_precision();
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.RegressionRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
+                                   0, 78,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RegressionRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr suite_name_;
+    ::google::protobuf::internal::ArenaStringPtr solver_mode_;
+    ::google::protobuf::internal::ArenaStringPtr precision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull RegressionRequest_class_data_;
+// -------------------------------------------------------------------
+
+class RegressionLog final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.RegressionLog) */ {
+ public:
+  inline RegressionLog() : RegressionLog(nullptr) {}
+  ~RegressionLog() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RegressionLog* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RegressionLog));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR RegressionLog(::google::protobuf::internal::ConstantInitialized);
+
+  inline RegressionLog(const RegressionLog& from) : RegressionLog(nullptr, from) {}
+  inline RegressionLog(RegressionLog&& from) noexcept
+      : RegressionLog(nullptr, ::std::move(from)) {}
+  inline RegressionLog& operator=(const RegressionLog& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RegressionLog& operator=(RegressionLog&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const RegressionLog& default_instance() {
+    return *reinterpret_cast<const RegressionLog*>(
+        &_RegressionLog_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(RegressionLog& a, RegressionLog& b) { a.Swap(&b); }
+  inline void Swap(RegressionLog* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RegressionLog* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RegressionLog* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RegressionLog>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RegressionLog& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RegressionLog& from) { RegressionLog::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RegressionLog* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.RegressionLog"; }
+
+  explicit RegressionLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RegressionLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RegressionLog& from);
+  RegressionLog(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RegressionLog&& from) noexcept
+      : RegressionLog(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -883,8 +944,10 @@ class SimulationLog final : public ::google::protobuf::Message
   enum : int {
     kJobIdFieldNumber = 1,
     kLogLineFieldNumber = 2,
-    kVcdChunkFieldNumber = 4,
-    kIsFinishedFieldNumber = 3,
+    kResultJsonFieldNumber = 6,
+    kIsErrorFieldNumber = 3,
+    kIsFinishedFieldNumber = 4,
+    kPassedFieldNumber = 5,
   };
   // string job_id = 1;
   void clear_job_id() ;
@@ -916,22 +979,32 @@ class SimulationLog final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_log_line();
 
   public:
-  // bytes vcd_chunk = 4;
-  void clear_vcd_chunk() ;
-  const ::std::string& vcd_chunk() const;
+  // string result_json = 6;
+  void clear_result_json() ;
+  const ::std::string& result_json() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_vcd_chunk(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_vcd_chunk();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_vcd_chunk();
-  void set_allocated_vcd_chunk(::std::string* PROTOBUF_NULLABLE value);
+  void set_result_json(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_result_json();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_result_json();
+  void set_allocated_result_json(::std::string* PROTOBUF_NULLABLE value);
 
   private:
-  const ::std::string& _internal_vcd_chunk() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_vcd_chunk(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_vcd_chunk();
+  const ::std::string& _internal_result_json() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_result_json(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_result_json();
 
   public:
-  // bool is_finished = 3;
+  // bool is_error = 3;
+  void clear_is_error() ;
+  bool is_error() const;
+  void set_is_error(bool value);
+
+  private:
+  bool _internal_is_error() const;
+  void _internal_set_is_error(bool value);
+
+  public:
+  // bool is_finished = 4;
   void clear_is_finished() ;
   bool is_finished() const;
   void set_is_finished(bool value);
@@ -941,12 +1014,22 @@ class SimulationLog final : public ::google::protobuf::Message
   void _internal_set_is_finished(bool value);
 
   public:
-  // @@protoc_insertion_point(class_scope:acutesim.worker.SimulationLog)
+  // bool passed = 5;
+  void clear_passed() ;
+  bool passed() const;
+  void set_passed(bool value);
+
+  private:
+  bool _internal_passed() const;
+  void _internal_set_passed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.RegressionLog)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 4,
-                                   0, 52,
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   0, 63,
                                    2>
       _table_;
 
@@ -964,20 +1047,22 @@ class SimulationLog final : public ::google::protobuf::Message
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const SimulationLog& from_msg);
+        const RegressionLog& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr job_id_;
     ::google::protobuf::internal::ArenaStringPtr log_line_;
-    ::google::protobuf::internal::ArenaStringPtr vcd_chunk_;
+    ::google::protobuf::internal::ArenaStringPtr result_json_;
+    bool is_error_;
     bool is_finished_;
+    bool passed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_worker_5fservice_2eproto;
 };
 
-extern const ::google::protobuf::internal::ClassDataFull SimulationLog_class_data_;
+extern const ::google::protobuf::internal::ClassDataFull RegressionLog_class_data_;
 // -------------------------------------------------------------------
 
 class PnRRequest_Floorplan final : public ::google::protobuf::Message
@@ -1035,7 +1120,7 @@ class PnRRequest_Floorplan final : public ::google::protobuf::Message
     return *reinterpret_cast<const PnRRequest_Floorplan*>(
         &_PnRRequest_Floorplan_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(PnRRequest_Floorplan& a, PnRRequest_Floorplan& b) { a.Swap(&b); }
   inline void Swap(PnRRequest_Floorplan* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1206,6 +1291,247 @@ class PnRRequest_Floorplan final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull PnRRequest_Floorplan_class_data_;
 // -------------------------------------------------------------------
 
+class HDLSimulationLog final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.HDLSimulationLog) */ {
+ public:
+  inline HDLSimulationLog() : HDLSimulationLog(nullptr) {}
+  ~HDLSimulationLog() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HDLSimulationLog* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HDLSimulationLog));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR HDLSimulationLog(::google::protobuf::internal::ConstantInitialized);
+
+  inline HDLSimulationLog(const HDLSimulationLog& from) : HDLSimulationLog(nullptr, from) {}
+  inline HDLSimulationLog(HDLSimulationLog&& from) noexcept
+      : HDLSimulationLog(nullptr, ::std::move(from)) {}
+  inline HDLSimulationLog& operator=(const HDLSimulationLog& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HDLSimulationLog& operator=(HDLSimulationLog&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const HDLSimulationLog& default_instance() {
+    return *reinterpret_cast<const HDLSimulationLog*>(
+        &_HDLSimulationLog_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(HDLSimulationLog& a, HDLSimulationLog& b) { a.Swap(&b); }
+  inline void Swap(HDLSimulationLog* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HDLSimulationLog* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HDLSimulationLog* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HDLSimulationLog>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HDLSimulationLog& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HDLSimulationLog& from) { HDLSimulationLog::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HDLSimulationLog* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.HDLSimulationLog"; }
+
+  explicit HDLSimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HDLSimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HDLSimulationLog& from);
+  HDLSimulationLog(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HDLSimulationLog&& from) noexcept
+      : HDLSimulationLog(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kLogLineFieldNumber = 2,
+    kVcdChunkFieldNumber = 4,
+    kIsFinishedFieldNumber = 3,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string log_line = 2;
+  void clear_log_line() ;
+  const ::std::string& log_line() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_log_line(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_log_line();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_log_line();
+  void set_allocated_log_line(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_log_line() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_log_line(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_log_line();
+
+  public:
+  // bytes vcd_chunk = 4;
+  void clear_vcd_chunk() ;
+  const ::std::string& vcd_chunk() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_vcd_chunk(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_vcd_chunk();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_vcd_chunk();
+  void set_allocated_vcd_chunk(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_vcd_chunk() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_vcd_chunk(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_vcd_chunk();
+
+  public:
+  // bool is_finished = 3;
+  void clear_is_finished() ;
+  bool is_finished() const;
+  void set_is_finished(bool value);
+
+  private:
+  bool _internal_is_finished() const;
+  void _internal_set_is_finished(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.HDLSimulationLog)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
+                                   0, 55,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HDLSimulationLog& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr log_line_;
+    ::google::protobuf::internal::ArenaStringPtr vcd_chunk_;
+    bool is_finished_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull HDLSimulationLog_class_data_;
+// -------------------------------------------------------------------
+
 class FileData final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:acutesim.worker.FileData) */ {
  public:
@@ -1261,7 +1587,7 @@ class FileData final : public ::google::protobuf::Message
     return *reinterpret_cast<const FileData*>(
         &_FileData_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(FileData& a, FileData& b) { a.Swap(&b); }
   inline void Swap(FileData* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1418,6 +1744,478 @@ class FileData final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull FileData_class_data_;
 // -------------------------------------------------------------------
 
+class CircuitSimulationRequest_Analysis final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.CircuitSimulationRequest.Analysis) */ {
+ public:
+  inline CircuitSimulationRequest_Analysis() : CircuitSimulationRequest_Analysis(nullptr) {}
+  ~CircuitSimulationRequest_Analysis() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CircuitSimulationRequest_Analysis));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR CircuitSimulationRequest_Analysis(::google::protobuf::internal::ConstantInitialized);
+
+  inline CircuitSimulationRequest_Analysis(const CircuitSimulationRequest_Analysis& from) : CircuitSimulationRequest_Analysis(nullptr, from) {}
+  inline CircuitSimulationRequest_Analysis(CircuitSimulationRequest_Analysis&& from) noexcept
+      : CircuitSimulationRequest_Analysis(nullptr, ::std::move(from)) {}
+  inline CircuitSimulationRequest_Analysis& operator=(const CircuitSimulationRequest_Analysis& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CircuitSimulationRequest_Analysis& operator=(CircuitSimulationRequest_Analysis&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const CircuitSimulationRequest_Analysis& default_instance() {
+    return *reinterpret_cast<const CircuitSimulationRequest_Analysis*>(
+        &_CircuitSimulationRequest_Analysis_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(CircuitSimulationRequest_Analysis& a, CircuitSimulationRequest_Analysis& b) { a.Swap(&b); }
+  inline void Swap(CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CircuitSimulationRequest_Analysis>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CircuitSimulationRequest_Analysis& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CircuitSimulationRequest_Analysis& from) { CircuitSimulationRequest_Analysis::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.CircuitSimulationRequest.Analysis"; }
+
+  explicit CircuitSimulationRequest_Analysis(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CircuitSimulationRequest_Analysis(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CircuitSimulationRequest_Analysis& from);
+  CircuitSimulationRequest_Analysis(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CircuitSimulationRequest_Analysis&& from) noexcept
+      : CircuitSimulationRequest_Analysis(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTypeFieldNumber = 1,
+    kTStartFieldNumber = 2,
+    kTStopFieldNumber = 3,
+    kTStepFieldNumber = 4,
+  };
+  // string type = 1;
+  void clear_type() ;
+  const ::std::string& type() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_type(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_type();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_type();
+  void set_allocated_type(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_type() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_type(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_type();
+
+  public:
+  // double t_start = 2;
+  void clear_t_start() ;
+  double t_start() const;
+  void set_t_start(double value);
+
+  private:
+  double _internal_t_start() const;
+  void _internal_set_t_start(double value);
+
+  public:
+  // double t_stop = 3;
+  void clear_t_stop() ;
+  double t_stop() const;
+  void set_t_stop(double value);
+
+  private:
+  double _internal_t_stop() const;
+  void _internal_set_t_stop(double value);
+
+  public:
+  // double t_step = 4;
+  void clear_t_step() ;
+  double t_step() const;
+  void set_t_step(double value);
+
+  private:
+  double _internal_t_step() const;
+  void _internal_set_t_step(double value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.CircuitSimulationRequest.Analysis)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
+                                   0, 62,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CircuitSimulationRequest_Analysis& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr type_;
+    double t_start_;
+    double t_stop_;
+    double t_step_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull CircuitSimulationRequest_Analysis_class_data_;
+// -------------------------------------------------------------------
+
+class CircuitSimulationLog final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.CircuitSimulationLog) */ {
+ public:
+  inline CircuitSimulationLog() : CircuitSimulationLog(nullptr) {}
+  ~CircuitSimulationLog() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CircuitSimulationLog* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CircuitSimulationLog));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR CircuitSimulationLog(::google::protobuf::internal::ConstantInitialized);
+
+  inline CircuitSimulationLog(const CircuitSimulationLog& from) : CircuitSimulationLog(nullptr, from) {}
+  inline CircuitSimulationLog(CircuitSimulationLog&& from) noexcept
+      : CircuitSimulationLog(nullptr, ::std::move(from)) {}
+  inline CircuitSimulationLog& operator=(const CircuitSimulationLog& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CircuitSimulationLog& operator=(CircuitSimulationLog&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const CircuitSimulationLog& default_instance() {
+    return *reinterpret_cast<const CircuitSimulationLog*>(
+        &_CircuitSimulationLog_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(CircuitSimulationLog& a, CircuitSimulationLog& b) { a.Swap(&b); }
+  inline void Swap(CircuitSimulationLog* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CircuitSimulationLog* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  CircuitSimulationLog* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CircuitSimulationLog>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CircuitSimulationLog& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CircuitSimulationLog& from) { CircuitSimulationLog::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CircuitSimulationLog* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.CircuitSimulationLog"; }
+
+  explicit CircuitSimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CircuitSimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CircuitSimulationLog& from);
+  CircuitSimulationLog(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CircuitSimulationLog&& from) noexcept
+      : CircuitSimulationLog(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kLogLineFieldNumber = 2,
+    kResultChunkFieldNumber = 4,
+    kIsFinishedFieldNumber = 3,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string log_line = 2;
+  void clear_log_line() ;
+  const ::std::string& log_line() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_log_line(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_log_line();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_log_line();
+  void set_allocated_log_line(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_log_line() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_log_line(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_log_line();
+
+  public:
+  // bytes result_chunk = 4;
+  void clear_result_chunk() ;
+  const ::std::string& result_chunk() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_result_chunk(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_result_chunk();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_result_chunk();
+  void set_allocated_result_chunk(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_result_chunk() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_result_chunk(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_result_chunk();
+
+  public:
+  // bool is_finished = 3;
+  void clear_is_finished() ;
+  bool is_finished() const;
+  void set_is_finished(bool value);
+
+  private:
+  bool _internal_is_finished() const;
+  void _internal_set_is_finished(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.CircuitSimulationLog)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
+                                   0, 59,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CircuitSimulationLog& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr log_line_;
+    ::google::protobuf::internal::ArenaStringPtr result_chunk_;
+    bool is_finished_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull CircuitSimulationLog_class_data_;
+// -------------------------------------------------------------------
+
 class SynthesisRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:acutesim.worker.SynthesisRequest) */ {
  public:
@@ -1473,7 +2271,7 @@ class SynthesisRequest final : public ::google::protobuf::Message
     return *reinterpret_cast<const SynthesisRequest*>(
         &_SynthesisRequest_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(SynthesisRequest& a, SynthesisRequest& b) { a.Swap(&b); }
   inline void Swap(SynthesisRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1739,7 +2537,7 @@ class SynthesisLog final : public ::google::protobuf::Message
     return *reinterpret_cast<const SynthesisLog*>(
         &_SynthesisLog_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(SynthesisLog& a, SynthesisLog& b) { a.Swap(&b); }
   inline void Swap(SynthesisLog* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1954,30 +2752,30 @@ class SynthesisLog final : public ::google::protobuf::Message
 extern const ::google::protobuf::internal::ClassDataFull SynthesisLog_class_data_;
 // -------------------------------------------------------------------
 
-class SimulationRequest final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:acutesim.worker.SimulationRequest) */ {
+class StatusResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.StatusResponse) */ {
  public:
-  inline SimulationRequest() : SimulationRequest(nullptr) {}
-  ~SimulationRequest() PROTOBUF_FINAL;
+  inline StatusResponse() : StatusResponse(nullptr) {}
+  ~StatusResponse() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(SimulationRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(StatusResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(SimulationRequest));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StatusResponse));
   }
 #endif
 
   template <typename = void>
-  explicit PROTOBUF_CONSTEXPR SimulationRequest(::google::protobuf::internal::ConstantInitialized);
+  explicit PROTOBUF_CONSTEXPR StatusResponse(::google::protobuf::internal::ConstantInitialized);
 
-  inline SimulationRequest(const SimulationRequest& from) : SimulationRequest(nullptr, from) {}
-  inline SimulationRequest(SimulationRequest&& from) noexcept
-      : SimulationRequest(nullptr, ::std::move(from)) {}
-  inline SimulationRequest& operator=(const SimulationRequest& from) {
+  inline StatusResponse(const StatusResponse& from) : StatusResponse(nullptr, from) {}
+  inline StatusResponse(StatusResponse&& from) noexcept
+      : StatusResponse(nullptr, ::std::move(from)) {}
+  inline StatusResponse& operator=(const StatusResponse& from) {
     CopyFrom(from);
     return *this;
   }
-  inline SimulationRequest& operator=(SimulationRequest&& from) noexcept {
+  inline StatusResponse& operator=(StatusResponse&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -2005,13 +2803,13 @@ class SimulationRequest final : public ::google::protobuf::Message
   static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  static const SimulationRequest& default_instance() {
-    return *reinterpret_cast<const SimulationRequest*>(
-        &_SimulationRequest_default_instance_);
+  static const StatusResponse& default_instance() {
+    return *reinterpret_cast<const StatusResponse*>(
+        &_StatusResponse_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 9;
-  friend void swap(SimulationRequest& a, SimulationRequest& b) { a.Swap(&b); }
-  inline void Swap(SimulationRequest* PROTOBUF_NONNULL other) {
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(StatusResponse& a, StatusResponse& b) { a.Swap(&b); }
+  inline void Swap(StatusResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -2019,7 +2817,7 @@ class SimulationRequest final : public ::google::protobuf::Message
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(SimulationRequest* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(StatusResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -2027,13 +2825,13 @@ class SimulationRequest final : public ::google::protobuf::Message
 
   // implements Message ----------------------------------------------
 
-  SimulationRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<SimulationRequest>(arena);
+  StatusResponse* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StatusResponse>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const SimulationRequest& from);
+  void CopyFrom(const StatusResponse& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const SimulationRequest& from) { SimulationRequest::MergeImpl(*this, from); }
+  void MergeFrom(const StatusResponse& from) { StatusResponse::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -2069,17 +2867,17 @@ class SimulationRequest final : public ::google::protobuf::Message
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(SimulationRequest* PROTOBUF_NONNULL other);
+  void InternalSwap(StatusResponse* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "acutesim.worker.SimulationRequest"; }
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.StatusResponse"; }
 
-  explicit SimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  SimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SimulationRequest& from);
-  SimulationRequest(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SimulationRequest&& from) noexcept
-      : SimulationRequest(arena) {
+  explicit StatusResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StatusResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StatusResponse& from);
+  StatusResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StatusResponse&& from) noexcept
+      : StatusResponse(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -2096,63 +2894,94 @@ class SimulationRequest final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
-    kSourceFilesFieldNumber = 2,
-    kJobIdFieldNumber = 1,
-    kTestbenchModuleFieldNumber = 3,
+    kWorkerIdFieldNumber = 1,
+    kVersionFieldNumber = 2,
+    kCpuUsageFieldNumber = 4,
+    kMemoryUsageFieldNumber = 5,
+    kReadyFieldNumber = 3,
+    kToolsFieldNumber = 6,
   };
-  // repeated .acutesim.worker.FileData source_files = 2;
-  int source_files_size() const;
-  private:
-  int _internal_source_files_size() const;
-
-  public:
-  void clear_source_files() ;
-  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_source_files(int index);
-  ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>* PROTOBUF_NONNULL mutable_source_files();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>& _internal_source_files() const;
-  ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>* PROTOBUF_NONNULL _internal_mutable_source_files();
-  public:
-  const ::acutesim::worker::FileData& source_files(int index) const;
-  ::acutesim::worker::FileData* PROTOBUF_NONNULL add_source_files();
-  const ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>& source_files() const;
-  // string job_id = 1;
-  void clear_job_id() ;
-  const ::std::string& job_id() const;
+  // string worker_id = 1;
+  void clear_worker_id() ;
+  const ::std::string& worker_id() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_job_id(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_job_id();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
-  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+  void set_worker_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_worker_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_worker_id();
+  void set_allocated_worker_id(::std::string* PROTOBUF_NULLABLE value);
 
   private:
-  const ::std::string& _internal_job_id() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+  const ::std::string& _internal_worker_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_worker_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_worker_id();
 
   public:
-  // string testbench_module = 3;
-  void clear_testbench_module() ;
-  const ::std::string& testbench_module() const;
+  // string version = 2;
+  void clear_version() ;
+  const ::std::string& version() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_testbench_module(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_testbench_module();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_testbench_module();
-  void set_allocated_testbench_module(::std::string* PROTOBUF_NULLABLE value);
+  void set_version(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_version();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_version();
+  void set_allocated_version(::std::string* PROTOBUF_NULLABLE value);
 
   private:
-  const ::std::string& _internal_testbench_module() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_testbench_module(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_testbench_module();
+  const ::std::string& _internal_version() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_version(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_version();
 
   public:
-  // @@protoc_insertion_point(class_scope:acutesim.worker.SimulationRequest)
+  // double cpu_usage = 4;
+  void clear_cpu_usage() ;
+  double cpu_usage() const;
+  void set_cpu_usage(double value);
+
+  private:
+  double _internal_cpu_usage() const;
+  void _internal_set_cpu_usage(double value);
+
+  public:
+  // double memory_usage = 5;
+  void clear_memory_usage() ;
+  double memory_usage() const;
+  void set_memory_usage(double value);
+
+  private:
+  double _internal_memory_usage() const;
+  void _internal_set_memory_usage(double value);
+
+  public:
+  // bool ready = 3;
+  void clear_ready() ;
+  bool ready() const;
+  void set_ready(bool value);
+
+  private:
+  bool _internal_ready() const;
+  void _internal_set_ready(bool value);
+
+  public:
+  // map<string, string> tools = 6;
+  int tools_size() const;
+  private:
+  int _internal_tools_size() const;
+
+  public:
+  void clear_tools() ;
+  const ::google::protobuf::Map<::std::string, ::std::string>& tools() const;
+  ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL mutable_tools();
+
+  private:
+  const ::google::protobuf::Map<::std::string, ::std::string>& _internal_tools() const;
+  ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL _internal_mutable_tools();
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.StatusResponse)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
-                                   1, 64,
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   1, 60,
                                    2>
       _table_;
 
@@ -2170,19 +2999,541 @@ class SimulationRequest final : public ::google::protobuf::Message
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const SimulationRequest& from_msg);
+        const StatusResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::acutesim::worker::FileData > source_files_;
-    ::google::protobuf::internal::ArenaStringPtr job_id_;
-    ::google::protobuf::internal::ArenaStringPtr testbench_module_;
+    ::google::protobuf::internal::ArenaStringPtr worker_id_;
+    ::google::protobuf::internal::ArenaStringPtr version_;
+    double cpu_usage_;
+    double memory_usage_;
+    bool ready_;
+    ::google::protobuf::internal::MapField<StatusResponse_ToolsEntry_DoNotUse, ::std::string, ::std::string,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING>
+        tools_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_worker_5fservice_2eproto;
 };
 
-extern const ::google::protobuf::internal::ClassDataFull SimulationRequest_class_data_;
+extern const ::google::protobuf::internal::ClassDataFull StatusResponse_class_data_;
+// -------------------------------------------------------------------
+
+class SignOffRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.SignOffRequest) */ {
+ public:
+  inline SignOffRequest() : SignOffRequest(nullptr) {}
+  ~SignOffRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SignOffRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SignOffRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR SignOffRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline SignOffRequest(const SignOffRequest& from) : SignOffRequest(nullptr, from) {}
+  inline SignOffRequest(SignOffRequest&& from) noexcept
+      : SignOffRequest(nullptr, ::std::move(from)) {}
+  inline SignOffRequest& operator=(const SignOffRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SignOffRequest& operator=(SignOffRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const SignOffRequest& default_instance() {
+    return *reinterpret_cast<const SignOffRequest*>(
+        &_SignOffRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(SignOffRequest& a, SignOffRequest& b) { a.Swap(&b); }
+  inline void Swap(SignOffRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SignOffRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SignOffRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SignOffRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SignOffRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SignOffRequest& from) { SignOffRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SignOffRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.SignOffRequest"; }
+
+  explicit SignOffRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SignOffRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SignOffRequest& from);
+  SignOffRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SignOffRequest&& from) noexcept
+      : SignOffRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kCheckTypeFieldNumber = 4,
+    kLayoutFileFieldNumber = 2,
+    kScriptFileFieldNumber = 3,
+    kReferenceNetlistFieldNumber = 5,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string check_type = 4;
+  void clear_check_type() ;
+  const ::std::string& check_type() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_check_type(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_check_type();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_check_type();
+  void set_allocated_check_type(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_check_type() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_check_type(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_check_type();
+
+  public:
+  // .acutesim.worker.FileData layout_file = 2;
+  bool has_layout_file() const;
+  void clear_layout_file() ;
+  const ::acutesim::worker::FileData& layout_file() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_layout_file();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_layout_file();
+  void set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_layout_file();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_layout_file() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_layout_file();
+
+  public:
+  // .acutesim.worker.FileData script_file = 3;
+  bool has_script_file() const;
+  void clear_script_file() ;
+  const ::acutesim::worker::FileData& script_file() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_script_file();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_script_file();
+  void set_allocated_script_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_script_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_script_file();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_script_file() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_script_file();
+
+  public:
+  // .acutesim.worker.FileData reference_netlist = 5;
+  bool has_reference_netlist() const;
+  void clear_reference_netlist() ;
+  const ::acutesim::worker::FileData& reference_netlist() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_reference_netlist();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_reference_netlist();
+  void set_allocated_reference_netlist(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_reference_netlist(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_reference_netlist();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_reference_netlist() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_reference_netlist();
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.SignOffRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
+                                   3, 55,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SignOffRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr check_type_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE layout_file_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE script_file_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE reference_netlist_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SignOffRequest_class_data_;
+// -------------------------------------------------------------------
+
+class SignOffLog final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.SignOffLog) */ {
+ public:
+  inline SignOffLog() : SignOffLog(nullptr) {}
+  ~SignOffLog() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SignOffLog* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SignOffLog));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR SignOffLog(::google::protobuf::internal::ConstantInitialized);
+
+  inline SignOffLog(const SignOffLog& from) : SignOffLog(nullptr, from) {}
+  inline SignOffLog(SignOffLog&& from) noexcept
+      : SignOffLog(nullptr, ::std::move(from)) {}
+  inline SignOffLog& operator=(const SignOffLog& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SignOffLog& operator=(SignOffLog&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const SignOffLog& default_instance() {
+    return *reinterpret_cast<const SignOffLog*>(
+        &_SignOffLog_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(SignOffLog& a, SignOffLog& b) { a.Swap(&b); }
+  inline void Swap(SignOffLog* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SignOffLog* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SignOffLog* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SignOffLog>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SignOffLog& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SignOffLog& from) { SignOffLog::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SignOffLog* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.SignOffLog"; }
+
+  explicit SignOffLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SignOffLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SignOffLog& from);
+  SignOffLog(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SignOffLog&& from) noexcept
+      : SignOffLog(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kLogLineFieldNumber = 2,
+    kReportFieldNumber = 5,
+    kIsErrorFieldNumber = 3,
+    kIsFinishedFieldNumber = 4,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string log_line = 2;
+  void clear_log_line() ;
+  const ::std::string& log_line() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_log_line(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_log_line();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_log_line();
+  void set_allocated_log_line(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_log_line() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_log_line(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_log_line();
+
+  public:
+  // .acutesim.worker.FileData report = 5;
+  bool has_report() const;
+  void clear_report() ;
+  const ::acutesim::worker::FileData& report() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_report();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_report();
+  void set_allocated_report(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_report(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_report();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_report() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_report();
+
+  public:
+  // bool is_error = 3;
+  void clear_is_error() ;
+  bool is_error() const;
+  void set_is_error(bool value);
+
+  private:
+  bool _internal_is_error() const;
+  void _internal_set_is_error(bool value);
+
+  public:
+  // bool is_finished = 4;
+  void clear_is_finished() ;
+  bool is_finished() const;
+  void set_is_finished(bool value);
+
+  private:
+  bool _internal_is_finished() const;
+  void _internal_set_is_finished(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.SignOffLog)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
+                                   1, 49,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SignOffLog& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr log_line_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE report_;
+    bool is_error_;
+    bool is_finished_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull SignOffLog_class_data_;
 // -------------------------------------------------------------------
 
 class PnRRequest final : public ::google::protobuf::Message
@@ -2240,7 +3591,7 @@ class PnRRequest final : public ::google::protobuf::Message
     return *reinterpret_cast<const PnRRequest*>(
         &_PnRRequest_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(PnRRequest& a, PnRRequest& b) { a.Swap(&b); }
   inline void Swap(PnRRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2487,7 +3838,7 @@ class PnRLog final : public ::google::protobuf::Message
     return *reinterpret_cast<const PnRLog*>(
         &_PnRLog_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(PnRLog& a, PnRLog& b) { a.Swap(&b); }
   inline void Swap(PnRLog* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2700,6 +4051,1331 @@ class PnRLog final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull PnRLog_class_data_;
+// -------------------------------------------------------------------
+
+class PEXRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.PEXRequest) */ {
+ public:
+  inline PEXRequest() : PEXRequest(nullptr) {}
+  ~PEXRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PEXRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PEXRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR PEXRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline PEXRequest(const PEXRequest& from) : PEXRequest(nullptr, from) {}
+  inline PEXRequest(PEXRequest&& from) noexcept
+      : PEXRequest(nullptr, ::std::move(from)) {}
+  inline PEXRequest& operator=(const PEXRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PEXRequest& operator=(PEXRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const PEXRequest& default_instance() {
+    return *reinterpret_cast<const PEXRequest*>(
+        &_PEXRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 20;
+  friend void swap(PEXRequest& a, PEXRequest& b) { a.Swap(&b); }
+  inline void Swap(PEXRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PEXRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  PEXRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PEXRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PEXRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PEXRequest& from) { PEXRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PEXRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.PEXRequest"; }
+
+  explicit PEXRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PEXRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PEXRequest& from);
+  PEXRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PEXRequest&& from) noexcept
+      : PEXRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kOutputSpefFieldNumber = 4,
+    kEngineFieldNumber = 6,
+    kLayoutFileFieldNumber = 2,
+    kTechFileFieldNumber = 3,
+    kCouplingCapsFieldNumber = 5,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string output_spef = 4;
+  void clear_output_spef() ;
+  const ::std::string& output_spef() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_output_spef(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_output_spef();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_output_spef();
+  void set_allocated_output_spef(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_output_spef() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_output_spef(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_output_spef();
+
+  public:
+  // string engine = 6;
+  void clear_engine() ;
+  const ::std::string& engine() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_engine(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_engine();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_engine();
+  void set_allocated_engine(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_engine() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_engine(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_engine();
+
+  public:
+  // .acutesim.worker.FileData layout_file = 2;
+  bool has_layout_file() const;
+  void clear_layout_file() ;
+  const ::acutesim::worker::FileData& layout_file() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_layout_file();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_layout_file();
+  void set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_layout_file();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_layout_file() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_layout_file();
+
+  public:
+  // .acutesim.worker.FileData tech_file = 3;
+  bool has_tech_file() const;
+  void clear_tech_file() ;
+  const ::acutesim::worker::FileData& tech_file() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_tech_file();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_tech_file();
+  void set_allocated_tech_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_tech_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_tech_file();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_tech_file() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_tech_file();
+
+  public:
+  // bool coupling_caps = 5;
+  void clear_coupling_caps() ;
+  bool coupling_caps() const;
+  void set_coupling_caps(bool value);
+
+  private:
+  bool _internal_coupling_caps() const;
+  void _internal_set_coupling_caps(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.PEXRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   2, 58,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PEXRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr output_spef_;
+    ::google::protobuf::internal::ArenaStringPtr engine_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE layout_file_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE tech_file_;
+    bool coupling_caps_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull PEXRequest_class_data_;
+// -------------------------------------------------------------------
+
+class LVSRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.LVSRequest) */ {
+ public:
+  inline LVSRequest() : LVSRequest(nullptr) {}
+  ~LVSRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(LVSRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(LVSRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR LVSRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline LVSRequest(const LVSRequest& from) : LVSRequest(nullptr, from) {}
+  inline LVSRequest(LVSRequest&& from) noexcept
+      : LVSRequest(nullptr, ::std::move(from)) {}
+  inline LVSRequest& operator=(const LVSRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LVSRequest& operator=(LVSRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const LVSRequest& default_instance() {
+    return *reinterpret_cast<const LVSRequest*>(
+        &_LVSRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 19;
+  friend void swap(LVSRequest& a, LVSRequest& b) { a.Swap(&b); }
+  inline void Swap(LVSRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LVSRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  LVSRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<LVSRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const LVSRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const LVSRequest& from) { LVSRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(LVSRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.LVSRequest"; }
+
+  explicit LVSRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  LVSRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const LVSRequest& from);
+  LVSRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, LVSRequest&& from) noexcept
+      : LVSRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kRuleDeckFieldNumber = 4,
+    kTopCellFieldNumber = 5,
+    kModeFieldNumber = 6,
+    kLayoutFileFieldNumber = 2,
+    kSchematicNetlistFieldNumber = 3,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string rule_deck = 4;
+  void clear_rule_deck() ;
+  const ::std::string& rule_deck() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_rule_deck(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_rule_deck();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_rule_deck();
+  void set_allocated_rule_deck(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_rule_deck() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_rule_deck(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_rule_deck();
+
+  public:
+  // string top_cell = 5;
+  void clear_top_cell() ;
+  const ::std::string& top_cell() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_top_cell(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_top_cell();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_top_cell();
+  void set_allocated_top_cell(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_top_cell() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_top_cell(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_top_cell();
+
+  public:
+  // string mode = 6;
+  void clear_mode() ;
+  const ::std::string& mode() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_mode(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_mode();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_mode();
+  void set_allocated_mode(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_mode() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_mode(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_mode();
+
+  public:
+  // .acutesim.worker.FileData layout_file = 2;
+  bool has_layout_file() const;
+  void clear_layout_file() ;
+  const ::acutesim::worker::FileData& layout_file() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_layout_file();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_layout_file();
+  void set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_layout_file();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_layout_file() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_layout_file();
+
+  public:
+  // .acutesim.worker.FileData schematic_netlist = 3;
+  bool has_schematic_netlist() const;
+  void clear_schematic_netlist() ;
+  const ::acutesim::worker::FileData& schematic_netlist() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_schematic_netlist();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_schematic_netlist();
+  void set_allocated_schematic_netlist(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_schematic_netlist(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_schematic_netlist();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_schematic_netlist() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_schematic_netlist();
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.LVSRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   2, 62,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const LVSRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr rule_deck_;
+    ::google::protobuf::internal::ArenaStringPtr top_cell_;
+    ::google::protobuf::internal::ArenaStringPtr mode_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE layout_file_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE schematic_netlist_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull LVSRequest_class_data_;
+// -------------------------------------------------------------------
+
+class HDLSimulationRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.HDLSimulationRequest) */ {
+ public:
+  inline HDLSimulationRequest() : HDLSimulationRequest(nullptr) {}
+  ~HDLSimulationRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(HDLSimulationRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(HDLSimulationRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR HDLSimulationRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline HDLSimulationRequest(const HDLSimulationRequest& from) : HDLSimulationRequest(nullptr, from) {}
+  inline HDLSimulationRequest(HDLSimulationRequest&& from) noexcept
+      : HDLSimulationRequest(nullptr, ::std::move(from)) {}
+  inline HDLSimulationRequest& operator=(const HDLSimulationRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HDLSimulationRequest& operator=(HDLSimulationRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const HDLSimulationRequest& default_instance() {
+    return *reinterpret_cast<const HDLSimulationRequest*>(
+        &_HDLSimulationRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(HDLSimulationRequest& a, HDLSimulationRequest& b) { a.Swap(&b); }
+  inline void Swap(HDLSimulationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HDLSimulationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HDLSimulationRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<HDLSimulationRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const HDLSimulationRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const HDLSimulationRequest& from) { HDLSimulationRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(HDLSimulationRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.HDLSimulationRequest"; }
+
+  explicit HDLSimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  HDLSimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const HDLSimulationRequest& from);
+  HDLSimulationRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, HDLSimulationRequest&& from) noexcept
+      : HDLSimulationRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSourceFilesFieldNumber = 2,
+    kJobIdFieldNumber = 1,
+    kTestbenchModuleFieldNumber = 3,
+  };
+  // repeated .acutesim.worker.FileData source_files = 2;
+  int source_files_size() const;
+  private:
+  int _internal_source_files_size() const;
+
+  public:
+  void clear_source_files() ;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_source_files(int index);
+  ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>* PROTOBUF_NONNULL mutable_source_files();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>& _internal_source_files() const;
+  ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>* PROTOBUF_NONNULL _internal_mutable_source_files();
+  public:
+  const ::acutesim::worker::FileData& source_files(int index) const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL add_source_files();
+  const ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>& source_files() const;
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string testbench_module = 3;
+  void clear_testbench_module() ;
+  const ::std::string& testbench_module() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_testbench_module(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_testbench_module();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_testbench_module();
+  void set_allocated_testbench_module(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_testbench_module() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_testbench_module(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_testbench_module();
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.HDLSimulationRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   1, 67,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const HDLSimulationRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::acutesim::worker::FileData > source_files_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr testbench_module_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull HDLSimulationRequest_class_data_;
+// -------------------------------------------------------------------
+
+class GDSExportRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.GDSExportRequest) */ {
+ public:
+  inline GDSExportRequest() : GDSExportRequest(nullptr) {}
+  ~GDSExportRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GDSExportRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GDSExportRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR GDSExportRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline GDSExportRequest(const GDSExportRequest& from) : GDSExportRequest(nullptr, from) {}
+  inline GDSExportRequest(GDSExportRequest&& from) noexcept
+      : GDSExportRequest(nullptr, ::std::move(from)) {}
+  inline GDSExportRequest& operator=(const GDSExportRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GDSExportRequest& operator=(GDSExportRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const GDSExportRequest& default_instance() {
+    return *reinterpret_cast<const GDSExportRequest*>(
+        &_GDSExportRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(GDSExportRequest& a, GDSExportRequest& b) { a.Swap(&b); }
+  inline void Swap(GDSExportRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GDSExportRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GDSExportRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GDSExportRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GDSExportRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GDSExportRequest& from) { GDSExportRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GDSExportRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.GDSExportRequest"; }
+
+  explicit GDSExportRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GDSExportRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GDSExportRequest& from);
+  GDSExportRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GDSExportRequest&& from) noexcept
+      : GDSExportRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kOutputGdsFieldNumber = 4,
+    kTopCellFieldNumber = 5,
+    kInputFileFieldNumber = 2,
+    kTechFileFieldNumber = 3,
+    kCompressFieldNumber = 6,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string output_gds = 4;
+  void clear_output_gds() ;
+  const ::std::string& output_gds() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_output_gds(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_output_gds();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_output_gds();
+  void set_allocated_output_gds(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_output_gds() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_output_gds(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_output_gds();
+
+  public:
+  // string top_cell = 5;
+  void clear_top_cell() ;
+  const ::std::string& top_cell() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_top_cell(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_top_cell();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_top_cell();
+  void set_allocated_top_cell(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_top_cell() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_top_cell(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_top_cell();
+
+  public:
+  // .acutesim.worker.FileData input_file = 2;
+  bool has_input_file() const;
+  void clear_input_file() ;
+  const ::acutesim::worker::FileData& input_file() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_input_file();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_input_file();
+  void set_allocated_input_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_input_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_input_file();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_input_file() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_input_file();
+
+  public:
+  // .acutesim.worker.FileData tech_file = 3;
+  bool has_tech_file() const;
+  void clear_tech_file() ;
+  const ::acutesim::worker::FileData& tech_file() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_tech_file();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_tech_file();
+  void set_allocated_tech_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_tech_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_tech_file();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_tech_file() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_tech_file();
+
+  public:
+  // bool compress = 6;
+  void clear_compress() ;
+  bool compress() const;
+  void set_compress(bool value);
+
+  private:
+  bool _internal_compress() const;
+  void _internal_set_compress(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.GDSExportRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 6,
+                                   2, 65,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GDSExportRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr output_gds_;
+    ::google::protobuf::internal::ArenaStringPtr top_cell_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE input_file_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE tech_file_;
+    bool compress_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull GDSExportRequest_class_data_;
+// -------------------------------------------------------------------
+
+class CircuitSimulationRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:acutesim.worker.CircuitSimulationRequest) */ {
+ public:
+  inline CircuitSimulationRequest() : CircuitSimulationRequest(nullptr) {}
+  ~CircuitSimulationRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CircuitSimulationRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CircuitSimulationRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR CircuitSimulationRequest(::google::protobuf::internal::ConstantInitialized);
+
+  inline CircuitSimulationRequest(const CircuitSimulationRequest& from) : CircuitSimulationRequest(nullptr, from) {}
+  inline CircuitSimulationRequest(CircuitSimulationRequest&& from) noexcept
+      : CircuitSimulationRequest(nullptr, ::std::move(from)) {}
+  inline CircuitSimulationRequest& operator=(const CircuitSimulationRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CircuitSimulationRequest& operator=(CircuitSimulationRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const CircuitSimulationRequest& default_instance() {
+    return *reinterpret_cast<const CircuitSimulationRequest*>(
+        &_CircuitSimulationRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 13;
+  friend void swap(CircuitSimulationRequest& a, CircuitSimulationRequest& b) { a.Swap(&b); }
+  inline void Swap(CircuitSimulationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CircuitSimulationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  CircuitSimulationRequest* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CircuitSimulationRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CircuitSimulationRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CircuitSimulationRequest& from) { CircuitSimulationRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CircuitSimulationRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "acutesim.worker.CircuitSimulationRequest"; }
+
+  explicit CircuitSimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CircuitSimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CircuitSimulationRequest& from);
+  CircuitSimulationRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CircuitSimulationRequest&& from) noexcept
+      : CircuitSimulationRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+  using Analysis = CircuitSimulationRequest_Analysis;
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJobIdFieldNumber = 1,
+    kSolverModeFieldNumber = 3,
+    kPrecisionFieldNumber = 4,
+    kNetlistJsonFieldNumber = 2,
+    kAnalysisFieldNumber = 5,
+  };
+  // string job_id = 1;
+  void clear_job_id() ;
+  const ::std::string& job_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_job_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_job_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_job_id();
+  void set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_job_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_job_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_job_id();
+
+  public:
+  // string solver_mode = 3;
+  void clear_solver_mode() ;
+  const ::std::string& solver_mode() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_solver_mode(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_solver_mode();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_solver_mode();
+  void set_allocated_solver_mode(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_solver_mode() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_solver_mode(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_solver_mode();
+
+  public:
+  // string precision = 4;
+  void clear_precision() ;
+  const ::std::string& precision() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_precision(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_precision();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_precision();
+  void set_allocated_precision(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_precision() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_precision(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_precision();
+
+  public:
+  // .acutesim.worker.FileData netlist_json = 2;
+  bool has_netlist_json() const;
+  void clear_netlist_json() ;
+  const ::acutesim::worker::FileData& netlist_json() const;
+  [[nodiscard]] ::acutesim::worker::FileData* PROTOBUF_NULLABLE release_netlist_json();
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL mutable_netlist_json();
+  void set_allocated_netlist_json(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_netlist_json(::acutesim::worker::FileData* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::FileData* PROTOBUF_NULLABLE unsafe_arena_release_netlist_json();
+
+  private:
+  const ::acutesim::worker::FileData& _internal_netlist_json() const;
+  ::acutesim::worker::FileData* PROTOBUF_NONNULL _internal_mutable_netlist_json();
+
+  public:
+  // .acutesim.worker.CircuitSimulationRequest.Analysis analysis = 5;
+  bool has_analysis() const;
+  void clear_analysis() ;
+  const ::acutesim::worker::CircuitSimulationRequest_Analysis& analysis() const;
+  [[nodiscard]] ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE release_analysis();
+  ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL mutable_analysis();
+  void set_allocated_analysis(::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_analysis(::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE value);
+  ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE unsafe_arena_release_analysis();
+
+  private:
+  const ::acutesim::worker::CircuitSimulationRequest_Analysis& _internal_analysis() const;
+  ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL _internal_mutable_analysis();
+
+  public:
+  // @@protoc_insertion_point(class_scope:acutesim.worker.CircuitSimulationRequest)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
+                                   2, 75,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CircuitSimulationRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr job_id_;
+    ::google::protobuf::internal::ArenaStringPtr solver_mode_;
+    ::google::protobuf::internal::ArenaStringPtr precision_;
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE netlist_json_;
+    ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE analysis_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_worker_5fservice_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull CircuitSimulationRequest_class_data_;
 
 // ===================================================================
 
@@ -2719,6 +5395,8 @@ extern const ::google::protobuf::internal::ClassDataFull PnRLog_class_data_;
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
 // StatusResponse
 
 // string worker_id = 1;
@@ -2726,7 +5404,7 @@ inline void StatusResponse::clear_worker_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.worker_id_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000001U);
 }
 inline const ::std::string& StatusResponse::worker_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -2736,13 +5414,13 @@ inline const ::std::string& StatusResponse::worker_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void StatusResponse::set_worker_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   _impl_.worker_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:acutesim.worker.StatusResponse.worker_id)
 }
 inline ::std::string* PROTOBUF_NONNULL StatusResponse::mutable_worker_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   ::std::string* _s = _internal_mutable_worker_id();
   // @@protoc_insertion_point(field_mutable:acutesim.worker.StatusResponse.worker_id)
   return _s;
@@ -2762,10 +5440,10 @@ inline ::std::string* PROTOBUF_NONNULL StatusResponse::_internal_mutable_worker_
 inline ::std::string* PROTOBUF_NULLABLE StatusResponse::release_worker_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:acutesim.worker.StatusResponse.worker_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
   auto* released = _impl_.worker_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.worker_id_.Set("", GetArena());
@@ -2775,9 +5453,9 @@ inline ::std::string* PROTOBUF_NULLABLE StatusResponse::release_worker_id() {
 inline void StatusResponse::set_allocated_worker_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
   }
   _impl_.worker_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.worker_id_.IsDefault()) {
@@ -2791,7 +5469,7 @@ inline void StatusResponse::clear_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.version_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000002U);
 }
 inline const ::std::string& StatusResponse::version() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -2801,13 +5479,13 @@ inline const ::std::string& StatusResponse::version() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void StatusResponse::set_version(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.version_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:acutesim.worker.StatusResponse.version)
 }
 inline ::std::string* PROTOBUF_NONNULL StatusResponse::mutable_version()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_version();
   // @@protoc_insertion_point(field_mutable:acutesim.worker.StatusResponse.version)
   return _s;
@@ -2827,10 +5505,10 @@ inline ::std::string* PROTOBUF_NONNULL StatusResponse::_internal_mutable_version
 inline ::std::string* PROTOBUF_NULLABLE StatusResponse::release_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:acutesim.worker.StatusResponse.version)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   auto* released = _impl_.version_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.version_.Set("", GetArena());
@@ -2840,9 +5518,9 @@ inline ::std::string* PROTOBUF_NULLABLE StatusResponse::release_version() {
 inline void StatusResponse::set_allocated_version(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   _impl_.version_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.version_.IsDefault()) {
@@ -2856,7 +5534,7 @@ inline void StatusResponse::clear_ready() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ready_ = false;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000010U);
 }
 inline bool StatusResponse::ready() const {
   // @@protoc_insertion_point(field_get:acutesim.worker.StatusResponse.ready)
@@ -2864,7 +5542,7 @@ inline bool StatusResponse::ready() const {
 }
 inline void StatusResponse::set_ready(bool value) {
   _internal_set_ready(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:acutesim.worker.StatusResponse.ready)
 }
 inline bool StatusResponse::_internal_ready() const {
@@ -2881,7 +5559,7 @@ inline void StatusResponse::clear_cpu_usage() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cpu_usage_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000004U);
 }
 inline double StatusResponse::cpu_usage() const {
   // @@protoc_insertion_point(field_get:acutesim.worker.StatusResponse.cpu_usage)
@@ -2889,7 +5567,7 @@ inline double StatusResponse::cpu_usage() const {
 }
 inline void StatusResponse::set_cpu_usage(double value) {
   _internal_set_cpu_usage(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:acutesim.worker.StatusResponse.cpu_usage)
 }
 inline double StatusResponse::_internal_cpu_usage() const {
@@ -2906,7 +5584,7 @@ inline void StatusResponse::clear_memory_usage() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.memory_usage_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000008U);
 }
 inline double StatusResponse::memory_usage() const {
   // @@protoc_insertion_point(field_get:acutesim.worker.StatusResponse.memory_usage)
@@ -2914,7 +5592,7 @@ inline double StatusResponse::memory_usage() const {
 }
 inline void StatusResponse::set_memory_usage(double value) {
   _internal_set_memory_usage(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:acutesim.worker.StatusResponse.memory_usage)
 }
 inline double StatusResponse::_internal_memory_usage() const {
@@ -2926,76 +5604,36 @@ inline void StatusResponse::_internal_set_memory_usage(double value) {
   _impl_.memory_usage_ = value;
 }
 
-// repeated string supported_tools = 6;
-inline int StatusResponse::_internal_supported_tools_size() const {
-  return _internal_supported_tools().size();
+// map<string, string> tools = 6;
+inline int StatusResponse::_internal_tools_size() const {
+  return _internal_tools().size();
 }
-inline int StatusResponse::supported_tools_size() const {
-  return _internal_supported_tools_size();
+inline int StatusResponse::tools_size() const {
+  return _internal_tools_size();
 }
-inline void StatusResponse::clear_supported_tools() {
+inline void StatusResponse::clear_tools() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.supported_tools_.Clear();
+  _impl_.tools_.Clear();
   ClearHasBitForRepeated(_impl_._has_bits_[0],
-                  0x00000001U);
+                  0x00000020U);
 }
-inline ::std::string* PROTOBUF_NONNULL StatusResponse::add_supported_tools()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::std::string* _s =
-      _internal_mutable_supported_tools()->InternalAddWithArena(
-          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_add_mutable:acutesim.worker.StatusResponse.supported_tools)
-  return _s;
-}
-inline const ::std::string& StatusResponse::supported_tools(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:acutesim.worker.StatusResponse.supported_tools)
-  return _internal_supported_tools().Get(index);
-}
-inline ::std::string* PROTOBUF_NONNULL StatusResponse::mutable_supported_tools(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:acutesim.worker.StatusResponse.supported_tools)
-  return _internal_mutable_supported_tools()->Mutable(index);
-}
-template <typename Arg_, typename... Args_>
-inline void StatusResponse::set_supported_tools(int index, Arg_&& value, Args_... args) {
-  ::google::protobuf::internal::AssignToString(*_internal_mutable_supported_tools()->Mutable(index), ::std::forward<Arg_>(value),
-                        args... );
-  // @@protoc_insertion_point(field_set:acutesim.worker.StatusResponse.supported_tools)
-}
-template <typename Arg_, typename... Args_>
-inline void StatusResponse::add_supported_tools(Arg_&& value, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::google::protobuf::internal::AddToRepeatedPtrField(
-      ::google::protobuf::MessageLite::internal_visibility(), GetArena(),
-      *_internal_mutable_supported_tools(), ::std::forward<Arg_>(value),
-      args... );
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_add:acutesim.worker.StatusResponse.supported_tools)
-}
-inline const ::google::protobuf::RepeatedPtrField<::std::string>& StatusResponse::supported_tools()
-    const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:acutesim.worker.StatusResponse.supported_tools)
-  return _internal_supported_tools();
-}
-inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
-StatusResponse::mutable_supported_tools() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_mutable_list:acutesim.worker.StatusResponse.supported_tools)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_supported_tools();
-}
-inline const ::google::protobuf::RepeatedPtrField<::std::string>&
-StatusResponse::_internal_supported_tools() const {
+inline const ::google::protobuf::Map<::std::string, ::std::string>& StatusResponse::_internal_tools() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.supported_tools_;
+  return _impl_.tools_.GetMap();
 }
-inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
-StatusResponse::_internal_mutable_supported_tools() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.supported_tools_;
+inline const ::google::protobuf::Map<::std::string, ::std::string>& StatusResponse::tools() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:acutesim.worker.StatusResponse.tools)
+  return _internal_tools();
+}
+inline ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL StatusResponse::_internal_mutable_tools() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.tools_.MutableMap();
+}
+inline ::google::protobuf::Map<::std::string, ::std::string>* PROTOBUF_NONNULL StatusResponse::mutable_tools()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_mutable_map:acutesim.worker.StatusResponse.tools)
+  return _internal_mutable_tools();
 }
 
 // -------------------------------------------------------------------
@@ -4807,49 +7445,49 @@ inline void PnRLog::set_allocated_gds_file(::acutesim::worker::FileData* PROTOBU
 
 // -------------------------------------------------------------------
 
-// SimulationRequest
+// HDLSimulationRequest
 
 // string job_id = 1;
-inline void SimulationRequest::clear_job_id() {
+inline void HDLSimulationRequest::clear_job_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.job_id_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000002U);
 }
-inline const ::std::string& SimulationRequest::job_id() const
+inline const ::std::string& HDLSimulationRequest::job_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:acutesim.worker.SimulationRequest.job_id)
+  // @@protoc_insertion_point(field_get:acutesim.worker.HDLSimulationRequest.job_id)
   return _internal_job_id();
 }
 template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void SimulationRequest::set_job_id(Arg_&& arg, Args_... args) {
+PROTOBUF_ALWAYS_INLINE void HDLSimulationRequest::set_job_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:acutesim.worker.SimulationRequest.job_id)
+  // @@protoc_insertion_point(field_set:acutesim.worker.HDLSimulationRequest.job_id)
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationRequest::mutable_job_id()
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationRequest::mutable_job_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_job_id();
-  // @@protoc_insertion_point(field_mutable:acutesim.worker.SimulationRequest.job_id)
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.HDLSimulationRequest.job_id)
   return _s;
 }
-inline const ::std::string& SimulationRequest::_internal_job_id() const {
+inline const ::std::string& HDLSimulationRequest::_internal_job_id() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.job_id_.Get();
 }
-inline void SimulationRequest::_internal_set_job_id(const ::std::string& value) {
+inline void HDLSimulationRequest::_internal_set_job_id(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.job_id_.Set(value, GetArena());
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationRequest::_internal_mutable_job_id() {
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationRequest::_internal_mutable_job_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _impl_.job_id_.Mutable( GetArena());
 }
-inline ::std::string* PROTOBUF_NULLABLE SimulationRequest::release_job_id() {
+inline ::std::string* PROTOBUF_NULLABLE HDLSimulationRequest::release_job_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:acutesim.worker.SimulationRequest.job_id)
+  // @@protoc_insertion_point(field_release:acutesim.worker.HDLSimulationRequest.job_id)
   if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
@@ -4860,7 +7498,7 @@ inline ::std::string* PROTOBUF_NULLABLE SimulationRequest::release_job_id() {
   }
   return released;
 }
-inline void SimulationRequest::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+inline void HDLSimulationRequest::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000002U);
@@ -4871,106 +7509,106 @@ inline void SimulationRequest::set_allocated_job_id(::std::string* PROTOBUF_NULL
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
     _impl_.job_id_.Set("", GetArena());
   }
-  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SimulationRequest.job_id)
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.HDLSimulationRequest.job_id)
 }
 
 // repeated .acutesim.worker.FileData source_files = 2;
-inline int SimulationRequest::_internal_source_files_size() const {
+inline int HDLSimulationRequest::_internal_source_files_size() const {
   return _internal_source_files().size();
 }
-inline int SimulationRequest::source_files_size() const {
+inline int HDLSimulationRequest::source_files_size() const {
   return _internal_source_files_size();
 }
-inline void SimulationRequest::clear_source_files() {
+inline void HDLSimulationRequest::clear_source_files() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_files_.Clear();
   ClearHasBitForRepeated(_impl_._has_bits_[0],
                   0x00000001U);
 }
-inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SimulationRequest::mutable_source_files(int index)
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL HDLSimulationRequest::mutable_source_files(int index)
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:acutesim.worker.SimulationRequest.source_files)
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.HDLSimulationRequest.source_files)
   return _internal_mutable_source_files()->Mutable(index);
 }
-inline ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>* PROTOBUF_NONNULL SimulationRequest::mutable_source_files()
+inline ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>* PROTOBUF_NONNULL HDLSimulationRequest::mutable_source_files()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_mutable_list:acutesim.worker.SimulationRequest.source_files)
+  // @@protoc_insertion_point(field_mutable_list:acutesim.worker.HDLSimulationRequest.source_files)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_source_files();
 }
-inline const ::acutesim::worker::FileData& SimulationRequest::source_files(int index) const
+inline const ::acutesim::worker::FileData& HDLSimulationRequest::source_files(int index) const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:acutesim.worker.SimulationRequest.source_files)
+  // @@protoc_insertion_point(field_get:acutesim.worker.HDLSimulationRequest.source_files)
   return _internal_source_files().Get(index);
 }
-inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SimulationRequest::add_source_files()
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL HDLSimulationRequest::add_source_files()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   ::acutesim::worker::FileData* _add =
       _internal_mutable_source_files()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
   SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_add:acutesim.worker.SimulationRequest.source_files)
+  // @@protoc_insertion_point(field_add:acutesim.worker.HDLSimulationRequest.source_files)
   return _add;
 }
-inline const ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>& SimulationRequest::source_files() const
+inline const ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>& HDLSimulationRequest::source_files() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:acutesim.worker.SimulationRequest.source_files)
+  // @@protoc_insertion_point(field_list:acutesim.worker.HDLSimulationRequest.source_files)
   return _internal_source_files();
 }
 inline const ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>&
-SimulationRequest::_internal_source_files() const {
+HDLSimulationRequest::_internal_source_files() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.source_files_;
 }
 inline ::google::protobuf::RepeatedPtrField<::acutesim::worker::FileData>* PROTOBUF_NONNULL
-SimulationRequest::_internal_mutable_source_files() {
+HDLSimulationRequest::_internal_mutable_source_files() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.source_files_;
 }
 
 // string testbench_module = 3;
-inline void SimulationRequest::clear_testbench_module() {
+inline void HDLSimulationRequest::clear_testbench_module() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.testbench_module_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000004U);
 }
-inline const ::std::string& SimulationRequest::testbench_module() const
+inline const ::std::string& HDLSimulationRequest::testbench_module() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:acutesim.worker.SimulationRequest.testbench_module)
+  // @@protoc_insertion_point(field_get:acutesim.worker.HDLSimulationRequest.testbench_module)
   return _internal_testbench_module();
 }
 template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void SimulationRequest::set_testbench_module(Arg_&& arg, Args_... args) {
+PROTOBUF_ALWAYS_INLINE void HDLSimulationRequest::set_testbench_module(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.testbench_module_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:acutesim.worker.SimulationRequest.testbench_module)
+  // @@protoc_insertion_point(field_set:acutesim.worker.HDLSimulationRequest.testbench_module)
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationRequest::mutable_testbench_module()
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationRequest::mutable_testbench_module()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_testbench_module();
-  // @@protoc_insertion_point(field_mutable:acutesim.worker.SimulationRequest.testbench_module)
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.HDLSimulationRequest.testbench_module)
   return _s;
 }
-inline const ::std::string& SimulationRequest::_internal_testbench_module() const {
+inline const ::std::string& HDLSimulationRequest::_internal_testbench_module() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.testbench_module_.Get();
 }
-inline void SimulationRequest::_internal_set_testbench_module(const ::std::string& value) {
+inline void HDLSimulationRequest::_internal_set_testbench_module(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.testbench_module_.Set(value, GetArena());
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationRequest::_internal_mutable_testbench_module() {
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationRequest::_internal_mutable_testbench_module() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _impl_.testbench_module_.Mutable( GetArena());
 }
-inline ::std::string* PROTOBUF_NULLABLE SimulationRequest::release_testbench_module() {
+inline ::std::string* PROTOBUF_NULLABLE HDLSimulationRequest::release_testbench_module() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:acutesim.worker.SimulationRequest.testbench_module)
+  // @@protoc_insertion_point(field_release:acutesim.worker.HDLSimulationRequest.testbench_module)
   if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
@@ -4981,7 +7619,7 @@ inline ::std::string* PROTOBUF_NULLABLE SimulationRequest::release_testbench_mod
   }
   return released;
 }
-inline void SimulationRequest::set_allocated_testbench_module(::std::string* PROTOBUF_NULLABLE value) {
+inline void HDLSimulationRequest::set_allocated_testbench_module(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000004U);
@@ -4992,54 +7630,54 @@ inline void SimulationRequest::set_allocated_testbench_module(::std::string* PRO
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.testbench_module_.IsDefault()) {
     _impl_.testbench_module_.Set("", GetArena());
   }
-  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SimulationRequest.testbench_module)
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.HDLSimulationRequest.testbench_module)
 }
 
 // -------------------------------------------------------------------
 
-// SimulationLog
+// HDLSimulationLog
 
 // string job_id = 1;
-inline void SimulationLog::clear_job_id() {
+inline void HDLSimulationLog::clear_job_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.job_id_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000001U);
 }
-inline const ::std::string& SimulationLog::job_id() const
+inline const ::std::string& HDLSimulationLog::job_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:acutesim.worker.SimulationLog.job_id)
+  // @@protoc_insertion_point(field_get:acutesim.worker.HDLSimulationLog.job_id)
   return _internal_job_id();
 }
 template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void SimulationLog::set_job_id(Arg_&& arg, Args_... args) {
+PROTOBUF_ALWAYS_INLINE void HDLSimulationLog::set_job_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:acutesim.worker.SimulationLog.job_id)
+  // @@protoc_insertion_point(field_set:acutesim.worker.HDLSimulationLog.job_id)
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationLog::mutable_job_id()
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationLog::mutable_job_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   ::std::string* _s = _internal_mutable_job_id();
-  // @@protoc_insertion_point(field_mutable:acutesim.worker.SimulationLog.job_id)
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.HDLSimulationLog.job_id)
   return _s;
 }
-inline const ::std::string& SimulationLog::_internal_job_id() const {
+inline const ::std::string& HDLSimulationLog::_internal_job_id() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.job_id_.Get();
 }
-inline void SimulationLog::_internal_set_job_id(const ::std::string& value) {
+inline void HDLSimulationLog::_internal_set_job_id(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.job_id_.Set(value, GetArena());
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationLog::_internal_mutable_job_id() {
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationLog::_internal_mutable_job_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _impl_.job_id_.Mutable( GetArena());
 }
-inline ::std::string* PROTOBUF_NULLABLE SimulationLog::release_job_id() {
+inline ::std::string* PROTOBUF_NULLABLE HDLSimulationLog::release_job_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:acutesim.worker.SimulationLog.job_id)
+  // @@protoc_insertion_point(field_release:acutesim.worker.HDLSimulationLog.job_id)
   if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
     return nullptr;
   }
@@ -5050,7 +7688,7 @@ inline ::std::string* PROTOBUF_NULLABLE SimulationLog::release_job_id() {
   }
   return released;
 }
-inline void SimulationLog::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+inline void HDLSimulationLog::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000001U);
@@ -5061,50 +7699,50 @@ inline void SimulationLog::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
     _impl_.job_id_.Set("", GetArena());
   }
-  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SimulationLog.job_id)
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.HDLSimulationLog.job_id)
 }
 
 // string log_line = 2;
-inline void SimulationLog::clear_log_line() {
+inline void HDLSimulationLog::clear_log_line() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.log_line_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000002U);
 }
-inline const ::std::string& SimulationLog::log_line() const
+inline const ::std::string& HDLSimulationLog::log_line() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:acutesim.worker.SimulationLog.log_line)
+  // @@protoc_insertion_point(field_get:acutesim.worker.HDLSimulationLog.log_line)
   return _internal_log_line();
 }
 template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void SimulationLog::set_log_line(Arg_&& arg, Args_... args) {
+PROTOBUF_ALWAYS_INLINE void HDLSimulationLog::set_log_line(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.log_line_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:acutesim.worker.SimulationLog.log_line)
+  // @@protoc_insertion_point(field_set:acutesim.worker.HDLSimulationLog.log_line)
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationLog::mutable_log_line()
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationLog::mutable_log_line()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_log_line();
-  // @@protoc_insertion_point(field_mutable:acutesim.worker.SimulationLog.log_line)
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.HDLSimulationLog.log_line)
   return _s;
 }
-inline const ::std::string& SimulationLog::_internal_log_line() const {
+inline const ::std::string& HDLSimulationLog::_internal_log_line() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.log_line_.Get();
 }
-inline void SimulationLog::_internal_set_log_line(const ::std::string& value) {
+inline void HDLSimulationLog::_internal_set_log_line(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.log_line_.Set(value, GetArena());
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationLog::_internal_mutable_log_line() {
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationLog::_internal_mutable_log_line() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _impl_.log_line_.Mutable( GetArena());
 }
-inline ::std::string* PROTOBUF_NULLABLE SimulationLog::release_log_line() {
+inline ::std::string* PROTOBUF_NULLABLE HDLSimulationLog::release_log_line() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:acutesim.worker.SimulationLog.log_line)
+  // @@protoc_insertion_point(field_release:acutesim.worker.HDLSimulationLog.log_line)
   if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
@@ -5115,7 +7753,7 @@ inline ::std::string* PROTOBUF_NULLABLE SimulationLog::release_log_line() {
   }
   return released;
 }
-inline void SimulationLog::set_allocated_log_line(::std::string* PROTOBUF_NULLABLE value) {
+inline void HDLSimulationLog::set_allocated_log_line(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000002U);
@@ -5126,75 +7764,75 @@ inline void SimulationLog::set_allocated_log_line(::std::string* PROTOBUF_NULLAB
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.log_line_.IsDefault()) {
     _impl_.log_line_.Set("", GetArena());
   }
-  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SimulationLog.log_line)
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.HDLSimulationLog.log_line)
 }
 
 // bool is_finished = 3;
-inline void SimulationLog::clear_is_finished() {
+inline void HDLSimulationLog::clear_is_finished() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_finished_ = false;
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000008U);
 }
-inline bool SimulationLog::is_finished() const {
-  // @@protoc_insertion_point(field_get:acutesim.worker.SimulationLog.is_finished)
+inline bool HDLSimulationLog::is_finished() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.HDLSimulationLog.is_finished)
   return _internal_is_finished();
 }
-inline void SimulationLog::set_is_finished(bool value) {
+inline void HDLSimulationLog::set_is_finished(bool value) {
   _internal_set_is_finished(value);
   SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  // @@protoc_insertion_point(field_set:acutesim.worker.SimulationLog.is_finished)
+  // @@protoc_insertion_point(field_set:acutesim.worker.HDLSimulationLog.is_finished)
 }
-inline bool SimulationLog::_internal_is_finished() const {
+inline bool HDLSimulationLog::_internal_is_finished() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.is_finished_;
 }
-inline void SimulationLog::_internal_set_is_finished(bool value) {
+inline void HDLSimulationLog::_internal_set_is_finished(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_finished_ = value;
 }
 
 // bytes vcd_chunk = 4;
-inline void SimulationLog::clear_vcd_chunk() {
+inline void HDLSimulationLog::clear_vcd_chunk() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.vcd_chunk_.ClearToEmpty();
   ClearHasBit(_impl_._has_bits_[0],
                   0x00000004U);
 }
-inline const ::std::string& SimulationLog::vcd_chunk() const
+inline const ::std::string& HDLSimulationLog::vcd_chunk() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:acutesim.worker.SimulationLog.vcd_chunk)
+  // @@protoc_insertion_point(field_get:acutesim.worker.HDLSimulationLog.vcd_chunk)
   return _internal_vcd_chunk();
 }
 template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void SimulationLog::set_vcd_chunk(Arg_&& arg, Args_... args) {
+PROTOBUF_ALWAYS_INLINE void HDLSimulationLog::set_vcd_chunk(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.vcd_chunk_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:acutesim.worker.SimulationLog.vcd_chunk)
+  // @@protoc_insertion_point(field_set:acutesim.worker.HDLSimulationLog.vcd_chunk)
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationLog::mutable_vcd_chunk()
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationLog::mutable_vcd_chunk()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_vcd_chunk();
-  // @@protoc_insertion_point(field_mutable:acutesim.worker.SimulationLog.vcd_chunk)
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.HDLSimulationLog.vcd_chunk)
   return _s;
 }
-inline const ::std::string& SimulationLog::_internal_vcd_chunk() const {
+inline const ::std::string& HDLSimulationLog::_internal_vcd_chunk() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.vcd_chunk_.Get();
 }
-inline void SimulationLog::_internal_set_vcd_chunk(const ::std::string& value) {
+inline void HDLSimulationLog::_internal_set_vcd_chunk(const ::std::string& value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.vcd_chunk_.Set(value, GetArena());
 }
-inline ::std::string* PROTOBUF_NONNULL SimulationLog::_internal_mutable_vcd_chunk() {
+inline ::std::string* PROTOBUF_NONNULL HDLSimulationLog::_internal_mutable_vcd_chunk() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _impl_.vcd_chunk_.Mutable( GetArena());
 }
-inline ::std::string* PROTOBUF_NULLABLE SimulationLog::release_vcd_chunk() {
+inline ::std::string* PROTOBUF_NULLABLE HDLSimulationLog::release_vcd_chunk() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:acutesim.worker.SimulationLog.vcd_chunk)
+  // @@protoc_insertion_point(field_release:acutesim.worker.HDLSimulationLog.vcd_chunk)
   if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
@@ -5205,7 +7843,7 @@ inline ::std::string* PROTOBUF_NULLABLE SimulationLog::release_vcd_chunk() {
   }
   return released;
 }
-inline void SimulationLog::set_allocated_vcd_chunk(::std::string* PROTOBUF_NULLABLE value) {
+inline void HDLSimulationLog::set_allocated_vcd_chunk(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
     SetHasBit(_impl_._has_bits_[0], 0x00000004U);
@@ -5216,7 +7854,3330 @@ inline void SimulationLog::set_allocated_vcd_chunk(::std::string* PROTOBUF_NULLA
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.vcd_chunk_.IsDefault()) {
     _impl_.vcd_chunk_.Set("", GetArena());
   }
-  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SimulationLog.vcd_chunk)
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.HDLSimulationLog.vcd_chunk)
+}
+
+// -------------------------------------------------------------------
+
+// CircuitSimulationRequest_Analysis
+
+// string type = 1;
+inline void CircuitSimulationRequest_Analysis::clear_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.type_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& CircuitSimulationRequest_Analysis::type() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.Analysis.type)
+  return _internal_type();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CircuitSimulationRequest_Analysis::set_type(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.type_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationRequest.Analysis.type)
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationRequest_Analysis::mutable_type()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_type();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationRequest.Analysis.type)
+  return _s;
+}
+inline const ::std::string& CircuitSimulationRequest_Analysis::_internal_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.type_.Get();
+}
+inline void CircuitSimulationRequest_Analysis::_internal_set_type(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.type_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationRequest_Analysis::_internal_mutable_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.type_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CircuitSimulationRequest_Analysis::release_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationRequest.Analysis.type)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.type_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.type_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CircuitSimulationRequest_Analysis::set_allocated_type(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.type_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.type_.IsDefault()) {
+    _impl_.type_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationRequest.Analysis.type)
+}
+
+// double t_start = 2;
+inline void CircuitSimulationRequest_Analysis::clear_t_start() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.t_start_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline double CircuitSimulationRequest_Analysis::t_start() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.Analysis.t_start)
+  return _internal_t_start();
+}
+inline void CircuitSimulationRequest_Analysis::set_t_start(double value) {
+  _internal_set_t_start(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationRequest.Analysis.t_start)
+}
+inline double CircuitSimulationRequest_Analysis::_internal_t_start() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.t_start_;
+}
+inline void CircuitSimulationRequest_Analysis::_internal_set_t_start(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.t_start_ = value;
+}
+
+// double t_stop = 3;
+inline void CircuitSimulationRequest_Analysis::clear_t_stop() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.t_stop_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline double CircuitSimulationRequest_Analysis::t_stop() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.Analysis.t_stop)
+  return _internal_t_stop();
+}
+inline void CircuitSimulationRequest_Analysis::set_t_stop(double value) {
+  _internal_set_t_stop(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationRequest.Analysis.t_stop)
+}
+inline double CircuitSimulationRequest_Analysis::_internal_t_stop() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.t_stop_;
+}
+inline void CircuitSimulationRequest_Analysis::_internal_set_t_stop(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.t_stop_ = value;
+}
+
+// double t_step = 4;
+inline void CircuitSimulationRequest_Analysis::clear_t_step() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.t_step_ = 0;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline double CircuitSimulationRequest_Analysis::t_step() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.Analysis.t_step)
+  return _internal_t_step();
+}
+inline void CircuitSimulationRequest_Analysis::set_t_step(double value) {
+  _internal_set_t_step(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationRequest.Analysis.t_step)
+}
+inline double CircuitSimulationRequest_Analysis::_internal_t_step() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.t_step_;
+}
+inline void CircuitSimulationRequest_Analysis::_internal_set_t_step(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.t_step_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CircuitSimulationRequest
+
+// string job_id = 1;
+inline void CircuitSimulationRequest::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& CircuitSimulationRequest::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CircuitSimulationRequest::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationRequest.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationRequest::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationRequest.job_id)
+  return _s;
+}
+inline const ::std::string& CircuitSimulationRequest::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void CircuitSimulationRequest::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationRequest::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CircuitSimulationRequest::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationRequest.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CircuitSimulationRequest::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationRequest.job_id)
+}
+
+// .acutesim.worker.FileData netlist_json = 2;
+inline bool CircuitSimulationRequest::has_netlist_json() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.netlist_json_ != nullptr);
+  return value;
+}
+inline void CircuitSimulationRequest::clear_netlist_json() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.netlist_json_ != nullptr) _impl_.netlist_json_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::acutesim::worker::FileData& CircuitSimulationRequest::_internal_netlist_json() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.netlist_json_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& CircuitSimulationRequest::netlist_json() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.netlist_json)
+  return _internal_netlist_json();
+}
+inline void CircuitSimulationRequest::unsafe_arena_set_allocated_netlist_json(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.netlist_json_);
+  }
+  _impl_.netlist_json_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.CircuitSimulationRequest.netlist_json)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE CircuitSimulationRequest::release_netlist_json() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* released = _impl_.netlist_json_;
+  _impl_.netlist_json_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE CircuitSimulationRequest::unsafe_arena_release_netlist_json() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationRequest.netlist_json)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* temp = _impl_.netlist_json_;
+  _impl_.netlist_json_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL CircuitSimulationRequest::_internal_mutable_netlist_json() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.netlist_json_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.netlist_json_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.netlist_json_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL CircuitSimulationRequest::mutable_netlist_json()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_netlist_json();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationRequest.netlist_json)
+  return _msg;
+}
+inline void CircuitSimulationRequest::set_allocated_netlist_json(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.netlist_json_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.netlist_json_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationRequest.netlist_json)
+}
+
+// string solver_mode = 3;
+inline void CircuitSimulationRequest::clear_solver_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.solver_mode_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& CircuitSimulationRequest::solver_mode() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.solver_mode)
+  return _internal_solver_mode();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CircuitSimulationRequest::set_solver_mode(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.solver_mode_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationRequest.solver_mode)
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationRequest::mutable_solver_mode()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_solver_mode();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationRequest.solver_mode)
+  return _s;
+}
+inline const ::std::string& CircuitSimulationRequest::_internal_solver_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.solver_mode_.Get();
+}
+inline void CircuitSimulationRequest::_internal_set_solver_mode(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.solver_mode_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationRequest::_internal_mutable_solver_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.solver_mode_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CircuitSimulationRequest::release_solver_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationRequest.solver_mode)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.solver_mode_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.solver_mode_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CircuitSimulationRequest::set_allocated_solver_mode(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.solver_mode_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.solver_mode_.IsDefault()) {
+    _impl_.solver_mode_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationRequest.solver_mode)
+}
+
+// string precision = 4;
+inline void CircuitSimulationRequest::clear_precision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.precision_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& CircuitSimulationRequest::precision() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.precision)
+  return _internal_precision();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CircuitSimulationRequest::set_precision(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.precision_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationRequest.precision)
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationRequest::mutable_precision()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_precision();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationRequest.precision)
+  return _s;
+}
+inline const ::std::string& CircuitSimulationRequest::_internal_precision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.precision_.Get();
+}
+inline void CircuitSimulationRequest::_internal_set_precision(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.precision_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationRequest::_internal_mutable_precision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.precision_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CircuitSimulationRequest::release_precision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationRequest.precision)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.precision_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.precision_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CircuitSimulationRequest::set_allocated_precision(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.precision_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.precision_.IsDefault()) {
+    _impl_.precision_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationRequest.precision)
+}
+
+// .acutesim.worker.CircuitSimulationRequest.Analysis analysis = 5;
+inline bool CircuitSimulationRequest::has_analysis() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.analysis_ != nullptr);
+  return value;
+}
+inline void CircuitSimulationRequest::clear_analysis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.analysis_ != nullptr) _impl_.analysis_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline const ::acutesim::worker::CircuitSimulationRequest_Analysis& CircuitSimulationRequest::_internal_analysis() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::CircuitSimulationRequest_Analysis* p = _impl_.analysis_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::CircuitSimulationRequest_Analysis&>(::acutesim::worker::_CircuitSimulationRequest_Analysis_default_instance_);
+}
+inline const ::acutesim::worker::CircuitSimulationRequest_Analysis& CircuitSimulationRequest::analysis() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationRequest.analysis)
+  return _internal_analysis();
+}
+inline void CircuitSimulationRequest::unsafe_arena_set_allocated_analysis(
+    ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.analysis_);
+  }
+  _impl_.analysis_ = reinterpret_cast<::acutesim::worker::CircuitSimulationRequest_Analysis*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.CircuitSimulationRequest.analysis)
+}
+inline ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE CircuitSimulationRequest::release_analysis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::CircuitSimulationRequest_Analysis* released = _impl_.analysis_;
+  _impl_.analysis_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE CircuitSimulationRequest::unsafe_arena_release_analysis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationRequest.analysis)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::CircuitSimulationRequest_Analysis* temp = _impl_.analysis_;
+  _impl_.analysis_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL CircuitSimulationRequest::_internal_mutable_analysis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.analysis_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::CircuitSimulationRequest_Analysis>(GetArena());
+    _impl_.analysis_ = reinterpret_cast<::acutesim::worker::CircuitSimulationRequest_Analysis*>(p);
+  }
+  return _impl_.analysis_;
+}
+inline ::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NONNULL CircuitSimulationRequest::mutable_analysis()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::CircuitSimulationRequest_Analysis* _msg = _internal_mutable_analysis();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationRequest.analysis)
+  return _msg;
+}
+inline void CircuitSimulationRequest::set_allocated_analysis(::acutesim::worker::CircuitSimulationRequest_Analysis* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.analysis_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.analysis_ = reinterpret_cast<::acutesim::worker::CircuitSimulationRequest_Analysis*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationRequest.analysis)
+}
+
+// -------------------------------------------------------------------
+
+// CircuitSimulationLog
+
+// string job_id = 1;
+inline void CircuitSimulationLog::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& CircuitSimulationLog::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationLog.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CircuitSimulationLog::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationLog.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationLog::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationLog.job_id)
+  return _s;
+}
+inline const ::std::string& CircuitSimulationLog::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void CircuitSimulationLog::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationLog::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CircuitSimulationLog::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationLog.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CircuitSimulationLog::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationLog.job_id)
+}
+
+// string log_line = 2;
+inline void CircuitSimulationLog::clear_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.log_line_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& CircuitSimulationLog::log_line() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationLog.log_line)
+  return _internal_log_line();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CircuitSimulationLog::set_log_line(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.log_line_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationLog.log_line)
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationLog::mutable_log_line()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_log_line();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationLog.log_line)
+  return _s;
+}
+inline const ::std::string& CircuitSimulationLog::_internal_log_line() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.log_line_.Get();
+}
+inline void CircuitSimulationLog::_internal_set_log_line(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.log_line_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationLog::_internal_mutable_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.log_line_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CircuitSimulationLog::release_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationLog.log_line)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.log_line_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.log_line_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CircuitSimulationLog::set_allocated_log_line(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.log_line_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.log_line_.IsDefault()) {
+    _impl_.log_line_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationLog.log_line)
+}
+
+// bool is_finished = 3;
+inline void CircuitSimulationLog::clear_is_finished() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_finished_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline bool CircuitSimulationLog::is_finished() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationLog.is_finished)
+  return _internal_is_finished();
+}
+inline void CircuitSimulationLog::set_is_finished(bool value) {
+  _internal_set_is_finished(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationLog.is_finished)
+}
+inline bool CircuitSimulationLog::_internal_is_finished() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_finished_;
+}
+inline void CircuitSimulationLog::_internal_set_is_finished(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_finished_ = value;
+}
+
+// bytes result_chunk = 4;
+inline void CircuitSimulationLog::clear_result_chunk() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.result_chunk_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& CircuitSimulationLog::result_chunk() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.CircuitSimulationLog.result_chunk)
+  return _internal_result_chunk();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CircuitSimulationLog::set_result_chunk(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.result_chunk_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.CircuitSimulationLog.result_chunk)
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationLog::mutable_result_chunk()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_result_chunk();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.CircuitSimulationLog.result_chunk)
+  return _s;
+}
+inline const ::std::string& CircuitSimulationLog::_internal_result_chunk() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.result_chunk_.Get();
+}
+inline void CircuitSimulationLog::_internal_set_result_chunk(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.result_chunk_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CircuitSimulationLog::_internal_mutable_result_chunk() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.result_chunk_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CircuitSimulationLog::release_result_chunk() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.CircuitSimulationLog.result_chunk)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.result_chunk_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.result_chunk_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CircuitSimulationLog::set_allocated_result_chunk(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.result_chunk_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.result_chunk_.IsDefault()) {
+    _impl_.result_chunk_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.CircuitSimulationLog.result_chunk)
+}
+
+// -------------------------------------------------------------------
+
+// RegressionRequest
+
+// string job_id = 1;
+inline void RegressionRequest::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& RegressionRequest::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionRequest.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RegressionRequest::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionRequest.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionRequest::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.RegressionRequest.job_id)
+  return _s;
+}
+inline const ::std::string& RegressionRequest::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void RegressionRequest::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionRequest::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RegressionRequest::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.RegressionRequest.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RegressionRequest::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.RegressionRequest.job_id)
+}
+
+// string suite_name = 2;
+inline void RegressionRequest::clear_suite_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.suite_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& RegressionRequest::suite_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionRequest.suite_name)
+  return _internal_suite_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RegressionRequest::set_suite_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.suite_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionRequest.suite_name)
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionRequest::mutable_suite_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_suite_name();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.RegressionRequest.suite_name)
+  return _s;
+}
+inline const ::std::string& RegressionRequest::_internal_suite_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.suite_name_.Get();
+}
+inline void RegressionRequest::_internal_set_suite_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.suite_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionRequest::_internal_mutable_suite_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.suite_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RegressionRequest::release_suite_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.RegressionRequest.suite_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.suite_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.suite_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RegressionRequest::set_allocated_suite_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.suite_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.suite_name_.IsDefault()) {
+    _impl_.suite_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.RegressionRequest.suite_name)
+}
+
+// string solver_mode = 3;
+inline void RegressionRequest::clear_solver_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.solver_mode_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& RegressionRequest::solver_mode() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionRequest.solver_mode)
+  return _internal_solver_mode();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RegressionRequest::set_solver_mode(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.solver_mode_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionRequest.solver_mode)
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionRequest::mutable_solver_mode()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_solver_mode();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.RegressionRequest.solver_mode)
+  return _s;
+}
+inline const ::std::string& RegressionRequest::_internal_solver_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.solver_mode_.Get();
+}
+inline void RegressionRequest::_internal_set_solver_mode(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.solver_mode_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionRequest::_internal_mutable_solver_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.solver_mode_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RegressionRequest::release_solver_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.RegressionRequest.solver_mode)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.solver_mode_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.solver_mode_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RegressionRequest::set_allocated_solver_mode(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.solver_mode_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.solver_mode_.IsDefault()) {
+    _impl_.solver_mode_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.RegressionRequest.solver_mode)
+}
+
+// string precision = 4;
+inline void RegressionRequest::clear_precision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.precision_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::std::string& RegressionRequest::precision() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionRequest.precision)
+  return _internal_precision();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RegressionRequest::set_precision(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.precision_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionRequest.precision)
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionRequest::mutable_precision()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_precision();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.RegressionRequest.precision)
+  return _s;
+}
+inline const ::std::string& RegressionRequest::_internal_precision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.precision_.Get();
+}
+inline void RegressionRequest::_internal_set_precision(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.precision_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionRequest::_internal_mutable_precision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.precision_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RegressionRequest::release_precision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.RegressionRequest.precision)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.precision_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.precision_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RegressionRequest::set_allocated_precision(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.precision_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.precision_.IsDefault()) {
+    _impl_.precision_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.RegressionRequest.precision)
+}
+
+// -------------------------------------------------------------------
+
+// RegressionLog
+
+// string job_id = 1;
+inline void RegressionLog::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& RegressionLog::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionLog.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RegressionLog::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionLog.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionLog::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.RegressionLog.job_id)
+  return _s;
+}
+inline const ::std::string& RegressionLog::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void RegressionLog::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionLog::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RegressionLog::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.RegressionLog.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RegressionLog::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.RegressionLog.job_id)
+}
+
+// string log_line = 2;
+inline void RegressionLog::clear_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.log_line_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& RegressionLog::log_line() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionLog.log_line)
+  return _internal_log_line();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RegressionLog::set_log_line(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.log_line_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionLog.log_line)
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionLog::mutable_log_line()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_log_line();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.RegressionLog.log_line)
+  return _s;
+}
+inline const ::std::string& RegressionLog::_internal_log_line() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.log_line_.Get();
+}
+inline void RegressionLog::_internal_set_log_line(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.log_line_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionLog::_internal_mutable_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.log_line_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RegressionLog::release_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.RegressionLog.log_line)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.log_line_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.log_line_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RegressionLog::set_allocated_log_line(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.log_line_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.log_line_.IsDefault()) {
+    _impl_.log_line_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.RegressionLog.log_line)
+}
+
+// bool is_error = 3;
+inline void RegressionLog::clear_is_error() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_error_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline bool RegressionLog::is_error() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionLog.is_error)
+  return _internal_is_error();
+}
+inline void RegressionLog::set_is_error(bool value) {
+  _internal_set_is_error(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionLog.is_error)
+}
+inline bool RegressionLog::_internal_is_error() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_error_;
+}
+inline void RegressionLog::_internal_set_is_error(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_error_ = value;
+}
+
+// bool is_finished = 4;
+inline void RegressionLog::clear_is_finished() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_finished_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline bool RegressionLog::is_finished() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionLog.is_finished)
+  return _internal_is_finished();
+}
+inline void RegressionLog::set_is_finished(bool value) {
+  _internal_set_is_finished(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionLog.is_finished)
+}
+inline bool RegressionLog::_internal_is_finished() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_finished_;
+}
+inline void RegressionLog::_internal_set_is_finished(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_finished_ = value;
+}
+
+// bool passed = 5;
+inline void RegressionLog::clear_passed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.passed_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline bool RegressionLog::passed() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionLog.passed)
+  return _internal_passed();
+}
+inline void RegressionLog::set_passed(bool value) {
+  _internal_set_passed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionLog.passed)
+}
+inline bool RegressionLog::_internal_passed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.passed_;
+}
+inline void RegressionLog::_internal_set_passed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.passed_ = value;
+}
+
+// string result_json = 6;
+inline void RegressionLog::clear_result_json() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.result_json_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& RegressionLog::result_json() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.RegressionLog.result_json)
+  return _internal_result_json();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RegressionLog::set_result_json(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.result_json_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.RegressionLog.result_json)
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionLog::mutable_result_json()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_result_json();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.RegressionLog.result_json)
+  return _s;
+}
+inline const ::std::string& RegressionLog::_internal_result_json() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.result_json_.Get();
+}
+inline void RegressionLog::_internal_set_result_json(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.result_json_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RegressionLog::_internal_mutable_result_json() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.result_json_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RegressionLog::release_result_json() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.RegressionLog.result_json)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.result_json_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.result_json_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RegressionLog::set_allocated_result_json(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.result_json_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.result_json_.IsDefault()) {
+    _impl_.result_json_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.RegressionLog.result_json)
+}
+
+// -------------------------------------------------------------------
+
+// SignOffRequest
+
+// string job_id = 1;
+inline void SignOffRequest::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& SignOffRequest::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffRequest.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SignOffRequest::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.SignOffRequest.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL SignOffRequest::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.SignOffRequest.job_id)
+  return _s;
+}
+inline const ::std::string& SignOffRequest::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void SignOffRequest::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SignOffRequest::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SignOffRequest::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.SignOffRequest.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SignOffRequest::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SignOffRequest.job_id)
+}
+
+// .acutesim.worker.FileData layout_file = 2;
+inline bool SignOffRequest::has_layout_file() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.layout_file_ != nullptr);
+  return value;
+}
+inline void SignOffRequest::clear_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.layout_file_ != nullptr) _impl_.layout_file_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::acutesim::worker::FileData& SignOffRequest::_internal_layout_file() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.layout_file_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& SignOffRequest::layout_file() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffRequest.layout_file)
+  return _internal_layout_file();
+}
+inline void SignOffRequest::unsafe_arena_set_allocated_layout_file(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.layout_file_);
+  }
+  _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.SignOffRequest.layout_file)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE SignOffRequest::release_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::acutesim::worker::FileData* released = _impl_.layout_file_;
+  _impl_.layout_file_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE SignOffRequest::unsafe_arena_release_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.SignOffRequest.layout_file)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::acutesim::worker::FileData* temp = _impl_.layout_file_;
+  _impl_.layout_file_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SignOffRequest::_internal_mutable_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.layout_file_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.layout_file_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SignOffRequest::mutable_layout_file()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_layout_file();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.SignOffRequest.layout_file)
+  return _msg;
+}
+inline void SignOffRequest::set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.layout_file_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SignOffRequest.layout_file)
+}
+
+// .acutesim.worker.FileData script_file = 3;
+inline bool SignOffRequest::has_script_file() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.script_file_ != nullptr);
+  return value;
+}
+inline void SignOffRequest::clear_script_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.script_file_ != nullptr) _impl_.script_file_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::acutesim::worker::FileData& SignOffRequest::_internal_script_file() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.script_file_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& SignOffRequest::script_file() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffRequest.script_file)
+  return _internal_script_file();
+}
+inline void SignOffRequest::unsafe_arena_set_allocated_script_file(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.script_file_);
+  }
+  _impl_.script_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.SignOffRequest.script_file)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE SignOffRequest::release_script_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* released = _impl_.script_file_;
+  _impl_.script_file_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE SignOffRequest::unsafe_arena_release_script_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.SignOffRequest.script_file)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* temp = _impl_.script_file_;
+  _impl_.script_file_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SignOffRequest::_internal_mutable_script_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.script_file_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.script_file_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.script_file_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SignOffRequest::mutable_script_file()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_script_file();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.SignOffRequest.script_file)
+  return _msg;
+}
+inline void SignOffRequest::set_allocated_script_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.script_file_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.script_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SignOffRequest.script_file)
+}
+
+// string check_type = 4;
+inline void SignOffRequest::clear_check_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.check_type_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& SignOffRequest::check_type() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffRequest.check_type)
+  return _internal_check_type();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SignOffRequest::set_check_type(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.check_type_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.SignOffRequest.check_type)
+}
+inline ::std::string* PROTOBUF_NONNULL SignOffRequest::mutable_check_type()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_check_type();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.SignOffRequest.check_type)
+  return _s;
+}
+inline const ::std::string& SignOffRequest::_internal_check_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.check_type_.Get();
+}
+inline void SignOffRequest::_internal_set_check_type(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.check_type_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SignOffRequest::_internal_mutable_check_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.check_type_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SignOffRequest::release_check_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.SignOffRequest.check_type)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.check_type_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.check_type_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SignOffRequest::set_allocated_check_type(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.check_type_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.check_type_.IsDefault()) {
+    _impl_.check_type_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SignOffRequest.check_type)
+}
+
+// .acutesim.worker.FileData reference_netlist = 5;
+inline bool SignOffRequest::has_reference_netlist() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.reference_netlist_ != nullptr);
+  return value;
+}
+inline void SignOffRequest::clear_reference_netlist() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.reference_netlist_ != nullptr) _impl_.reference_netlist_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline const ::acutesim::worker::FileData& SignOffRequest::_internal_reference_netlist() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.reference_netlist_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& SignOffRequest::reference_netlist() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffRequest.reference_netlist)
+  return _internal_reference_netlist();
+}
+inline void SignOffRequest::unsafe_arena_set_allocated_reference_netlist(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.reference_netlist_);
+  }
+  _impl_.reference_netlist_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.SignOffRequest.reference_netlist)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE SignOffRequest::release_reference_netlist() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* released = _impl_.reference_netlist_;
+  _impl_.reference_netlist_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE SignOffRequest::unsafe_arena_release_reference_netlist() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.SignOffRequest.reference_netlist)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* temp = _impl_.reference_netlist_;
+  _impl_.reference_netlist_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SignOffRequest::_internal_mutable_reference_netlist() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.reference_netlist_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.reference_netlist_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.reference_netlist_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SignOffRequest::mutable_reference_netlist()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_reference_netlist();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.SignOffRequest.reference_netlist)
+  return _msg;
+}
+inline void SignOffRequest::set_allocated_reference_netlist(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.reference_netlist_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.reference_netlist_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SignOffRequest.reference_netlist)
+}
+
+// -------------------------------------------------------------------
+
+// SignOffLog
+
+// string job_id = 1;
+inline void SignOffLog::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& SignOffLog::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffLog.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SignOffLog::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.SignOffLog.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL SignOffLog::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.SignOffLog.job_id)
+  return _s;
+}
+inline const ::std::string& SignOffLog::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void SignOffLog::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SignOffLog::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SignOffLog::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.SignOffLog.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SignOffLog::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SignOffLog.job_id)
+}
+
+// string log_line = 2;
+inline void SignOffLog::clear_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.log_line_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& SignOffLog::log_line() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffLog.log_line)
+  return _internal_log_line();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SignOffLog::set_log_line(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.log_line_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.SignOffLog.log_line)
+}
+inline ::std::string* PROTOBUF_NONNULL SignOffLog::mutable_log_line()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_log_line();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.SignOffLog.log_line)
+  return _s;
+}
+inline const ::std::string& SignOffLog::_internal_log_line() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.log_line_.Get();
+}
+inline void SignOffLog::_internal_set_log_line(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.log_line_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SignOffLog::_internal_mutable_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.log_line_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SignOffLog::release_log_line() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.SignOffLog.log_line)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.log_line_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.log_line_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SignOffLog::set_allocated_log_line(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.log_line_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.log_line_.IsDefault()) {
+    _impl_.log_line_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SignOffLog.log_line)
+}
+
+// bool is_error = 3;
+inline void SignOffLog::clear_is_error() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_error_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline bool SignOffLog::is_error() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffLog.is_error)
+  return _internal_is_error();
+}
+inline void SignOffLog::set_is_error(bool value) {
+  _internal_set_is_error(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.SignOffLog.is_error)
+}
+inline bool SignOffLog::_internal_is_error() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_error_;
+}
+inline void SignOffLog::_internal_set_is_error(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_error_ = value;
+}
+
+// bool is_finished = 4;
+inline void SignOffLog::clear_is_finished() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_finished_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline bool SignOffLog::is_finished() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffLog.is_finished)
+  return _internal_is_finished();
+}
+inline void SignOffLog::set_is_finished(bool value) {
+  _internal_set_is_finished(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.SignOffLog.is_finished)
+}
+inline bool SignOffLog::_internal_is_finished() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_finished_;
+}
+inline void SignOffLog::_internal_set_is_finished(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_finished_ = value;
+}
+
+// .acutesim.worker.FileData report = 5;
+inline bool SignOffLog::has_report() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.report_ != nullptr);
+  return value;
+}
+inline void SignOffLog::clear_report() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.report_ != nullptr) _impl_.report_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::acutesim::worker::FileData& SignOffLog::_internal_report() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.report_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& SignOffLog::report() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.SignOffLog.report)
+  return _internal_report();
+}
+inline void SignOffLog::unsafe_arena_set_allocated_report(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.report_);
+  }
+  _impl_.report_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.SignOffLog.report)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE SignOffLog::release_report() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::acutesim::worker::FileData* released = _impl_.report_;
+  _impl_.report_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE SignOffLog::unsafe_arena_release_report() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.SignOffLog.report)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::acutesim::worker::FileData* temp = _impl_.report_;
+  _impl_.report_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SignOffLog::_internal_mutable_report() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.report_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.report_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.report_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL SignOffLog::mutable_report()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_report();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.SignOffLog.report)
+  return _msg;
+}
+inline void SignOffLog::set_allocated_report(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.report_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.report_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.SignOffLog.report)
+}
+
+// -------------------------------------------------------------------
+
+// LVSRequest
+
+// string job_id = 1;
+inline void LVSRequest::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& LVSRequest::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.LVSRequest.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void LVSRequest::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.LVSRequest.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL LVSRequest::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.LVSRequest.job_id)
+  return _s;
+}
+inline const ::std::string& LVSRequest::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void LVSRequest::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL LVSRequest::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE LVSRequest::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.LVSRequest.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void LVSRequest::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.LVSRequest.job_id)
+}
+
+// .acutesim.worker.FileData layout_file = 2;
+inline bool LVSRequest::has_layout_file() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.layout_file_ != nullptr);
+  return value;
+}
+inline void LVSRequest::clear_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.layout_file_ != nullptr) _impl_.layout_file_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline const ::acutesim::worker::FileData& LVSRequest::_internal_layout_file() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.layout_file_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& LVSRequest::layout_file() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.LVSRequest.layout_file)
+  return _internal_layout_file();
+}
+inline void LVSRequest::unsafe_arena_set_allocated_layout_file(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.layout_file_);
+  }
+  _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.LVSRequest.layout_file)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE LVSRequest::release_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* released = _impl_.layout_file_;
+  _impl_.layout_file_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE LVSRequest::unsafe_arena_release_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.LVSRequest.layout_file)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* temp = _impl_.layout_file_;
+  _impl_.layout_file_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL LVSRequest::_internal_mutable_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.layout_file_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.layout_file_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL LVSRequest::mutable_layout_file()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_layout_file();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.LVSRequest.layout_file)
+  return _msg;
+}
+inline void LVSRequest::set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.layout_file_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.LVSRequest.layout_file)
+}
+
+// .acutesim.worker.FileData schematic_netlist = 3;
+inline bool LVSRequest::has_schematic_netlist() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.schematic_netlist_ != nullptr);
+  return value;
+}
+inline void LVSRequest::clear_schematic_netlist() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.schematic_netlist_ != nullptr) _impl_.schematic_netlist_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline const ::acutesim::worker::FileData& LVSRequest::_internal_schematic_netlist() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.schematic_netlist_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& LVSRequest::schematic_netlist() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.LVSRequest.schematic_netlist)
+  return _internal_schematic_netlist();
+}
+inline void LVSRequest::unsafe_arena_set_allocated_schematic_netlist(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.schematic_netlist_);
+  }
+  _impl_.schematic_netlist_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.LVSRequest.schematic_netlist)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE LVSRequest::release_schematic_netlist() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::acutesim::worker::FileData* released = _impl_.schematic_netlist_;
+  _impl_.schematic_netlist_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE LVSRequest::unsafe_arena_release_schematic_netlist() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.LVSRequest.schematic_netlist)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::acutesim::worker::FileData* temp = _impl_.schematic_netlist_;
+  _impl_.schematic_netlist_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL LVSRequest::_internal_mutable_schematic_netlist() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.schematic_netlist_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.schematic_netlist_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.schematic_netlist_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL LVSRequest::mutable_schematic_netlist()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_schematic_netlist();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.LVSRequest.schematic_netlist)
+  return _msg;
+}
+inline void LVSRequest::set_allocated_schematic_netlist(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.schematic_netlist_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.schematic_netlist_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.LVSRequest.schematic_netlist)
+}
+
+// string rule_deck = 4;
+inline void LVSRequest::clear_rule_deck() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_deck_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& LVSRequest::rule_deck() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.LVSRequest.rule_deck)
+  return _internal_rule_deck();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void LVSRequest::set_rule_deck(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.rule_deck_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.LVSRequest.rule_deck)
+}
+inline ::std::string* PROTOBUF_NONNULL LVSRequest::mutable_rule_deck()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_rule_deck();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.LVSRequest.rule_deck)
+  return _s;
+}
+inline const ::std::string& LVSRequest::_internal_rule_deck() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rule_deck_.Get();
+}
+inline void LVSRequest::_internal_set_rule_deck(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_deck_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL LVSRequest::_internal_mutable_rule_deck() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.rule_deck_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE LVSRequest::release_rule_deck() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.LVSRequest.rule_deck)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.rule_deck_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.rule_deck_.Set("", GetArena());
+  }
+  return released;
+}
+inline void LVSRequest::set_allocated_rule_deck(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.rule_deck_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.rule_deck_.IsDefault()) {
+    _impl_.rule_deck_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.LVSRequest.rule_deck)
+}
+
+// string top_cell = 5;
+inline void LVSRequest::clear_top_cell() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.top_cell_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& LVSRequest::top_cell() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.LVSRequest.top_cell)
+  return _internal_top_cell();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void LVSRequest::set_top_cell(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.top_cell_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.LVSRequest.top_cell)
+}
+inline ::std::string* PROTOBUF_NONNULL LVSRequest::mutable_top_cell()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_top_cell();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.LVSRequest.top_cell)
+  return _s;
+}
+inline const ::std::string& LVSRequest::_internal_top_cell() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.top_cell_.Get();
+}
+inline void LVSRequest::_internal_set_top_cell(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.top_cell_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL LVSRequest::_internal_mutable_top_cell() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.top_cell_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE LVSRequest::release_top_cell() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.LVSRequest.top_cell)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.top_cell_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.top_cell_.Set("", GetArena());
+  }
+  return released;
+}
+inline void LVSRequest::set_allocated_top_cell(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.top_cell_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.top_cell_.IsDefault()) {
+    _impl_.top_cell_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.LVSRequest.top_cell)
+}
+
+// string mode = 6;
+inline void LVSRequest::clear_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mode_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::std::string& LVSRequest::mode() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.LVSRequest.mode)
+  return _internal_mode();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void LVSRequest::set_mode(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.mode_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.LVSRequest.mode)
+}
+inline ::std::string* PROTOBUF_NONNULL LVSRequest::mutable_mode()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_mode();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.LVSRequest.mode)
+  return _s;
+}
+inline const ::std::string& LVSRequest::_internal_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mode_.Get();
+}
+inline void LVSRequest::_internal_set_mode(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mode_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL LVSRequest::_internal_mutable_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.mode_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE LVSRequest::release_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.LVSRequest.mode)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.mode_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.mode_.Set("", GetArena());
+  }
+  return released;
+}
+inline void LVSRequest::set_allocated_mode(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.mode_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.mode_.IsDefault()) {
+    _impl_.mode_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.LVSRequest.mode)
+}
+
+// -------------------------------------------------------------------
+
+// PEXRequest
+
+// string job_id = 1;
+inline void PEXRequest::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& PEXRequest::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.PEXRequest.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PEXRequest::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.PEXRequest.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PEXRequest::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.PEXRequest.job_id)
+  return _s;
+}
+inline const ::std::string& PEXRequest::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void PEXRequest::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PEXRequest::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PEXRequest::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.PEXRequest.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PEXRequest::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.PEXRequest.job_id)
+}
+
+// .acutesim.worker.FileData layout_file = 2;
+inline bool PEXRequest::has_layout_file() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.layout_file_ != nullptr);
+  return value;
+}
+inline void PEXRequest::clear_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.layout_file_ != nullptr) _impl_.layout_file_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::acutesim::worker::FileData& PEXRequest::_internal_layout_file() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.layout_file_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& PEXRequest::layout_file() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.PEXRequest.layout_file)
+  return _internal_layout_file();
+}
+inline void PEXRequest::unsafe_arena_set_allocated_layout_file(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.layout_file_);
+  }
+  _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.PEXRequest.layout_file)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE PEXRequest::release_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* released = _impl_.layout_file_;
+  _impl_.layout_file_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE PEXRequest::unsafe_arena_release_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.PEXRequest.layout_file)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* temp = _impl_.layout_file_;
+  _impl_.layout_file_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL PEXRequest::_internal_mutable_layout_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.layout_file_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.layout_file_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL PEXRequest::mutable_layout_file()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_layout_file();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.PEXRequest.layout_file)
+  return _msg;
+}
+inline void PEXRequest::set_allocated_layout_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.layout_file_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.layout_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.PEXRequest.layout_file)
+}
+
+// .acutesim.worker.FileData tech_file = 3;
+inline bool PEXRequest::has_tech_file() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.tech_file_ != nullptr);
+  return value;
+}
+inline void PEXRequest::clear_tech_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.tech_file_ != nullptr) _impl_.tech_file_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline const ::acutesim::worker::FileData& PEXRequest::_internal_tech_file() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.tech_file_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& PEXRequest::tech_file() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.PEXRequest.tech_file)
+  return _internal_tech_file();
+}
+inline void PEXRequest::unsafe_arena_set_allocated_tech_file(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.tech_file_);
+  }
+  _impl_.tech_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.PEXRequest.tech_file)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE PEXRequest::release_tech_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* released = _impl_.tech_file_;
+  _impl_.tech_file_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE PEXRequest::unsafe_arena_release_tech_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.PEXRequest.tech_file)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* temp = _impl_.tech_file_;
+  _impl_.tech_file_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL PEXRequest::_internal_mutable_tech_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.tech_file_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.tech_file_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.tech_file_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL PEXRequest::mutable_tech_file()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_tech_file();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.PEXRequest.tech_file)
+  return _msg;
+}
+inline void PEXRequest::set_allocated_tech_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.tech_file_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.tech_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.PEXRequest.tech_file)
+}
+
+// string output_spef = 4;
+inline void PEXRequest::clear_output_spef() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.output_spef_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& PEXRequest::output_spef() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.PEXRequest.output_spef)
+  return _internal_output_spef();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PEXRequest::set_output_spef(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.output_spef_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.PEXRequest.output_spef)
+}
+inline ::std::string* PROTOBUF_NONNULL PEXRequest::mutable_output_spef()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_output_spef();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.PEXRequest.output_spef)
+  return _s;
+}
+inline const ::std::string& PEXRequest::_internal_output_spef() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.output_spef_.Get();
+}
+inline void PEXRequest::_internal_set_output_spef(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.output_spef_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PEXRequest::_internal_mutable_output_spef() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.output_spef_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PEXRequest::release_output_spef() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.PEXRequest.output_spef)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.output_spef_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.output_spef_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PEXRequest::set_allocated_output_spef(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.output_spef_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.output_spef_.IsDefault()) {
+    _impl_.output_spef_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.PEXRequest.output_spef)
+}
+
+// bool coupling_caps = 5;
+inline void PEXRequest::clear_coupling_caps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.coupling_caps_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline bool PEXRequest::coupling_caps() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.PEXRequest.coupling_caps)
+  return _internal_coupling_caps();
+}
+inline void PEXRequest::set_coupling_caps(bool value) {
+  _internal_set_coupling_caps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.PEXRequest.coupling_caps)
+}
+inline bool PEXRequest::_internal_coupling_caps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.coupling_caps_;
+}
+inline void PEXRequest::_internal_set_coupling_caps(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.coupling_caps_ = value;
+}
+
+// string engine = 6;
+inline void PEXRequest::clear_engine() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.engine_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& PEXRequest::engine() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.PEXRequest.engine)
+  return _internal_engine();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PEXRequest::set_engine(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.engine_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.PEXRequest.engine)
+}
+inline ::std::string* PROTOBUF_NONNULL PEXRequest::mutable_engine()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_engine();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.PEXRequest.engine)
+  return _s;
+}
+inline const ::std::string& PEXRequest::_internal_engine() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.engine_.Get();
+}
+inline void PEXRequest::_internal_set_engine(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.engine_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PEXRequest::_internal_mutable_engine() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.engine_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PEXRequest::release_engine() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.PEXRequest.engine)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.engine_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.engine_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PEXRequest::set_allocated_engine(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.engine_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.engine_.IsDefault()) {
+    _impl_.engine_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.PEXRequest.engine)
+}
+
+// -------------------------------------------------------------------
+
+// GDSExportRequest
+
+// string job_id = 1;
+inline void GDSExportRequest::clear_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& GDSExportRequest::job_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.GDSExportRequest.job_id)
+  return _internal_job_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GDSExportRequest::set_job_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.job_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.GDSExportRequest.job_id)
+}
+inline ::std::string* PROTOBUF_NONNULL GDSExportRequest::mutable_job_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_job_id();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.GDSExportRequest.job_id)
+  return _s;
+}
+inline const ::std::string& GDSExportRequest::_internal_job_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.job_id_.Get();
+}
+inline void GDSExportRequest::_internal_set_job_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.job_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GDSExportRequest::_internal_mutable_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.job_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GDSExportRequest::release_job_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.GDSExportRequest.job_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.job_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GDSExportRequest::set_allocated_job_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.job_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.job_id_.IsDefault()) {
+    _impl_.job_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.GDSExportRequest.job_id)
+}
+
+// .acutesim.worker.FileData input_file = 2;
+inline bool GDSExportRequest::has_input_file() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.input_file_ != nullptr);
+  return value;
+}
+inline void GDSExportRequest::clear_input_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.input_file_ != nullptr) _impl_.input_file_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::acutesim::worker::FileData& GDSExportRequest::_internal_input_file() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.input_file_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& GDSExportRequest::input_file() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.GDSExportRequest.input_file)
+  return _internal_input_file();
+}
+inline void GDSExportRequest::unsafe_arena_set_allocated_input_file(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.input_file_);
+  }
+  _impl_.input_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.GDSExportRequest.input_file)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE GDSExportRequest::release_input_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* released = _impl_.input_file_;
+  _impl_.input_file_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE GDSExportRequest::unsafe_arena_release_input_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.GDSExportRequest.input_file)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* temp = _impl_.input_file_;
+  _impl_.input_file_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL GDSExportRequest::_internal_mutable_input_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.input_file_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.input_file_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.input_file_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL GDSExportRequest::mutable_input_file()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_input_file();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.GDSExportRequest.input_file)
+  return _msg;
+}
+inline void GDSExportRequest::set_allocated_input_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.input_file_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.input_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.GDSExportRequest.input_file)
+}
+
+// .acutesim.worker.FileData tech_file = 3;
+inline bool GDSExportRequest::has_tech_file() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.tech_file_ != nullptr);
+  return value;
+}
+inline void GDSExportRequest::clear_tech_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.tech_file_ != nullptr) _impl_.tech_file_->Clear();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline const ::acutesim::worker::FileData& GDSExportRequest::_internal_tech_file() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::acutesim::worker::FileData* p = _impl_.tech_file_;
+  return p != nullptr ? *p : reinterpret_cast<const ::acutesim::worker::FileData&>(::acutesim::worker::_FileData_default_instance_);
+}
+inline const ::acutesim::worker::FileData& GDSExportRequest::tech_file() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.GDSExportRequest.tech_file)
+  return _internal_tech_file();
+}
+inline void GDSExportRequest::unsafe_arena_set_allocated_tech_file(
+    ::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.tech_file_);
+  }
+  _impl_.tech_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:acutesim.worker.GDSExportRequest.tech_file)
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE GDSExportRequest::release_tech_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* released = _impl_.tech_file_;
+  _impl_.tech_file_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NULLABLE GDSExportRequest::unsafe_arena_release_tech_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.GDSExportRequest.tech_file)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* temp = _impl_.tech_file_;
+  _impl_.tech_file_ = nullptr;
+  return temp;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL GDSExportRequest::_internal_mutable_tech_file() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.tech_file_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::acutesim::worker::FileData>(GetArena());
+    _impl_.tech_file_ = reinterpret_cast<::acutesim::worker::FileData*>(p);
+  }
+  return _impl_.tech_file_;
+}
+inline ::acutesim::worker::FileData* PROTOBUF_NONNULL GDSExportRequest::mutable_tech_file()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::acutesim::worker::FileData* _msg = _internal_mutable_tech_file();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.GDSExportRequest.tech_file)
+  return _msg;
+}
+inline void GDSExportRequest::set_allocated_tech_file(::acutesim::worker::FileData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.tech_file_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.tech_file_ = reinterpret_cast<::acutesim::worker::FileData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.GDSExportRequest.tech_file)
+}
+
+// string output_gds = 4;
+inline void GDSExportRequest::clear_output_gds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.output_gds_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& GDSExportRequest::output_gds() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.GDSExportRequest.output_gds)
+  return _internal_output_gds();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GDSExportRequest::set_output_gds(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.output_gds_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.GDSExportRequest.output_gds)
+}
+inline ::std::string* PROTOBUF_NONNULL GDSExportRequest::mutable_output_gds()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_output_gds();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.GDSExportRequest.output_gds)
+  return _s;
+}
+inline const ::std::string& GDSExportRequest::_internal_output_gds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.output_gds_.Get();
+}
+inline void GDSExportRequest::_internal_set_output_gds(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.output_gds_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GDSExportRequest::_internal_mutable_output_gds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.output_gds_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GDSExportRequest::release_output_gds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.GDSExportRequest.output_gds)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.output_gds_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.output_gds_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GDSExportRequest::set_allocated_output_gds(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.output_gds_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.output_gds_.IsDefault()) {
+    _impl_.output_gds_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.GDSExportRequest.output_gds)
+}
+
+// string top_cell = 5;
+inline void GDSExportRequest::clear_top_cell() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.top_cell_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& GDSExportRequest::top_cell() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:acutesim.worker.GDSExportRequest.top_cell)
+  return _internal_top_cell();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GDSExportRequest::set_top_cell(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.top_cell_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:acutesim.worker.GDSExportRequest.top_cell)
+}
+inline ::std::string* PROTOBUF_NONNULL GDSExportRequest::mutable_top_cell()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_top_cell();
+  // @@protoc_insertion_point(field_mutable:acutesim.worker.GDSExportRequest.top_cell)
+  return _s;
+}
+inline const ::std::string& GDSExportRequest::_internal_top_cell() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.top_cell_.Get();
+}
+inline void GDSExportRequest::_internal_set_top_cell(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.top_cell_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GDSExportRequest::_internal_mutable_top_cell() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.top_cell_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GDSExportRequest::release_top_cell() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:acutesim.worker.GDSExportRequest.top_cell)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.top_cell_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.top_cell_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GDSExportRequest::set_allocated_top_cell(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.top_cell_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.top_cell_.IsDefault()) {
+    _impl_.top_cell_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:acutesim.worker.GDSExportRequest.top_cell)
+}
+
+// bool compress = 6;
+inline void GDSExportRequest::clear_compress() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.compress_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000020U);
+}
+inline bool GDSExportRequest::compress() const {
+  // @@protoc_insertion_point(field_get:acutesim.worker.GDSExportRequest.compress)
+  return _internal_compress();
+}
+inline void GDSExportRequest::set_compress(bool value) {
+  _internal_set_compress(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:acutesim.worker.GDSExportRequest.compress)
+}
+inline bool GDSExportRequest::_internal_compress() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.compress_;
+}
+inline void GDSExportRequest::_internal_set_compress(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.compress_ = value;
 }
 
 #ifdef __GNUC__

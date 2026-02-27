@@ -3,7 +3,7 @@
 #include "simulation_trace.h"
 #include "trace_chunker.h"
 #include "../analysis/failure_classifier.h"
-#include "../../physics/simulation_profile.h"
+#include "../../gui/analysis/simulation_profile.h"
 #include "../../components/circuit.h"
 #include <QUuid>
 #include <QDateTime>

@@ -1,10 +1,7 @@
 #include "simulation_workspace.h"
 #include "../../gui/styling/theme_manager.h"
-#include "monte_carlo_setup_widget.h"
 #include "variables_panel.h"
-#include "calculator_widget.h" // [NEW]
-#include "parametric_sweep_dialog.h" // [NEW]
-#include "../../compute/orchestration/batch_runner.h" // [NEW]
+#include "calculator_widget.h"
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -15,6 +12,7 @@
 #include <QDateTime>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include "../widgets/inline_dialog.h"
 #include "../widgets/inline_progress.h"
 #include <QFile>
@@ -22,13 +20,18 @@
 #include <QDockWidget>
 #include <QMainWindow>
 #include "corner_setup_widget.h"
-#include "../../physics/quick_analysis.h"
-#include "../../physics/statistical_engine.h"
 #include "statistical_dashboard.h"
+#include "parametric_sweep_dialog.h"
+#include "monte_carlo_setup_widget.h"
 #include <random>
 #include <numeric>
 #include <map>
 #include <QSpinBox>
+
+// Orchestration Layer
+#include "../../compute/orchestration/driver/local_worker_driver.h"
+// Verilog-A transport (generate source from schematic netlist)
+#include "../../components/veriloga_generator.h"
 
 SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     : QWidget(parent)
@@ -41,66 +44,25 @@ SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     profiles_["ac_sweep_default"] = Simulation::SimulationProfile::acSweep();
     currentProfileId_ = "quick_dc";
     
-    // Threading Setup
-#ifdef ACUTESIM_THREADS_ENABLED
-    workerThread_ = new QThread(this);
-    worker_ = new SimulationWorker(); // Moved to thread
-    worker_->moveToThread(workerThread_);
+    // ── Orchestration Layer Setup ────────────────────────────────────────
+    // Create the LocalWorkerDriver (encapsulates CircuitSim and threading)
+    auto localDriver = std::make_unique<acutesim::compute::orchestration::LocalWorkerDriver>();
+    driverAdapter_ = new acutesim::gui::analysis::SimulationDriverAdapter(
+        std::move(localDriver), this);
     
-    // Lifecycle
-    connect(workerThread_, &QThread::finished, worker_, &QObject::deleteLater);
-#else
-    worker_ = new SimulationWorker(this); // Main thread worker
-#endif
-    
-    // Commands
-    qRegisterMetaType<TensorNetlist>("TensorNetlist");
-    qRegisterMetaType<Simulation::SimulationProfile>("Simulation::SimulationProfile");
-    qRegisterMetaType<acutesim::physics::RunMode>("acutesim::physics::RunMode");
-    qRegisterMetaType<std::shared_ptr<const CompiledTensorBlock>>("std::shared_ptr<const CompiledTensorBlock>");
-    
-    // Legacy TensorNetlist connections (kept for backward compatibility)
-    connect(this, &SimulationWorkspace::startDCRequested, worker_, 
-        static_cast<void(SimulationWorker::*)(TensorNetlist, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startDC));
-    connect(this, &SimulationWorkspace::startTransientRequested, worker_, 
-        static_cast<void(SimulationWorker::*)(TensorNetlist, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startTransient));
-    connect(this, &SimulationWorkspace::startACRequested, worker_, 
-        static_cast<void(SimulationWorker::*)(TensorNetlist, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startAC));
-    connect(this, &SimulationWorkspace::startNoiseRequested, worker_, 
-        static_cast<void(SimulationWorker::*)(TensorNetlist, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startNoise));
-    
-    // Compiled-block connections (new path)
-    connect(this, &SimulationWorkspace::startDCCompiledRequested, worker_, 
-        static_cast<void(SimulationWorker::*)(std::shared_ptr<const CompiledTensorBlock>, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startDC));
-    connect(this, &SimulationWorkspace::startTransientCompiledRequested, worker_, 
-        static_cast<void(SimulationWorker::*)(std::shared_ptr<const CompiledTensorBlock>, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startTransient));
-    connect(this, &SimulationWorkspace::startACCompiledRequested, worker_, 
-        static_cast<void(SimulationWorker::*)(std::shared_ptr<const CompiledTensorBlock>, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startAC));
-    connect(this, &SimulationWorkspace::startNoiseCompiledRequested, worker_, 
-        static_cast<void(SimulationWorker::*)(std::shared_ptr<const CompiledTensorBlock>, Simulation::SimulationProfile, acutesim::physics::RunMode)>(&SimulationWorker::startNoise));
-    
-    // Results
-    connect(worker_, &SimulationWorker::resultsReady, this, &SimulationWorkspace::onWorkerResults);
-    connect(worker_, &SimulationWorker::solverViolation, this, &SimulationWorkspace::onWorkerViolation);
-    connect(worker_, &SimulationWorker::simulationFinished, this, &SimulationWorkspace::onWorkerFinished);
-    connect(worker_, &SimulationWorker::logMessage, this, &SimulationWorkspace::appendLog);
-    connect(worker_, &SimulationWorker::streamMessage, this, &SimulationWorkspace::appendStreamLog);
-    
-#ifdef ACUTESIM_THREADS_ENABLED
-    workerThread_->start();
-#endif
+    // Connect driver adapter signals to workspace slots
+    connect(driverAdapter_, &acutesim::gui::analysis::SimulationDriverAdapter::jobCompleted,
+            this, &SimulationWorkspace::onDriverJobCompleted);
+    connect(driverAdapter_, &acutesim::gui::analysis::SimulationDriverAdapter::jobProgress,
+            this, &SimulationWorkspace::onDriverJobProgress);
+    connect(driverAdapter_, &acutesim::gui::analysis::SimulationDriverAdapter::batchCompleted,
+            this, &SimulationWorkspace::onDriverBatchCompleted);
+    connect(driverAdapter_, &acutesim::gui::analysis::SimulationDriverAdapter::batchProgress,
+            this, &SimulationWorkspace::onDriverBatchProgress);
 }
 
 SimulationWorkspace::~SimulationWorkspace() {
-#ifdef ACUTESIM_THREADS_ENABLED
-    if (workerThread_) {
-        // Explicit shutdown
-        worker_->stop();
-        workerThread_->quit();
-        workerThread_->wait();
-        // worker_ is deleted via deleteLater on finished()
-    }
-#endif
+    // driverAdapter_ is a child QObject — cleaned up automatically
 }
 
 void SimulationWorkspace::setupUI() {
@@ -178,10 +140,10 @@ void SimulationWorkspace::setupToolbar() {
     layout->addWidget(modeLabel);
     
     runModeCombo_ = new QComboBox(toolbar_);
-    runModeCombo_->addItem("Full", static_cast<int>(acutesim::physics::RunMode::FULL));
-    runModeCombo_->addItem("Quick", static_cast<int>(acutesim::physics::RunMode::QUICK));
-    runModeCombo_->addItem("Resume", static_cast<int>(acutesim::physics::RunMode::RESUME));
-    runModeCombo_->addItem("Incremental", static_cast<int>(acutesim::physics::RunMode::INCREMENTAL));
+    runModeCombo_->addItem("Full", static_cast<int>(acutesim::compute::orchestration::RunModeDTO::FULL));
+    runModeCombo_->addItem("Quick", static_cast<int>(acutesim::compute::orchestration::RunModeDTO::QUICK));
+    runModeCombo_->addItem("Resume", static_cast<int>(acutesim::compute::orchestration::RunModeDTO::RESUME));
+    runModeCombo_->addItem("Incremental", static_cast<int>(acutesim::compute::orchestration::RunModeDTO::INCREMENTAL));
     runModeCombo_->setMinimumWidth(90);
     layout->addWidget(runModeCombo_);
     
@@ -194,9 +156,9 @@ void SimulationWorkspace::setupToolbar() {
     
     cornerCombo_ = new QComboBox(toolbar_);
     int i = 0;
-    for (const auto& c : acutesim::physics::CornerConfig::standard5()) {
-        cornerCombo_->addItem(QString::fromStdString(c.name), QVariant::fromValue(c));
-        cornerCombo_->setItemData(i, QString("%1C, Vdd x%2").arg(c.temperatureC).arg(c.voltageScale), Qt::ToolTipRole);
+    for (const auto& c : acutesim::compute::orchestration::CornerParametersDTO::standard5()) {
+        cornerCombo_->addItem(QString::fromStdString(c.name), QVariant::fromValue(c.name)); // Just using name as value for now
+        cornerCombo_->setItemData(i, QString("%1C, Vdd x%2").arg(c.temperature).arg(c.voltageScale), Qt::ToolTipRole);
         i++;
     }
     layout->addWidget(cornerCombo_);
@@ -586,7 +548,7 @@ void SimulationWorkspace::onTopologyChanged(size_t newHash) {
     if (newHash != currentTopologyHash_) {
         currentTopologyHash_ = newHash;
         // explorer_->markAllStale(); // Explorer removed
-        QuickAnalysis::invalidate(); // Invalidate hover preview cache
+        // QuickAnalysis::invalidate(); // Invalidate hover preview cache
         appendLog(QString("[INFO] Topology changed (hash: 0x%1). Profiles marked stale.")
                   .arg(newHash, 8, 16, QChar('0')));
     }
@@ -665,39 +627,47 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
 
     qDebug() << "[SimWorkspace] canRun() passed, proceeding with simulation";
     
-    // Get netlist (Main Thread)
-    netlist_ = schematicEditor_->toNetlist();
-    
-    // ── NetlistCompiler: Compile and cache ──────────────────────────────
-    netlist_.globalBlock.computeTopologyHash();
-    size_t currentHash = netlist_.globalBlock.topologyHash;
-    
-    if (!currentCompiledBlock_ || currentCompiledBlock_->topologyHash != currentHash) {
-        appendLog("[Compiler] Topology changed — recompiling netlist...");
-        currentCompiledBlock_ = NetlistCompiler::compile(netlist_);
-        appendLog(QString("[Compiler] Compiled block: %1 nodes, hash=%2")
-            .arg(currentCompiledBlock_->nodeCount)
-            .arg(currentCompiledBlock_->topologyHash));
-    } else {
-        appendLog("[Compiler] Using cached compiled block.");
+    // ── Build SimulationRequestDTO (the ONLY thing we send across the boundary) ──
+    using namespace acutesim::compute::orchestration;
+    SimulationRequestDTO req;
+    // Generate Verilog-A source (preferred transport, covers all 9 component types)
+    req.source      = generateSimulationSource();
+    // req.netlistJson = serializeSchematicToJson();  // [REMOVED] PURGED Phase D1
+    req.topologyHash = currentTopologyHash_;
+    // Show the exact source being sent to the driver
+    updateVerilogADock(req.source.payload);
+    req.sessionToken = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8).toStdString();
+    req.compute_mode = computeEngineCombo_->currentData().toInt();
+
+    auto* profile = currentProfile();
+    if (!profile) return;
+    Simulation::SimulationProfile profCopy = *profile;
+
+    // Map analysis type
+    switch (profCopy.analysis) {
+        case Simulation::AnalysisType::DC:        req.analysis = AnalysisTypeDTO::DC; break;
+        case Simulation::AnalysisType::TRANSIENT:  req.analysis = AnalysisTypeDTO::TRANSIENT; break;
+        case Simulation::AnalysisType::AC:         req.analysis = AnalysisTypeDTO::AC; break;
+        case Simulation::AnalysisType::NOISE:      req.analysis = AnalysisTypeDTO::NOISE; break;
+        default:                                   req.analysis = AnalysisTypeDTO::DC; break;
     }
-    
+
+    // Marshal parameters from the profile into the DTO
+    for (auto it = profCopy.parameters.begin(); it != profCopy.parameters.end(); ++it) {
+        req.parameters[it.key().toStdString()] = it.value().toString().toStdString();
+    }
+
     // Create run object logic (UI State)
     currentRun_ = Simulation::SimulationRun();
-    currentRun_.runId = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    currentRun_.runId = QString::fromStdString(req.sessionToken);
     currentRun_.profileId = profileId;
     currentRun_.topologyHash = currentTopologyHash_;
-    
-    if (runModeCombo_) {
-        currentRun_.runMode = static_cast<acutesim::physics::RunMode>(runModeCombo_->currentData().toInt());
-    }
-    
     currentRun_.startTime = QDateTime::currentDateTime();
     currentRun_.status = Simulation::SimulationRun::Status::RUNNING;
-    
+
     // Clear cache for new run
     latestResults_.clear();
-    
+
     // Update UI
     isRunning_ = true;
     runBtn_->setEnabled(false);
@@ -706,30 +676,20 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     findChild<QLabel*>("statusLabel")->setStyleSheet("color: #dcdcaa;");
 
     emit simulationStarted(profileId);
+    appendLog(QString("[Orchestrator] Submitting %1 job (hash=0x%2)...")
+              .arg(QString::fromStdString(analysisTypeToString(req.analysis)))
+              .arg(req.topologyHash, 8, 16, QChar('0')));
 
-    auto* profile = currentProfile();
-    Simulation::SimulationProfile profCopy = *profile; // Copy
-    
-    // Dispatch using compiled block
-    switch (profCopy.analysis) {
-        case Simulation::AnalysisType::DC:
-            emit startDCCompiledRequested(currentCompiledBlock_, profCopy, currentRun_.runMode);
-            break;
-        case Simulation::AnalysisType::AC:
-            emit startACCompiledRequested(currentCompiledBlock_, profCopy, currentRun_.runMode);
-            break;
-        case Simulation::AnalysisType::NOISE:
-            emit startNoiseCompiledRequested(currentCompiledBlock_, profCopy, currentRun_.runMode);
-            break;
-        case Simulation::AnalysisType::TRANSIENT:
-        default:
-            emit startTransientCompiledRequested(currentCompiledBlock_, profCopy, currentRun_.runMode);
-            break;
-    }
+    // ── Submit to Driver (the GUI's ONLY interaction with the physics world) ──
+    currentJobId_ = driverAdapter_->submitJob(req);
+    emit simulationSubmitted(currentJobId_);
 }
 
 void SimulationWorkspace::stopSimulation() {
-    if (worker_) worker_->stop();
+    if (driverAdapter_ && currentJobId_ > 0) {
+        driverAdapter_->cancelJob(currentJobId_);
+        appendLog("[Orchestrator] Cancellation requested.");
+    }
 }
 
 void SimulationWorkspace::openCalculator() {
@@ -743,93 +703,149 @@ void SimulationWorkspace::openCalculator() {
     calc->setAttribute(Qt::WA_DeleteOnClose);
 }
 
-void SimulationWorkspace::onWorkerResults(const QJsonObject& results) {
-    QString type = results.value("type").toString();
+// ============================================================================
+// ORCHESTRATION LAYER HANDLERS (DTO-based, no physics types)
+// ============================================================================
 
-    // Per-step transient points: forward data and cache it
-    if (type == "TransientPoint") {
-        double t = results.value("time").toDouble();
-        
-        // Cache Voltages
-        QJsonArray volts = results.value("voltages").toArray();
-        for (int i = 0; i < volts.size(); ++i) {
-            QString name = QString("v(node%1)").arg(i+1); // Node names? ideally we map map local ID->Name
-            // Initialize if new
-            if (!latestResults_.contains(name)) {
-                latestResults_[name].name = name;
-                latestResults_[name].unit = "V";
-            }
-            latestResults_[name].time.append(t);
-            latestResults_[name].values.append(volts[i].toDouble());
-        }
-        
-        // Cache Probes
-        QJsonObject probes = results.value("probes").toObject();
-        for (auto k : probes.keys()) {
-           QString name = QString("v(\"%1\")").arg(k); // Quote names
-           if (!latestResults_.contains(name)) {
-                latestResults_[name].name = name;
-                latestResults_[name].unit = "V";
-            }
-            latestResults_[name].time.append(t);
-            latestResults_[name].values.append(probes.value(k).toDouble());
-        }
+void SimulationWorkspace::onDriverJobCompleted(
+    quint64 jobId, const acutesim::compute::orchestration::SimulationResponseDTO& response)
+{
+    Q_UNUSED(jobId);
+    using namespace acutesim::compute::orchestration;
 
-        emit resultsReady(results);
-        return;
-    }
-    
-    // DC Results
-    if (type == "DC") {
+    if (response.success) {
+        currentRun_.status = Simulation::SimulationRun::Status::CONVERGED;
+
+        // Extract convergence telemetry
+        currentRun_.iterations = response.convergence.iterations;
+        currentRun_.trustMaxResidual = response.convergence.maxResidual;
+        currentRun_.trustMethod = QString::fromStdString(response.convergence.method);
+        currentRun_.trustGminUsed = response.convergence.gminSteppingUsed;
+        currentRun_.trustSourceStepUsed = response.convergence.sourceSteppingUsed;
+
+        // Populate waveform cache from raw DTO arrays
         latestResults_.clear();
-        double dc_time = 0.0; // Pseudo-time
-        
-        QJsonArray volts = results.value("voltages").toArray();
-        for (int i = 0; i < volts.size(); ++i) {
-            QString name = QString("v(node%1)").arg(i+1);
+
+        if (!response.timeVector.empty()) {
+            // Transient/AC: multi-point results
+            for (const auto& [nodeIdx, voltages] : response.nodeVoltages) {
+                std::string name = "v(node" + std::to_string(nodeIdx + 1) + ")";
+                acutesim::compute::postproc::Waveform w;
+                w.name = name;
+                w.unit = "V";
+                for (size_t i = 0; i < response.timeVector.size() && i < voltages.size(); ++i) {
+                    w.time.push_back(response.timeVector[i]);
+                    w.values.push_back(voltages[i]);
+                }
+                latestResults_[name] = std::move(w);
+            }
+        } else if (!response.dcOperatingPoint.empty()) {
+            // DC: single-point results
+            double dc_time = 0.0;
+            for (int i = 0; i < (int)response.dcOperatingPoint.size(); ++i) {
+                std::string name = "v(node" + std::to_string(i + 1) + ")";
+                acutesim::compute::postproc::Waveform w;
+                w.name = name; w.unit = "V";
+                w.time.push_back(dc_time);
+                w.values.push_back(response.dcOperatingPoint[i]);
+                latestResults_[name] = std::move(w);
+            }
+        }
+
+        // Probe values
+        for (const auto& [probeName, values] : response.probeValues) {
+            std::string name = "v(\"" + probeName + "\")";
             acutesim::compute::postproc::Waveform w;
-            w.name = name; w.unit = "V"; w.time.append(dc_time); w.values.append(volts[i].toDouble());
-            latestResults_.insert(name, w);
+            w.name = name; w.unit = "V";
+            if (!response.timeVector.empty()) {
+                for (size_t i = 0; i < response.timeVector.size() && i < values.size(); ++i) {
+                    w.time.push_back(response.timeVector[i]);
+                    w.values.push_back(values[i]);
+                }
+            } else if (!values.empty()) {
+                w.time.push_back(0.0);
+                w.values.push_back(values[0]);
+            }
+            latestResults_[name] = std::move(w);
         }
-        
-        QJsonObject probes = results.value("probes").toObject();
-        for (auto k : probes.keys()) {
-           QString name = QString("v(\"%1\")").arg(k);
-           acutesim::compute::postproc::Waveform w;
-           w.name = name; w.unit = "V"; w.time.append(dc_time); w.values.append(probes.value(k).toDouble());
-           latestResults_.insert(name, w);
+
+        // Build a JSON summary for downstream consumers (waveform widget, etc.)
+        QJsonObject jsonSummary;
+        jsonSummary["type"] = "DriverResult";
+        jsonSummary["success"] = true;
+        QJsonObject stats;
+        stats["iterations"] = response.convergence.iterations;
+        stats["residual"] = response.convergence.maxResidual;
+        stats["converged"] = true;
+        stats["method"] = QString::fromStdString(response.convergence.method);
+        stats["gminSteppingUsed"] = response.convergence.gminSteppingUsed;
+        stats["sourceSteppingUsed"] = response.convergence.sourceSteppingUsed;
+        jsonSummary["stats"] = stats;
+        emit resultsReady(jsonSummary);
+
+        // Phase 2.9: Surface solver warnings even on successful solve
+        const auto& conv = response.convergence;
+        if (conv.rankDeficient) {
+            QString msg = QString("Near-singular matrix detected (pivot=%1 at node %2). "
+                                  "Check for floating nodes or degenerate topology.")
+                .arg(conv.smallestPivot, 0, 'e', 3)
+                .arg(conv.rankDeficientNode + 1); // 1-based display
+            ERC::Violation v(ERC::ViolationType::SOLVER_SINGULAR_MATRIX, msg, QPoint(-9999, -9999));
+            emit solverViolation(v);
+        }
+        if (conv.divergenceDetected) {
+            QString msg = QString("Solver divergence detected during NR iterations "
+                                  "(worst node=%1, V=%2 V, max KCL=%3 A).")
+                .arg(conv.worstNodeIndex)
+                .arg(conv.worstNodeVoltage, 0, 'g', 6)
+                .arg(conv.maxResidual, 0, 'e', 3);
+            ERC::Violation v(ERC::ViolationType::SOLVER_DIVERGENCE, msg, QPoint(-9999, -9999));
+            emit solverViolation(v);
+        } else if (conv.stagnationDetected) {
+            QString msg = QString("Solver stagnation detected (residual plateaued at %1 A, "
+                                  "worst node=%2).")
+                .arg(conv.maxResidual, 0, 'e', 3)
+                .arg(conv.worstNodeIndex);
+            ERC::Violation v(ERC::ViolationType::SOLVER_SLOW_CONVERGENCE, msg, QPoint(-9999, -9999));
+            emit solverViolation(v);
+        }
+        if (conv.gminApplied > 1e-12 && conv.gminInjections > 0) {
+            QString msg = QString("GMIN regularization applied (gmin=%1, nodes=%2). "
+                                  "Consider adding explicit DC paths to floating nets.")
+                .arg(conv.gminApplied, 0, 'e', 2)
+                .arg(conv.gminInjections);
+            // INFO level — use NEAR_MISS as closest INFO violation type
+            ERC::Violation v(ERC::ViolationType::NEAR_MISS, msg, QPoint(-9999, -9999));
+            emit solverViolation(v);
+        }
+
+    } else {
+        currentRun_.status = Simulation::SimulationRun::Status::FAILED;
+        QString errorMsg = QString::fromStdString(response.errorMessage);
+        appendLog("[Orchestrator] Solver failed: " + errorMsg);
+
+        // Phase 2.9: Use specific violation type based on convergence telemetry
+        const auto& conv = response.convergence;
+        if (conv.rankDeficient) {
+            ERC::Violation v(ERC::ViolationType::SOLVER_SINGULAR_MATRIX, errorMsg, QPoint(-9999, -9999));
+            emit solverViolation(v);
+        } else if (conv.divergenceDetected) {
+            ERC::Violation v(ERC::ViolationType::SOLVER_DIVERGENCE, errorMsg, QPoint(-9999, -9999));
+            emit solverViolation(v);
+        } else {
+            ERC::Violation v(ERC::ViolationType::SOLVER_DIVERGENCE, errorMsg, QPoint(-9999, -9999));
+            emit solverViolation(v);
         }
     }
-    
-    // AC Results - TODO: Cache complex values
-    if (type == "AC") {
-        latestResults_.clear();
-        // For Phase 1, just stub or implement later when PostProc handles complex.
-        // Assuming PostProcEngine::Waveform has complex fields.
-    }
 
-    // DC result or TransientSummary: mark run as converged and extract stats
-    currentRun_.status = Simulation::SimulationRun::Status::CONVERGED;
-
-    if (results.contains("stats")) {
-        QJsonObject stats = results["stats"].toObject();
-        currentRun_.iterations = stats.value("iterations").toInt();
-        currentRun_.trustMaxResidual = stats.value("residual").toDouble();
-        currentRun_.trustMethod = stats.value("method").toString();
-        currentRun_.trustGminUsed = stats.value("gminSteppingUsed").toBool();
-        currentRun_.trustSourceStepUsed = stats.value("sourceSteppingUsed").toBool();
-    }
-
-    emit resultsReady(results);
-}
-
-void SimulationWorkspace::onWorkerViolation(const ERC::Violation& violation) {
-    currentRun_.status = Simulation::SimulationRun::Status::FAILED;
-    emit solverViolation(violation);
-}
-
-void SimulationWorkspace::onWorkerFinished() {
     finishSimulation();
+}
+
+void SimulationWorkspace::onDriverJobProgress(
+    quint64 jobId, float percent, const QString& message)
+{
+    Q_UNUSED(jobId);
+    appendStreamLog(QString("[%1%] %2").arg(int(percent * 100)).arg(message));
 }
 void SimulationWorkspace::finishSimulation() {
     isRunning_ = false;
@@ -895,83 +911,66 @@ void SimulationWorkspace::appendStreamLog(const QString& msg) {
 }
 
 void SimulationWorkspace::onSweepRequested() {
-    using namespace acutesim::gui::widgets;
+    if (!canRun()) return;
 
-    if (simParams_.variableExprs.isEmpty()) {
-        InlineDialog::information(this, "Sweep", "No design variables defined.");
+    using namespace acutesim::gui::widgets;
+    using namespace acutesim::compute::orchestration;
+    
+    // Auto-detect sweepable components
+    auto netlist = schematicEditor_->toNetlist();
+    QStringList sweepableVars;
+    for (const auto& r : netlist.globalBlock.resistors) sweepableVars << QString::fromStdString(r.name);
+    for (const auto& c : netlist.globalBlock.capacitors) sweepableVars << QString::fromStdString(c.name);
+    
+    if (sweepableVars.isEmpty()) {
+        InlineDialog::warning(this, "Parametric Sweep", "No sweepable components found in schematic.");
         return;
     }
 
-    auto* dlg = new acutesim::gui::analysis::ParametricSweepDialog(
-        simParams_.variableExprs.keys(), this);
-
-    InlineDialog::showCustom(this, "Parametric Sweep", dlg,
+    auto* sweepDialog = new acutesim::gui::analysis::ParametricSweepDialog(sweepableVars);
+    InlineDialog::showCustom(this, "Parametric Sweep Setup", sweepDialog,
         DialogButton::Ok | DialogButton::Cancel,
-        [this, dlg](const DialogResult& r) {
-            if (r.clickedButton != DialogButton::Ok) return;
+        [this, sweepDialog](const DialogResult& r) {
+            if (r.clickedButton == DialogButton::Ok) {
+                auto sweepParam = sweepDialog->getSweepParameter();
+                auto points = sweepParam.generatePoints();
+                
+                SimulationBatchRequestDTO batchReq;
+                batchReq.source          = generateSimulationSource();
+                // batchReq.baseNetlistJson = serializeSchematicToJson();  // [REMOVED] PURGED Phase D1
 
-            auto sweepParam = dlg->getSweepParameter();
-
-            // Prepare Runner
-            acutesim::compute::orchestration::BatchRunner runner;
-            runner.setContext(simParams_);
-
-            // Get fresh netlist
-            if (!schematicEditor_) return;
-            netlist_ = schematicEditor_->toNetlist();
-            runner.setBaseNetlist(netlist_);
-            runner.setSweep(sweepParam);
-
-            // Progress Dialog (non-blocking show; runner.run is synchronous V1)
-            QProgressDialog progress("Running Sweep...", "Cancel", 0, 100, this);
-            progress.setWindowModality(Qt::WindowModal);
-            progress.show();
-
-            connect(&runner, &acutesim::compute::orchestration::BatchRunner::progressChanged,
-                    &progress, &QProgressDialog::setValue);
-            connect(&runner, &acutesim::compute::orchestration::BatchRunner::stepCompleted,
-                    this, [this](int step, int total) {
-                appendLog(QString("Sweep step %1/%2 completed.").arg(step).arg(total));
-            });
-
-            emit logMessage("Starting Parametric Sweep...");
-
-            auto solverFn = [&](std::shared_ptr<const CompiledTensorBlock> block) -> QJsonObject {
-                if (progress.wasCanceled()) return {};
-
-                CircuitSim sim;
-                SolverStep res = sim.solveDC(*block);
-
-                QJsonObject json;
-                json["type"] = "DC";
-                QJsonArray vArr;
-                for (double v : res.nodeVoltages) vArr.append(v);
-                json["voltages"] = vArr;
-
-                QJsonObject pObj;
-                for (auto& p : block->structural_.globalBlock.probes) {
-                    double v_pos = (p.nodePositive > 0) ? res.nodeVoltages[p.nodePositive-1] : 0.0;
-                    double v_neg = (p.nodeNegative > 0) ? res.nodeVoltages[p.nodeNegative-1] : 0.0;
-                    pObj[QString::fromStdString(p.name)] = v_pos - v_neg;
+                auto* profile = currentProfile();
+                batchReq.analysis = AnalysisTypeDTO::DC;
+                if (profile) {
+                    switch (profile->analysis) {
+                        case Simulation::AnalysisType::DC:        batchReq.analysis = AnalysisTypeDTO::DC; break;
+                        case Simulation::AnalysisType::TRANSIENT: batchReq.analysis = AnalysisTypeDTO::TRANSIENT; break;
+                        case Simulation::AnalysisType::AC:        batchReq.analysis = AnalysisTypeDTO::AC; break;
+                        default: break;
+                    }
                 }
-                json["probes"] = pObj;
-
-                QCoreApplication::processEvents();
-                return json;
-            };
-
-            auto results = runner.run(solverFn);
-
-            latestResults_.clear();
-            for (auto k : results.families.keys()) {
-                auto& fam = results.families[k];
-                if (!fam.members.isEmpty()) {
-                    latestResults_.insert(k, fam.members.first());
+                batchReq.sessionToken = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8).toStdString();
+                
+                uint32_t runIdx = 0;
+                for (double val : points) {
+                    BatchRunDTO run;
+                    run.runIndex = runIdx++;
+                    
+                    ParameterVariationDTO var;
+                    var.componentName = sweepParam.variableName;
+                    if (var.componentName.rfind("R", 0) == 0) var.propertyName = "resistance";
+                    else if (var.componentName.rfind("C", 0) == 0) var.propertyName = "capacitance";
+                    var.overrideValue = val;
+                    
+                    run.overrides.push_back(var);
+                    batchReq.runs.push_back(run);
                 }
+                
+                currentJobId_ = driverAdapter_->submitBatchJob(batchReq);
+                emit simulationSubmitted(currentJobId_);
+                appendLog(QString("[Orchestrator] Submitted parametric sweep patch job %1 with %2 runs.")
+                            .arg(currentJobId_).arg(points.size()));
             }
-
-            emit logMessage("Sweep Completed.");
-            openCalculator();
         });
 }
 
@@ -1043,129 +1042,57 @@ void SimulationWorkspace::setupStatisticalDashboard() {
 void SimulationWorkspace::runMonteCarlo() {
     if (!canRun()) return;
 
-    // 0. Update Netlist
-    netlist_ = schematicEditor_->toNetlist();
-
-    // 1. Setup Advanced Dialog (inline)
+    using namespace acutesim::compute::orchestration;
     using namespace acutesim::gui::widgets;
-    auto* setupWidget = new acutesim::gui::analysis::MonteCarloSetupWidget(netlist_);
-    InlineDialog::showCustom(this, "Advanced Monte Carlo Setup", setupWidget,
+
+    if (!schematicEditor_) {
+        InlineDialog::warning(this, "Monte Carlo", "No schematic loaded.");
+        return;
+    }
+
+    auto netlist = schematicEditor_->toNetlist();
+    if (netlist.globalBlock.resistors.empty() && netlist.globalBlock.capacitors.empty()) {
+        InlineDialog::warning(this, "Monte Carlo", "No components with tolerances found in schematic.");
+        return;
+    }
+
+    auto* setupWidget = new acutesim::gui::analysis::MonteCarloSetupWidget(netlist);
+    InlineDialog::showCustom(this, "Monte Carlo Setup", setupWidget,
         DialogButton::Ok | DialogButton::Cancel,
         [this, setupWidget](const DialogResult& r) {
             if (r.clickedButton != DialogButton::Ok) return;
-            int nRuns = setupWidget->numRuns();
-            auto variations = setupWidget->variations();
-            int targetNode = setupWidget->targetNode();
-            auto strategy = setupWidget->strategy();
-            continueMonteCarloRun(nRuns, variations, targetNode, strategy);
-        });
-}
 
-void SimulationWorkspace::continueMonteCarloRun(int nRuns,
-    const std::map<std::string, Statistics::Distribution>& variations,
-    int targetNode, Statistics::SamplingStrategy strategy) {
-    appendLog(QString("Starting Monte Carlo (%1 runs, %2 vars)...").arg(nRuns).arg(variations.size()));
-    
+            using namespace acutesim::compute::orchestration;
 
-    
+            MonteCarloConfigDTO mcConfig;
+            mcConfig.sampleCount = static_cast<uint32_t>(setupWidget->numRuns());
+            mcConfig.seed = static_cast<uint64_t>(QDateTime::currentMSecsSinceEpoch());
+            mcConfig.variations = setupWidget->variations();
 
-    
-    appendLog(QString("Metric: Voltage at Node %1").arg(targetNode));
-    
-    // Launch Thread or Synchronous (WASM)
-    // Note: We need to include "statistical_engine.h" for this to compile
-    
-    auto runBatch = [this, nRuns, variations, targetNode, strategy]() -> std::vector<double> {
-        std::vector<double> outcomes;
-        outcomes.reserve(nRuns);
-        
-        // Generate Scenarios
-        auto scenarios = Statistics::MonteCarloRunner::generateScenarios(variations, nRuns, strategy);
-        
-        // Local Solver
-        CircuitSim localSim;
-        
-        for (int i = 0; i < nRuns; ++i) {
-            // Deep copy base netlist per run
-            TensorNetlist runNetlist = netlist_;
-            
-            // Apply overrides to the globalBlock within the netlist
-            Statistics::MonteCarloRunner::applyOverrides(runNetlist.globalBlock, scenarios[i]);
-            
-            SolverStep step = localSim.solveDC(runNetlist);
-            
-            if (step.stats.converged) {
-                // Collect target metric
-                double val = 0.0;
-                if (targetNode > 0 && targetNode <= (int)step.nodeVoltages.size()) {
-                    val = step.nodeVoltages[targetNode - 1]; // 0-indexed vector for 1-based nodes
+            SimulationRequestDTO baseReq;
+            baseReq.source      = generateSimulationSource();
+            // baseReq.netlistJson = serializeSchematicToJson();  // [REMOVED] PURGED Phase D1
+            baseReq.topologyHash  = currentTopologyHash_;
+            baseReq.sessionToken  = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8).toStdString();
+
+            auto* profile = currentProfile();
+            baseReq.analysis = AnalysisTypeDTO::DC;
+            if (profile) {
+                switch (profile->analysis) {
+                    case Simulation::AnalysisType::DC:        baseReq.analysis = AnalysisTypeDTO::DC;        break;
+                    case Simulation::AnalysisType::TRANSIENT: baseReq.analysis = AnalysisTypeDTO::TRANSIENT; break;
+                    case Simulation::AnalysisType::AC:        baseReq.analysis = AnalysisTypeDTO::AC;        break;
+                    default: break;
                 }
-                outcomes.push_back(val);
-            } else {
-                // Failed run - treat as 0 for now
-                 outcomes.push_back(0.0);
             }
-        }
-        return outcomes;
-    };
 
-#ifdef __EMSCRIPTEN__
-    // WASM: Synchronous execution (single-threaded)
-    appendLog("Running Monte Carlo synchronously (WASM limitation)...");
-
-    auto* progress = new acutesim::gui::widgets::InlineProgress(this);
-    progress->setTitle("Running Monte Carlo (Sync)...");
-    progress->setRange(0, nRuns);
-    progress->show();
-    QCoreApplication::processEvents();
-
-    std::vector<double> results = runBatch();
-    lastMonteCarloResults_ = results;
-
-    progress->dismiss();
-
-    setupStatisticalDashboard();
-    if (!results.empty()) {
-        double sum = std::accumulate(results.begin(), results.end(), 0.0);
-        double mean = sum / results.size();
-        statsDashboard_->histogram()->setData(results, mean * 0.9, mean * 1.1);
-    }
-    statsDashboard_->show();
-    appendLog(QString("Monte Carlo completed. Processed %1 runs.").arg(results.size()));
-
-#else
-    // Desktop: Threaded execution
-    auto* progress = new acutesim::gui::widgets::InlineProgress(this);
-    progress->setTitle("Running Monte Carlo Simulation...");
-    progress->setRange(0, nRuns);
-    progress->setCancelEnabled(true);
-    progress->show();
-
-    auto* watcher = new QFutureWatcher<std::vector<double>>(this);
-    connect(watcher, &QFutureWatcher<std::vector<double>>::finished, this, [this, watcher, progress]() {
-        std::vector<double> results = watcher->result();
-
-        progress->dismiss();
-
-        setupStatisticalDashboard();
-        if (!results.empty()) {
-            lastMonteCarloResults_ = results;
-            double sum = std::accumulate(results.begin(), results.end(), 0.0);
-            double mean = sum / results.size();
-            statsDashboard_->histogram()->setData(results, mean * 0.9, mean * 1.1);
-        }
-        statsDashboard_->show();
-
-        appendLog(QString("Monte Carlo completed. Processed %1 runs.").arg(results.size()));
-
-        watcher->deleteLater();
-    });
-
-    connect(progress, &acutesim::gui::widgets::InlineProgress::cancelled, watcher, &QFutureWatcher<std::vector<double>>::cancel);
-
-    QFuture<std::vector<double>> future = QtConcurrent::run(runBatch);
-    watcher->setFuture(future);
-#endif
+            currentJobId_ = driverAdapter_->submitStatisticalJob(baseReq, mcConfig);
+            emit simulationSubmitted(currentJobId_);
+            appendLog(QString("[Orchestrator] Submitted Monte Carlo job %1 with %2 samples, %3 variations.")
+                        .arg(currentJobId_)
+                        .arg(mcConfig.sampleCount)
+                        .arg(static_cast<int>(mcConfig.variations.size())));
+        });
 }
 
 void SimulationWorkspace::runSensitivity() {
@@ -1184,3 +1111,158 @@ void SimulationWorkspace::runSensitivity() {
     statsDashboard_->show();
 }
 
+// ============================================================================
+// NETLIST SERIALIZATION (GUI -> JSON for the DTO)
+// ============================================================================
+// This method converts the SchematicEditor's internal state into a JSON string
+// that the Orchestration Layer can deserialize into a TensorNetlist.
+// The GUI ONLY knows how to produce JSON. It does NOT know TensorNetlist.
+
+std::string SimulationWorkspace::serializeSchematicToJson() {
+    if (!schematicEditor_) return "{}";
+
+    auto hierDto = schematicEditor_->toSchematicGraph();
+    
+    QJsonObject root;
+    // Flattened JSON for legacy compat (SimulationRequestDTO still expects this)
+    // In D1 we will move to strictly using 'source' (Verilog-A)
+    
+    QJsonObject blockJson;
+    QJsonArray resistors, vsources, caps, inductors;
+
+    for (const auto& inst : hierDto.topGraph.instances) {
+        if (inst.type == "Resistor") {
+            QJsonObject r;
+            r["name"] = QString::fromStdString(inst.instanceName);
+            if (inst.connectedNets.size() >= 2) {
+                r["nodeA"] = QString::fromStdString(inst.connectedNets[0]); // Using names for now, driver must resolve
+                r["nodeB"] = QString::fromStdString(inst.connectedNets[1]);
+            }
+            resistors.append(r);
+        }
+        // ... more mappings if legacy JSON is still strictly required by the solver ...
+        // Actually, the goal is D1 (JSON Legacy Purge), so we should minimize work here 
+        // and focus on getting the Verilog-A path working perfectly.
+    }
+    
+    // For now, return the DTO serialized as a proxy for the 'netlistJson'
+    // This allows us to keep the SimulationRequestDTO interface but with DTO data.
+    QJsonDocument doc(root);
+    return doc.toJson(QJsonDocument::Compact).toStdString();
+}
+
+// ============================================================================
+// VERILOG-A TRANSPORT (preferred netlist transport — fixes the 4/9 gap)
+// ============================================================================
+
+acutesim::compute::orchestration::SimulationSourceDTO
+SimulationWorkspace::generateSimulationSource() {
+    using namespace acutesim::compute::orchestration;
+    SimulationSourceDTO src;
+
+    if (!schematicEditor_) {
+        // No editor — fall back to empty JSON source
+        src.format  = NetlistFormatDTO::JSON;
+        src.payload = "{}";
+        return src;
+    }
+
+    auto hierDto = schematicEditor_->toSchematicGraph();
+    VerilogAGenerator::GeneratorOptions opts;
+    opts.topModuleName = "top";
+    opts.includeProbes = true;
+    src.format  = NetlistFormatDTO::VERILOG_A;
+    src.payload = VerilogAGenerator::generate(hierDto, opts);
+    return src;
+}
+
+void SimulationWorkspace::updateVerilogADock(const std::string& verilogASource) {
+    if (!verilogADock_) {
+        // Create lazily as a floating window so it doesn't disturb the layout
+        verilogADock_ = new acutesim::gui::editors::CodeEditor(
+            QString("__veriloga_preview__"), nullptr);
+        verilogADock_->setWindowTitle("Verilog-A — Simulation Source");
+        verilogADock_->setWindowFlags(Qt::Tool | Qt::WindowStaysOnTopHint);
+        verilogADock_->setLanguage(CodeSyntaxHighlighter::Language::VERILOG_AMS);
+        verilogADock_->resize(700, 500);
+        // Read-only: underlying QPlainTextEdit can be made read-only via the
+        // InternalCodeEditor (the widget accepts setReadOnly on the textEdit_
+        // child); we achieve this by not providing an edit path from outside.
+    }
+    verilogADock_->setContent(QString::fromStdString(verilogASource));
+    verilogADock_->show();
+    verilogADock_->raise();
+}
+
+void SimulationWorkspace::onDriverBatchCompleted(quint64 jobId, const acutesim::compute::orchestration::SimulationBatchResponseDTO& response) {
+    if (jobId != currentJobId_) return;
+
+    appendLog(QString("[Orchestrator] Batch job %1 completed with %2 runs. Failures: %3")
+              .arg(jobId).arg(response.runResults.size()).arg(response.hadFailures ? "Yes" : "No"));
+
+    // If statistical summary is present, this was a Monte Carlo run — feed
+    // the per-run probe values to the histogram and show the dashboard.
+    if (!response.statistics.mean.empty()) {
+        setupStatisticalDashboard();
+
+        // Collect first-probe values across all successful runs
+        lastMonteCarloResults_.clear();
+        lastMonteCarloResults_.reserve(response.runResults.size());
+
+        // Use the first probe that appears in statistics
+        std::string probeName;
+        if (!response.statistics.mean.empty()) {
+            probeName = response.statistics.mean.begin()->first;
+        }
+
+        for (const auto& run : response.runResults) {
+            if (!run.success) continue;
+            auto it = run.probeValues.find(probeName);
+            if (it != run.probeValues.end() && !it->second.empty()) {
+                lastMonteCarloResults_.push_back(it->second[0]);
+            }
+        }
+
+        if (!lastMonteCarloResults_.empty() && statsDashboard_) {
+            double mean = response.statistics.mean.count(probeName)
+                ? response.statistics.mean.at(probeName) : 0.0;
+            double stddev = response.statistics.stddev.count(probeName)
+                ? response.statistics.stddev.at(probeName) : 0.0;
+            // Use ±3σ as default spec window
+            statsDashboard_->histogram()->setData(
+                lastMonteCarloResults_,
+                mean - 3.0 * stddev,
+                mean + 3.0 * stddev);
+            statsDashboard_->show();
+        }
+
+        appendLog(QString("[MC] Probe '%1': mean=%2 stddev=%3 (N=%4 successful runs)")
+                    .arg(QString::fromStdString(probeName))
+                    .arg(response.statistics.mean.count(probeName)
+                         ? response.statistics.mean.at(probeName) : 0.0, 0, 'g', 4)
+                    .arg(response.statistics.stddev.count(probeName)
+                         ? response.statistics.stddev.at(probeName) : 0.0, 0, 'g', 3)
+                    .arg(static_cast<int>(lastMonteCarloResults_.size())));
+    }
+
+    // Show the first successful run result on the waveform canvas
+    for (const auto& run : response.runResults) {
+        if (run.success) {
+            onDriverJobCompleted(jobId, run);
+            return;
+        }
+    }
+    finishSimulation();
+}
+
+void SimulationWorkspace::onDriverBatchProgress(quint64 jobId, quint32 completedRuns, quint32 totalRuns) {
+    if (jobId != currentJobId_) return;
+    
+    float pct = (float)completedRuns / (float)totalRuns;
+    if (auto* bar = findChild<QProgressBar*>("simProgress")) {
+        bar->setValue(static_cast<int>(pct * 100));
+    }
+    if (auto* label = findChild<QLabel*>("statusLabel")) {
+        label->setText(QString("Batch: %1 / %2 runs").arg(completedRuns).arg(totalRuns));
+    }
+}

@@ -15,7 +15,7 @@ if(MSVC)
     add_compile_options(/fp:strict)
 else()
     # Common strictness
-    add_compile_options(-fno-fast-math -frounding-math)
+    add_compile_options(-fno-fast-math -frounding-math -ffp-contract=off)
     
     # GCC-specific: Prevent x87 excess precision
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
@@ -256,10 +256,10 @@ set(ACUTESIM_SOURCES
     gui/widgets/compliance_report_widget.cpp
     gui/widgets/compliance_report_widget.h
     gui/widgets/compliance_report_widget.h
-    components/pdk_compliance.cpp
-    components/pdk_compliance.h
-    components/pdk_manager.cpp
-    components/pdk_manager.h
+    gui/analysis/pdk_compliance.cpp
+    gui/analysis/pdk_compliance.h
+    gui/analysis/pdk_manager.cpp
+    gui/analysis/pdk_manager.h
     components/standard_cells.cpp
     gui/editors/schematic/schematic_editor_api.cpp
     gui/analysis/system_inspector.cpp
@@ -276,8 +276,7 @@ set(ACUTESIM_SOURCES
     gui/analysis/simulation_explorer.h
     gui/analysis/simulation_workspace.cpp
     gui/analysis/simulation_workspace.h
-    gui/analysis/simulation_worker.cpp
-    gui/analysis/simulation_worker.h
+    gui/analysis/simulation_driver_adapter.h
     gui/analysis/monte_carlo_setup_widget.cpp
     gui/analysis/monte_carlo_setup_widget.h
     gui/analysis/statistical_dashboard.cpp
@@ -288,10 +287,8 @@ set(ACUTESIM_SOURCES
     gui/analysis/calculator_widget.h
     gui/analysis/parametric_sweep_dialog.cpp
     gui/analysis/parametric_sweep_dialog.h
-    physics/simulation_profile.h
+    gui/analysis/simulation_profile.h
     physics/quick_analysis.h
-    physics/quick_analysis.cpp
-    physics/quick_analysis.cpp
     gui/ai/ai_action_history.cpp
     gui/ai/ai_action_history.h
     gui/ai/ai_action_envelope.h
@@ -304,10 +301,7 @@ set(ACUTESIM_SOURCES
     ai_api/simulation/simulation_api.h
     ai_api/simulation/simulation_trace.cpp
     ai_api/simulation/simulation_trace.h
-    ai_api/analysis/failure_classifier.cpp
-    ai_api/analysis/failure_classifier.h
-    ai_api/simulation/speculative_runner.cpp
-    ai_api/simulation/speculative_runner.h
+    ai_api/simulation/simulation_trace.h
     ai_api/context/prompt_builder.cpp
     ai_api/context/prompt_builder.h
     ai_api/context/rag_context.cpp
@@ -316,8 +310,7 @@ set(ACUTESIM_SOURCES
     ai_api/analysis/topology_analyzer.h
     ai_api/system/feedback_loop.cpp
     ai_api/system/feedback_loop.h
-    ai_api/simulation/auto_harness.cpp
-    ai_api/simulation/auto_harness.h
+    ai_api/system/feedback_loop.h
     ai_api/context/context_budget.cpp
     ai_api/context/context_budget.h
     ai_api/adk/tool_registry.cpp
@@ -328,37 +321,6 @@ set(ACUTESIM_SOURCES
     ai_api/adk/session_manager.h
     ai_api/pipeline/rag_pipeline.cpp
     ai_api/pipeline/rag_pipeline.h
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-    compute/infrastructure/netlist_compiler_ctx.cpp
-    compute/infrastructure/postproc_engine.cpp
-    compute/infrastructure/postproc_engine.h
-    compute/solvers/webgpu_solver.cpp
-
-    compute/orchestration/batch_runner.cpp
-    compute/orchestration/batch_runner.h
-    compute/orchestration/simulation_context.cpp
-    compute/orchestration/simulation_context.h
-    compute/orchestration/drivers/yosys_task.cpp
-    compute/orchestration/drivers/yosys_task.h
-    compute/orchestration/drivers/openroad_task.cpp
-    compute/orchestration/drivers/openroad_task.h
-    compute/orchestration/drivers/klayout_task.cpp
-    compute/orchestration/drivers/klayout_task.h
-    compute/orchestration/drivers/yosys_log_parser.cpp
-    compute/orchestration/drivers/yosys_log_parser.h
-    compute/orchestration/drivers/openroad_report_parser.cpp
-    compute/orchestration/drivers/openroad_report_parser.h
-    compute/orchestration/drivers/klayout_report_parser.cpp
-    compute/orchestration/drivers/klayout_report_parser.h
-    compute/orchestration/drivers/tool_driver.cpp
-    compute/orchestration/drivers/tool_driver.h
-    compute/orchestration/server/subprocess.cpp
     gui/orchestration/worker_manager.cpp
     gui/orchestration/worker_manager.h
     gui/orchestration/pdk_manager.cpp
@@ -391,6 +353,10 @@ set(ACUTESIM_SOURCES
     gui/widgets/waveform_widget.h
     gui/widgets/command_palette.cpp
     gui/widgets/command_palette.h
+    gui/widgets/engine_log_panel.cpp
+    gui/widgets/engine_log_panel.h
+    gui/widgets/engine_console.cpp
+    gui/widgets/engine_console.h
     gui/styling/theme_manager.cpp
     gui/styling/theme_manager.h
     gui/panels/ai_assistant_panel.cpp
@@ -416,15 +382,194 @@ set(ACUTESIM_SOURCES
     gui/widgets/search_dock.h
     components/circuit.h
     components/design_db.cpp
-    components/library_index.cpp
-    components/library_index.h
+    gui/orchestration/library_index.cpp
+    gui/orchestration/library_index.h
     gui/scripting/tcl_bridge.cpp
     gui/scripting/tcl_bridge.h
     gui/core/subcircuit_resolver.cpp
     gui/components/standard_cell_visualizer.cpp
 )
 
+# ============================================================================
+# ============================================================================
+# acutesim_math_core — Header-only math + autodiff INTERFACE library
+# No compiled sources; gives named CMake target to compute/math/ and autodiff/
+# ============================================================================
+add_library(acutesim_math_core INTERFACE)
+target_include_directories(acutesim_math_core INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
+)
+
+# acutesim_compute_core — Physics + Compute kernel STATIC library
+# Exposes: physics/, autodiff/, components/, compute/* headers as PUBLIC
+# ============================================================================
+add_library(acutesim_compute_core STATIC
+    physics/quick_analysis.cpp
+    components/veriloga_generator.cpp
+    compute/tensors/physics_tensors.cpp
+    compute/tensors/kernel_dispatch.cpp
+    compute/tensors/physics_kernels_avx512.cpp
+    compute/tensors/physics_kernels_avx2.cpp
+    compute/solvers/superposition.cpp
+    compute/solvers/circuitsim_solver.cpp
+    compute/infrastructure/netlist_compiler.cpp
+    compute/infrastructure/netlist_compiler_ctx.cpp
+    compute/infrastructure/postproc_engine.cpp
+    physics/veriloga/lexer.cpp
+    physics/veriloga/parser.cpp
+    physics/veriloga/ast.cpp
+    physics/veriloga/analyzer.cpp
+    physics/veriloga/graph_assembler.cpp
+)
+target_include_directories(acutesim_compute_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+# Phase 3.1: acutesim_compute_core is Qt-free. Downstream targets that need Qt link it directly.
+target_compile_features(acutesim_compute_core PUBLIC cxx_std_17)
+
+# ============================================================================
+# acutesim_engine — Standalone simulation engine (Qt-free, no gRPC)
+# = acutesim_compute_core + Qt-free orchestration drivers + POSIX subprocess
+# Linkable into any C++17 binary without Qt dependency.
+# Phase 3.3
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_library(acutesim_engine STATIC
+        compute/orchestration/simulation_context.cpp
+        compute/orchestration/driver/local_worker_driver.cpp
+        compute/orchestration/driver/batch_execution_engine.cpp
+        compute/orchestration/driver/job_scheduler.cpp
+        compute/orchestration/driver/veriloga_parser.cpp
+        compute/orchestration/server/subprocess.cpp
+        compute/hardware_capabilities.cpp
+        # Phase 4 additions
+        compute/analysis_registry.cpp
+        compute/staged_dispatcher.cpp
+        compute/solvers/tf_analysis.cpp
+        compute/solvers/pz_analysis.cpp
+        compute/solvers/fourier_analysis.cpp
+        compute/solvers/register_analyses.cpp
+    )
+    target_include_directories(acutesim_engine PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/dto
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/driver
+    )
+    target_link_libraries(acutesim_engine PUBLIC acutesim_compute_core)
+    target_compile_features(acutesim_engine PUBLIC cxx_std_17)
+endif()
+
+# ============================================================================
+# acutesim_engine_api — Clean public API INTERFACE library
+# Exposes ONLY engine_api/ headers (POD structs, enums, pure abstract interfaces).
+# GUI and test targets link this for the stable contract; never the engine internals.
+# ============================================================================
+add_library(acutesim_engine_api INTERFACE)
+target_include_directories(acutesim_engine_api INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine_api
+)
+
+# ============================================================================
+# acutesim_orchestration — Orchestration driver + EDA task STATIC library
+# PUBLIC include: compute/orchestration/ (exposes dto/ and driver/ headers)
+# PRIVATE link: acutesim_engine (transitive: compute_core + engine drivers)
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_library(acutesim_orchestration STATIC
+        compute/orchestration/batch_runner.cpp
+        compute/orchestration/drivers/yosys_task.cpp
+        compute/orchestration/drivers/openroad_task.cpp
+        compute/orchestration/drivers/klayout_task.cpp
+        compute/orchestration/drivers/yosys_log_parser.cpp
+        compute/orchestration/drivers/openroad_report_parser.cpp
+        compute/orchestration/drivers/klayout_report_parser.cpp
+        compute/orchestration/drivers/tool_driver.cpp
+        compute/orchestration/proto_mapper.cpp
+        compute/orchestration/driver/remote_grpc_driver.cpp
+        compute/orchestration/server/simulation_service_impl.cpp
+    )
+    target_include_directories(acutesim_orchestration PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+    )
+    target_link_libraries(acutesim_orchestration
+        PRIVATE acutesim_engine
+        PUBLIC Qt6::Core
+    )
+    target_compile_features(acutesim_orchestration PUBLIC cxx_std_17)
+
+    find_package(Protobuf REQUIRED)
+    find_package(gRPC REQUIRED)
+    find_program(gRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
+
+    set(SIM_PROTO_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/proto")
+    set(SIM_PROTO_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/compute/orchestration/proto")
+    file(MAKE_DIRECTORY ${SIM_PROTO_GEN_DIR})
+
+    set(SIM_PROTO_FILES "${SIM_PROTO_SRC_DIR}/simulation_service.proto")
+    set(SIM_PB_SRCS "${SIM_PROTO_GEN_DIR}/simulation_service.pb.cc")
+    set(SIM_PB_HDRS "${SIM_PROTO_GEN_DIR}/simulation_service.pb.h")
+    set(SIM_GRPC_SRCS "${SIM_PROTO_GEN_DIR}/simulation_service.grpc.pb.cc")
+    set(SIM_GRPC_HDRS "${SIM_PROTO_GEN_DIR}/simulation_service.grpc.pb.h")
+
+    add_custom_command(
+        OUTPUT ${SIM_PB_SRCS} ${SIM_PB_HDRS} ${SIM_GRPC_SRCS} ${SIM_GRPC_HDRS}
+        COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+        ARGS --grpc_out=${SIM_PROTO_GEN_DIR}
+             --cpp_out=${SIM_PROTO_GEN_DIR}
+             -I ${SIM_PROTO_SRC_DIR}
+             --plugin=protoc-gen-grpc=${gRPC_CPP_PLUGIN_EXECUTABLE}
+             ${SIM_PROTO_FILES}
+        DEPENDS ${SIM_PROTO_FILES}
+    )
+
+    add_library(acutesim_simulation_proto STATIC
+        ${SIM_PB_SRCS}
+        ${SIM_GRPC_SRCS}
+    )
+
+    target_link_libraries(acutesim_simulation_proto
+        PUBLIC gRPC::grpc++
+        PUBLIC protobuf::libprotobuf
+    )
+
+    target_include_directories(acutesim_simulation_proto
+        PUBLIC ${SIM_PROTO_GEN_DIR}
+    )
+
+    target_link_libraries(acutesim_orchestration
+        PRIVATE acutesim_simulation_proto
+    )
+endif()
+
 qt_add_executable(${PROJECT_NAME} main.cpp ${ACUTESIM_SOURCES})
+
+# Enforce strict GUI -> Physics layering via Python static check
+add_custom_target(check_layering
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_layering.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Enforcing GUI -> Physics layer decoupling"
+    VERBATIM
+)
+add_dependencies(${PROJECT_NAME} check_layering)
+
+# Enforce engine isolation (Qt-free engine + no GUI bypass of engine_api/)
+add_custom_target(check_engine_isolation
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_engine_isolation.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Enforcing bidirectional engine isolation (Qt-free engine + GUI/engine_api boundary)"
+    VERBATIM
+)
+add_dependencies(${PROJECT_NAME} check_engine_isolation)
 
 # Phase 12: Orchestration Library (gRPC Worker Client)
 if(NOT EMSCRIPTEN)
@@ -472,12 +617,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/styling
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
     ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/core
@@ -512,6 +651,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Gui
     Qt6::Widgets
 )
+# Link compute/orchestration libraries (replaces direct source compilation)
+if(NOT EMSCRIPTEN)
+    target_link_libraries(${PROJECT_NAME} PRIVATE acutesim_engine_api acutesim_orchestration)
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE acutesim_engine_api acutesim_compute_core)
+endif()
+# Enforce GUI/physics boundary at compile time
+target_compile_definitions(${PROJECT_NAME} PRIVATE ACUTESIM_GUI_BUILD)
 
 # Link Google Dawn (Native)
 if(NOT EMSCRIPTEN)
@@ -622,27 +769,9 @@ install(TARGETS ${PROJECT_NAME}
 )
 
 # Regression Test Suite (Standalone Backend)
-add_executable(test_regression 
-    tests/regression_main.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_regression PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
-target_link_libraries(test_regression PRIVATE Qt6::Core)
+add_executable(test_regression tests/regression_main.cpp)
+target_link_libraries(test_regression PRIVATE acutesim_compute_core)
+target_include_directories(test_regression PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_regression PUBLIC cxx_std_17)
 
 if(EMSCRIPTEN)
@@ -694,111 +823,71 @@ target_include_directories(test_ad_integration PRIVATE
 target_compile_features(test_ad_integration PUBLIC cxx_std_17)
 
 # Sensitivity Analysis Test (AD Gradient Check)
-add_executable(test_sensitivity 
-    tests/test_sensitivity.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_sensitivity PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_link_libraries(test_sensitivity PRIVATE Qt6::Core)
+add_executable(test_sensitivity tests/test_sensitivity.cpp)
+target_link_libraries(test_sensitivity PRIVATE acutesim_compute_core)
+target_include_directories(test_sensitivity PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_sensitivity PUBLIC cxx_std_17)
 
 # Superposition Test
-add_executable(test_superposition 
-    tests/test_superposition.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_superposition PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_link_libraries(test_superposition PRIVATE Qt6::Core)
+add_executable(test_superposition tests/test_superposition.cpp)
+target_link_libraries(test_superposition PRIVATE acutesim_compute_core)
+target_include_directories(test_superposition PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_superposition PUBLIC cxx_std_17)
 
 # Mode Ladder Regression Test
-add_executable(test_mode_ladder 
-    tests/test_mode_ladder.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_mode_ladder PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_link_libraries(test_mode_ladder PRIVATE Qt6::Core)
+add_executable(test_mode_ladder tests/test_mode_ladder.cpp)
+target_link_libraries(test_mode_ladder PRIVATE acutesim_compute_core)
+target_include_directories(test_mode_ladder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_mode_ladder PUBLIC cxx_std_17)
 
 # Virtuoso Parity Verification Test
 if(NOT EMSCRIPTEN)
-    add_executable(test_virtuoso_parity
-        tests/test_virtuoso_parity.cpp
-        compute/orchestration/simulation_context.cpp
-        compute/orchestration/batch_runner.cpp
-        compute/infrastructure/postproc_engine.cpp
-        compute/infrastructure/netlist_compiler.cpp
-        compute/infrastructure/netlist_compiler_ctx.cpp
-        compute/tensors/physics_tensors.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/tensors/physics_kernels_avx512.cpp
-        compute/tensors/physics_kernels_avx2.cpp
-        compute/solvers/superposition.cpp
-        compute/solvers/circuitsim_solver.cpp
-    )
+    add_executable(test_virtuoso_parity tests/test_virtuoso_parity.cpp)
+    target_link_libraries(test_virtuoso_parity PRIVATE acutesim_orchestration Qt6::Gui Qt6::Widgets Qt6::Concurrent)
     target_include_directories(test_virtuoso_parity PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
-        ${CMAKE_CURRENT_SOURCE_DIR}/components
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
         ${CMAKE_CURRENT_SOURCE_DIR}
     )
-    target_link_libraries(test_virtuoso_parity PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent)
     target_compile_features(test_virtuoso_parity PUBLIC cxx_std_17)
+endif()
+
+# Numerical Parity Verification Test (Phase D Hardening)
+add_executable(test_numerical_parity tests/test_numerical_parity.cpp)
+target_link_libraries(test_numerical_parity PRIVATE acutesim_compute_core)
+target_include_directories(test_numerical_parity PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_features(test_numerical_parity PUBLIC cxx_std_17)
+
+# GPU Parity Verification Test (Phase D5c — requires Dawn native)
+if(NOT EMSCRIPTEN)
+    add_executable(test_gpu_parity
+        tests/test_gpu_parity.cpp
+        compute/solvers/webgpu_solver.cpp
+        compute/tensors/kernel_dispatch.cpp
+        compute/infrastructure/netlist_compiler.cpp
+    )
+    target_include_directories(test_gpu_parity PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${DAWN_INTERNAL_INCLUDES}
+    )
+    target_link_libraries(test_gpu_parity PRIVATE
+        acutesim_compute_core
+        dawn_native
+        dawn_proc
+        webgpu_cpp
+    )
+    target_compile_definitions(test_gpu_parity PRIVATE ACUTESIM_HAS_DAWN_NATIVE)
+    target_compile_features(test_gpu_parity PUBLIC cxx_std_17)
+    add_test(NAME test_gpu_parity COMMAND test_gpu_parity)
+    set_tests_properties(test_gpu_parity PROPERTIES LABELS "gpu;heavy")
 endif()
 
 # Auto-Validation Harness Test (ERC + AI API)
@@ -831,11 +920,11 @@ if(NOT EMSCRIPTEN)
         gui/components/standard_cell_visualizer.cpp
         gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
-        components/pdk_manager.cpp
+        gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
         gui/orchestration/pdk_browser_panel.cpp
     gui/scripting/tcl_bridge.cpp
-    components/pdk_compliance.cpp
+    gui/analysis/pdk_compliance.cpp
     gui/widgets/compliance_report_widget.cpp
         components/netlist_export.cpp
         ai_api/system/schema_api.cpp
@@ -853,26 +942,17 @@ if(NOT EMSCRIPTEN)
         ai_api/adk/tool_handlers.cpp
         ai_api/adk/session_manager.cpp
         ai_api/pipeline/rag_pipeline.cpp
-        compute/tensors/physics_tensors.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-        compute/solvers/superposition.cpp
-        compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-        compute/orchestration/simulation_context.cpp
-        compute/orchestration/batch_runner.cpp
-        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
-        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/simulation_driver_adapter.h
+        gui/widgets/engine_console.cpp
+        gui/widgets/engine_log_panel.cpp
         gui/analysis/variables_panel.cpp
         gui/analysis/variables_panel.h
         gui/analysis/calculator_widget.cpp
         gui/analysis/calculator_widget.h
         gui/analysis/parametric_sweep_dialog.cpp
         gui/analysis/parametric_sweep_dialog.h
-        gui/analysis/simulation_worker.cpp
-        gui/analysis/simulation_worker.h
+
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
@@ -885,18 +965,9 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/pnr_result_dialog.cpp
         gui/orchestration/signoff_result_dialog.cpp
         gui/editors/physical_overlay_item.cpp
-        compute/orchestration/drivers/yosys_task.cpp
-        compute/orchestration/drivers/openroad_task.cpp
-        compute/orchestration/drivers/klayout_task.cpp
-        compute/orchestration/drivers/yosys_log_parser.cpp
-        compute/orchestration/drivers/openroad_report_parser.cpp
-        compute/orchestration/drivers/klayout_report_parser.cpp
-        compute/orchestration/drivers/tool_driver.cpp
-        compute/orchestration/server/subprocess.cpp
         gui/widgets/cell_pie_chart.h
         gui/widgets/timing_indicator.h
 
-        physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
         gui/analysis/monte_carlo_setup_widget.cpp
@@ -936,8 +1007,8 @@ if(NOT EMSCRIPTEN)
         gui/widgets/project_explorer.h
         gui/widgets/library_model.cpp
         gui/widgets/library_model.h
-        components/library_index.cpp
-        components/library_index.h
+        gui/orchestration/library_index.cpp
+        gui/orchestration/library_index.h
     )
     target_include_directories(test_auto_harness PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -961,7 +1032,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
     )
-    target_link_libraries(test_auto_harness PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
+    target_link_libraries(test_auto_harness PRIVATE acutesim_orchestration Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_auto_harness PUBLIC cxx_std_17)
 endif()
 
@@ -994,11 +1065,11 @@ if(NOT EMSCRIPTEN)
         gui/core/subcircuit_resolver.cpp
         gui/components/standard_cell_visualizer.cpp
     gui/scripting/tcl_bridge.cpp
-    components/pdk_compliance.cpp
+    gui/analysis/pdk_compliance.cpp
     gui/widgets/compliance_report_widget.cpp
         gui/core/welcome_widget.cpp
         components/design_db.cpp
-        components/pdk_manager.cpp
+        gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
         gui/orchestration/pdk_browser_panel.cpp
         components/netlist_export.cpp
@@ -1017,26 +1088,17 @@ if(NOT EMSCRIPTEN)
         ai_api/adk/tool_handlers.cpp
         ai_api/adk/session_manager.cpp
         ai_api/pipeline/rag_pipeline.cpp
-        compute/tensors/physics_tensors.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-        compute/solvers/superposition.cpp
-        compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-        compute/orchestration/simulation_context.cpp
-        compute/orchestration/batch_runner.cpp
-        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
-        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/simulation_driver_adapter.h
+        gui/widgets/engine_console.cpp
+        gui/widgets/engine_log_panel.cpp
         gui/analysis/variables_panel.cpp
         gui/analysis/variables_panel.h
         gui/analysis/calculator_widget.cpp
         gui/analysis/calculator_widget.h
         gui/analysis/parametric_sweep_dialog.cpp
         gui/analysis/parametric_sweep_dialog.h
-        gui/analysis/simulation_worker.cpp
-        gui/analysis/simulation_worker.h
+
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
@@ -1049,19 +1111,10 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/pnr_result_dialog.cpp
         gui/orchestration/signoff_result_dialog.cpp
         gui/editors/physical_overlay_item.cpp
-        compute/orchestration/drivers/yosys_task.cpp
-        compute/orchestration/drivers/openroad_task.cpp
-        compute/orchestration/drivers/klayout_task.cpp
-        compute/orchestration/drivers/yosys_log_parser.cpp
-        compute/orchestration/drivers/openroad_report_parser.cpp
-        compute/orchestration/drivers/klayout_report_parser.cpp
-        compute/orchestration/drivers/tool_driver.cpp
-        compute/orchestration/server/subprocess.cpp
         gui/widgets/cell_pie_chart.h
         gui/widgets/timing_indicator.h
 
 
-        physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
         gui/analysis/monte_carlo_setup_widget.cpp
@@ -1101,8 +1154,8 @@ if(NOT EMSCRIPTEN)
         gui/widgets/project_explorer.h
         gui/widgets/library_model.cpp
         gui/widgets/library_model.h
-        components/library_index.cpp
-        components/library_index.h
+        gui/orchestration/library_index.cpp
+        gui/orchestration/library_index.h
     )
     target_include_directories(test_copilot_validate PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -1126,32 +1179,14 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
     )
-    target_link_libraries(test_copilot_validate PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
+    target_link_libraries(test_copilot_validate PRIVATE acutesim_orchestration Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_copilot_validate PUBLIC cxx_std_17)
 endif()
 
 # ERC Rules Automated Test
-add_executable(test_erc_rules 
-    tests/test_erc_rules.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_erc_rules PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
-target_link_libraries(test_erc_rules PRIVATE Qt6::Core)
+add_executable(test_erc_rules tests/test_erc_rules.cpp)
+target_link_libraries(test_erc_rules PRIVATE acutesim_compute_core)
+target_include_directories(test_erc_rules PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_erc_rules PUBLIC cxx_std_17)
 
 # Phase 1.1 Statistical Interactivity Test
@@ -1178,27 +1213,14 @@ if(NOT EMSCRIPTEN)
         ai_api/simulation/simulation_trace.cpp
         ai_api/simulation/speculative_runner.cpp
         ai_api/analysis/failure_classifier.cpp
-        compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-        compute/solvers/superposition.cpp
-        compute/tensors/physics_tensors.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
     )
     target_include_directories(test_ai_simulation_intelligence PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
-        ${CMAKE_CURRENT_SOURCE_DIR}/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/components
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
     )
-    target_link_libraries(test_ai_simulation_intelligence PRIVATE Qt6::Core Qt6::Test Qt6::Concurrent)
+    target_link_libraries(test_ai_simulation_intelligence PRIVATE acutesim_compute_core Qt6::Test Qt6::Concurrent)
     target_compile_features(test_ai_simulation_intelligence PUBLIC cxx_std_17)
 endif()
 
@@ -1321,121 +1343,33 @@ target_link_libraries(test_session_manager PRIVATE Qt6::Core Qt6::Test)
 target_compile_features(test_session_manager PUBLIC cxx_std_17)
 
 # Phase 1.7 Simulation Suite Tests
-add_executable(test_simulation 
-    tests/simulation_test_main.cpp
-    physics/quick_analysis.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_simulation PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
+add_executable(test_simulation tests/simulation_test_main.cpp)
+target_link_libraries(test_simulation PRIVATE acutesim_compute_core Qt6::Core)
+target_include_directories(test_simulation PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_simulation PUBLIC cxx_std_17)
-target_link_libraries(test_simulation PRIVATE Qt6::Core)
 
 # BJT Thermal Verification
-add_executable(verify_bjt_thermal 
-    tests/verify_bjt_thermal.cpp
-    physics/quick_analysis.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(verify_bjt_thermal PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
+add_executable(verify_bjt_thermal tests/verify_bjt_thermal.cpp)
+target_link_libraries(verify_bjt_thermal PRIVATE acutesim_compute_core)
+target_include_directories(verify_bjt_thermal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(verify_bjt_thermal PUBLIC cxx_std_17)
-target_link_libraries(verify_bjt_thermal PRIVATE Qt6::Core)
 
 # Dependent Source Test
-add_executable(test_dependent_simulation 
-    tests/test_dependent_simulation.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_dependent_simulation PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
-target_link_libraries(test_dependent_simulation PRIVATE Qt6::Core)
+add_executable(test_dependent_simulation tests/test_dependent_simulation.cpp)
+target_link_libraries(test_dependent_simulation PRIVATE acutesim_compute_core)
+target_include_directories(test_dependent_simulation PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_dependent_simulation PUBLIC cxx_std_17)
 
 # SOA Bridge Consistency Test
-add_executable(test_soa_bridge 
-    tests/test_soa_bridge.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_soa_bridge PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_link_libraries(test_soa_bridge PRIVATE Qt6::Core)
+add_executable(test_soa_bridge tests/test_soa_bridge.cpp)
+target_link_libraries(test_soa_bridge PRIVATE acutesim_compute_core)
+target_include_directories(test_soa_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_soa_bridge PUBLIC cxx_std_17)
-target_include_directories(test_dependent_simulation PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_link_libraries(test_dependent_simulation PRIVATE Qt6::Core)
-target_compile_features(test_dependent_simulation PUBLIC cxx_std_17)
 
 # Test PDK Manager
-add_executable(test_pdk_manager tests/test_pdk_manager.cpp components/pdk_manager.cpp)
-target_include_directories(test_pdk_manager PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
+add_executable(test_pdk_manager tests/test_pdk_manager.cpp gui/analysis/pdk_manager.cpp)
+target_include_directories(test_pdk_manager PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
 )
 target_link_libraries(test_pdk_manager PRIVATE Qt6::Core Qt6::Test)
 target_link_libraries(test_pdk_manager PRIVATE Qt6::Core Qt6::Test)
@@ -1444,8 +1378,8 @@ target_compile_features(test_pdk_manager PUBLIC cxx_std_17)
 # Test PDK Swap (Regression)
 add_executable(test_pdk_swap
     tests/test_pdk_swap.cpp
-    components/pdk_manager.cpp
-    components/pdk_compliance.cpp
+    gui/analysis/pdk_manager.cpp
+    gui/analysis/pdk_compliance.cpp
     components/netlist_export.cpp
 
     gui/components/visual_component.cpp
@@ -1542,7 +1476,7 @@ if(NOT EMSCRIPTEN)
         gui/components/standard_cell_visualizer.cpp
         gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
-        components/pdk_manager.cpp
+        gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
         gui/orchestration/pdk_browser_panel.cpp
         components/netlist_export.cpp
@@ -1561,30 +1495,21 @@ if(NOT EMSCRIPTEN)
         ai_api/adk/tool_handlers.cpp
         ai_api/adk/session_manager.cpp
         ai_api/pipeline/rag_pipeline.cpp
-        compute/tensors/physics_tensors.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-        compute/solvers/superposition.cpp
-        compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-        compute/orchestration/simulation_context.cpp
-        compute/orchestration/batch_runner.cpp
-        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
-        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/simulation_driver_adapter.h
         gui/analysis/variables_panel.cpp
         gui/analysis/variables_panel.h
         gui/analysis/calculator_widget.cpp
         gui/analysis/calculator_widget.h
         gui/analysis/parametric_sweep_dialog.cpp
         gui/analysis/parametric_sweep_dialog.h
-        gui/analysis/simulation_worker.cpp
-        gui/analysis/simulation_worker.h
+
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
         gui/widgets/debug_suggestions_panel.cpp
+        gui/widgets/engine_console.cpp
+        gui/widgets/engine_log_panel.cpp
         gui/widgets/trust_badge_widget.cpp
         gui/orchestration/worker_status_panel.cpp
         gui/orchestration/worker_manager.cpp
@@ -1593,18 +1518,9 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/pnr_result_dialog.cpp
         gui/orchestration/signoff_result_dialog.cpp
         gui/editors/physical_overlay_item.cpp
-        compute/orchestration/drivers/yosys_task.cpp
-        compute/orchestration/drivers/openroad_task.cpp
-        compute/orchestration/drivers/klayout_task.cpp
-        compute/orchestration/drivers/yosys_log_parser.cpp
-        compute/orchestration/drivers/openroad_report_parser.cpp
-        compute/orchestration/drivers/klayout_report_parser.cpp
-        compute/orchestration/drivers/tool_driver.cpp
-        compute/orchestration/server/subprocess.cpp
         gui/widgets/cell_pie_chart.h
         gui/widgets/timing_indicator.h
 
-        physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
         gui/analysis/monte_carlo_setup_widget.cpp
@@ -1632,10 +1548,10 @@ if(NOT EMSCRIPTEN)
         gui/widgets/project_explorer.h
         gui/widgets/library_model.cpp
         gui/widgets/library_model.h
-        components/library_index.cpp
-        components/library_index.h
-        components/pdk_compliance.cpp
-        components/pdk_manager.cpp
+        gui/orchestration/library_index.cpp
+        gui/orchestration/library_index.h
+        gui/analysis/pdk_compliance.cpp
+        gui/analysis/pdk_manager.cpp
         components/design_db.cpp
         gui/scripting/tcl_bridge.cpp
         gui/widgets/compliance_report_widget.cpp
@@ -1663,7 +1579,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
         ${TCL_INCLUDE_PATH}
     )
-    target_link_libraries(test_pdk_compliance PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
+    target_link_libraries(test_pdk_compliance PRIVATE acutesim_orchestration Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_pdk_compliance PUBLIC cxx_std_17)
 endif()
 
@@ -1710,26 +1626,17 @@ if(NOT EMSCRIPTEN)
         ai_api/adk/tool_handlers.cpp
         ai_api/adk/session_manager.cpp
         ai_api/pipeline/rag_pipeline.cpp
-        compute/tensors/physics_tensors.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-        compute/solvers/superposition.cpp
-        compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-        compute/orchestration/simulation_context.cpp
-        compute/orchestration/batch_runner.cpp
-        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
-        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/simulation_driver_adapter.h
+        gui/widgets/engine_console.cpp
+        gui/widgets/engine_log_panel.cpp
         gui/analysis/variables_panel.cpp
         gui/analysis/variables_panel.h
         gui/analysis/calculator_widget.cpp
         gui/analysis/calculator_widget.h
         gui/analysis/parametric_sweep_dialog.cpp
         gui/analysis/parametric_sweep_dialog.h
-        gui/analysis/simulation_worker.cpp
-        gui/analysis/simulation_worker.h
+
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
@@ -1742,18 +1649,9 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/pnr_result_dialog.cpp
         gui/orchestration/signoff_result_dialog.cpp
         gui/editors/physical_overlay_item.cpp
-        compute/orchestration/drivers/yosys_task.cpp
-        compute/orchestration/drivers/openroad_task.cpp
-        compute/orchestration/drivers/klayout_task.cpp
-        compute/orchestration/drivers/yosys_log_parser.cpp
-        compute/orchestration/drivers/openroad_report_parser.cpp
-        compute/orchestration/drivers/klayout_report_parser.cpp
-        compute/orchestration/drivers/tool_driver.cpp
-        compute/orchestration/server/subprocess.cpp
         gui/widgets/cell_pie_chart.h
         gui/widgets/timing_indicator.h
 
-        physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
         gui/analysis/monte_carlo_setup_widget.cpp
@@ -1768,7 +1666,7 @@ if(NOT EMSCRIPTEN)
         gui/core/activity_bar.cpp
         gui/core/icon_provider.cpp
         resources/icons.qrc
-        components/pdk_compliance.cpp
+        gui/analysis/pdk_compliance.cpp
         gui/widgets/compliance_report_widget.cpp
         gui/widgets/command_palette.cpp
         gui/widgets/ghost_diff_viewer.cpp
@@ -1783,10 +1681,10 @@ if(NOT EMSCRIPTEN)
         gui/widgets/project_explorer.h
         gui/widgets/library_model.cpp
         gui/widgets/library_model.h
-        components/library_index.cpp
-        components/library_index.h
+        gui/orchestration/library_index.cpp
+        gui/orchestration/library_index.h
         components/design_db.cpp
-        components/pdk_manager.cpp
+        gui/analysis/pdk_manager.cpp
         components/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
         gui/editors/json_viewer.cpp
@@ -1818,7 +1716,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
     )
-    target_link_libraries(test_hierarchical_sim PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
+    target_link_libraries(test_hierarchical_sim PRIVATE acutesim_orchestration Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
     target_compile_features(test_hierarchical_sim PUBLIC cxx_std_17)
     target_compile_definitions(test_hierarchical_sim PRIVATE CURRENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME test_hierarchical_sim COMMAND test_hierarchical_sim)
@@ -1882,10 +1780,10 @@ if(NOT EMSCRIPTEN)
         gui/components/standard_cell_visualizer.cpp
         gui/core/subcircuit_resolver.cpp
         components/design_db.cpp
-        components/pdk_manager.cpp
-        components/library_index.cpp
+        gui/analysis/pdk_manager.cpp
+        gui/orchestration/library_index.cpp
         components/netlist_export.cpp
-        components/pdk_compliance.cpp
+        gui/analysis/pdk_compliance.cpp
         gui/scripting/tcl_bridge.cpp
         gui/orchestration/worker_manager.cpp
         gui/orchestration/pdk_manager.cpp
@@ -2045,44 +1943,27 @@ target_link_libraries(test_fpu_determinism PRIVATE Qt6::Core)
 add_test(NAME test_fpu_determinism COMMAND test_fpu_determinism)
 
 # Determinism Replay Test
-add_executable(test_determinism 
-    tests/test_determinism.cpp
-    physics/quick_analysis.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_determinism PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
+add_executable(test_determinism tests/test_determinism.cpp)
+target_link_libraries(test_determinism PRIVATE acutesim_compute_core)
+target_include_directories(test_determinism PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_determinism PUBLIC cxx_std_17)
-target_link_libraries(test_determinism PRIVATE Qt6::Core)
 add_test(NAME test_determinism COMMAND test_determinism)
 
+# B2: Determinism Cross-Test
+add_executable(test_determinism_xclient tests/test_determinism_xclient.cpp)
+target_link_libraries(test_determinism_xclient PRIVATE acutesim_orchestration acutesim_compute_core Qt6::Core)
+target_include_directories(test_determinism_xclient PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(test_determinism_xclient PUBLIC cxx_std_17)
+add_test(NAME test_determinism_xclient COMMAND test_determinism_xclient)
+add_executable(test_driver_swap tests/test_driver_swap.cpp)
+target_link_libraries(test_driver_swap PRIVATE acutesim_orchestration)
+target_include_directories(test_driver_swap PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(test_driver_swap PUBLIC cxx_std_17)
+add_test(NAME test_driver_swap COMMAND test_driver_swap)
+
 # Test Kernel Dispatch
-add_executable(test_kernel_dispatch 
-    tests/test_kernel_dispatch.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-)
-target_include_directories(test_kernel_dispatch PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-)
-target_link_libraries(test_kernel_dispatch PRIVATE Qt6::Core)
+add_executable(test_kernel_dispatch tests/test_kernel_dispatch.cpp)
+target_link_libraries(test_kernel_dispatch PRIVATE acutesim_compute_core)
 target_compile_features(test_kernel_dispatch PUBLIC cxx_std_17)
 add_test(NAME test_kernel_dispatch COMMAND test_kernel_dispatch)
 
@@ -2092,74 +1973,39 @@ add_test(NAME test_kernel_dispatch COMMAND test_kernel_dispatch)
 add_executable(test_hierarchy_headless
     tests/test_hierarchy_headless.cpp
     components/design_db.cpp
-    compute/infrastructure/netlist_compiler.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
 )
-target_include_directories(test_hierarchy_headless PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-)
-target_link_libraries(test_hierarchy_headless PRIVATE Qt6::Core)
+target_link_libraries(test_hierarchy_headless PRIVATE acutesim_compute_core)
 target_compile_features(test_hierarchy_headless PUBLIC cxx_std_17)
 add_test(NAME test_hierarchy_headless COMMAND test_hierarchy_headless)
 set_tests_properties(test_hierarchy_headless PROPERTIES LABELS "quick")
 
+# Phase 2.9: Numerical Intelligence Tests
+add_executable(test_numerical_intelligence tests/test_numerical_intelligence.cpp)
+target_link_libraries(test_numerical_intelligence PRIVATE acutesim_compute_core)
+target_compile_features(test_numerical_intelligence PUBLIC cxx_std_17)
+add_test(NAME test_numerical_intelligence COMMAND test_numerical_intelligence)
+set_tests_properties(test_numerical_intelligence PROPERTIES LABELS "quick")
+
+# Phase 2.10: Sparse AC Refactor Tests
+add_executable(test_sparse_ac tests/test_sparse_ac.cpp)
+target_link_libraries(test_sparse_ac PRIVATE acutesim_compute_core)
+target_compile_features(test_sparse_ac PUBLIC cxx_std_17)
+add_test(NAME test_sparse_ac COMMAND test_sparse_ac)
+set_tests_properties(test_sparse_ac PROPERTIES LABELS "quick")
+
 # Verification Harness (Benchmarks, Alignment, Dense Batch)
-add_executable(test_verification_harness 
-    tests/verification_main.cpp
-    physics/quick_analysis.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-)
-target_include_directories(test_verification_harness PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
+add_executable(test_verification_harness tests/verification_main.cpp)
+target_link_libraries(test_verification_harness PRIVATE acutesim_compute_core)
+target_include_directories(test_verification_harness PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_verification_harness PUBLIC cxx_std_17)
-target_link_libraries(test_verification_harness PRIVATE Qt6::Core)
 # Standard Cell Verification (Generic Darlington)
 add_executable(test_std_cells
     tests/test_std_cells.cpp
-    physics/quick_analysis.cpp
     components/standard_cells.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
 )
-target_include_directories(test_std_cells PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-)
+target_link_libraries(test_std_cells PRIVATE acutesim_compute_core Qt6::Core)
+target_include_directories(test_std_cells PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_std_cells PUBLIC cxx_std_17)
-target_link_libraries(test_std_cells PRIVATE Qt6::Core)
 
 if(NOT EMSCRIPTEN)
     # Validating flow tests
@@ -2217,26 +2063,17 @@ if(NOT EMSCRIPTEN)
         ai_api/adk/tool_handlers.cpp
         ai_api/adk/session_manager.cpp
         ai_api/pipeline/rag_pipeline.cpp
-        compute/tensors/physics_tensors.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-        compute/solvers/superposition.cpp
-        compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-        compute/orchestration/simulation_context.cpp
-        compute/orchestration/batch_runner.cpp
-        compute/infrastructure/netlist_compiler_ctx.cpp
         gui/analysis/simulation_workspace.cpp
-        compute/infrastructure/postproc_engine.cpp
+        gui/analysis/simulation_driver_adapter.h
+        gui/widgets/engine_console.cpp
+        gui/widgets/engine_log_panel.cpp
         gui/analysis/variables_panel.cpp
         gui/analysis/variables_panel.h
         gui/analysis/calculator_widget.cpp
         gui/analysis/calculator_widget.h
         gui/analysis/parametric_sweep_dialog.cpp
         gui/analysis/parametric_sweep_dialog.h
-        gui/analysis/simulation_worker.cpp
-        gui/analysis/simulation_worker.h
+
         gui/analysis/simulation_explorer.cpp
         gui/analysis/corner_setup_widget.cpp
         gui/widgets/problems_panel.cpp
@@ -2249,18 +2086,9 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/pnr_result_dialog.cpp
         gui/orchestration/signoff_result_dialog.cpp
         gui/editors/physical_overlay_item.cpp
-        compute/orchestration/drivers/yosys_task.cpp
-        compute/orchestration/drivers/openroad_task.cpp
-        compute/orchestration/drivers/klayout_task.cpp
-        compute/orchestration/drivers/yosys_log_parser.cpp
-        compute/orchestration/drivers/openroad_report_parser.cpp
-        compute/orchestration/drivers/klayout_report_parser.cpp
-        compute/orchestration/drivers/tool_driver.cpp
-        compute/orchestration/server/subprocess.cpp
         gui/widgets/cell_pie_chart.h
         gui/widgets/timing_indicator.h
 
-        physics/quick_analysis.cpp
         compute/orchestration/grpc_worker_client.cpp
         gui/analysis/statistical_dashboard.cpp
         gui/analysis/monte_carlo_setup_widget.cpp
@@ -2275,7 +2103,7 @@ if(NOT EMSCRIPTEN)
         gui/core/activity_bar.cpp
         gui/core/icon_provider.cpp
         resources/icons.qrc
-        components/pdk_compliance.cpp
+        gui/analysis/pdk_compliance.cpp
         gui/widgets/compliance_report_widget.cpp
         gui/widgets/command_palette.cpp
         gui/widgets/ghost_diff_viewer.cpp
@@ -2290,10 +2118,10 @@ if(NOT EMSCRIPTEN)
         gui/widgets/project_explorer.h
         gui/widgets/library_model.cpp
         gui/widgets/library_model.h
-        components/library_index.cpp
-        components/library_index.h
+        gui/orchestration/library_index.cpp
+        gui/orchestration/library_index.h
         components/design_db.cpp
-        components/pdk_manager.cpp
+        gui/analysis/pdk_manager.cpp
         components/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
         gui/editors/json_viewer.cpp
@@ -2326,7 +2154,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
         ${TCL_INCLUDE_PATH}
     )
-    target_link_libraries(test_introspection PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent Qt6::Test ${TCL_LIBRARY})
+    target_link_libraries(test_introspection PRIVATE acutesim_orchestration Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent Qt6::Test ${TCL_LIBRARY})
     target_include_directories(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/math)
     target_include_directories(test_introspection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/math)
     target_include_directories(test_flow PRIVATE 
@@ -2338,7 +2166,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     )
     target_sources(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
-    target_sources(test_introspection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
+    # test_introspection gets kernel_dispatch via acutesim_orchestration → acutesim_compute_core
     target_include_directories(test_introspection PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
         ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
@@ -2456,25 +2284,8 @@ endif()
 # search may find a plugin built against a different Qt version, causing crashes.
 
 # EDA Driver Unit Tests (no external tools required)
-add_executable(test_eda_drivers
-    tests/test_eda_drivers.cpp
-    compute/orchestration/drivers/yosys_task.cpp
-    compute/orchestration/drivers/yosys_log_parser.cpp
-    compute/orchestration/drivers/openroad_task.cpp
-    compute/orchestration/drivers/openroad_report_parser.cpp
-    compute/orchestration/drivers/klayout_report_parser.cpp
-    compute/orchestration/drivers/klayout_task.cpp
-    compute/orchestration/drivers/tool_driver.cpp
-    compute/orchestration/server/subprocess.cpp
-)
-target_include_directories(test_eda_drivers PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/drivers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/server
-)
-target_link_libraries(test_eda_drivers PRIVATE Qt6::Core)
+add_executable(test_eda_drivers tests/test_eda_drivers.cpp)
+target_link_libraries(test_eda_drivers PRIVATE acutesim_orchestration)
 target_compile_features(test_eda_drivers PUBLIC cxx_std_17)
 
 if(APPLE AND CMAKE_PREFIX_PATH)
@@ -2485,6 +2296,7 @@ if(APPLE AND CMAKE_PREFIX_PATH)
             test_hierarchical_sim
             test_gui_logic
             test_docking_interaction
+            test_gui_headless_scenarios
         )
         foreach(_test ${_qt_gui_tests})
             if(TEST ${_test})
@@ -2494,6 +2306,151 @@ if(APPLE AND CMAKE_PREFIX_PATH)
             endif()
         endforeach()
     endif()
+endif()
+
+# ============================================================================
+# test_veriloga_parser — AST parsing and Tensor lowering
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_executable(test_veriloga_parser
+        tests/test_veriloga_parser.cpp
+    )
+    target_link_libraries(test_veriloga_parser PRIVATE acutesim_compute_core Qt6::Test Qt6::Core)
+    target_include_directories(test_veriloga_parser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(test_veriloga_parser PUBLIC cxx_std_17)
+    add_test(NAME test_veriloga_parser COMMAND test_veriloga_parser)
+    set_tests_properties(test_veriloga_parser PROPERTIES LABELS "quick")
+endif()
+
+# ============================================================================
+# test_veriloga_roundtrip — Generator/Parser/Driver round-trip tests
+# No Qt::Gui required — pure compute-layer test
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_executable(test_veriloga_roundtrip
+        tests/test_veriloga_roundtrip.cpp
+    )
+    target_link_libraries(test_veriloga_roundtrip PRIVATE acutesim_orchestration acutesim_compute_core)
+    target_include_directories(test_veriloga_roundtrip PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(test_veriloga_roundtrip PUBLIC cxx_std_17)
+    add_test(NAME test_veriloga_roundtrip COMMAND test_veriloga_roundtrip)
+    set_tests_properties(test_veriloga_roundtrip PROPERTIES LABELS "quick")
+endif()
+
+# ============================================================================
+# test_headless_orchestrator — Proves orchestration works WITHOUT Qt GUI
+# Links only acutesim_orchestration (no Qt::Gui, no Qt::Widgets)
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_executable(test_headless_orchestrator
+        tests/test_headless_orchestrator.cpp
+    )
+    target_link_libraries(test_headless_orchestrator PRIVATE acutesim_orchestration)
+    target_compile_features(test_headless_orchestrator PUBLIC cxx_std_17)
+    add_test(NAME test_headless_orchestrator COMMAND test_headless_orchestrator)
+    set_tests_properties(test_headless_orchestrator PROPERTIES LABELS "quick")
+endif()
+
+if(NOT EMSCRIPTEN)
+    add_executable(test_grpc_orchestrator
+        tests/test_grpc_orchestrator.cpp
+    )
+    target_link_libraries(test_grpc_orchestrator PRIVATE acutesim_orchestration acutesim_simulation_proto gRPC::grpc++ protobuf::libprotobuf)
+    target_compile_features(test_grpc_orchestrator PUBLIC cxx_std_17)
+    add_test(NAME test_grpc_orchestrator COMMAND test_grpc_orchestrator)
+    set_tests_properties(test_grpc_orchestrator PROPERTIES LABELS "quick")
+endif()
+
+# ============================================================================
+# Phase 4: test_analysis_registry — AnalysisRegistry + StagedDispatcher
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_executable(test_analysis_registry
+        tests/test_analysis_registry.cpp
+    )
+    target_link_libraries(test_analysis_registry PRIVATE acutesim_engine)
+    target_include_directories(test_analysis_registry PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/dto
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/driver
+    )
+    target_compile_features(test_analysis_registry PUBLIC cxx_std_17)
+    add_test(NAME test_analysis_registry COMMAND test_analysis_registry)
+    set_tests_properties(test_analysis_registry PROPERTIES LABELS "quick")
+endif()
+
+# ============================================================================
+# Phase 4: test_parallel_batch — JobScheduler + Parallel BatchExecutionEngine
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_executable(test_parallel_batch
+        tests/test_parallel_batch.cpp
+    )
+    target_link_libraries(test_parallel_batch PRIVATE acutesim_engine)
+    target_include_directories(test_parallel_batch PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/dto
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/driver
+    )
+    target_compile_features(test_parallel_batch PUBLIC cxx_std_17)
+    add_test(NAME test_parallel_batch COMMAND test_parallel_batch)
+    set_tests_properties(test_parallel_batch PROPERTIES LABELS "quick")
+endif()
+
+# ============================================================================
+# Phase 4: test_parallel_monte_carlo — MC bit-parity: sequential vs parallel
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_executable(test_parallel_monte_carlo
+        tests/test_parallel_monte_carlo.cpp
+    )
+    target_link_libraries(test_parallel_monte_carlo PRIVATE acutesim_engine)
+    target_include_directories(test_parallel_monte_carlo PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/dto
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/driver
+    )
+    target_compile_features(test_parallel_monte_carlo PUBLIC cxx_std_17)
+    add_test(NAME test_parallel_monte_carlo COMMAND test_parallel_monte_carlo)
+    set_tests_properties(test_parallel_monte_carlo PROPERTIES LABELS "quick")
+endif()
+
+# ============================================================================
+# Phase 5: test_gui_headless_scenarios — IGuiDriver + HeadlessDriver + ScenarioRunner
+# Drives GridScene(Headless) + LocalWorkerDriver via JSON scenarios. No display needed.
+# ============================================================================
+if(NOT EMSCRIPTEN)
+    add_executable(test_gui_headless_scenarios
+        tests/test_gui_headless_scenarios.cpp
+        tests/gui_driver/headless_driver.cpp
+        tests/gui_driver/scenario_runner.cpp
+    )
+    target_include_directories(test_gui_headless_scenarios PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/gui_driver
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/dto
+        ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/driver
+        ${CMAKE_CURRENT_SOURCE_DIR}/components
+    )
+    target_link_libraries(test_gui_headless_scenarios PRIVATE
+        acutesim_engine
+        Qt6::Core Qt6::Test
+    )
+    target_compile_definitions(test_gui_headless_scenarios PRIVATE
+        SCENARIOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/scenarios"
+    )
+    target_compile_features(test_gui_headless_scenarios PUBLIC cxx_std_17)
+    add_test(NAME test_gui_headless_scenarios COMMAND test_gui_headless_scenarios)
+    set_tests_properties(test_gui_headless_scenarios PROPERTIES LABELS "heavy")
 endif()
 
 # ── CTest Labels: quick (< 5s unit tests) vs heavy (GUI/stress/regression) ──
@@ -2527,6 +2484,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_hierarchy_gui 
         tests/test_hierarchy_gui.cpp 
         ${ACUTESIM_SOURCES}
+        compute/orchestration/grpc_worker_client.cpp
     )
     
     target_include_directories(test_hierarchy_gui PRIVATE
@@ -2568,6 +2526,7 @@ if(NOT EMSCRIPTEN)
         Qt6::Concurrent
         Qt6::Svg
         ${TCL_LIBRARY}
+        acutesim_orchestration
     )
     
     if(OpenMP_CXX_FOUND)

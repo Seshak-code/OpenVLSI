@@ -13,7 +13,7 @@ NetlistCompiler::compile(const TensorNetlist& netlist, const acutesim::orchestra
     // Helper lambda to resolve a single double via the context evaluator
     auto resolve = [&](double& val, const std::string& expr) {
         if (expr.empty()) return;
-        val = ctx.evaluate(QString::fromStdString(expr));
+        val = ctx.evaluate(expr);
     };
 
     // Make a mutable copy so we don't modify the caller's netlist

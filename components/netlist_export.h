@@ -2,6 +2,7 @@
 #include <string>
 #include <unordered_map>
 #include "circuit.h"
+#include "../compute/orchestration/dto/schematic_dto.h"
 
 namespace NetlistExporter {
 
@@ -25,6 +26,9 @@ namespace NetlistExporter {
 
     // Structural Verilog (IEEE 1364-2005)
     std::string toVerilog(const TensorNetlist& netlist, const ExportOptions& options = {});
+
+    // New DTO-based entry point
+    std::string toVerilog(const acutesim::compute::orchestration::HierarchicalSchematicDTO& hierDto, const ExportOptions& options = {});
 
     // Standard Parasitic Exchange Format (IEEE 1481-1999)
     std::string toSPEF(const TensorNetlist& netlist, const ExportOptions& options = {});

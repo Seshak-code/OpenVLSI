@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QString>
-#include <QStringList>
+#include <string>
+#include <vector>
 
 namespace acutesim::compute::orchestration {
 
@@ -27,41 +27,52 @@ enum class LVSMode {
  * Configuration for Design Rule Check.
  */
 struct DRCConfig {
-    QString layoutFile;             // Input GDS/OASIS file
-    QString ruleFile;               // DRC rule deck (KLayout Ruby or DRC)
-    QString techFile;               // Technology file
-    QString outputReport;           // Output report file
-    DRCLevel minLevel = DRCLevel::ERROR;  // Minimum level to report
-    bool verbose = false;           // Verbose output
-    QStringList excludeRules;       // Rules to skip
-    QStringList onlyRules;          // Run only these rules
+    std::string layoutFile;                 // Input GDS/OASIS file
+    std::string ruleFile;                   // DRC rule deck (KLayout Ruby or DRC)
+    std::string techFile;                   // Technology file
+    std::string outputReport;               // Output report file
+    DRCLevel minLevel = DRCLevel::ERROR;    // Minimum level to report
+    bool verbose = false;                   // Verbose output
+    std::vector<std::string> excludeRules;  // Rules to skip
+    std::vector<std::string> onlyRules;     // Run only these rules
 };
 
 /**
  * Configuration for Layout vs Schematic check.
  */
 struct LVSConfig {
-    QString layoutFile;             // Input GDS/OASIS file
-    QString schematicNetlist;       // Reference netlist (SPICE/Verilog)
-    QString ruleFile;               // LVS rule deck
-    QString techFile;               // Technology file
-    QString outputReport;           // Output report file
+    std::string layoutFile;             // Input GDS/OASIS file
+    std::string schematicNetlist;       // Reference netlist (SPICE/Verilog)
+    std::string ruleFile;               // LVS rule deck
+    std::string techFile;               // Technology file
+    std::string outputReport;           // Output report file
     LVSMode mode = LVSMode::HIERARCHICAL;
-    bool extractParasitics = false; // Extract RC parasitics
-    QString topCell;                // Top cell name (if different)
+    bool extractParasitics = false;     // Extract RC parasitics
+    std::string topCell;                // Top cell name (if different)
 };
 
 /**
  * Configuration for parasitic extraction.
  */
 struct PEXConfig {
-    QString layoutFile;             // Input GDS/OASIS file
-    QString techFile;               // Technology/RC extraction file
-    QString outputSpef;             // Output SPEF file
-    QString outputSpice;            // Output SPICE netlist
-    bool couplingCaps = true;       // Include coupling capacitances
-    double minResistance = 0.0;     // Min resistance to extract (ohms)
-    double minCapacitance = 0.0;    // Min capacitance to extract (fF)
+    std::string layoutFile;             // Input GDS/OASIS file
+    std::string techFile;               // Technology/RC extraction file
+    std::string outputSpef;             // Output SPEF file
+    std::string outputSpice;            // Output SPICE netlist
+    bool couplingCaps = true;           // Include coupling capacitances
+    double minResistance = 0.0;         // Min resistance to extract (ohms)
+    double minCapacitance = 0.0;        // Min capacitance to extract (fF)
+};
+
+/**
+ * Configuration for GDSII export via KLayout.
+ */
+struct GDSExportConfig {
+    std::string inputFile;          // Input OASIS/GDS/DEF file
+    std::string techFile;           // Technology file (layer mapping)
+    std::string outputGDS;          // Output .gds file path
+    std::string topCell;            // Top cell to export (empty = all)
+    bool compressOutput = true;     // Write .gds.gz if true
 };
 
 /**
@@ -77,32 +88,15 @@ struct PEXConfig {
  */
 class KLayoutTask {
 public:
-    /**
-     * Generate DRC script.
-     * Checks layout against design rules.
-     */
-    static QString generateDRCScript(const DRCConfig& config);
-
-    /**
-     * Generate LVS script.
-     * Compares extracted layout netlist against schematic.
-     */
-    static QString generateLVSScript(const LVSConfig& config);
-
-    /**
-     * Generate parasitic extraction script.
-     */
-    static QString generatePEXScript(const PEXConfig& config);
-
-    /**
-     * Generate KLayout batch command line.
-     * Returns the command to run KLayout in batch mode with the script.
-     */
-    static QString generateBatchCommand(const QString& scriptPath);
+    static std::string generateDRCScript(const DRCConfig& config);
+    static std::string generateLVSScript(const LVSConfig& config);
+    static std::string generatePEXScript(const PEXConfig& config);
+    static std::string generateGDSExportScript(const GDSExportConfig& config);
+    static std::string generateBatchCommand(const std::string& scriptPath);
 
 private:
-    static QString getDRCLevelFilter(DRCLevel level);
-    static QString getLVSModeOptions(LVSMode mode);
+    static std::string getDRCLevelFilter(DRCLevel level);
+    static std::string getLVSModeOptions(LVSMode mode);
 };
 
 } // namespace acutesim::compute::orchestration

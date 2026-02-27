@@ -89,7 +89,10 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build qt6-base-dev libgl1-mesa-dev
+          sudo apt-get install -y ninja-build qt6-base-dev libgl1-mesa-dev python3
+          
+      - name: Static Architecture Linting
+        run: python3 scripts/check_layering.py
           
       - name: Configure CMake
         run: |

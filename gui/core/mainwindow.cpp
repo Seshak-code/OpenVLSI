@@ -238,6 +238,17 @@ void MainWindow::setupCentralWidget() {
     });
     connect(simulationWorkspace, &SimulationWorkspace::resultsReady, this, &MainWindow::onSimulationResults);
 
+    // Wire engine telemetry events to the structured log panel
+    if (simulationWorkspace->driverAdapter()) {
+        connect(simulationWorkspace->driverAdapter(),
+                &acutesim::gui::analysis::SimulationDriverAdapter::engineEvent,
+                this, [this](const acutesim::compute::orchestration::EngineEventDTO& event) {
+            if (engineLogPanel_) {
+                engineLogPanel_->appendEvent(event);
+            }
+        });
+    }
+
     // Connect RTL Pipeline Panel logs to output
     if (rtlPipelinePanel) {
         connect(rtlPipelinePanel, &acutesim::gui::orchestration::RtlPipelinePanel::logMessage,
@@ -406,6 +417,29 @@ void MainWindow::setupDocks() {
 #ifdef __EMSCRIPTEN__
     workerDock->hide(); // No gRPC worker in WASM; avoid cluttering the bottom panel
 #endif
+
+    // Engine Log Dock
+    qDebug() << "[MW] Creating Engine Log Dock...";
+    engineLogDock_ = new QDockWidget("Engine Log", this);
+    engineLogDock_->setObjectName("EngineLogDock");
+    engineLogDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
+    engineLogPanel_ = new acutesim::gui::widgets::EngineLogPanel(engineLogDock_);
+    engineLogDock_->setWidget(engineLogPanel_);
+    addDockWidget(Qt::BottomDockWidgetArea, engineLogDock_);
+
+    // Engine Console Dock
+    qDebug() << "[MW] Creating Engine Console Dock...";
+    consoleDock_ = new QDockWidget("Console", this);
+    consoleDock_->setObjectName("ConsoleDock");
+    consoleDock_->setAllowedAreas(Qt::AllDockWidgetAreas);
+    engineConsole_ = new acutesim::gui::widgets::EngineConsole(consoleDock_);
+    consoleDock_->setWidget(engineConsole_);
+    addDockWidget(Qt::BottomDockWidgetArea, consoleDock_);
+
+    // Wire console to driver adapter (after simulationWorkspace is created)
+    if (simulationWorkspace && simulationWorkspace->driverAdapter()) {
+        engineConsole_->setDriverAdapter(simulationWorkspace->driverAdapter());
+    }
 
     // Kick off local tool detection and wire result into PdkManager
     {
@@ -1419,10 +1453,11 @@ void MainWindow::setupActivityBar() {
             return;
         }
 
-        // Hide all left docks first (exclusive sidebar)
-        if (projectDock) projectDock->hide();
-        if (libraryDock) libraryDock->hide();
-        if (searchDock_) searchDock_->hide();
+        // Only hide docks that aren't the target (avoids unnecessary hide+show
+        // cycles which cause WASM QBackingStore to lose backing for sibling widgets)
+        if (id != "explorer" && projectDock) projectDock->hide();
+        if (id != "components" && libraryDock) libraryDock->hide();
+        if (id != "search" && searchDock_) searchDock_->hide();
 
         // Show the selected sidebar
         if (id == "explorer" && projectDock) {
@@ -1439,6 +1474,16 @@ void MainWindow::setupActivityBar() {
         }
 
         currentSidebarId = id;
+
+#ifdef __EMSCRIPTEN__
+        // WASM QBackingStore needs a deferred repaint after dock visibility changes
+        QTimer::singleShot(0, this, [this]() {
+            const auto children = findChildren<QWidget*>();
+            for (QWidget* child : children) {
+                if (child->isVisible()) child->update();
+            }
+        });
+#endif
     });
 
     // Set Default Active
@@ -1940,13 +1985,7 @@ void MainWindow::applyModernTabStyle(QTabWidget* tabWidget) {
     QString textColor = tm.getColor("ui.text").name();
     QString textDim = tm.getColor("ui.textDim").name();
 
-    // On WASM, SVG icon loading is bypassed (FreeType unreachable traps), so omit
-    // the close-button image reference and rely on the platform default "×".
-#ifdef __EMSCRIPTEN__
-    QString closeButtonImageRule;
-#else
     QString closeButtonImageRule = "image: url(:/icons/close.svg);";
-#endif
 
     // Modern VS Code-style tab styling with rounded corners
     tabWidget->setStyleSheet(QString(R"(

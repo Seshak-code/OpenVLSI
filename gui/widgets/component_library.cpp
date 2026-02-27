@@ -124,48 +124,139 @@ void ComponentLibrary::refresh() {
     }
 }
 
-void ComponentLibrary::populateLists() {
-    // =========================================================================
-    // BASIC - Available in all modes
-    // =========================================================================
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QFile>
+#include <QCoreApplication>
+#include <QDir>
 
+static ComponentType componentTypeFromString(const QString& s) {
+    static const QMap<QString, ComponentType> map = {
+        {"Resistor", ComponentType::Resistor},
+        {"Capacitor", ComponentType::Capacitor},
+        {"Inductor", ComponentType::Inductor},
+        {"Ground", ComponentType::Ground},
+        {"VoltageSource", ComponentType::VoltageSource},
+        {"CurrentSource", ComponentType::CurrentSource},
+        {"PDK_VDD", ComponentType::PDK_VDD},
+        {"PDK_VSS", ComponentType::PDK_VSS},
+        {"PDK_VDDIO", ComponentType::PDK_VDDIO},
+        {"PDK_VBB", ComponentType::PDK_VBB},
+        {"PDK_NFET", ComponentType::PDK_NFET},
+        {"PDK_PFET", ComponentType::PDK_PFET},
+        {"SubCircuit", ComponentType::SubCircuit},
+        {"Generic", ComponentType::Generic},
+    };
+    return map.value(s, ComponentType::Generic);
+}
+
+bool ComponentLibrary::loadFromJsonRegistry() {
+    // Search for the JSON registry in known locations
+    QStringList searchPaths = {
+        QCoreApplication::applicationDirPath() + "/resources/component_library.json",
+        QCoreApplication::applicationDirPath() + "/../resources/component_library.json",
+        "resources/component_library.json",
+    };
+
+    QFile file;
+    for (const auto& path : searchPaths) {
+        file.setFileName(path);
+        if (file.exists()) break;
+    }
+
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "[ComponentLibrary] JSON registry not found, using hardcoded fallback";
+        return false;
+    }
+
+    QJsonParseError err;
+    auto doc = QJsonDocument::fromJson(file.readAll(), &err);
+    if (err.error != QJsonParseError::NoError) {
+        qWarning() << "[ComponentLibrary] JSON parse error:" << err.errorString();
+        return false;
+    }
+
+    auto root = doc.object();
+    auto categories = root["categories"].toArray();
+
+    for (const auto& catVal : categories) {
+        auto cat = catVal.toObject();
+        QString tab = cat["tab"].toString();
+        auto components = cat["components"].toArray();
+
+        QListWidget* targetList = nullptr;
+        if (tab == "Primitives") targetList = basicList;
+        else if (tab == "Standard Cells") targetList = pdkList;
+        else if (tab == "Verilog-A") targetList = userList;
+        else targetList = basicList;
+
+        for (const auto& compVal : components) {
+            auto comp = compVal.toObject();
+            addComponentItem(
+                targetList,
+                comp["displayName"].toString(),
+                comp["icon"].toString(),
+                componentTypeFromString(comp["type"].toString())
+            );
+        }
+    }
+
+    qDebug() << "[ComponentLibrary] Loaded from JSON registry";
+    return true;
+}
+
+void ComponentLibrary::populateLists() {
+    // Try JSON registry first
+    if (loadFromJsonRegistry()) {
+        // Also load dynamic PDK cells from StandardCellLibrary
+        auto cellNames = StandardCells::StandardCellLibrary::instance().getNames();
+        for (const auto& name : cellNames) {
+            // Skip cells already loaded from JSON
+            bool alreadyExists = false;
+            for (int i = 0; i < pdkList->count(); ++i) {
+                if (pdkList->item(i)->text() == QString::fromStdString(name)) {
+                    alreadyExists = true;
+                    break;
+                }
+            }
+            if (!alreadyExists) {
+                ComponentType type = ComponentType::SubCircuit;
+                QString icon = "chip.png";
+                if (name == "PDK_NFET") { type = ComponentType::PDK_NFET; icon = "nfet.png"; }
+                else if (name == "PDK_PFET") { type = ComponentType::PDK_PFET; icon = "pfet.png"; }
+                addComponentItem(pdkList, QString::fromStdString(name), icon, type);
+            }
+        }
+        refresh();
+        return;
+    }
+
+    // ── Fallback: hardcoded population ──────────────────────────────────────
     addComponentItem(basicList, "Resistor", "resistor.png", ComponentType::Resistor);
     addComponentItem(basicList, "Capacitor", "capacitor.png", ComponentType::Capacitor);
     addComponentItem(basicList, "Inductor", "inductor.png", ComponentType::Inductor);
     addComponentItem(basicList, "Ground", "ground.png", ComponentType::Ground);
-    
-    // Power Rails (PDK Domain-Aware)
     addComponentItem(basicList, "VDD Rail", "vdd.png", ComponentType::PDK_VDD);
     addComponentItem(basicList, "VSS (Ground)", "vss.png", ComponentType::PDK_VSS);
     addComponentItem(basicList, "VDDIO Rail", "vddio.png", ComponentType::PDK_VDDIO);
     addComponentItem(basicList, "VBB (Body Bias)", "vbb.png", ComponentType::PDK_VBB);
-    
-    // Sources
     addComponentItem(basicList, "Voltage Source", "vsource.png", ComponentType::VoltageSource);
     addComponentItem(basicList, "Current Source", "isource.png", ComponentType::CurrentSource);
 
-    // =========================================================================
-    // PDK / STANDARD CELLS - Sourced from StandardCellLibrary
-    // =========================================================================
     auto cellNames = StandardCells::StandardCellLibrary::instance().getNames();
     for (const auto& name : cellNames) {
         ComponentType type = ComponentType::SubCircuit;
         QString icon = "chip.png";
-        
-        // Map known types to icons/enums if possible
         if (name == "PDK_NFET") { type = ComponentType::PDK_NFET; icon = "nfet.png"; }
         else if (name == "PDK_PFET") { type = ComponentType::PDK_PFET; icon = "pfet.png"; }
         else if (name == "PDK_Resistor_Poly") { type = ComponentType::PDK_Resistor; icon = "res.png"; }
         else if (name == "PDK_Capacitor_MIM") { type = ComponentType::PDK_Capacitor; icon = "cap.png"; }
         else if (name.find("Inverter") != std::string::npos) { icon = "inverter.png"; }
-        
         addComponentItem(pdkList, QString::fromStdString(name), icon, type);
     }
 
-
-
-
-    refresh(); // Populate User Models
+    refresh();
 }
 
 void ComponentLibrary::addComponentItem(QListWidget* list, const QString& name, const QString& iconName, ComponentType type) {

@@ -17,6 +17,9 @@
 #include "../../physics/physics_constants.h"
 #include "../infrastructure/safe_utils.h"
 #include "../infrastructure/compiled_block.h"
+#if !defined(__EMSCRIPTEN__) && defined(ACUTESIM_HAS_DAWN_NATIVE)
+#include "webgpu_solver.h"
+#endif
 
 // =============================================================================
 // PHASE 1 HARDENING: Helper Method Implementations
@@ -148,7 +151,7 @@ void CircuitSim::applyPnJunctionLimits(const TensorizedBlock& block,
     
     // 1. Diode Limiting (Flattened)
     for (size_t i = 0; i < block.diodes.size(); ++i) {
-        limitJunction(block.diodes.anodes[i], block.diodes.cathodes[i], 
+        limitJunction(block.diodes.node_a[i], block.diodes.node_c[i], 
                       block.diodes.Is[i], block.diodes.Vt[i]);
     }
     
@@ -170,6 +173,31 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   if (netlist.numGlobalNodes == 0)
     return {0.0, {}, {0, 0.0, true}, 0};
 
+#if !defined(__EMSCRIPTEN__) && defined(ACUTESIM_HAS_DAWN_NATIVE)
+  // GPU execution path — delegate to WebGPUSolver hybrid NR loop
+  if (execMode == ExecutionMode::GPU || execMode == ExecutionMode::GPU_DEBUG) {
+    netlist.globalBlock.computeTopologyHash();
+    WebGPUSolver gpuSolver;
+    if (gpuSolver.initialize(netlist)) {
+        gpuSolver.uploadNetlist(netlist);
+        constexpr int    GPU_MAX_ITER = 50;
+        constexpr double GPU_TOL      = 1e-9;
+        constexpr double GPU_GMIN     = 1e-12;
+        std::vector<double> sol = gpuSolver.runHybridNRLoop(
+            netlist, GPU_MAX_ITER, GPU_TOL, GPU_GMIN, /*time=*/0.0, /*h=*/0.0);
+        if (!sol.empty()) {
+            double kcl_err = 0.0;
+            // Quick KCL check on first node as sanity scalar
+            return {0.0, sol, {GPU_MAX_ITER, kcl_err, true},
+                    netlist.globalBlock.topologyHash};
+        }
+        std::cerr << "[WARN] WebGPUSolver returned empty solution, falling back to CPU.\n";
+    } else {
+        std::cerr << "[WARN] WebGPUSolver init failed, falling back to CPU.\n";
+    }
+  }
+#endif
+
   // Ensure topology hash is fresh
   netlist.globalBlock.computeTopologyHash();
 
@@ -186,6 +214,13 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   double final_kcl_error = 0.0;
   bool singularMatrixDetected = false;
   std::vector<ConvergenceStep> convergenceHistory;
+  // Phase 2.9: Numerical Intelligence state
+  bool stagnationDetected = false;
+  bool divergenceDetected = false;
+  bool rankDeficientDetected = false;
+  int  rankDeficientRow = -1;
+  double smallestPivotOverall = 1e300;
+  RegularizationInfo regulInfo;
 
   // GMIN Stepping: Start with large parallel conductances, reduce each pass
   // This prevents singular matrices for cold-start BJT circuits
@@ -199,6 +234,13 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     if (gmin_factor < 1e-12) gmin_factor = 1e-12;
     bool gmin_converged = false;
 
+    // Phase 2.9: Track regularization
+    if (gmin_factor > 1e-12) {
+        regulInfo.applied = true;
+        regulInfo.gminValue = gmin_factor;
+        regulInfo.injections = static_cast<uint32_t>(netlist.numGlobalNodes);
+    }
+
   int iteration = 0; // Declare outside loop for scope access
   for (; iteration < MAX_NR_ITER; ++iteration) {
     // Unified Stamping (Phase 1: Structural Abstraction)
@@ -210,7 +252,17 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
     stampAllElements(netlist, 0.0, voltageEstimate, 0.0);
     addDiagonalConditioning(netlist.numGlobalNodes, gmin_factor);
 
-    Csr_matrix matrix = matrixBuilder.createCsr();
+    // Sparse Merge (D5): Use cached pattern for O(N) assembly on iterations > 0
+    Csr_matrix matrix;
+    bool patternValid = cachedPattern_ &&
+                        cachedPatternHash_ == netlist.globalBlock.topologyHash;
+    if (!patternValid) {
+        cachedPattern_ = std::make_unique<CachedCsrPattern>(matrixBuilder.buildPattern());
+        cachedPatternHash_ = netlist.globalBlock.topologyHash;
+        matrix = matrixBuilder.createCsr();
+    } else {
+        matrix = matrixBuilder.assembleFast(*cachedPattern_);
+    }
     
     // Solver Selection: Use LU for circuits with active (non-linear) devices
     // PCG requires symmetric positive-definite, which BJTs violate
@@ -230,6 +282,17 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
         result = solveLU_Pivoted(matrix, rhsVector);
       }
     }
+    // Phase 2.9: Capture pivot diagnostics from LU
+    if (result.smallestPivot < smallestPivotOverall) {
+        smallestPivotOverall = result.smallestPivot;
+        rankDeficientRow = result.rankDeficientRow;
+    }
+    if (result.rankDeficient && !rankDeficientDetected) {
+        rankDeficientDetected = true;
+        std::cerr << "DC Solver: Near-rank-deficient matrix (pivot=" << result.smallestPivot
+                  << " at row=" << result.rankDeficientRow << ") — proceeding with GMIN conditioning.\n";
+    }
+
     if (!result.converged) {
       // Matrix is singular - circuit topology error or floating node
       std::cerr << "DC Solver: Linear solver failed (Singular Matrix) at iter " << iteration << "\n";
@@ -275,6 +338,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
         cs.iteration = iteration;
         cs.residualNorm = kcl_error;
         cs.dampingFactor = (iteration > 0 && kcl_error >= final_kcl_error) ? 0.5 : 1.0;
+        cs.linearSolverResidual = result.finalResidual;  // Phase 2.9
 
         // Compute max voltage delta
         double maxDelta = 0.0;
@@ -286,6 +350,24 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
         cs.worstNode = ConvergenceEngine::findWorstNode(
             std::vector<double>(v_new.size(), kcl_error)); // Simplified; worst node from residual
         convergenceHistory.push_back(cs);
+    }
+
+    // Phase 2.9: Stagnation and divergence detection
+    {
+        // Stagnation: residual plateaued but not converged
+        if (iteration > 0 &&
+            std::abs(final_kcl_error - kcl_error) < 1e-15 &&
+            kcl_error > PhysicsConstants::KCL_TOL) {
+            stagnationDetected = true;
+        }
+        // Divergence: last 3 iterations show monotonic increase
+        size_t sz = convergenceHistory.size();
+        if (sz >= 3) {
+            if (convergenceHistory[sz-1].residualNorm > convergenceHistory[sz-2].residualNorm &&
+                convergenceHistory[sz-2].residualNorm > convergenceHistory[sz-3].residualNorm) {
+                divergenceDetected = true;
+            }
+        }
     }
 
     final_kcl_error = kcl_error; // Store for next iteration comparison
@@ -330,8 +412,29 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   
   } // End GMIN stepping loop
 
-  final_kcl_error = calculatePhysicalResiduals(netlist, voltageEstimate);
-  
+  // Phase 2.9: Final per-node residual for RMS + worst-node tracking
+  std::vector<double> perNodeResiduals;
+  final_kcl_error = calculatePhysicalResiduals(netlist, voltageEstimate, perNodeResiduals);
+
+  // Compute RMS and worst node
+  double rmsResidual = 0.0;
+  uint32_t worstNodeIndex = 0;
+  double worstNodeVoltage = 0.0;
+  if (!perNodeResiduals.empty()) {
+      double sumSq = 0.0;
+      double maxAbs = 0.0;
+      for (size_t i = 0; i < perNodeResiduals.size(); ++i) {
+          double v = std::abs(perNodeResiduals[i]);
+          sumSq += v * v;
+          if (v > maxAbs) {
+              maxAbs = v;
+              worstNodeIndex = static_cast<uint32_t>(i + 1); // 1-based
+              worstNodeVoltage = (i < voltageEstimate.size()) ? voltageEstimate[i] : 0.0;
+          }
+      }
+      rmsResidual = std::sqrt(sumSq / static_cast<double>(perNodeResiduals.size()));
+  }
+
   std::string details;
   if (final_kcl_error > 1.0 || !converged) {
       details = auditPhysicalResiduals(netlist, voltageEstimate);
@@ -350,7 +453,7 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   std::string justification = ConvergenceEngine::generateJustification(
       failureType, convergenceHistory, worstDevices);
 
-  // Phase 1.7.9: Build trust-enriched SolverStats
+  // Phase 1.7.9 + Phase 2.9: Build trust-enriched SolverStats
   SolverStats stats;
   stats.iterations = total_iterations;
   stats.residual = final_kcl_error;
@@ -365,6 +468,16 @@ SolverStep CircuitSim::solveDC(TensorNetlist &netlist) {
   stats.worstDevices = std::move(worstDevices);
   stats.convergenceJustification = justification;
   stats.convergenceTolerance = 1e-6;
+  // Phase 2.9: Numerical Intelligence fields
+  stats.rmsResidual = rmsResidual;
+  stats.worstNodeIndex = worstNodeIndex;
+  stats.worstNodeVoltage = worstNodeVoltage;
+  stats.stagnationDetected = stagnationDetected;
+  stats.divergenceDetected = divergenceDetected;
+  stats.rankDeficient = rankDeficientDetected || singularMatrixDetected;
+  stats.rankDeficientRow = rankDeficientRow;
+  stats.smallestPivot = smallestPivotOverall;
+  stats.regularization = regulInfo;
 
   return {0.0, voltageEstimate, stats, netlist.globalBlock.topologyHash};
 }

@@ -11,13 +11,13 @@
  * Iterates through the netlist and formats components as module instantiations.
  */
 QString SchematicEditor::generateVerilogSnippet() {
-    TensorNetlist netlist = scene->generateNetlist();
+    auto hierDto = toSchematicGraph();
     
     NetlistExporter::ExportOptions options;
     options.topModuleName = "top_schematic";
     options.flavor = NetlistExporter::ExportFlavor::AnalogMixedSignal;
     
-    std::string code = NetlistExporter::toVerilog(netlist, options);
+    std::string code = NetlistExporter::toVerilog(hierDto, options);
     return QString::fromStdString(code);
 }
 

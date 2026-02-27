@@ -1,8 +1,7 @@
 #pragma once
 
-#include <QString>
-#include <QStringList>
-#include <QMap>
+#include <string>
+#include <vector>
 
 namespace acutesim::compute::orchestration {
 
@@ -14,9 +13,9 @@ enum class SynthesisGoal {
 };
 
 struct SynthesisConfig {
-    QString topModule;
-    QStringList sourceFiles;
-    QString targetLibrary = "sky130_fd_sc_hd"; // Default to Skywater 130
+    std::string topModule;
+    std::vector<std::string> sourceFiles;
+    std::string targetLibrary = "sky130_fd_sc_hd"; // Default to Skywater 130
     SynthesisGoal goal = SynthesisGoal::BALANCED;
     bool flatten = false;
 };
@@ -30,27 +29,12 @@ struct SynthesisConfig {
  */
 class YosysTask {
 public:
-    /**
-     * Generate a standard Yosys synthesis TCL script.
-     */
-    static QString generateTcl(const SynthesisConfig& config);
-    
-    /**
-     * Generate a Yosys script that outputs structured JSON stats.
-     * Uses `tee -o /dev/stdout` and `stat -json` (Yosys 0.30+).
-     * Falls back to text `stat` for older versions.
-     */
-    static QString generateJsonTcl(const SynthesisConfig& config);
+    static std::string generateTcl(const SynthesisConfig& config);
+    static std::string generateJsonTcl(const SynthesisConfig& config);
+    static std::string generateBatchCommand(const std::string& scriptPath);
 
-    /**
-     * Generate command-line arguments for batch-mode Yosys execution.
-     * @param scriptPath Path to the generated TCL script.
-     * @return Command string: "yosys -s <scriptPath>"
-     */
-    static QString generateBatchCommand(const QString& scriptPath);
-    
 private:
-    static QString getGoalOptimizations(SynthesisGoal goal);
+    static std::string getGoalOptimizations(SynthesisGoal goal);
 };
 
 } // namespace acutesim::compute::orchestration

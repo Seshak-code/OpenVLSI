@@ -45,7 +45,7 @@ ParametricSweepDialog::ParametricSweepDialog(const QStringList& variables, QWidg
 
 acutesim::compute::orchestration::SweepParameter ParametricSweepDialog::getSweepParameter() const {
     acutesim::compute::orchestration::SweepParameter p;
-    p.variableName = varCombo_->currentText();
+    p.variableName = varCombo_->currentText().toStdString();
     p.start = startSpin_->value();
     p.stop = stopSpin_->value();
     p.step = stepSpin_->value();

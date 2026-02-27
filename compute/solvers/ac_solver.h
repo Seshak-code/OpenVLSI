@@ -9,6 +9,7 @@
 #include "../../physics/noise_models.h"
 #include "../../autodiff/dual.h"
 #include "../infrastructure/simtrace.h"
+#include "../math/linalg.h"  // Phase 2.10: ComplexCsr, ComplexMatrixConstructor, solveComplexLU_Sparse
 
 /**
  * ac_solver.h
@@ -591,6 +592,284 @@ inline NoiseResult solveNoise(
         double df = result.frequencies[i] - result.frequencies[i - 1];
         double avg_psd = 0.5 * (result.output_noise_psd[i] + result.output_noise_psd[i - 1]);
         integrated += avg_psd * df;
+    }
+    result.integrated_noise_vrms = std::sqrt(std::max(integrated, 0.0));
+
+    return result;
+}
+
+// ============================================================================
+// PHASE 2.10: SPARSE AC REFACTOR
+// ============================================================================
+
+/**
+ * buildAdmittanceMatrixSparse — Phase 2.10
+ * Builds the AC admittance matrix Y(jw) using the SoA ComplexMatrixConstructor.
+ * If dcPattern is provided, uses O(N) assembleFast; otherwise full createCsr.
+ *
+ * @param netlist       Circuit netlist
+ * @param dcSolution    DC operating point voltages
+ * @param omega         Angular frequency (2*pi*f)
+ * @param rhs_real      Output: RHS real part
+ * @param rhs_imag      Output: RHS imaginary part
+ * @param dcPattern     Optional cached DC sparsity pattern for fast assembly
+ * @return              ComplexCsr admittance matrix
+ */
+inline ComplexCsr buildAdmittanceMatrixSparse(
+    const TensorNetlist& netlist,
+    const std::vector<double>& dcSolution,
+    double omega,
+    std::vector<double>& rhs_real,
+    std::vector<double>& rhs_imag,
+    const CachedCsrPattern* dcPattern = nullptr)
+{
+    int n = netlist.numGlobalNodes;
+    ComplexMatrixConstructor builder;
+    builder.setDimensions(n, n);
+    rhs_real.assign(n, 0.0);
+    rhs_imag.assign(n, 0.0);
+
+    auto getV = [&](int idx) -> double {
+        if (idx <= 0 || idx > (int)dcSolution.size()) return 0.0;
+        return dcSolution[idx - 1];
+    };
+
+    // Helpers: add admittance stamp (pi-equivalent: +Y at (r,r), -Y at (r,c), etc.)
+    auto addY_real = [&](int r, int c, double re) {
+        if (r > 0 && r <= n && c > 0 && c <= n)
+            builder.addEntry_real(r - 1, c - 1, re);
+    };
+    auto addY_imag = [&](int r, int c, double im) {
+        if (r > 0 && r <= n && c > 0 && c <= n)
+            builder.addEntry_imag(r - 1, c - 1, im);
+    };
+    auto addY = [&](int r, int c, double re, double im) {
+        if (r > 0 && r <= n && c > 0 && c <= n)
+            builder.addEntry(r - 1, c - 1, re, im);
+    };
+    auto stampY = [&](int p, int q, double re, double im) {
+        addY(p, p,  re,  im); addY(p, q, -re, -im);
+        addY(q, p, -re, -im); addY(q, q,  re,  im);
+    };
+
+    // 1. Resistors: Y = G (real)
+    for (const auto& r : netlist.globalBlock.resistors)
+        stampY(r.nodeTerminal1, r.nodeTerminal2, 1.0 / r.resistance_ohms, 0.0);
+
+    // 2. Capacitors: Y = jwC (imaginary)
+    for (const auto& c : netlist.globalBlock.capacitors)
+        stampY(c.nodePlate1, c.nodePlate2, 0.0, omega * c.capacitance_farads);
+
+    // 3. Inductors: Y = 1/(jwL) = -j/(wL) (imaginary, negative)
+    for (const auto& l : netlist.globalBlock.inductors) {
+        if (l.inductance_henries > 0.0 && omega > 0.0)
+            stampY(l.nodeCoil1, l.nodeCoil2, 0.0, -1.0 / (omega * l.inductance_henries));
+    }
+
+    // 4. Voltage Sources: Norton equivalent (G_int = 1e3)
+    for (const auto& vs : netlist.globalBlock.voltageSources)
+        stampY(vs.nodePositive, vs.nodeNegative, 1.0 / 1e-3, 0.0);
+
+    // 5. Diodes: linearized g_d at DC OP
+    for (const auto& d : netlist.globalBlock.diodes) {
+        DiodeParams<double> params = {d.saturationCurrent_I_S_A, d.emissionCoefficient_N, d.thermalVoltage_V_T_V};
+        Dual<double> i_dual = diode_current_clamped(Dual<double>(getV(d.anode) - getV(d.cathode), 1.0), params);
+        double g_d = std::max(i_dual.grad, 1e-15);
+        stampY(d.anode, d.cathode, g_d, 0.0);
+    }
+
+    // 6. Schottky Diodes
+    for (const auto& sd : netlist.globalBlock.schottkyDiodes) {
+        DiodeParams<double> params = {sd.saturationCurrent_I_S_A, sd.emissionCoefficient_N, sd.thermalVoltage_V_T_V};
+        Dual<double> i_dual = diode_current_clamped(Dual<double>(getV(sd.anode) - getV(sd.cathode), 1.0), params);
+        double g_d = std::max(i_dual.grad, 1e-15);
+        stampY(sd.anode, sd.cathode, g_d, 0.0);
+    }
+
+    // 7. MOSFETs: gm (VCCS) + gds (conductance)
+    for (const auto& m : netlist.globalBlock.mosfets) {
+        MosfetParams<double> p; p.Kp = 200e-6; p.Vth = 0.7; p.lambda = 0.02; p.W = m.w; p.L = m.l;
+        double vgs = getV(m.gate) - getV(m.source), vds = getV(m.drain) - getV(m.source);
+        double gm  = mosfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p).grad;
+        double gds = mosfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p).grad;
+        // gm: VCCS drain-source controlled by gate-source
+        addY_real(m.drain,  m.gate,   gm); addY_real(m.drain,  m.source, -gm);
+        addY_real(m.source, m.gate,  -gm); addY_real(m.source, m.source,  gm);
+        // gds: conductance drain-source
+        addY_real(m.drain,  m.drain,  gds); addY_real(m.drain,  m.source, -gds);
+        addY_real(m.source, m.drain, -gds); addY_real(m.source, m.source,  gds);
+    }
+
+    // 8. BJTs: 3x3 linearized conductance matrix
+    for (const auto& q : netlist.globalBlock.bjts) {
+        BJTParams<double> params;
+        params.Is = q.saturationCurrent_I_S_A; params.BetaF = q.betaF;
+        params.BetaR = q.betaR; params.Vt = q.thermalVoltage_V_T_V;
+        BJTCurrents<double> res = bjt_ebers_moll(getV(q.nodeCollector), getV(q.base), getV(q.emitter), q.isNPN, params);
+        addY_real(q.nodeCollector, q.nodeCollector, res.g_cc); addY_real(q.nodeCollector, q.base, res.g_cb);
+        addY_real(q.nodeCollector, q.emitter, res.g_ce);       addY_real(q.base, q.nodeCollector, res.g_bc);
+        addY_real(q.base, q.base, res.g_bb);                   addY_real(q.base, q.emitter, res.g_be);
+        addY_real(q.emitter, q.nodeCollector, res.g_ec);       addY_real(q.emitter, q.base, res.g_eb);
+        addY_real(q.emitter, q.emitter, res.g_ee);
+    }
+
+    // 9. JFETs
+    for (const auto& j : netlist.globalBlock.jfets) {
+        double sign = j.isNChannel ? 1.0 : -1.0;
+        JFETParams<double> p; p.Beta = j.beta; p.Vto = j.Vto; p.Lambda = j.lambda;
+        double vgs = getV(j.gate) - getV(j.source), vds = getV(j.drain) - getV(j.source);
+        double gm  = jfet_ids(Dual<double>(sign*vgs, 1.0), Dual<double>(sign*vds, 0.0), p).grad;
+        double gds = jfet_ids(Dual<double>(sign*vgs, 0.0), Dual<double>(sign*vds, 1.0), p).grad;
+        addY_real(j.drain,  j.gate,   sign*gm); addY_real(j.drain,  j.source, -sign*gm);
+        addY_real(j.source, j.gate,  -sign*gm); addY_real(j.source, j.source,  sign*gm);
+        addY_real(j.drain,  j.drain,  sign*gds); addY_real(j.drain,  j.source, -sign*gds);
+        addY_real(j.source, j.drain, -sign*gds); addY_real(j.source, j.source,  sign*gds);
+    }
+
+    // 10. Zener Diodes
+    for (const auto& z : netlist.globalBlock.zenerDiodes) {
+        ZenerParams<double> zp;
+        zp.BV = z.breakdownVoltage_V; zp.IBV = z.currentAtBreakdown_A;
+        zp.Rs = z.seriesResistance_Rs_ohms; zp.N = z.emissionCoefficient_N;
+        zp.Is = z.saturationCurrent_I_S_A; zp.Vt = z.thermalVoltage_V_T_V;
+        double g_d = std::max(zener_current(Dual<double>(getV(z.anode)-getV(z.cathode), 1.0), zp).grad, 1e-15);
+        stampY(z.anode, z.cathode, g_d, 0.0);
+    }
+
+    // GMIN diagonal conditioning
+    for (int i = 0; i < n; ++i)
+        builder.addEntry_real(i, i, 1e-12);
+
+    return dcPattern ? builder.assembleFast(*dcPattern) : builder.createCsr();
+}
+
+/**
+ * solveAC_Sparse — Phase 2.10
+ * AC sweep using sparse ComplexCsr admittance matrix + solveComplexLU_Sparse.
+ * Drop-in replacement for solveAC; same return type (ACResult).
+ * Pass dcPattern for O(N) matrix assembly on each frequency point.
+ */
+inline ACResult solveAC_Sparse(
+    const TensorNetlist& netlist,
+    const std::vector<double>& dcSolution,
+    double fStart, double fStop, int numPoints,
+    int inputNode = 0, double inputAmplitude = 1.0,
+    const CachedCsrPattern* dcPattern = nullptr)
+{
+    ACResult result;
+    if (netlist.numGlobalNodes == 0 || numPoints <= 0) return result;
+
+    int n = netlist.numGlobalNodes;
+    result.frequencies.resize(numPoints);
+    result.nodeVoltages.resize(numPoints);
+
+    double logStart = std::log10(std::max(fStart, 1e-3));
+    double logStop  = std::log10(std::max(fStop, fStart + 1.0));
+    for (int i = 0; i < numPoints; ++i) {
+        double logF = logStart + (logStop - logStart) * i / std::max(numPoints - 1, 1);
+        result.frequencies[i] = std::pow(10.0, logF);
+    }
+
+    for (int fi = 0; fi < numPoints; ++fi) {
+        double omega = 2.0 * M_PI * result.frequencies[fi];
+
+        std::vector<double> rhs_real, rhs_imag;
+        ComplexCsr Y = buildAdmittanceMatrixSparse(netlist, dcSolution, omega,
+                                                    rhs_real, rhs_imag, dcPattern);
+
+        // AC input excitation: large-G Norton equivalent at inputNode
+        if (inputNode > 0 && inputNode <= n) {
+            double G_large = 1e6;
+            // Add G_large to (inputNode-1, inputNode-1) diagonal — rebuild needed
+            // Simple approach: just add to rhs and diagonal via addEntry
+            // Since Y is already built, we append and re-createCsr is not practical.
+            // Instead: directly modify values_real at diagonal position.
+            // Find diagonal in Y.row_pointer
+            int row = inputNode - 1;
+            for (int p = Y.row_pointer[row]; p < Y.row_pointer[row + 1]; ++p) {
+                if (Y.col_indices[p] == row) {
+                    Y.values_real[static_cast<size_t>(p)] += G_large;
+                    break;
+                }
+            }
+            rhs_real[inputNode - 1] += G_large * inputAmplitude;
+        }
+
+        ComplexSolverResult sol = solveComplexLU_Sparse(Y, rhs_real, rhs_imag);
+
+        // Convert SoA to std::vector<Complex> for API compatibility
+        result.nodeVoltages[fi].resize(n);
+        for (int i = 0; i < n; ++i)
+            result.nodeVoltages[fi][i] = Complex(sol.solution_real[i], sol.solution_imag[i]);
+    }
+
+    return result;
+}
+
+/**
+ * solveNoise_Sparse — Phase 2.10
+ * Noise analysis using sparse Y matrix. Pattern shared across noise sources.
+ */
+inline NoiseResult solveNoise_Sparse(
+    const TensorNetlist& netlist,
+    const std::vector<double>& dcSolution,
+    int outputNode, int inputNode,
+    double fStart, double fStop, int numPoints,
+    double temp_K = 300.15,
+    const CachedCsrPattern* dcPattern = nullptr)
+{
+    NoiseResult result;
+    int n = netlist.numGlobalNodes;
+    if (n == 0 || numPoints <= 0) return result;
+
+    result.frequencies.resize(numPoints);
+    result.output_noise_psd.resize(numPoints, 0.0);
+
+    double logStart = std::log10(std::max(fStart, 1e-3));
+    double logStop  = std::log10(std::max(fStop, fStart + 1.0));
+    for (int i = 0; i < numPoints; ++i) {
+        double logF = logStart + (logStop - logStart) * i / std::max(numPoints - 1, 1);
+        result.frequencies[i] = std::pow(10.0, logF);
+    }
+
+    for (int fi = 0; fi < numPoints; ++fi) {
+        double freq  = result.frequencies[fi];
+        double omega = 2.0 * M_PI * freq;
+
+        // Build Y template once per frequency
+        std::vector<double> rhs_real_unused, rhs_imag_unused;
+        ComplexCsr Y_template = buildAdmittanceMatrixSparse(
+            netlist, dcSolution, omega, rhs_real_unused, rhs_imag_unused, dcPattern);
+
+        auto noiseSources = computeNoiseSources(netlist, dcSolution, freq, temp_K);
+        double total_psd = 0.0;
+
+        for (const auto& ns : noiseSources) {
+            // Copy template values (pattern is shared — only copy values)
+            ComplexCsr Y = Y_template;  // shallow copy: all vectors copied
+
+            std::vector<double> rhs_re(n, 0.0), rhs_im(n, 0.0);
+            if (ns.nodePos > 0 && ns.nodePos <= n) rhs_re[ns.nodePos - 1] += 1.0;
+            if (ns.nodeNeg > 0 && ns.nodeNeg <= n) rhs_re[ns.nodeNeg - 1] -= 1.0;
+
+            ComplexSolverResult sol = solveComplexLU_Sparse(Y, rhs_re, rhs_im);
+
+            Complex H_out(0.0, 0.0);
+            if (outputNode > 0 && outputNode <= n) {
+                H_out = Complex(sol.solution_real[outputNode - 1],
+                                sol.solution_imag[outputNode - 1]);
+            }
+            total_psd += std::norm(H_out) * ns.psd;
+        }
+
+        result.output_noise_psd[fi] = total_psd;
+    }
+
+    // Integrate PSD (trapezoidal, log-spaced)
+    double integrated = 0.0;
+    for (int i = 1; i < numPoints; ++i) {
+        double df = result.frequencies[i] - result.frequencies[i - 1];
+        integrated += 0.5 * (result.output_noise_psd[i] + result.output_noise_psd[i - 1]) * df;
     }
     result.integrated_noise_vrms = std::sqrt(std::max(integrated, 0.0));
 

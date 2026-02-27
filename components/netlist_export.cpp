@@ -75,6 +75,50 @@ namespace NetlistExporter {
         ss << "\nendmodule\n\n";
     }
 
+    std::string toVerilog(const acutesim::compute::orchestration::HierarchicalSchematicDTO& hierDto, const ExportOptions& options) {
+        // Simple conversion from DTO to TensorNetlist for reuse of existing export logic
+        TensorNetlist tempNl;
+        auto& top = hierDto.topGraph;
+        
+        auto getNetIdx = [&](const std::string& name) -> int {
+            if (name == "0" || name == "GND" || name == "gnd" || name == "VSS") return 0;
+            for (size_t i = 0; i < top.nets.size(); ++i) {
+                if (top.nets[i].name == name) return (int)i + 1;
+            }
+            return (int)top.nets.size() + 1; // fallback
+        };
+
+        auto getVal = [](const std::map<std::string, std::string>& params, const std::string& key, double def = 0.0) {
+            auto it = params.find(key);
+            if (it == params.end()) return def;
+            try { return std::stod(it->second); } catch(...) { return def; }
+        };
+
+        for (const auto& inst : top.instances) {
+            if (inst.type == "Resistor") {
+                Resistor r;
+                r.name = inst.instanceName;
+                r.nodeTerminal1 = inst.connectedNets.size() > 0 ? getNetIdx(inst.connectedNets[0]) : 0;
+                r.nodeTerminal2 = inst.connectedNets.size() > 1 ? getNetIdx(inst.connectedNets[1]) : 0;
+                r.resistance_ohms = getVal(inst.parameters, "R", getVal(inst.parameters, "val", 1000.0));
+                tempNl.globalBlock.resistors.push_back(r);
+            } else if (inst.type == "Mosfet") {
+                Mosfet m;
+                m.instanceName = inst.instanceName;
+                m.drain = inst.connectedNets.size() > 0 ? getNetIdx(inst.connectedNets[0]) : 0;
+                m.gate  = inst.connectedNets.size() > 1 ? getNetIdx(inst.connectedNets[1]) : 0;
+                m.source= inst.connectedNets.size() > 2 ? getNetIdx(inst.connectedNets[2]) : 0;
+                m.body  = inst.connectedNets.size() > 3 ? getNetIdx(inst.connectedNets[3]) : 0;
+                auto itModel = inst.parameters.find("model");
+                if (itModel != inst.parameters.end()) m.modelName = itModel->second;
+                tempNl.globalBlock.mosfets.push_back(m);
+            }
+            // ... more types can be added as needed ...
+        }
+
+        return toVerilog(tempNl, options);
+    }
+
     std::string toVerilog(const TensorNetlist& netlist, const ExportOptions& options) {
         std::stringstream ss;
         

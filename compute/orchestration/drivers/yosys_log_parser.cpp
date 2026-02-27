@@ -1,75 +1,95 @@
 #include "yosys_log_parser.h"
-#include <QRegularExpression>
+#include <regex>
+#include <sstream>
 
 namespace acutesim::compute::orchestration {
+
+namespace {
+
+std::vector<std::string> splitLines(const std::string& s) {
+    std::vector<std::string> result;
+    std::istringstream iss(s);
+    std::string line;
+    while (std::getline(iss, line)) result.push_back(line);
+    return result;
+}
+
+std::string trimStr(const std::string& s) {
+    size_t start = s.find_first_not_of(" \t\r\n");
+    size_t end   = s.find_last_not_of(" \t\r\n");
+    if (start == std::string::npos) return "";
+    return s.substr(start, end - start + 1);
+}
+
+bool startsWith(const std::string& s, const std::string& prefix) {
+    return s.size() >= prefix.size() && s.compare(0, prefix.size(), prefix) == 0;
+}
+
+} // anonymous namespace
 
 // ============================================================================
 // MODULE BLOCK PARSER
 // ============================================================================
 
-ModuleStats YosysLogParser::parseModuleBlock(const QStringList& lines, int startLine, int& endLine) {
+ModuleStats YosysLogParser::parseModuleBlock(const std::vector<std::string>& lines,
+                                              int startLine, int& endLine) {
     ModuleStats stats;
-    
-    // Extract module name from "=== <name> ==="
-    static QRegularExpression moduleRe(R"(^=== (\S+) ===$)");
-    auto match = moduleRe.match(lines[startLine].trimmed());
-    if (match.hasMatch()) {
-        stats.moduleName = match.captured(1);
-    }
-    
-    // Parse stat lines until next "===" or end
-    static QRegularExpression statRe(R"(^\s+Number of (\w[\w ]*\w)\s*:\s+(\d+))");
-    static QRegularExpression cellRe(R"(^\s{4,}(\S+)\s+(\d+))");
-    static QRegularExpression areaRe(R"(Chip area for module '\\?(\S+)':\s+([\d.]+))");
-    
+
+    static const std::regex moduleRe(R"(^=== (\S+) ===$)");
+    std::smatch m;
+    std::string trimmedStart = trimStr(lines[startLine]);
+    if (std::regex_match(trimmedStart, m, moduleRe))
+        stats.moduleName = m[1].str();
+
+    static const std::regex statRe(R"(^\s+Number of (\w[\w ]*\w)\s*:\s+(\d+))");
+    static const std::regex cellRe(R"(^\s{4,}(\S+)\s+(\d+))");
+    static const std::regex areaRe(R"(Chip area for module '\\?(\S+)':\s+([\d.]+))");
+
     bool inCellList = false;
-    
-    for (int i = startLine + 1; i < lines.size(); ++i) {
-        const QString& line = lines[i];
-        QString trimmed = line.trimmed();
-        
-        // Next module block starts
-        if (trimmed.startsWith("===") && trimmed.endsWith("===") && i > startLine + 1) {
+
+    for (int i = startLine + 1; i < static_cast<int>(lines.size()); ++i) {
+        const std::string& line = lines[i];
+        std::string trimmed = trimStr(line);
+
+        // Next module block
+        if (trimmed.size() >= 7 && startsWith(trimmed, "===") &&
+            trimmed.compare(trimmed.size() - 3, 3, "===") == 0 && i > startLine + 1) {
             endLine = i - 1;
             return stats;
         }
 
-        // "Number of X: N" lines    
-        auto statMatch = statRe.match(line);
-        if (statMatch.hasMatch()) {
-            QString key = statMatch.captured(1).trimmed();
-            int value = statMatch.captured(2).toInt();
-            
-            if (key == "wires")          stats.wireCount = value;
-            else if (key == "wire bits") stats.wireBits = value;
-            else if (key == "public wires") stats.publicWires = value;
-            else if (key == "cells")     { stats.cellCount = value; inCellList = true; }
-            else if (key == "memories")  stats.memoryBits = value;
-            else if (key == "processes") stats.processes = value;
-            
+        std::smatch sm;
+        if (std::regex_search(line, sm, statRe)) {
+            std::string key = trimStr(sm[1].str());
+            int value = std::stoi(sm[2].str());
+
+            if      (key == "wires")         stats.wireCount = value;
+            else if (key == "wire bits")     stats.wireBits = value;
+            else if (key == "public wires")  stats.publicWires = value;
+            else if (key == "cells")         { stats.cellCount = value; inCellList = true; }
+            else if (key == "memories")      stats.memoryBits = value;
+            else if (key == "processes")     stats.processes = value;
+
             if (key != "cells") inCellList = false;
             continue;
         }
-        
-        // Cell breakdown lines (indented, e.g. "      $_NOT_    4")
+
         if (inCellList) {
-            auto cellMatch = cellRe.match(line);
-            if (cellMatch.hasMatch()) {
-                stats.cellBreakdown[cellMatch.captured(1)] = cellMatch.captured(2).toInt();
+            std::smatch cm;
+            if (std::regex_search(line, cm, cellRe)) {
+                stats.cellBreakdown[cm[1].str()] = std::stoi(cm[2].str());
                 continue;
-            } else if (!trimmed.isEmpty()) {
+            } else if (!trimmed.empty()) {
                 inCellList = false;
             }
         }
-        
-        // "Chip area for module '\top': 1234.560000"
-        auto areaMatch = areaRe.match(line);
-        if (areaMatch.hasMatch()) {
-            stats.chipArea = areaMatch.captured(2).toDouble();
-        }
+
+        std::smatch am;
+        if (std::regex_search(line, am, areaRe))
+            stats.chipArea = std::stod(am[2].str());
     }
-    
-    endLine = lines.size() - 1;
+
+    endLine = static_cast<int>(lines.size()) - 1;
     return stats;
 }
 
@@ -77,50 +97,39 @@ ModuleStats YosysLogParser::parseModuleBlock(const QStringList& lines, int start
 // MAIN PARSER
 // ============================================================================
 
-SynthesisResult YosysLogParser::parse(const QString& output) {
+SynthesisResult YosysLogParser::parse(const std::string& output) {
     SynthesisResult result;
     result.rawOutput = output;
-    
-    QStringList lines = output.split('\n');
-    
-    // Extract module stat blocks
-    for (int i = 0; i < lines.size(); ++i) {
-        QString trimmed = lines[i].trimmed();
-        
-        // Module stat block header: "=== <name> ==="
-        static QRegularExpression moduleHeaderRe(R"(^=== (\S+) ===$)");
-        if (moduleHeaderRe.match(trimmed).hasMatch()) {
+
+    std::vector<std::string> lines = splitLines(output);
+    static const std::regex moduleHeaderRe(R"(^=== (\S+) ===$)");
+
+    for (int i = 0; i < static_cast<int>(lines.size()); ++i) {
+        std::string trimmed = trimStr(lines[i]);
+        std::smatch m;
+
+        if (std::regex_match(trimmed, m, moduleHeaderRe)) {
             int endLine = i;
             ModuleStats modStats = parseModuleBlock(lines, i, endLine);
             result.modules[modStats.moduleName] = modStats;
-            
-            // The last module reported is typically the top
-            result.cellCount = modStats.cellCount;
-            result.wireCount = modStats.wireCount;
+
+            result.cellCount    = modStats.cellCount;
+            result.wireCount    = modStats.wireCount;
             result.estimatedArea = modStats.chipArea;
-            
-            // Merge cell breakdown
-            for (auto it = modStats.cellBreakdown.constBegin(); 
-                 it != modStats.cellBreakdown.constEnd(); ++it) {
-                result.cellBreakdown[it.key()] += it.value();
-            }
-            
+
+            for (const auto& [k, v] : modStats.cellBreakdown)
+                result.cellBreakdown[k] += v;
+
             i = endLine;
             continue;
         }
-        
-        // Warning lines
-        if (trimmed.startsWith("Warning:") || trimmed.startsWith("warning:")) {
-            result.warnings.append(trimmed);
-        }
+
+        if (startsWith(trimmed, "Warning:") || startsWith(trimmed, "warning:"))
+            result.warnings.push_back(trimmed);
     }
-    
-    // Parse errors separately
+
     parseErrors(output, result);
-    
-    // Determine success: no ERROR lines found
-    result.success = result.errors.isEmpty();
-    
+    result.success = result.errors.empty();
     return result;
 }
 
@@ -128,23 +137,16 @@ SynthesisResult YosysLogParser::parse(const QString& output) {
 // ERROR PARSER
 // ============================================================================
 
-void YosysLogParser::parseErrors(const QString& stderr, SynthesisResult& result) {
-    QStringList lines = stderr.split('\n');
-    
-    for (const QString& line : lines) {
-        QString trimmed = line.trimmed();
-        if (trimmed.startsWith("ERROR:") || trimmed.startsWith("error:")) {
-            result.errors.append(trimmed);
-        }
+void YosysLogParser::parseErrors(const std::string& stderr, SynthesisResult& result) {
+    for (const auto& line : splitLines(stderr)) {
+        std::string trimmed = trimStr(line);
+        if (startsWith(trimmed, "ERROR:") || startsWith(trimmed, "error:"))
+            result.errors.push_back(trimmed);
     }
 }
 
-// ============================================================================
-// SUCCESS CHECK
-// ============================================================================
-
-bool YosysLogParser::isSuccessful(const QString& output) {
-    return !output.contains("ERROR:");
+bool YosysLogParser::isSuccessful(const std::string& output) {
+    return output.find("ERROR:") == std::string::npos;
 }
 
 } // namespace acutesim::compute::orchestration

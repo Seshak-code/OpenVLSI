@@ -1,8 +1,8 @@
 #pragma once
 
-#include <QString>
-#include <QStringList>
-#include <QSizeF>
+#include <string>
+#include <vector>
+#include "eda_types.h"
 
 namespace acutesim::compute::orchestration {
 
@@ -29,97 +29,84 @@ enum class RoutingEffort {
  * Configuration for floorplanning.
  */
 struct FloorplanConfig {
-    QString designName;
-    QSizeF dieArea;                     // Die dimensions in micrometers
-    double coreUtilization = 0.5;       // Target core utilization (0.0-1.0)
-    double aspectRatio = 1.0;           // Width/Height ratio
-    QString techLef;                    // Technology LEF file
-    QStringList cellLefs;               // Cell library LEF files
-    QString synthesizedNetlist;         // Input netlist (Verilog from Yosys)
-    bool autoPlaceIO = true;            // Auto-place I/O pins
+    std::string designName;
+    Size2D dieArea;                         // Die dimensions in micrometers
+    double coreUtilization = 0.5;           // Target core utilization (0.0-1.0)
+    double aspectRatio = 1.0;               // Width/Height ratio
+    std::string techLef;                    // Technology LEF file
+    std::vector<std::string> cellLefs;      // Cell library LEF files
+    std::string synthesizedNetlist;         // Input netlist (Verilog from Yosys)
+    bool autoPlaceIO = true;                // Auto-place I/O pins
 };
 
 /**
  * Configuration for placement.
  */
 struct PlacementConfig {
-    QString designName;
+    std::string designName;
     PlacementGoal goal = PlacementGoal::BALANCED;
-    double targetDensity = 0.6;         // Placement density target
-    bool globalPlacementOnly = false;   // Skip detailed placement
-    int maxIterations = 0;              // 0 = tool default
+    double targetDensity = 0.6;             // Placement density target
+    bool globalPlacementOnly = false;       // Skip detailed placement
+    int maxIterations = 0;                  // 0 = tool default
 };
 
 /**
  * Configuration for clock tree synthesis.
  */
 struct CTSConfig {
-    QString clockNet;                   // Primary clock net name
-    double targetSkew = 0.0;            // Target clock skew (ps)
-    double maxCapacitance = 0.0;        // Max wire capacitance
-    QString bufferCell;                 // Buffer cell for CTS
+    std::string clockNet;                   // Primary clock net name
+    double targetSkew = 0.0;               // Target clock skew (ps)
+    double maxCapacitance = 0.0;           // Max wire capacitance
+    std::string bufferCell;                 // Buffer cell for CTS
+};
+
+/**
+ * Configuration for parasitic extraction via OpenROAD RCX.
+ */
+struct RCXConfig {
+    std::string designName;
+    std::string placedRoutedDef;            // Input routed DEF file
+    std::string techLef;                    // Technology LEF
+    std::vector<std::string> cellLefs;      // Cell library LEFs
+    std::string outputSpef;                 // Output SPEF file path
+    std::string rcxRuleFile;                // RC extraction rule deck (.lef or .rcx)
+    bool couplingCaps = true;               // Include coupling capacitances
+    double capFactor  = 1.0;               // Capacitance calibration factor
+    double resFactor  = 1.0;               // Resistance calibration factor
 };
 
 /**
  * Configuration for routing.
  */
 struct RoutingConfig {
-    QString designName;
+    std::string designName;
     RoutingEffort effort = RoutingEffort::MEDIUM;
-    bool globalRoutingOnly = false;     // Skip detailed routing
-    int maxRoutingLayer = -1;           // -1 = use all available
-    bool repairAntennas = true;         // Fix antenna violations
+    bool globalRoutingOnly = false;         // Skip detailed routing
+    int maxRoutingLayer = -1;               // -1 = use all available
+    bool repairAntennas = true;             // Fix antenna violations
 };
 
 /**
  * @brief Generates OpenROAD TCL scripts for physical design flow.
- *
- * OpenROAD handles:
- * - Floorplanning: Die/core area definition, I/O placement
- * - Placement: Global and detailed standard cell placement
- * - CTS: Clock tree synthesis
- * - Routing: Global and detailed routing
  *
  * Following the Configuration-to-Script pattern, this class only generates
  * TCL scripts. Execution is handled by the orchestration layer.
  */
 class OpenRoadTask {
 public:
-    /**
-     * Generate floorplan initialization script.
-     * Sets up die area, core utilization, and I/O placement.
-     */
-    static QString generateFloorplanTcl(const FloorplanConfig& config);
-
-    /**
-     * Generate placement script.
-     * Performs global and detailed placement.
-     */
-    static QString generatePlacementTcl(const PlacementConfig& config);
-
-    /**
-     * Generate clock tree synthesis script.
-     */
-    static QString generateCTSTcl(const CTSConfig& config);
-
-    /**
-     * Generate routing script.
-     * Performs global and detailed routing.
-     */
-    static QString generateRoutingTcl(const RoutingConfig& config);
-
-    /**
-     * Generate complete P&R flow script.
-     * Combines floorplan, placement, CTS, and routing.
-     */
-    static QString generateFullFlowTcl(const FloorplanConfig& fpConfig,
-                                        const PlacementConfig& placeConfig,
-                                        const CTSConfig& ctsConfig,
-                                        const RoutingConfig& routeConfig);
+    static std::string generateFloorplanTcl(const FloorplanConfig& config);
+    static std::string generatePlacementTcl(const PlacementConfig& config);
+    static std::string generateCTSTcl(const CTSConfig& config);
+    static std::string generateRoutingTcl(const RoutingConfig& config);
+    static std::string generateFullFlowTcl(const FloorplanConfig& fpConfig,
+                                            const PlacementConfig& placeConfig,
+                                            const CTSConfig& ctsConfig,
+                                            const RoutingConfig& routeConfig);
+    static std::string generateRCXTcl(const RCXConfig& config);
 
 private:
-    static QString getPlacementGoalOptions(PlacementGoal goal);
-    static QString getRoutingEffortOptions(RoutingEffort effort);
+    static std::string getPlacementGoalOptions(PlacementGoal goal);
+    static std::string getRoutingEffortOptions(RoutingEffort effort);
 };
 
 } // namespace acutesim::compute::orchestration

@@ -5,7 +5,7 @@
 #include <QString>
 #include <vector>
 #include <memory>
-#include "components/library_index.h"
+#include "../orchestration/library_index.h"
 
 namespace acutesim {
 namespace gui {

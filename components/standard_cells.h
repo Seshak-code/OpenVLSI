@@ -1,5 +1,6 @@
 #pragma once
 #include "circuit.h"
+#include "../compute/orchestration/dto/schematic_dto.h"
 #include <map>
 #include <string>
 
@@ -445,6 +446,48 @@ public:
         if (it != dataDrivenDefs_.end()) return &it->second;
         auto it2 = definitions_.find(name);
         return (it2 != definitions_.end()) ? &it2->second : nullptr;
+    }
+
+    std::optional<acutesim::compute::orchestration::SchematicGraphDTO> getDto(const std::string& name) const {
+        const auto* def = get(name);
+        if (!def) return std::nullopt;
+        
+        using namespace acutesim::compute::orchestration;
+        SchematicGraphDTO dto;
+        dto.name = def->name;
+        dto.portNames = def->pinNames;
+        
+        const auto& block = def->internalBlock;
+        
+        // Map internal nodes to DTO nets
+        for (int i = 1; i <= block.numInternalNodes; ++i) {
+            SchematicNodeDTO net;
+            net.name = "n" + std::to_string(i);
+            net.index = i;
+            dto.nets.push_back(net);
+        }
+        
+        // Converters for instances
+        auto addInst = [&](const std::string& type, const std::string& name, const std::vector<int>& nodes, const std::map<std::string, std::string>& params = {}) {
+            SchematicInstanceDTO inst;
+            inst.type = type;
+            inst.instanceName = name;
+            for (int n : nodes) {
+                if (n == 0) inst.connectedNets.push_back("0");
+                else inst.connectedNets.push_back("n" + std::to_string(n));
+            }
+            inst.parameters = params;
+            dto.instances.push_back(inst);
+        };
+
+        for (const auto& r : block.resistors) addInst("Resistor", r.name, {r.nodeTerminal1, r.nodeTerminal2}, {{"R", std::to_string(r.resistance_ohms)}});
+        for (const auto& c : block.capacitors) addInst("Capacitor", c.name, {c.nodePlate1, c.nodePlate2}, {{"C", std::to_string(c.capacitance_farads)}});
+        for (const auto& l : block.inductors) addInst("Inductor", l.name, {l.nodeCoil1, l.nodeCoil2}, {{"L", std::to_string(l.inductance_henries)}});
+        for (const auto& m : block.mosfets) addInst("Mosfet", m.instanceName, {m.drain, m.gate, m.source, m.body}, {{"model", m.modelName}, {"W", std::to_string(m.w)}, {"L", std::to_string(m.l)}});
+        for (const auto& q : block.bjts) addInst("BJT", q.instanceName, {q.nodeCollector, q.base, q.emitter}, {{"isNPN", q.isNPN ? "1" : "0"}, {"Is", std::to_string(q.saturationCurrent_I_S_A)}});
+        for (const auto& d : block.diodes) addInst("Diode", d.instanceName, {d.anode, d.cathode}, {{"Is", std::to_string(d.saturationCurrent_I_S_A)}});
+
+        return dto;
     }
 
     void registerDefinition(const SubCircuitDefinition& def) {

@@ -29,10 +29,11 @@ struct ResidualContribution {
 
 struct ConvergenceStep {
     int iteration = 0;
-    double residualNorm = 0.0;      // Max KCL violation [A]
-    double maxVoltageDelta = 0.0;   // Max |v_new - v_old| [V]
-    double dampingFactor = 1.0;     // 1.0 = full step, 0.5 = damped
-    int worstNode = 0;              // 1-based
+    double residualNorm = 0.0;          // Max KCL violation [A]
+    double maxVoltageDelta = 0.0;       // Max |v_new - v_old| [V]
+    double dampingFactor = 1.0;         // 1.0 = full step, 0.5 = damped
+    int worstNode = 0;                  // 1-based
+    double linearSolverResidual = 0.0;  // Phase 2.9: ||Ax-b|| from LU/PCG
 };
 
 enum class ConvergenceFailureType {
@@ -59,6 +60,16 @@ inline std::string convergenceFailureToString(ConvergenceFailureType t) {
 }
 
 // ============================================================================
+// REGULARIZATION INFO
+// ============================================================================
+
+struct RegularizationInfo {
+    bool applied = false;
+    double gminValue = 0.0;
+    uint32_t injections = 0;  // Number of diagonal entries conditioned
+};
+
+// ============================================================================
 // SOLVER STATS
 // ============================================================================
 
@@ -83,6 +94,17 @@ struct SolverStats
     std::vector<ResidualContribution> worstDevices;
     std::string convergenceJustification;
 
+    // Phase 2.9: Numerical Intelligence
+    double rmsResidual = 0.0;           // L2 norm of per-node KCL residual vector
+    uint32_t worstNodeIndex = 0;        // 1-based node with max |KCL residual|
+    double worstNodeVoltage = 0.0;      // Voltage at worst node [V]
+    bool stagnationDetected = false;    // Residual plateaued without converging
+    bool divergenceDetected = false;    // Monotonic residual increase (3+ iters)
+    bool rankDeficient = false;         // Smallest LU pivot below 1e-18
+    int rankDeficientRow = -1;          // 0-based row of smallest pivot
+    double smallestPivot = 1e300;       // Min |pivot| across LU factorization
+    RegularizationInfo regularization;  // GMIN conditioning details
+
     std::string provenance() const {
         std::string p = "Converged in " + std::to_string(iterations) + " iterations using " + method;
         if (!integrationMethod.empty()) {
@@ -94,6 +116,13 @@ struct SolverStats
         if (failureType != ConvergenceFailureType::NONE) {
             p += " Failure: " + convergenceFailureToString(failureType) + ".";
         }
+        if (stagnationDetected) p += " Stagnation detected.";
+        if (divergenceDetected) p += " Divergence detected.";
+        if (rankDeficient) p += " Rank deficiency at row " + std::to_string(rankDeficientRow)
+                                 + " (pivot=" + std::to_string(smallestPivot) + ").";
+        if (regularization.applied) p += " GMIN=" + std::to_string(regularization.gminValue)
+                                          + " applied to " + std::to_string(regularization.injections)
+                                          + " nodes.";
         return p;
     }
 };

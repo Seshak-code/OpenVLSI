@@ -55,40 +55,24 @@ struct SynthesisRequest_ConstraintsDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SynthesisRequest_ConstraintsDefaultTypeInternal _SynthesisRequest_Constraints_default_instance_;
-
-inline constexpr StatusResponse::Impl_::Impl_(
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        supported_tools_{},
-        worker_id_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        version_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        cpu_usage_{0},
-        memory_usage_{0},
-        ready_{false} {}
-
 template <typename>
-PROTOBUF_CONSTEXPR StatusResponse::StatusResponse(::_pbi::ConstantInitialized)
+PROTOBUF_CONSTEXPR StatusResponse_ToolsEntry_DoNotUse::StatusResponse_ToolsEntry_DoNotUse(::_pbi::ConstantInitialized)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(StatusResponse_class_data_.base()),
+    : StatusResponse_ToolsEntry_DoNotUse::MapEntry(StatusResponse_ToolsEntry_DoNotUse_class_data_.base()){}
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(::_pbi::ConstantInitialized()) {
+    : StatusResponse_ToolsEntry_DoNotUse::MapEntry() {
 }
-struct StatusResponseDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR StatusResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~StatusResponseDefaultTypeInternal() {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+struct StatusResponse_ToolsEntry_DoNotUseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR StatusResponse_ToolsEntry_DoNotUseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~StatusResponse_ToolsEntry_DoNotUseDefaultTypeInternal() {}
   union {
-    StatusResponse _instance;
+    StatusResponse_ToolsEntry_DoNotUse _instance;
   };
 };
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 StatusResponseDefaultTypeInternal _StatusResponse_default_instance_;
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 StatusResponse_ToolsEntry_DoNotUseDefaultTypeInternal _StatusResponse_ToolsEntry_DoNotUse_default_instance_;
 template <typename>
 PROTOBUF_CONSTEXPR StatusRequest::StatusRequest(::_pbi::ConstantInitialized)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -108,7 +92,43 @@ struct StatusRequestDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 StatusRequestDefaultTypeInternal _StatusRequest_default_instance_;
 
-inline constexpr SimulationLog::Impl_::Impl_(
+inline constexpr RegressionRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        suite_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        solver_mode_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        precision_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+PROTOBUF_CONSTEXPR RegressionRequest::RegressionRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(RegressionRequest_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct RegressionRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RegressionRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RegressionRequestDefaultTypeInternal() {}
+  union {
+    RegressionRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RegressionRequestDefaultTypeInternal _RegressionRequest_default_instance_;
+
+inline constexpr RegressionLog::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         job_id_(
@@ -117,30 +137,32 @@ inline constexpr SimulationLog::Impl_::Impl_(
         log_line_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        vcd_chunk_(
+        result_json_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        is_finished_{false} {}
+        is_error_{false},
+        is_finished_{false},
+        passed_{false} {}
 
 template <typename>
-PROTOBUF_CONSTEXPR SimulationLog::SimulationLog(::_pbi::ConstantInitialized)
+PROTOBUF_CONSTEXPR RegressionLog::RegressionLog(::_pbi::ConstantInitialized)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(SimulationLog_class_data_.base()),
+    : ::google::protobuf::Message(RegressionLog_class_data_.base()),
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(),
 #endif  // PROTOBUF_CUSTOM_VTABLE
       _impl_(::_pbi::ConstantInitialized()) {
 }
-struct SimulationLogDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR SimulationLogDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~SimulationLogDefaultTypeInternal() {}
+struct RegressionLogDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RegressionLogDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RegressionLogDefaultTypeInternal() {}
   union {
-    SimulationLog _instance;
+    RegressionLog _instance;
   };
 };
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SimulationLogDefaultTypeInternal _SimulationLog_default_instance_;
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RegressionLogDefaultTypeInternal _RegressionLog_default_instance_;
 
 inline constexpr PnRRequest_Floorplan::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -169,6 +191,40 @@ struct PnRRequest_FloorplanDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PnRRequest_FloorplanDefaultTypeInternal _PnRRequest_Floorplan_default_instance_;
+
+inline constexpr HDLSimulationLog::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        log_line_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        vcd_chunk_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        is_finished_{false} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR HDLSimulationLog::HDLSimulationLog(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(HDLSimulationLog_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct HDLSimulationLogDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR HDLSimulationLogDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~HDLSimulationLogDefaultTypeInternal() {}
+  union {
+    HDLSimulationLog _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 HDLSimulationLogDefaultTypeInternal _HDLSimulationLog_default_instance_;
 
 inline constexpr FileData::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -199,6 +255,70 @@ struct FileDataDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 FileDataDefaultTypeInternal _FileData_default_instance_;
+
+inline constexpr CircuitSimulationRequest_Analysis::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        type_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        t_start_{0},
+        t_stop_{0},
+        t_step_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR CircuitSimulationRequest_Analysis::CircuitSimulationRequest_Analysis(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(CircuitSimulationRequest_Analysis_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct CircuitSimulationRequest_AnalysisDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CircuitSimulationRequest_AnalysisDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CircuitSimulationRequest_AnalysisDefaultTypeInternal() {}
+  union {
+    CircuitSimulationRequest_Analysis _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CircuitSimulationRequest_AnalysisDefaultTypeInternal _CircuitSimulationRequest_Analysis_default_instance_;
+
+inline constexpr CircuitSimulationLog::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        log_line_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        result_chunk_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        is_finished_{false} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR CircuitSimulationLog::CircuitSimulationLog(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(CircuitSimulationLog_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct CircuitSimulationLogDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CircuitSimulationLogDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CircuitSimulationLogDefaultTypeInternal() {}
+  union {
+    CircuitSimulationLog _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CircuitSimulationLogDefaultTypeInternal _CircuitSimulationLog_default_instance_;
 
 inline constexpr SynthesisRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -269,36 +389,105 @@ struct SynthesisLogDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SynthesisLogDefaultTypeInternal _SynthesisLog_default_instance_;
 
-inline constexpr SimulationRequest::Impl_::Impl_(
+inline constexpr StatusResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        source_files_{},
-        job_id_(
+        worker_id_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        testbench_module_(
+        version_(
             &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()) {}
+            ::_pbi::ConstantInitialized()),
+        cpu_usage_{0},
+        memory_usage_{0},
+        ready_{false},
+        tools_{} {}
 
 template <typename>
-PROTOBUF_CONSTEXPR SimulationRequest::SimulationRequest(::_pbi::ConstantInitialized)
+PROTOBUF_CONSTEXPR StatusResponse::StatusResponse(::_pbi::ConstantInitialized)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(SimulationRequest_class_data_.base()),
+    : ::google::protobuf::Message(StatusResponse_class_data_.base()),
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(),
 #endif  // PROTOBUF_CUSTOM_VTABLE
       _impl_(::_pbi::ConstantInitialized()) {
 }
-struct SimulationRequestDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR SimulationRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
-  ~SimulationRequestDefaultTypeInternal() {}
+struct StatusResponseDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR StatusResponseDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~StatusResponseDefaultTypeInternal() {}
   union {
-    SimulationRequest _instance;
+    StatusResponse _instance;
   };
 };
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SimulationRequestDefaultTypeInternal _SimulationRequest_default_instance_;
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 StatusResponseDefaultTypeInternal _StatusResponse_default_instance_;
+
+inline constexpr SignOffRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        check_type_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        layout_file_{nullptr},
+        script_file_{nullptr},
+        reference_netlist_{nullptr} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR SignOffRequest::SignOffRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(SignOffRequest_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct SignOffRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SignOffRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SignOffRequestDefaultTypeInternal() {}
+  union {
+    SignOffRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SignOffRequestDefaultTypeInternal _SignOffRequest_default_instance_;
+
+inline constexpr SignOffLog::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        log_line_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        report_{nullptr},
+        is_error_{false},
+        is_finished_{false} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR SignOffLog::SignOffLog(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(SignOffLog_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct SignOffLogDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SignOffLogDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SignOffLogDefaultTypeInternal() {}
+  union {
+    SignOffLog _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SignOffLogDefaultTypeInternal _SignOffLog_default_instance_;
 
 inline constexpr PnRRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -365,6 +554,182 @@ struct PnRLogDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PnRLogDefaultTypeInternal _PnRLog_default_instance_;
+
+inline constexpr PEXRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        output_spef_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        engine_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        layout_file_{nullptr},
+        tech_file_{nullptr},
+        coupling_caps_{false} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR PEXRequest::PEXRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(PEXRequest_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct PEXRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR PEXRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~PEXRequestDefaultTypeInternal() {}
+  union {
+    PEXRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PEXRequestDefaultTypeInternal _PEXRequest_default_instance_;
+
+inline constexpr LVSRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        rule_deck_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        top_cell_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        mode_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        layout_file_{nullptr},
+        schematic_netlist_{nullptr} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR LVSRequest::LVSRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(LVSRequest_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct LVSRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR LVSRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~LVSRequestDefaultTypeInternal() {}
+  union {
+    LVSRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 LVSRequestDefaultTypeInternal _LVSRequest_default_instance_;
+
+inline constexpr HDLSimulationRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        source_files_{},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        testbench_module_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+PROTOBUF_CONSTEXPR HDLSimulationRequest::HDLSimulationRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(HDLSimulationRequest_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct HDLSimulationRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR HDLSimulationRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~HDLSimulationRequestDefaultTypeInternal() {}
+  union {
+    HDLSimulationRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 HDLSimulationRequestDefaultTypeInternal _HDLSimulationRequest_default_instance_;
+
+inline constexpr GDSExportRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        output_gds_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        top_cell_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        input_file_{nullptr},
+        tech_file_{nullptr},
+        compress_{false} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR GDSExportRequest::GDSExportRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(GDSExportRequest_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct GDSExportRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GDSExportRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GDSExportRequestDefaultTypeInternal() {}
+  union {
+    GDSExportRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GDSExportRequestDefaultTypeInternal _GDSExportRequest_default_instance_;
+
+inline constexpr CircuitSimulationRequest::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        job_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        solver_mode_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        precision_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        netlist_json_{nullptr},
+        analysis_{nullptr} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR CircuitSimulationRequest::CircuitSimulationRequest(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(CircuitSimulationRequest_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct CircuitSimulationRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CircuitSimulationRequestDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CircuitSimulationRequestDefaultTypeInternal() {}
+  union {
+    CircuitSimulationRequest _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CircuitSimulationRequestDefaultTypeInternal _CircuitSimulationRequest_default_instance_;
 }  // namespace worker
 }  // namespace acutesim
 static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
@@ -376,6 +741,13 @@ const ::uint32_t
         protodesc_cold) = {
         0x000, // bitmap
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse_ToolsEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse_ToolsEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse_ToolsEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse, _impl_._has_bits_),
         9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse, _impl_.worker_id_),
@@ -383,13 +755,13 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse, _impl_.ready_),
         PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse, _impl_.cpu_usage_),
         PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse, _impl_.memory_usage_),
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse, _impl_.supported_tools_),
-        1,
-        2,
-        5,
-        3,
-        4,
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::StatusResponse, _impl_.tools_),
         0,
+        1,
+        4,
+        2,
+        3,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::acutesim::worker::FileData, _impl_._has_bits_),
         5, // hasbit index offset
@@ -472,43 +844,187 @@ const ::uint32_t
         2,
         3,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationRequest, _impl_._has_bits_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationRequest, _impl_._has_bits_),
         6, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationRequest, _impl_.job_id_),
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationRequest, _impl_.source_files_),
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationRequest, _impl_.testbench_module_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationRequest, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationRequest, _impl_.source_files_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationRequest, _impl_.testbench_module_),
         1,
         0,
         2,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationLog, _impl_._has_bits_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationLog, _impl_._has_bits_),
         7, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationLog, _impl_.job_id_),
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationLog, _impl_.log_line_),
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationLog, _impl_.is_finished_),
-        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SimulationLog, _impl_.vcd_chunk_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationLog, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationLog, _impl_.log_line_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationLog, _impl_.is_finished_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::HDLSimulationLog, _impl_.vcd_chunk_),
         0,
         1,
         3,
         2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest_Analysis, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest_Analysis, _impl_.type_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest_Analysis, _impl_.t_start_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest_Analysis, _impl_.t_stop_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest_Analysis, _impl_.t_step_),
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest, _impl_.netlist_json_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest, _impl_.solver_mode_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest, _impl_.precision_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationRequest, _impl_.analysis_),
+        0,
+        3,
+        1,
+        2,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationLog, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationLog, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationLog, _impl_.log_line_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationLog, _impl_.is_finished_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::CircuitSimulationLog, _impl_.result_chunk_),
+        0,
+        1,
+        3,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionRequest, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionRequest, _impl_.suite_name_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionRequest, _impl_.solver_mode_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionRequest, _impl_.precision_),
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionLog, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionLog, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionLog, _impl_.log_line_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionLog, _impl_.is_error_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionLog, _impl_.is_finished_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionLog, _impl_.passed_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::RegressionLog, _impl_.result_json_),
+        0,
+        1,
+        3,
+        4,
+        5,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffRequest, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffRequest, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffRequest, _impl_.layout_file_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffRequest, _impl_.script_file_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffRequest, _impl_.check_type_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffRequest, _impl_.reference_netlist_),
+        0,
+        2,
+        3,
+        1,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffLog, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffLog, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffLog, _impl_.log_line_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffLog, _impl_.is_error_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffLog, _impl_.is_finished_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::SignOffLog, _impl_.report_),
+        0,
+        1,
+        3,
+        4,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::LVSRequest, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::LVSRequest, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::LVSRequest, _impl_.layout_file_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::LVSRequest, _impl_.schematic_netlist_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::LVSRequest, _impl_.rule_deck_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::LVSRequest, _impl_.top_cell_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::LVSRequest, _impl_.mode_),
+        0,
+        4,
+        5,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::PEXRequest, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::PEXRequest, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::PEXRequest, _impl_.layout_file_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::PEXRequest, _impl_.tech_file_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::PEXRequest, _impl_.output_spef_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::PEXRequest, _impl_.coupling_caps_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::PEXRequest, _impl_.engine_),
+        0,
+        3,
+        4,
+        1,
+        5,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::GDSExportRequest, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::GDSExportRequest, _impl_.job_id_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::GDSExportRequest, _impl_.input_file_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::GDSExportRequest, _impl_.tech_file_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::GDSExportRequest, _impl_.output_gds_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::GDSExportRequest, _impl_.top_cell_),
+        PROTOBUF_FIELD_OFFSET(::acutesim::worker::GDSExportRequest, _impl_.compress_),
+        0,
+        3,
+        4,
+        1,
+        2,
+        5,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::acutesim::worker::StatusRequest)},
-        {1, sizeof(::acutesim::worker::StatusResponse)},
-        {16, sizeof(::acutesim::worker::FileData)},
-        {23, sizeof(::acutesim::worker::SynthesisRequest_Constraints)},
-        {32, sizeof(::acutesim::worker::SynthesisRequest)},
-        {45, sizeof(::acutesim::worker::SynthesisLog)},
-        {60, sizeof(::acutesim::worker::PnRRequest_Floorplan)},
-        {71, sizeof(::acutesim::worker::PnRRequest)},
-        {82, sizeof(::acutesim::worker::PnRLog)},
-        {97, sizeof(::acutesim::worker::SimulationRequest)},
-        {106, sizeof(::acutesim::worker::SimulationLog)},
+        {1, sizeof(::acutesim::worker::StatusResponse_ToolsEntry_DoNotUse)},
+        {8, sizeof(::acutesim::worker::StatusResponse)},
+        {23, sizeof(::acutesim::worker::FileData)},
+        {30, sizeof(::acutesim::worker::SynthesisRequest_Constraints)},
+        {39, sizeof(::acutesim::worker::SynthesisRequest)},
+        {52, sizeof(::acutesim::worker::SynthesisLog)},
+        {67, sizeof(::acutesim::worker::PnRRequest_Floorplan)},
+        {78, sizeof(::acutesim::worker::PnRRequest)},
+        {89, sizeof(::acutesim::worker::PnRLog)},
+        {104, sizeof(::acutesim::worker::HDLSimulationRequest)},
+        {113, sizeof(::acutesim::worker::HDLSimulationLog)},
+        {124, sizeof(::acutesim::worker::CircuitSimulationRequest_Analysis)},
+        {135, sizeof(::acutesim::worker::CircuitSimulationRequest)},
+        {148, sizeof(::acutesim::worker::CircuitSimulationLog)},
+        {159, sizeof(::acutesim::worker::RegressionRequest)},
+        {170, sizeof(::acutesim::worker::RegressionLog)},
+        {185, sizeof(::acutesim::worker::SignOffRequest)},
+        {198, sizeof(::acutesim::worker::SignOffLog)},
+        {211, sizeof(::acutesim::worker::LVSRequest)},
+        {226, sizeof(::acutesim::worker::PEXRequest)},
+        {241, sizeof(::acutesim::worker::GDSExportRequest)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::acutesim::worker::_StatusRequest_default_instance_._instance,
+    &::acutesim::worker::_StatusResponse_ToolsEntry_DoNotUse_default_instance_._instance,
     &::acutesim::worker::_StatusResponse_default_instance_._instance,
     &::acutesim::worker::_FileData_default_instance_._instance,
     &::acutesim::worker::_SynthesisRequest_Constraints_default_instance_._instance,
@@ -517,16 +1033,28 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::acutesim::worker::_PnRRequest_Floorplan_default_instance_._instance,
     &::acutesim::worker::_PnRRequest_default_instance_._instance,
     &::acutesim::worker::_PnRLog_default_instance_._instance,
-    &::acutesim::worker::_SimulationRequest_default_instance_._instance,
-    &::acutesim::worker::_SimulationLog_default_instance_._instance,
+    &::acutesim::worker::_HDLSimulationRequest_default_instance_._instance,
+    &::acutesim::worker::_HDLSimulationLog_default_instance_._instance,
+    &::acutesim::worker::_CircuitSimulationRequest_Analysis_default_instance_._instance,
+    &::acutesim::worker::_CircuitSimulationRequest_default_instance_._instance,
+    &::acutesim::worker::_CircuitSimulationLog_default_instance_._instance,
+    &::acutesim::worker::_RegressionRequest_default_instance_._instance,
+    &::acutesim::worker::_RegressionLog_default_instance_._instance,
+    &::acutesim::worker::_SignOffRequest_default_instance_._instance,
+    &::acutesim::worker::_SignOffLog_default_instance_._instance,
+    &::acutesim::worker::_LVSRequest_default_instance_._instance,
+    &::acutesim::worker::_PEXRequest_default_instance_._instance,
+    &::acutesim::worker::_GDSExportRequest_default_instance_._instance,
 };
 const char descriptor_table_protodef_worker_5fservice_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\024worker_service.proto\022\017acutesim.worker\""
-    "\017\n\rStatusRequest\"\205\001\n\016StatusResponse\022\021\n\tw"
+    "\017\n\rStatusRequest\"\325\001\n\016StatusResponse\022\021\n\tw"
     "orker_id\030\001 \001(\t\022\017\n\007version\030\002 \001(\t\022\r\n\005ready"
     "\030\003 \001(\010\022\021\n\tcpu_usage\030\004 \001(\001\022\024\n\014memory_usag"
-    "e\030\005 \001(\001\022\027\n\017supported_tools\030\006 \003(\t\"-\n\010File"
+    "e\030\005 \001(\001\0229\n\005tools\030\006 \003(\0132*.acutesim.worker"
+    ".StatusResponse.ToolsEntry\032,\n\nToolsEntry"
+    "\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\t:\0028\001\"-\n\010File"
     "Data\022\020\n\010filename\030\001 \001(\t\022\017\n\007content\030\002 \001(\014\""
     "\222\002\n\020SynthesisRequest\022\016\n\006job_id\030\001 \001(\t\022/\n\014"
     "source_files\030\002 \003(\0132\031.acutesim.worker.Fil"
@@ -549,33 +1077,83 @@ const char descriptor_table_protodef_worker_5fservice_2eproto[] ABSL_ATTRIBUTE_S
     "ob_id\030\001 \001(\t\022\020\n\010log_line\030\002 \001(\t\022\020\n\010progres"
     "s\030\003 \001(\002\022\023\n\013is_finished\030\004 \001(\010\022+\n\010def_file"
     "\030\005 \001(\0132\031.acutesim.worker.FileData\022+\n\010gds"
-    "_file\030\006 \001(\0132\031.acutesim.worker.FileData\"n"
-    "\n\021SimulationRequest\022\016\n\006job_id\030\001 \001(\t\022/\n\014s"
-    "ource_files\030\002 \003(\0132\031.acutesim.worker.File"
-    "Data\022\030\n\020testbench_module\030\003 \001(\t\"Y\n\rSimula"
-    "tionLog\022\016\n\006job_id\030\001 \001(\t\022\020\n\010log_line\030\002 \001("
-    "\t\022\023\n\013is_finished\030\003 \001(\010\022\021\n\tvcd_chunk\030\004 \001("
-    "\0142\324\002\n\rWorkerService\022L\n\tGetStatus\022\036.acute"
-    "sim.worker.StatusRequest\032\037.acutesim.work"
-    "er.StatusResponse\022R\n\014RunSynthesis\022!.acut"
-    "esim.worker.SynthesisRequest\032\035.acutesim."
-    "worker.SynthesisLog0\001\022J\n\020RunPlaceAndRout"
-    "e\022\033.acutesim.worker.PnRRequest\032\027.acutesi"
-    "m.worker.PnRLog0\001\022U\n\rRunSimulation\022\".acu"
-    "tesim.worker.SimulationRequest\032\036.acutesi"
-    "m.worker.SimulationLog0\001b\006proto3"
+    "_file\030\006 \001(\0132\031.acutesim.worker.FileData\"q"
+    "\n\024HDLSimulationRequest\022\016\n\006job_id\030\001 \001(\t\022/"
+    "\n\014source_files\030\002 \003(\0132\031.acutesim.worker.F"
+    "ileData\022\030\n\020testbench_module\030\003 \001(\t\"\\\n\020HDL"
+    "SimulationLog\022\016\n\006job_id\030\001 \001(\t\022\020\n\010log_lin"
+    "e\030\002 \001(\t\022\023\n\013is_finished\030\003 \001(\010\022\021\n\tvcd_chun"
+    "k\030\004 \001(\014\"\224\002\n\030CircuitSimulationRequest\022\016\n\006"
+    "job_id\030\001 \001(\t\022/\n\014netlist_json\030\002 \001(\0132\031.acu"
+    "tesim.worker.FileData\022\023\n\013solver_mode\030\003 \001"
+    "(\t\022\021\n\tprecision\030\004 \001(\t\022D\n\010analysis\030\005 \001(\0132"
+    "2.acutesim.worker.CircuitSimulationReque"
+    "st.Analysis\032I\n\010Analysis\022\014\n\004type\030\001 \001(\t\022\017\n"
+    "\007t_start\030\002 \001(\001\022\016\n\006t_stop\030\003 \001(\001\022\016\n\006t_step"
+    "\030\004 \001(\001\"c\n\024CircuitSimulationLog\022\016\n\006job_id"
+    "\030\001 \001(\t\022\020\n\010log_line\030\002 \001(\t\022\023\n\013is_finished\030"
+    "\003 \001(\010\022\024\n\014result_chunk\030\004 \001(\014\"_\n\021Regressio"
+    "nRequest\022\016\n\006job_id\030\001 \001(\t\022\022\n\nsuite_name\030\002"
+    " \001(\t\022\023\n\013solver_mode\030\003 \001(\t\022\021\n\tprecision\030\004"
+    " \001(\t\"}\n\rRegressionLog\022\016\n\006job_id\030\001 \001(\t\022\020\n"
+    "\010log_line\030\002 \001(\t\022\020\n\010is_error\030\003 \001(\010\022\023\n\013is_"
+    "finished\030\004 \001(\010\022\016\n\006passed\030\005 \001(\010\022\023\n\013result"
+    "_json\030\006 \001(\t\"\312\001\n\016SignOffRequest\022\016\n\006job_id"
+    "\030\001 \001(\t\022.\n\013layout_file\030\002 \001(\0132\031.acutesim.w"
+    "orker.FileData\022.\n\013script_file\030\003 \001(\0132\031.ac"
+    "utesim.worker.FileData\022\022\n\ncheck_type\030\004 \001"
+    "(\t\0224\n\021reference_netlist\030\005 \001(\0132\031.acutesim"
+    ".worker.FileData\"\200\001\n\nSignOffLog\022\016\n\006job_i"
+    "d\030\001 \001(\t\022\020\n\010log_line\030\002 \001(\t\022\020\n\010is_error\030\003 "
+    "\001(\010\022\023\n\013is_finished\030\004 \001(\010\022)\n\006report\030\005 \001(\013"
+    "2\031.acutesim.worker.FileData\"\265\001\n\nLVSReque"
+    "st\022\016\n\006job_id\030\001 \001(\t\022.\n\013layout_file\030\002 \001(\0132"
+    "\031.acutesim.worker.FileData\0224\n\021schematic_"
+    "netlist\030\003 \001(\0132\031.acutesim.worker.FileData"
+    "\022\021\n\trule_deck\030\004 \001(\t\022\020\n\010top_cell\030\005 \001(\t\022\014\n"
+    "\004mode\030\006 \001(\t\"\266\001\n\nPEXRequest\022\016\n\006job_id\030\001 \001"
+    "(\t\022.\n\013layout_file\030\002 \001(\0132\031.acutesim.worke"
+    "r.FileData\022,\n\ttech_file\030\003 \001(\0132\031.acutesim"
+    ".worker.FileData\022\023\n\013output_spef\030\004 \001(\t\022\025\n"
+    "\rcoupling_caps\030\005 \001(\010\022\016\n\006engine\030\006 \001(\t\"\267\001\n"
+    "\020GDSExportRequest\022\016\n\006job_id\030\001 \001(\t\022-\n\ninp"
+    "ut_file\030\002 \001(\0132\031.acutesim.worker.FileData"
+    "\022,\n\ttech_file\030\003 \001(\0132\031.acutesim.worker.Fi"
+    "leData\022\022\n\noutput_gds\030\004 \001(\t\022\020\n\010top_cell\030\005"
+    " \001(\t\022\020\n\010compress\030\006 \001(\0102\314\006\n\rWorkerService"
+    "\022L\n\tGetStatus\022\036.acutesim.worker.StatusRe"
+    "quest\032\037.acutesim.worker.StatusResponse\022R"
+    "\n\014RunSynthesis\022!.acutesim.worker.Synthes"
+    "isRequest\032\035.acutesim.worker.SynthesisLog"
+    "0\001\022J\n\020RunPlaceAndRoute\022\033.acutesim.worker"
+    ".PnRRequest\032\027.acutesim.worker.PnRLog0\001\022^"
+    "\n\020RunHDLSimulation\022%.acutesim.worker.HDL"
+    "SimulationRequest\032!.acutesim.worker.HDLS"
+    "imulationLog0\001\022j\n\024RunCircuitSimulation\022)"
+    ".acutesim.worker.CircuitSimulationReques"
+    "t\032%.acutesim.worker.CircuitSimulationLog"
+    "0\001\022L\n\nRunSignOff\022\037.acutesim.worker.SignO"
+    "ffRequest\032\033.acutesim.worker.SignOffLog0\001"
+    "\022D\n\006RunLVS\022\033.acutesim.worker.LVSRequest\032"
+    "\033.acutesim.worker.SignOffLog0\001\022D\n\006RunPEX"
+    "\022\033.acutesim.worker.PEXRequest\032\033.acutesim"
+    ".worker.SignOffLog0\001\022P\n\014RunGDSExport\022!.a"
+    "cutesim.worker.GDSExportRequest\032\033.acutes"
+    "im.worker.SignOffLog0\001\022U\n\rRunRegression\022"
+    "\".acutesim.worker.RegressionRequest\032\036.ac"
+    "utesim.worker.RegressionLog0\001b\006proto3"
 };
 static ::absl::once_flag descriptor_table_worker_5fservice_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_worker_5fservice_2eproto = {
     false,
     false,
-    1672,
+    3757,
     descriptor_table_protodef_worker_5fservice_2eproto,
     "worker_service.proto",
     &descriptor_table_worker_5fservice_2eproto_once,
     nullptr,
     0,
-    11,
+    22,
     schemas,
     file_default_instances,
     TableStruct_worker_5fservice_2eproto::offsets,
@@ -695,6 +1273,104 @@ StatusRequest::_table_ = {
 }
 // ===================================================================
 
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+StatusResponse_ToolsEntry_DoNotUse::StatusResponse_ToolsEntry_DoNotUse()
+    : SuperType(StatusResponse_ToolsEntry_DoNotUse_class_data_.base()) {}
+StatusResponse_ToolsEntry_DoNotUse::StatusResponse_ToolsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, StatusResponse_ToolsEntry_DoNotUse_class_data_.base()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+StatusResponse_ToolsEntry_DoNotUse::StatusResponse_ToolsEntry_DoNotUse() : SuperType() {}
+StatusResponse_ToolsEntry_DoNotUse::StatusResponse_ToolsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+inline void* PROTOBUF_NONNULL StatusResponse_ToolsEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) StatusResponse_ToolsEntry_DoNotUse(arena);
+}
+constexpr auto StatusResponse_ToolsEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(StatusResponse_ToolsEntry_DoNotUse),
+                                            alignof(StatusResponse_ToolsEntry_DoNotUse));
+}
+constexpr auto StatusResponse_ToolsEntry_DoNotUse::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_StatusResponse_ToolsEntry_DoNotUse_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &StatusResponse_ToolsEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<StatusResponse_ToolsEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &StatusResponse_ToolsEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&StatusResponse_ToolsEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(StatusResponse_ToolsEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+      &StatusResponse_ToolsEntry_DoNotUse::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull StatusResponse_ToolsEntry_DoNotUse_class_data_ =
+        StatusResponse_ToolsEntry_DoNotUse::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+StatusResponse_ToolsEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&StatusResponse_ToolsEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(StatusResponse_ToolsEntry_DoNotUse_class_data_.tc_table);
+  return StatusResponse_ToolsEntry_DoNotUse_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<1, 2, 0, 58, 2>
+StatusResponse_ToolsEntry_DoNotUse::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(StatusResponse_ToolsEntry_DoNotUse, _impl_._has_bits_),
+    0, // no _extensions_
+    2, 8,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967292,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    2,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    StatusResponse_ToolsEntry_DoNotUse_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::StatusResponse_ToolsEntry_DoNotUse>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // string value = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(StatusResponse_ToolsEntry_DoNotUse, _impl_.value_)}},
+    // string key = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(StatusResponse_ToolsEntry_DoNotUse, _impl_.key_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string key = 1;
+    {PROTOBUF_FIELD_OFFSET(StatusResponse_ToolsEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string value = 2;
+    {PROTOBUF_FIELD_OFFSET(StatusResponse_ToolsEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  // no aux_entries
+  {{
+    "\51\3\5\0\0\0\0\0"
+    "acutesim.worker.StatusResponse.ToolsEntry"
+    "key"
+    "value"
+  }},
+};
+// ===================================================================
+
 class StatusResponse::_Internal {
  public:
   using HasBits =
@@ -718,9 +1394,9 @@ PROTOBUF_NDEBUG_INLINE StatusResponse::Impl_::Impl_(
     [[maybe_unused]] const ::acutesim::worker::StatusResponse& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        supported_tools_{visibility, arena, from.supported_tools_},
         worker_id_(arena, from.worker_id_),
-        version_(arena, from.version_) {}
+        version_(arena, from.version_),
+        tools_{visibility, arena, from.tools_} {}
 
 StatusResponse::StatusResponse(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -749,9 +1425,9 @@ PROTOBUF_NDEBUG_INLINE StatusResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        supported_tools_{visibility, arena},
         worker_id_(arena),
-        version_(arena) {}
+        version_(arena),
+        tools_{visibility, arena} {}
 
 inline void StatusResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -785,8 +1461,8 @@ inline void* PROTOBUF_NONNULL StatusResponse::PlacementNew_(
 }
 constexpr auto StatusResponse::InternalNewImpl_() {
   constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
-      PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.supported_tools_) +
-          decltype(StatusResponse::_impl_.supported_tools_)::
+      PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.tools_) +
+          decltype(StatusResponse::_impl_.tools_)::
               InternalGetArenaOffset(
                   ::google::protobuf::Message::internal_visibility()),
   });
@@ -833,7 +1509,7 @@ StatusResponse::GetClassData() const {
   return StatusResponse_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<3, 6, 0, 70, 2>
+const ::_pbi::TcParseTable<3, 6, 1, 60, 2>
 StatusResponse::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_._has_bits_),
@@ -843,8 +1519,8 @@ StatusResponse::_table_ = {
     4294967232,  // skipmap
     offsetof(decltype(_table_), field_entries),
     6,  // num_field_entries
-    0,  // num_aux_entries
-    offsetof(decltype(_table_), field_names),  // no aux_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
     StatusResponse_class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
@@ -855,52 +1531,52 @@ StatusResponse::_table_ = {
     {::_pbi::TcParser::MiniParse, {}},
     // string worker_id = 1;
     {::_pbi::TcParser::FastUS1,
-     {10, 1, 0,
+     {10, 0, 0,
       PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.worker_id_)}},
     // string version = 2;
     {::_pbi::TcParser::FastUS1,
-     {18, 2, 0,
+     {18, 1, 0,
       PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.version_)}},
     // bool ready = 3;
-    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(StatusResponse, _impl_.ready_), 5>(),
-     {24, 5, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(StatusResponse, _impl_.ready_), 4>(),
+     {24, 4, 0,
       PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.ready_)}},
     // double cpu_usage = 4;
     {::_pbi::TcParser::FastF64S1,
-     {33, 3, 0,
+     {33, 2, 0,
       PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.cpu_usage_)}},
     // double memory_usage = 5;
     {::_pbi::TcParser::FastF64S1,
-     {41, 4, 0,
+     {41, 3, 0,
       PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.memory_usage_)}},
-    // repeated string supported_tools = 6;
-    {::_pbi::TcParser::FastUR1,
-     {50, 0, 0,
-      PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.supported_tools_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
     // string worker_id = 1;
-    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.worker_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.worker_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // string version = 2;
-    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.version_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.version_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // bool ready = 3;
-    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.ready_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.ready_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     // double cpu_usage = 4;
-    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.cpu_usage_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.cpu_usage_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
     // double memory_usage = 5;
-    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.memory_usage_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
-    // repeated string supported_tools = 6;
-    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.supported_tools_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kUtf8String | ::_fl::kRepSString)},
+    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.memory_usage_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+    // map<string, string> tools = 6;
+    {PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.tools_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
   }},
-  // no aux_entries
   {{
-    "\36\11\7\0\0\0\17\0"
+      {::_pbi::TcParser::GetMapAuxInfo(
+          1, 0, 9, 9, 0)},
+  }},
+  {{
+    "\36\11\7\0\0\0\5\0"
     "acutesim.worker.StatusResponse"
     "worker_id"
     "version"
-    "supported_tools"
+    "tools"
   }},
 };
 PROTOBUF_NOINLINE void StatusResponse::Clear() {
@@ -911,21 +1587,21 @@ PROTOBUF_NOINLINE void StatusResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
-      _impl_.supported_tools_.Clear();
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.worker_id_.ClearNonDefaultToEmpty();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.version_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000038U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
     ::memset(&_impl_.cpu_usage_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.ready_) -
         reinterpret_cast<char*>(&_impl_.cpu_usage_)) + sizeof(_impl_.ready_));
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000020U)) {
+      _impl_.tools_.Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -951,7 +1627,7 @@ PROTOBUF_NOINLINE void StatusResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // string worker_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (!this_._internal_worker_id().empty()) {
       const ::std::string& _s = this_._internal_worker_id();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -961,7 +1637,7 @@ PROTOBUF_NOINLINE void StatusResponse::Clear() {
   }
 
   // string version = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (!this_._internal_version().empty()) {
       const ::std::string& _s = this_._internal_version();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -971,7 +1647,7 @@ PROTOBUF_NOINLINE void StatusResponse::Clear() {
   }
 
   // bool ready = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_ready() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -980,7 +1656,7 @@ PROTOBUF_NOINLINE void StatusResponse::Clear() {
   }
 
   // double cpu_usage = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (::absl::bit_cast<::uint64_t>(this_._internal_cpu_usage()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteDoubleToArray(
@@ -989,7 +1665,7 @@ PROTOBUF_NOINLINE void StatusResponse::Clear() {
   }
 
   // double memory_usage = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (::absl::bit_cast<::uint64_t>(this_._internal_memory_usage()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteDoubleToArray(
@@ -997,13 +1673,38 @@ PROTOBUF_NOINLINE void StatusResponse::Clear() {
     }
   }
 
-  // repeated string supported_tools = 6;
-  if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
-    for (int i = 0, n = this_._internal_supported_tools_size(); i < n; ++i) {
-      const auto& s = this_._internal_supported_tools().Get(i);
-      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          s.data(), static_cast<int>(s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.StatusResponse.supported_tools");
-      target = stream->WriteString(6, s, target);
+  // map<string, string> tools = 6;
+  if (CheckHasBitForRepeated(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_tools().empty()) {
+      using MapType = ::google::protobuf::Map<::std::string, ::std::string>;
+      using WireHelper = _pbi::MapEntryFuncs<::std::string, ::std::string,
+                                     _pbi::WireFormatLite::TYPE_STRING,
+                                     _pbi::WireFormatLite::TYPE_STRING>;
+      const auto& field = this_._internal_tools();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterPtr<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              6, entry.first, entry.second, target, stream);
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.StatusResponse.tools");
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.second.data(), static_cast<int>(entry.second.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.StatusResponse.tools");
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              6, entry.first, entry.second, target, stream);
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.StatusResponse.tools");
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.second.data(), static_cast<int>(entry.second.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.StatusResponse.tools");
+        }
+      }
     }
   }
 
@@ -1033,45 +1734,46 @@ PROTOBUF_NOINLINE void StatusResponse::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    // repeated string supported_tools = 6;
-    if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
-      total_size +=
-          1 * ::google::protobuf::internal::FromIntSize(this_._internal_supported_tools().size());
-      for (int i = 0, n = this_._internal_supported_tools().size(); i < n; ++i) {
-        total_size += ::google::protobuf::internal::WireFormatLite::StringSize(
-            this_._internal_supported_tools().Get(i));
-      }
-    }
     // string worker_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_worker_id().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_worker_id());
       }
     }
     // string version = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!this_._internal_version().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_version());
       }
     }
     // double cpu_usage = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (::absl::bit_cast<::uint64_t>(this_._internal_cpu_usage()) != 0) {
         total_size += 9;
       }
     }
     // double memory_usage = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (::absl::bit_cast<::uint64_t>(this_._internal_memory_usage()) != 0) {
         total_size += 9;
       }
     }
     // bool ready = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_ready() != 0) {
         total_size += 2;
+      }
+    }
+    // map<string, string> tools = 6;
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000020U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_tools_size());
+      for (const auto& entry : this_._internal_tools()) {
+        total_size += _pbi::MapEntryFuncs<::std::string, ::std::string,
+                                       _pbi::WireFormatLite::TYPE_STRING,
+                                       _pbi::WireFormatLite::TYPE_STRING>::ByteSizeLong(entry.first, entry.second);
       }
     }
   }
@@ -1087,7 +1789,6 @@ void StatusResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     from.CheckHasBitConsistency();
   }
-  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.StatusResponse)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
@@ -1095,12 +1796,7 @@ void StatusResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
 
   cached_has_bits = from._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    if (CheckHasBitForRepeated(cached_has_bits, 0x00000001U)) {
-      _this->_internal_mutable_supported_tools()->InternalMergeFromWithArena(
-          ::google::protobuf::MessageLite::internal_visibility(), arena,
-          from._internal_supported_tools());
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_worker_id().empty()) {
         _this->_internal_set_worker_id(from._internal_worker_id());
       } else {
@@ -1109,7 +1805,7 @@ void StatusResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (!from._internal_version().empty()) {
         _this->_internal_set_version(from._internal_version());
       } else {
@@ -1118,20 +1814,23 @@ void StatusResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (::absl::bit_cast<::uint64_t>(from._internal_cpu_usage()) != 0) {
         _this->_impl_.cpu_usage_ = from._impl_.cpu_usage_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (::absl::bit_cast<::uint64_t>(from._internal_memory_usage()) != 0) {
         _this->_impl_.memory_usage_ = from._impl_.memory_usage_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_ready() != 0) {
         _this->_impl_.ready_ = from._impl_.ready_;
       }
+    }
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00000020U)) {
+      _this->_impl_.tools_.MergeFrom(from._impl_.tools_);
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1153,7 +1852,6 @@ void StatusResponse::InternalSwap(StatusResponse* PROTOBUF_RESTRICT PROTOBUF_NON
   ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  _impl_.supported_tools_.InternalSwap(&other->_impl_.supported_tools_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.worker_id_, &other->_impl_.worker_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.version_, &other->_impl_.version_, arena);
   ::google::protobuf::internal::memswap<
@@ -1162,6 +1860,7 @@ void StatusResponse::InternalSwap(StatusResponse* PROTOBUF_RESTRICT PROTOBUF_NON
       - PROTOBUF_FIELD_OFFSET(StatusResponse, _impl_.cpu_usage_)>(
           reinterpret_cast<char*>(&_impl_.cpu_usage_),
           reinterpret_cast<char*>(&other->_impl_.cpu_usage_));
+  _impl_.tools_.InternalSwap(&other->_impl_.tools_);
 }
 
 ::google::protobuf::Metadata StatusResponse::GetMetadata() const {
@@ -3982,50 +4681,50 @@ void PnRLog::InternalSwap(PnRLog* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
 }
 // ===================================================================
 
-class SimulationRequest::_Internal {
+class HDLSimulationRequest::_Internal {
  public:
   using HasBits =
-      decltype(::std::declval<SimulationRequest>()._impl_._has_bits_);
+      decltype(::std::declval<HDLSimulationRequest>()._impl_._has_bits_);
   static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_._has_bits_);
+      8 * PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_._has_bits_);
 };
 
-SimulationRequest::SimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+HDLSimulationRequest::HDLSimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, SimulationRequest_class_data_.base()) {
+    : ::google::protobuf::Message(arena, HDLSimulationRequest_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
   SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:acutesim.worker.SimulationRequest)
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.HDLSimulationRequest)
 }
-PROTOBUF_NDEBUG_INLINE SimulationRequest::Impl_::Impl_(
+PROTOBUF_NDEBUG_INLINE HDLSimulationRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    [[maybe_unused]] const ::acutesim::worker::SimulationRequest& from_msg)
+    [[maybe_unused]] const ::acutesim::worker::HDLSimulationRequest& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         source_files_{visibility, arena, from.source_files_},
         job_id_(arena, from.job_id_),
         testbench_module_(arena, from.testbench_module_) {}
 
-SimulationRequest::SimulationRequest(
+HDLSimulationRequest::HDLSimulationRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const SimulationRequest& from)
+    const HDLSimulationRequest& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, SimulationRequest_class_data_.base()) {
+    : ::google::protobuf::Message(arena, HDLSimulationRequest_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  SimulationRequest* const _this = this;
+  HDLSimulationRequest* const _this = this;
   (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
 
-  // @@protoc_insertion_point(copy_constructor:acutesim.worker.SimulationRequest)
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.HDLSimulationRequest)
 }
-PROTOBUF_NDEBUG_INLINE SimulationRequest::Impl_::Impl_(
+PROTOBUF_NDEBUG_INLINE HDLSimulationRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
@@ -4033,15 +4732,15 @@ PROTOBUF_NDEBUG_INLINE SimulationRequest::Impl_::Impl_(
         job_id_(arena),
         testbench_module_(arena) {}
 
-inline void SimulationRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+inline void HDLSimulationRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
 }
-SimulationRequest::~SimulationRequest() {
-  // @@protoc_insertion_point(destructor:acutesim.worker.SimulationRequest)
+HDLSimulationRequest::~HDLSimulationRequest() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.HDLSimulationRequest)
   SharedDtor(*this);
 }
-inline void SimulationRequest::SharedDtor(MessageLite& self) {
-  SimulationRequest& this_ = static_cast<SimulationRequest&>(self);
+inline void HDLSimulationRequest::SharedDtor(MessageLite& self) {
+  HDLSimulationRequest& this_ = static_cast<HDLSimulationRequest&>(self);
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     this_.CheckHasBitConsistency();
   }
@@ -4052,65 +4751,65 @@ inline void SimulationRequest::SharedDtor(MessageLite& self) {
   this_._impl_.~Impl_();
 }
 
-inline void* PROTOBUF_NONNULL SimulationRequest::PlacementNew_(
+inline void* PROTOBUF_NONNULL HDLSimulationRequest::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) SimulationRequest(arena);
+  return ::new (mem) HDLSimulationRequest(arena);
 }
-constexpr auto SimulationRequest::InternalNewImpl_() {
+constexpr auto HDLSimulationRequest::InternalNewImpl_() {
   constexpr auto arena_bits = ::google::protobuf::internal::EncodePlacementArenaOffsets({
-      PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_.source_files_) +
-          decltype(SimulationRequest::_impl_.source_files_)::
+      PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_.source_files_) +
+          decltype(HDLSimulationRequest::_impl_.source_files_)::
               InternalGetArenaOffset(
                   ::google::protobuf::Message::internal_visibility()),
   });
   if (arena_bits.has_value()) {
     return ::google::protobuf::internal::MessageCreator::CopyInit(
-        sizeof(SimulationRequest), alignof(SimulationRequest), *arena_bits);
+        sizeof(HDLSimulationRequest), alignof(HDLSimulationRequest), *arena_bits);
   } else {
-    return ::google::protobuf::internal::MessageCreator(&SimulationRequest::PlacementNew_,
-                                 sizeof(SimulationRequest),
-                                 alignof(SimulationRequest));
+    return ::google::protobuf::internal::MessageCreator(&HDLSimulationRequest::PlacementNew_,
+                                 sizeof(HDLSimulationRequest),
+                                 alignof(HDLSimulationRequest));
   }
 }
-constexpr auto SimulationRequest::InternalGenerateClassData_() {
+constexpr auto HDLSimulationRequest::InternalGenerateClassData_() {
   return ::google::protobuf::internal::ClassDataFull{
       ::google::protobuf::internal::ClassData{
-          &_SimulationRequest_default_instance_._instance,
+          &_HDLSimulationRequest_default_instance_._instance,
           &_table_.header,
           nullptr,  // OnDemandRegisterArenaDtor
           nullptr,  // IsInitialized
-          &SimulationRequest::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<SimulationRequest>(),
+          &HDLSimulationRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<HDLSimulationRequest>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-          &SimulationRequest::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<SimulationRequest>(), &SimulationRequest::ByteSizeLong,
-              &SimulationRequest::_InternalSerialize,
+          &HDLSimulationRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<HDLSimulationRequest>(), &HDLSimulationRequest::ByteSizeLong,
+              &HDLSimulationRequest::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_._cached_size_),
+          PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_._cached_size_),
           false,
       },
-      &SimulationRequest::kDescriptorMethods,
+      &HDLSimulationRequest::kDescriptorMethods,
       &descriptor_table_worker_5fservice_2eproto,
       nullptr,  // tracker
   };
 }
 
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull SimulationRequest_class_data_ =
-        SimulationRequest::InternalGenerateClassData_();
+    ::google::protobuf::internal::ClassDataFull HDLSimulationRequest_class_data_ =
+        HDLSimulationRequest::InternalGenerateClassData_();
 
 PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-SimulationRequest::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&SimulationRequest_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(SimulationRequest_class_data_.tc_table);
-  return SimulationRequest_class_data_.base();
+HDLSimulationRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&HDLSimulationRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(HDLSimulationRequest_class_data_.tc_table);
+  return HDLSimulationRequest_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 3, 1, 64, 2>
-SimulationRequest::_table_ = {
+const ::_pbi::TcParseTable<2, 3, 1, 67, 2>
+HDLSimulationRequest::_table_ = {
   {
-    PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_._has_bits_),
+    PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_._has_bits_),
     0, // no _extensions_
     3, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
@@ -4119,48 +4818,48 @@ SimulationRequest::_table_ = {
     3,  // num_field_entries
     1,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
-    SimulationRequest_class_data_.base(),
+    HDLSimulationRequest_class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
     #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-    ::_pbi::TcParser::GetTable<::acutesim::worker::SimulationRequest>(),  // to_prefetch
+    ::_pbi::TcParser::GetTable<::acutesim::worker::HDLSimulationRequest>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
     {::_pbi::TcParser::MiniParse, {}},
     // string job_id = 1;
     {::_pbi::TcParser::FastUS1,
      {10, 1, 0,
-      PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_.job_id_)}},
+      PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_.job_id_)}},
     // repeated .acutesim.worker.FileData source_files = 2;
     {::_pbi::TcParser::FastMtR1,
      {18, 0, 0,
-      PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_.source_files_)}},
+      PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_.source_files_)}},
     // string testbench_module = 3;
     {::_pbi::TcParser::FastUS1,
      {26, 2, 0,
-      PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_.testbench_module_)}},
+      PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_.testbench_module_)}},
   }}, {{
     65535, 65535
   }}, {{
     // string job_id = 1;
-    {PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_.job_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    {PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_.job_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // repeated .acutesim.worker.FileData source_files = 2;
-    {PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_.source_files_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    {PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_.source_files_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     // string testbench_module = 3;
-    {PROTOBUF_FIELD_OFFSET(SimulationRequest, _impl_.testbench_module_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    {PROTOBUF_FIELD_OFFSET(HDLSimulationRequest, _impl_.testbench_module_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
   }},
   {{
-    "\41\6\0\20\0\0\0\0"
-    "acutesim.worker.SimulationRequest"
+    "\44\6\0\20\0\0\0\0"
+    "acutesim.worker.HDLSimulationRequest"
     "job_id"
     "testbench_module"
   }},
 };
-PROTOBUF_NOINLINE void SimulationRequest::Clear() {
-// @@protoc_insertion_point(message_clear_start:acutesim.worker.SimulationRequest)
+PROTOBUF_NOINLINE void HDLSimulationRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.HDLSimulationRequest)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   ::uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
@@ -4183,20 +4882,20 @@ PROTOBUF_NOINLINE void SimulationRequest::Clear() {
 }
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL SimulationRequest::_InternalSerialize(
+::uint8_t* PROTOBUF_NONNULL HDLSimulationRequest::_InternalSerialize(
     const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
     ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const SimulationRequest& this_ = static_cast<const SimulationRequest&>(base);
+  const HDLSimulationRequest& this_ = static_cast<const HDLSimulationRequest&>(base);
 #else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL SimulationRequest::_InternalSerialize(
+::uint8_t* PROTOBUF_NONNULL HDLSimulationRequest::_InternalSerialize(
     ::uint8_t* PROTOBUF_NONNULL target,
     ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const SimulationRequest& this_ = *this;
+  const HDLSimulationRequest& this_ = *this;
 #endif  // PROTOBUF_CUSTOM_VTABLE
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     this_.CheckHasBitConsistency();
   }
-  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.SimulationRequest)
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.HDLSimulationRequest)
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
@@ -4206,7 +4905,7 @@ PROTOBUF_NOINLINE void SimulationRequest::Clear() {
     if (!this_._internal_job_id().empty()) {
       const ::std::string& _s = this_._internal_job_id();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.SimulationRequest.job_id");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.HDLSimulationRequest.job_id");
       target = stream->WriteStringMaybeAliased(1, _s, target);
     }
   }
@@ -4229,7 +4928,7 @@ PROTOBUF_NOINLINE void SimulationRequest::Clear() {
     if (!this_._internal_testbench_module().empty()) {
       const ::std::string& _s = this_._internal_testbench_module();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.SimulationRequest.testbench_module");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.HDLSimulationRequest.testbench_module");
       target = stream->WriteStringMaybeAliased(3, _s, target);
     }
   }
@@ -4239,18 +4938,18 @@ PROTOBUF_NOINLINE void SimulationRequest::Clear() {
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
             this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
   }
-  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.SimulationRequest)
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.HDLSimulationRequest)
   return target;
 }
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t SimulationRequest::ByteSizeLong(const MessageLite& base) {
-  const SimulationRequest& this_ = static_cast<const SimulationRequest&>(base);
+::size_t HDLSimulationRequest::ByteSizeLong(const MessageLite& base) {
+  const HDLSimulationRequest& this_ = static_cast<const HDLSimulationRequest&>(base);
 #else   // PROTOBUF_CUSTOM_VTABLE
-::size_t SimulationRequest::ByteSizeLong() const {
-  const SimulationRequest& this_ = *this;
+::size_t HDLSimulationRequest::ByteSizeLong() const {
+  const HDLSimulationRequest& this_ = *this;
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.SimulationRequest)
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.HDLSimulationRequest)
   ::size_t total_size = 0;
 
   ::uint32_t cached_has_bits = 0;
@@ -4286,16 +4985,16 @@ PROTOBUF_NOINLINE void SimulationRequest::Clear() {
                                              &this_._impl_._cached_size_);
 }
 
-void SimulationRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+void HDLSimulationRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
                             const ::google::protobuf::MessageLite& from_msg) {
    auto* const _this =
-      static_cast<SimulationRequest*>(&to_msg);
-  auto& from = static_cast<const SimulationRequest&>(from_msg);
+      static_cast<HDLSimulationRequest*>(&to_msg);
+  auto& from = static_cast<const HDLSimulationRequest&>(from_msg);
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     from.CheckHasBitConsistency();
   }
   ::google::protobuf::Arena* arena = _this->GetArena();
-  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.SimulationRequest)
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.HDLSimulationRequest)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
@@ -4331,15 +5030,15 @@ void SimulationRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       from._internal_metadata_);
 }
 
-void SimulationRequest::CopyFrom(const SimulationRequest& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.SimulationRequest)
+void HDLSimulationRequest::CopyFrom(const HDLSimulationRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.HDLSimulationRequest)
   if (&from == this) return;
   Clear();
   MergeFrom(from);
 }
 
 
-void SimulationRequest::InternalSwap(SimulationRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+void HDLSimulationRequest::InternalSwap(HDLSimulationRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   auto* arena = GetArena();
   ABSL_DCHECK_EQ(arena, other->GetArena());
@@ -4350,56 +5049,56 @@ void SimulationRequest::InternalSwap(SimulationRequest* PROTOBUF_RESTRICT PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.testbench_module_, &other->_impl_.testbench_module_, arena);
 }
 
-::google::protobuf::Metadata SimulationRequest::GetMetadata() const {
+::google::protobuf::Metadata HDLSimulationRequest::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
 
-class SimulationLog::_Internal {
+class HDLSimulationLog::_Internal {
  public:
   using HasBits =
-      decltype(::std::declval<SimulationLog>()._impl_._has_bits_);
+      decltype(::std::declval<HDLSimulationLog>()._impl_._has_bits_);
   static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_._has_bits_);
+      8 * PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_._has_bits_);
 };
 
-SimulationLog::SimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+HDLSimulationLog::HDLSimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, SimulationLog_class_data_.base()) {
+    : ::google::protobuf::Message(arena, HDLSimulationLog_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
   SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:acutesim.worker.SimulationLog)
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.HDLSimulationLog)
 }
-PROTOBUF_NDEBUG_INLINE SimulationLog::Impl_::Impl_(
+PROTOBUF_NDEBUG_INLINE HDLSimulationLog::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    [[maybe_unused]] const ::acutesim::worker::SimulationLog& from_msg)
+    [[maybe_unused]] const ::acutesim::worker::HDLSimulationLog& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         job_id_(arena, from.job_id_),
         log_line_(arena, from.log_line_),
         vcd_chunk_(arena, from.vcd_chunk_) {}
 
-SimulationLog::SimulationLog(
+HDLSimulationLog::HDLSimulationLog(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const SimulationLog& from)
+    const HDLSimulationLog& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, SimulationLog_class_data_.base()) {
+    : ::google::protobuf::Message(arena, HDLSimulationLog_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
     : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  SimulationLog* const _this = this;
+  HDLSimulationLog* const _this = this;
   (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   _impl_.is_finished_ = from._impl_.is_finished_;
 
-  // @@protoc_insertion_point(copy_constructor:acutesim.worker.SimulationLog)
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.HDLSimulationLog)
 }
-PROTOBUF_NDEBUG_INLINE SimulationLog::Impl_::Impl_(
+PROTOBUF_NDEBUG_INLINE HDLSimulationLog::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
@@ -4407,16 +5106,16 @@ PROTOBUF_NDEBUG_INLINE SimulationLog::Impl_::Impl_(
         log_line_(arena),
         vcd_chunk_(arena) {}
 
-inline void SimulationLog::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+inline void HDLSimulationLog::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   _impl_.is_finished_ = {};
 }
-SimulationLog::~SimulationLog() {
-  // @@protoc_insertion_point(destructor:acutesim.worker.SimulationLog)
+HDLSimulationLog::~HDLSimulationLog() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.HDLSimulationLog)
   SharedDtor(*this);
 }
-inline void SimulationLog::SharedDtor(MessageLite& self) {
-  SimulationLog& this_ = static_cast<SimulationLog&>(self);
+inline void HDLSimulationLog::SharedDtor(MessageLite& self) {
+  HDLSimulationLog& this_ = static_cast<HDLSimulationLog&>(self);
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     this_.CheckHasBitConsistency();
   }
@@ -4428,53 +5127,53 @@ inline void SimulationLog::SharedDtor(MessageLite& self) {
   this_._impl_.~Impl_();
 }
 
-inline void* PROTOBUF_NONNULL SimulationLog::PlacementNew_(
+inline void* PROTOBUF_NONNULL HDLSimulationLog::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) SimulationLog(arena);
+  return ::new (mem) HDLSimulationLog(arena);
 }
-constexpr auto SimulationLog::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SimulationLog),
-                                            alignof(SimulationLog));
+constexpr auto HDLSimulationLog::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(HDLSimulationLog),
+                                            alignof(HDLSimulationLog));
 }
-constexpr auto SimulationLog::InternalGenerateClassData_() {
+constexpr auto HDLSimulationLog::InternalGenerateClassData_() {
   return ::google::protobuf::internal::ClassDataFull{
       ::google::protobuf::internal::ClassData{
-          &_SimulationLog_default_instance_._instance,
+          &_HDLSimulationLog_default_instance_._instance,
           &_table_.header,
           nullptr,  // OnDemandRegisterArenaDtor
           nullptr,  // IsInitialized
-          &SimulationLog::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<SimulationLog>(),
+          &HDLSimulationLog::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<HDLSimulationLog>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-          &SimulationLog::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<SimulationLog>(), &SimulationLog::ByteSizeLong,
-              &SimulationLog::_InternalSerialize,
+          &HDLSimulationLog::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<HDLSimulationLog>(), &HDLSimulationLog::ByteSizeLong,
+              &HDLSimulationLog::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_._cached_size_),
+          PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_._cached_size_),
           false,
       },
-      &SimulationLog::kDescriptorMethods,
+      &HDLSimulationLog::kDescriptorMethods,
       &descriptor_table_worker_5fservice_2eproto,
       nullptr,  // tracker
   };
 }
 
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull SimulationLog_class_data_ =
-        SimulationLog::InternalGenerateClassData_();
+    ::google::protobuf::internal::ClassDataFull HDLSimulationLog_class_data_ =
+        HDLSimulationLog::InternalGenerateClassData_();
 
 PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-SimulationLog::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&SimulationLog_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(SimulationLog_class_data_.tc_table);
-  return SimulationLog_class_data_.base();
+HDLSimulationLog::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&HDLSimulationLog_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(HDLSimulationLog_class_data_.tc_table);
+  return HDLSimulationLog_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 4, 0, 52, 2>
-SimulationLog::_table_ = {
+const ::_pbi::TcParseTable<2, 4, 0, 55, 2>
+HDLSimulationLog::_table_ = {
   {
-    PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_._has_bits_),
+    PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_._has_bits_),
     0, // no _extensions_
     4, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
@@ -4483,51 +5182,51 @@ SimulationLog::_table_ = {
     4,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
-    SimulationLog_class_data_.base(),
+    HDLSimulationLog_class_data_.base(),
     nullptr,  // post_loop_handler
     ::_pbi::TcParser::GenericFallback,  // fallback
     #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-    ::_pbi::TcParser::GetTable<::acutesim::worker::SimulationLog>(),  // to_prefetch
+    ::_pbi::TcParser::GetTable<::acutesim::worker::HDLSimulationLog>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
     // bytes vcd_chunk = 4;
     {::_pbi::TcParser::FastBS1,
      {34, 2, 0,
-      PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_.vcd_chunk_)}},
+      PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_.vcd_chunk_)}},
     // string job_id = 1;
     {::_pbi::TcParser::FastUS1,
      {10, 0, 0,
-      PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_.job_id_)}},
+      PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_.job_id_)}},
     // string log_line = 2;
     {::_pbi::TcParser::FastUS1,
      {18, 1, 0,
-      PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_.log_line_)}},
+      PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_.log_line_)}},
     // bool is_finished = 3;
-    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SimulationLog, _impl_.is_finished_), 3>(),
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(HDLSimulationLog, _impl_.is_finished_), 3>(),
      {24, 3, 0,
-      PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_.is_finished_)}},
+      PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_.is_finished_)}},
   }}, {{
     65535, 65535
   }}, {{
     // string job_id = 1;
-    {PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    {PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // string log_line = 2;
-    {PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_.log_line_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    {PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_.log_line_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // bool is_finished = 3;
-    {PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_.is_finished_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    {PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_.is_finished_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     // bytes vcd_chunk = 4;
-    {PROTOBUF_FIELD_OFFSET(SimulationLog, _impl_.vcd_chunk_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+    {PROTOBUF_FIELD_OFFSET(HDLSimulationLog, _impl_.vcd_chunk_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
   }},
   // no aux_entries
   {{
-    "\35\6\10\0\0\0\0\0"
-    "acutesim.worker.SimulationLog"
+    "\40\6\10\0\0\0\0\0"
+    "acutesim.worker.HDLSimulationLog"
     "job_id"
     "log_line"
   }},
 };
-PROTOBUF_NOINLINE void SimulationLog::Clear() {
-// @@protoc_insertion_point(message_clear_start:acutesim.worker.SimulationLog)
+PROTOBUF_NOINLINE void HDLSimulationLog::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.HDLSimulationLog)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   ::uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
@@ -4551,20 +5250,20 @@ PROTOBUF_NOINLINE void SimulationLog::Clear() {
 }
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL SimulationLog::_InternalSerialize(
+::uint8_t* PROTOBUF_NONNULL HDLSimulationLog::_InternalSerialize(
     const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
     ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const SimulationLog& this_ = static_cast<const SimulationLog&>(base);
+  const HDLSimulationLog& this_ = static_cast<const HDLSimulationLog&>(base);
 #else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL SimulationLog::_InternalSerialize(
+::uint8_t* PROTOBUF_NONNULL HDLSimulationLog::_InternalSerialize(
     ::uint8_t* PROTOBUF_NONNULL target,
     ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const SimulationLog& this_ = *this;
+  const HDLSimulationLog& this_ = *this;
 #endif  // PROTOBUF_CUSTOM_VTABLE
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     this_.CheckHasBitConsistency();
   }
-  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.SimulationLog)
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.HDLSimulationLog)
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
@@ -4574,7 +5273,7 @@ PROTOBUF_NOINLINE void SimulationLog::Clear() {
     if (!this_._internal_job_id().empty()) {
       const ::std::string& _s = this_._internal_job_id();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.SimulationLog.job_id");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.HDLSimulationLog.job_id");
       target = stream->WriteStringMaybeAliased(1, _s, target);
     }
   }
@@ -4584,7 +5283,7 @@ PROTOBUF_NOINLINE void SimulationLog::Clear() {
     if (!this_._internal_log_line().empty()) {
       const ::std::string& _s = this_._internal_log_line();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.SimulationLog.log_line");
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.HDLSimulationLog.log_line");
       target = stream->WriteStringMaybeAliased(2, _s, target);
     }
   }
@@ -4611,18 +5310,18 @@ PROTOBUF_NOINLINE void SimulationLog::Clear() {
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
             this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
   }
-  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.SimulationLog)
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.HDLSimulationLog)
   return target;
 }
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t SimulationLog::ByteSizeLong(const MessageLite& base) {
-  const SimulationLog& this_ = static_cast<const SimulationLog&>(base);
+::size_t HDLSimulationLog::ByteSizeLong(const MessageLite& base) {
+  const HDLSimulationLog& this_ = static_cast<const HDLSimulationLog&>(base);
 #else   // PROTOBUF_CUSTOM_VTABLE
-::size_t SimulationLog::ByteSizeLong() const {
-  const SimulationLog& this_ = *this;
+::size_t HDLSimulationLog::ByteSizeLong() const {
+  const HDLSimulationLog& this_ = *this;
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.SimulationLog)
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.HDLSimulationLog)
   ::size_t total_size = 0;
 
   ::uint32_t cached_has_bits = 0;
@@ -4664,15 +5363,15 @@ PROTOBUF_NOINLINE void SimulationLog::Clear() {
                                              &this_._impl_._cached_size_);
 }
 
-void SimulationLog::MergeImpl(::google::protobuf::MessageLite& to_msg,
+void HDLSimulationLog::MergeImpl(::google::protobuf::MessageLite& to_msg,
                             const ::google::protobuf::MessageLite& from_msg) {
    auto* const _this =
-      static_cast<SimulationLog*>(&to_msg);
-  auto& from = static_cast<const SimulationLog&>(from_msg);
+      static_cast<HDLSimulationLog*>(&to_msg);
+  auto& from = static_cast<const HDLSimulationLog&>(from_msg);
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     from.CheckHasBitConsistency();
   }
-  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.SimulationLog)
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.HDLSimulationLog)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
@@ -4717,15 +5416,15 @@ void SimulationLog::MergeImpl(::google::protobuf::MessageLite& to_msg,
       from._internal_metadata_);
 }
 
-void SimulationLog::CopyFrom(const SimulationLog& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.SimulationLog)
+void HDLSimulationLog::CopyFrom(const HDLSimulationLog& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.HDLSimulationLog)
   if (&from == this) return;
   Clear();
   MergeFrom(from);
 }
 
 
-void SimulationLog::InternalSwap(SimulationLog* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+void HDLSimulationLog::InternalSwap(HDLSimulationLog* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
   auto* arena = GetArena();
   ABSL_DCHECK_EQ(arena, other->GetArena());
@@ -4737,7 +5436,4399 @@ void SimulationLog::InternalSwap(SimulationLog* PROTOBUF_RESTRICT PROTOBUF_NONNU
   swap(_impl_.is_finished_, other->_impl_.is_finished_);
 }
 
-::google::protobuf::Metadata SimulationLog::GetMetadata() const {
+::google::protobuf::Metadata HDLSimulationLog::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class CircuitSimulationRequest_Analysis::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<CircuitSimulationRequest_Analysis>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_._has_bits_);
+};
+
+CircuitSimulationRequest_Analysis::CircuitSimulationRequest_Analysis(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CircuitSimulationRequest_Analysis_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.CircuitSimulationRequest.Analysis)
+}
+PROTOBUF_NDEBUG_INLINE CircuitSimulationRequest_Analysis::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::CircuitSimulationRequest_Analysis& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        type_(arena, from.type_) {}
+
+CircuitSimulationRequest_Analysis::CircuitSimulationRequest_Analysis(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CircuitSimulationRequest_Analysis& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CircuitSimulationRequest_Analysis_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CircuitSimulationRequest_Analysis* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, t_start_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, t_start_),
+           offsetof(Impl_, t_step_) -
+               offsetof(Impl_, t_start_) +
+               sizeof(Impl_::t_step_));
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.CircuitSimulationRequest.Analysis)
+}
+PROTOBUF_NDEBUG_INLINE CircuitSimulationRequest_Analysis::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        type_(arena) {}
+
+inline void CircuitSimulationRequest_Analysis::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, t_start_),
+           0,
+           offsetof(Impl_, t_step_) -
+               offsetof(Impl_, t_start_) +
+               sizeof(Impl_::t_step_));
+}
+CircuitSimulationRequest_Analysis::~CircuitSimulationRequest_Analysis() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.CircuitSimulationRequest.Analysis)
+  SharedDtor(*this);
+}
+inline void CircuitSimulationRequest_Analysis::SharedDtor(MessageLite& self) {
+  CircuitSimulationRequest_Analysis& this_ = static_cast<CircuitSimulationRequest_Analysis&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.type_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL CircuitSimulationRequest_Analysis::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CircuitSimulationRequest_Analysis(arena);
+}
+constexpr auto CircuitSimulationRequest_Analysis::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CircuitSimulationRequest_Analysis),
+                                            alignof(CircuitSimulationRequest_Analysis));
+}
+constexpr auto CircuitSimulationRequest_Analysis::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_CircuitSimulationRequest_Analysis_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &CircuitSimulationRequest_Analysis::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CircuitSimulationRequest_Analysis>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CircuitSimulationRequest_Analysis::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CircuitSimulationRequest_Analysis>(), &CircuitSimulationRequest_Analysis::ByteSizeLong,
+              &CircuitSimulationRequest_Analysis::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_._cached_size_),
+          false,
+      },
+      &CircuitSimulationRequest_Analysis::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CircuitSimulationRequest_Analysis_class_data_ =
+        CircuitSimulationRequest_Analysis::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CircuitSimulationRequest_Analysis::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CircuitSimulationRequest_Analysis_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CircuitSimulationRequest_Analysis_class_data_.tc_table);
+  return CircuitSimulationRequest_Analysis_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 0, 62, 2>
+CircuitSimulationRequest_Analysis::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    CircuitSimulationRequest_Analysis_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::CircuitSimulationRequest_Analysis>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // double t_step = 4;
+    {::_pbi::TcParser::FastF64S1,
+     {33, 3, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.t_step_)}},
+    // string type = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.type_)}},
+    // double t_start = 2;
+    {::_pbi::TcParser::FastF64S1,
+     {17, 1, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.t_start_)}},
+    // double t_stop = 3;
+    {::_pbi::TcParser::FastF64S1,
+     {25, 2, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.t_stop_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string type = 1;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.type_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // double t_start = 2;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.t_start_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+    // double t_stop = 3;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.t_stop_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+    // double t_step = 4;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.t_step_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+  }},
+  // no aux_entries
+  {{
+    "\61\4\0\0\0\0\0\0"
+    "acutesim.worker.CircuitSimulationRequest.Analysis"
+    "type"
+  }},
+};
+PROTOBUF_NOINLINE void CircuitSimulationRequest_Analysis::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.CircuitSimulationRequest.Analysis)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.type_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.t_start_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.t_step_) -
+        reinterpret_cast<char*>(&_impl_.t_start_)) + sizeof(_impl_.t_step_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CircuitSimulationRequest_Analysis::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CircuitSimulationRequest_Analysis& this_ = static_cast<const CircuitSimulationRequest_Analysis&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CircuitSimulationRequest_Analysis::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CircuitSimulationRequest_Analysis& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.CircuitSimulationRequest.Analysis)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string type = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_type().empty()) {
+      const ::std::string& _s = this_._internal_type();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.CircuitSimulationRequest.Analysis.type");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // double t_start = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_t_start()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          2, this_._internal_t_start(), target);
+    }
+  }
+
+  // double t_stop = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_t_stop()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          3, this_._internal_t_stop(), target);
+    }
+  }
+
+  // double t_step = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_t_step()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          4, this_._internal_t_step(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.CircuitSimulationRequest.Analysis)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CircuitSimulationRequest_Analysis::ByteSizeLong(const MessageLite& base) {
+  const CircuitSimulationRequest_Analysis& this_ = static_cast<const CircuitSimulationRequest_Analysis&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CircuitSimulationRequest_Analysis::ByteSizeLong() const {
+  const CircuitSimulationRequest_Analysis& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.CircuitSimulationRequest.Analysis)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // string type = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_type().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_type());
+      }
+    }
+    // double t_start = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_t_start()) != 0) {
+        total_size += 9;
+      }
+    }
+    // double t_stop = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_t_stop()) != 0) {
+        total_size += 9;
+      }
+    }
+    // double t_step = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_t_step()) != 0) {
+        total_size += 9;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CircuitSimulationRequest_Analysis::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<CircuitSimulationRequest_Analysis*>(&to_msg);
+  auto& from = static_cast<const CircuitSimulationRequest_Analysis&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.CircuitSimulationRequest.Analysis)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_type().empty()) {
+        _this->_internal_set_type(from._internal_type());
+      } else {
+        if (_this->_impl_.type_.IsDefault()) {
+          _this->_internal_set_type("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_t_start()) != 0) {
+        _this->_impl_.t_start_ = from._impl_.t_start_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_t_stop()) != 0) {
+        _this->_impl_.t_stop_ = from._impl_.t_stop_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_t_step()) != 0) {
+        _this->_impl_.t_step_ = from._impl_.t_step_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CircuitSimulationRequest_Analysis::CopyFrom(const CircuitSimulationRequest_Analysis& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.CircuitSimulationRequest.Analysis)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CircuitSimulationRequest_Analysis::InternalSwap(CircuitSimulationRequest_Analysis* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.type_, &other->_impl_.type_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.t_step_)
+      + sizeof(CircuitSimulationRequest_Analysis::_impl_.t_step_)
+      - PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest_Analysis, _impl_.t_start_)>(
+          reinterpret_cast<char*>(&_impl_.t_start_),
+          reinterpret_cast<char*>(&other->_impl_.t_start_));
+}
+
+::google::protobuf::Metadata CircuitSimulationRequest_Analysis::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class CircuitSimulationRequest::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<CircuitSimulationRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_._has_bits_);
+};
+
+CircuitSimulationRequest::CircuitSimulationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CircuitSimulationRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.CircuitSimulationRequest)
+}
+PROTOBUF_NDEBUG_INLINE CircuitSimulationRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::CircuitSimulationRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        solver_mode_(arena, from.solver_mode_),
+        precision_(arena, from.precision_) {}
+
+CircuitSimulationRequest::CircuitSimulationRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CircuitSimulationRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CircuitSimulationRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CircuitSimulationRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.netlist_json_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.netlist_json_)
+                : nullptr;
+  _impl_.analysis_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.analysis_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.CircuitSimulationRequest)
+}
+PROTOBUF_NDEBUG_INLINE CircuitSimulationRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        solver_mode_(arena),
+        precision_(arena) {}
+
+inline void CircuitSimulationRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, netlist_json_),
+           0,
+           offsetof(Impl_, analysis_) -
+               offsetof(Impl_, netlist_json_) +
+               sizeof(Impl_::analysis_));
+}
+CircuitSimulationRequest::~CircuitSimulationRequest() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.CircuitSimulationRequest)
+  SharedDtor(*this);
+}
+inline void CircuitSimulationRequest::SharedDtor(MessageLite& self) {
+  CircuitSimulationRequest& this_ = static_cast<CircuitSimulationRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.solver_mode_.Destroy();
+  this_._impl_.precision_.Destroy();
+  delete this_._impl_.netlist_json_;
+  delete this_._impl_.analysis_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL CircuitSimulationRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CircuitSimulationRequest(arena);
+}
+constexpr auto CircuitSimulationRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CircuitSimulationRequest),
+                                            alignof(CircuitSimulationRequest));
+}
+constexpr auto CircuitSimulationRequest::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_CircuitSimulationRequest_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &CircuitSimulationRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CircuitSimulationRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CircuitSimulationRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CircuitSimulationRequest>(), &CircuitSimulationRequest::ByteSizeLong,
+              &CircuitSimulationRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_._cached_size_),
+          false,
+      },
+      &CircuitSimulationRequest::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CircuitSimulationRequest_class_data_ =
+        CircuitSimulationRequest::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CircuitSimulationRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CircuitSimulationRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CircuitSimulationRequest_class_data_.tc_table);
+  return CircuitSimulationRequest_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 5, 2, 75, 2>
+CircuitSimulationRequest::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_._has_bits_),
+    0, // no _extensions_
+    5, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967264,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    5,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    CircuitSimulationRequest_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::CircuitSimulationRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.job_id_)}},
+    // .acutesim.worker.FileData netlist_json = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 3, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.netlist_json_)}},
+    // string solver_mode = 3;
+    {::_pbi::TcParser::FastUS1,
+     {26, 1, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.solver_mode_)}},
+    // string precision = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 2, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.precision_)}},
+    // .acutesim.worker.CircuitSimulationRequest.Analysis analysis = 5;
+    {::_pbi::TcParser::FastMtS1,
+     {42, 4, 1,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.analysis_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .acutesim.worker.FileData netlist_json = 2;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.netlist_json_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // string solver_mode = 3;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.solver_mode_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string precision = 4;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.precision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .acutesim.worker.CircuitSimulationRequest.Analysis analysis = 5;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.analysis_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+      {::_pbi::TcParser::GetTable<::acutesim::worker::CircuitSimulationRequest_Analysis>()},
+  }},
+  {{
+    "\50\6\0\13\11\0\0\0"
+    "acutesim.worker.CircuitSimulationRequest"
+    "job_id"
+    "solver_mode"
+    "precision"
+  }},
+};
+PROTOBUF_NOINLINE void CircuitSimulationRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.CircuitSimulationRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.solver_mode_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.precision_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(_impl_.netlist_json_ != nullptr);
+      _impl_.netlist_json_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(_impl_.analysis_ != nullptr);
+      _impl_.analysis_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CircuitSimulationRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CircuitSimulationRequest& this_ = static_cast<const CircuitSimulationRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CircuitSimulationRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CircuitSimulationRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.CircuitSimulationRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.CircuitSimulationRequest.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .acutesim.worker.FileData netlist_json = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.netlist_json_, this_._impl_.netlist_json_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string solver_mode = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_solver_mode().empty()) {
+      const ::std::string& _s = this_._internal_solver_mode();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.CircuitSimulationRequest.solver_mode");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string precision = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_precision().empty()) {
+      const ::std::string& _s = this_._internal_precision();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.CircuitSimulationRequest.precision");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // .acutesim.worker.CircuitSimulationRequest.Analysis analysis = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.analysis_, this_._impl_.analysis_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.CircuitSimulationRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CircuitSimulationRequest::ByteSizeLong(const MessageLite& base) {
+  const CircuitSimulationRequest& this_ = static_cast<const CircuitSimulationRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CircuitSimulationRequest::ByteSizeLong() const {
+  const CircuitSimulationRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.CircuitSimulationRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string solver_mode = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_solver_mode().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_solver_mode());
+      }
+    }
+    // string precision = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_precision().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_precision());
+      }
+    }
+    // .acutesim.worker.FileData netlist_json = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.netlist_json_);
+    }
+    // .acutesim.worker.CircuitSimulationRequest.Analysis analysis = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.analysis_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CircuitSimulationRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<CircuitSimulationRequest*>(&to_msg);
+  auto& from = static_cast<const CircuitSimulationRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.CircuitSimulationRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_solver_mode().empty()) {
+        _this->_internal_set_solver_mode(from._internal_solver_mode());
+      } else {
+        if (_this->_impl_.solver_mode_.IsDefault()) {
+          _this->_internal_set_solver_mode("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_precision().empty()) {
+        _this->_internal_set_precision(from._internal_precision());
+      } else {
+        if (_this->_impl_.precision_.IsDefault()) {
+          _this->_internal_set_precision("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(from._impl_.netlist_json_ != nullptr);
+      if (_this->_impl_.netlist_json_ == nullptr) {
+        _this->_impl_.netlist_json_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.netlist_json_);
+      } else {
+        _this->_impl_.netlist_json_->MergeFrom(*from._impl_.netlist_json_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.analysis_ != nullptr);
+      if (_this->_impl_.analysis_ == nullptr) {
+        _this->_impl_.analysis_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.analysis_);
+      } else {
+        _this->_impl_.analysis_->MergeFrom(*from._impl_.analysis_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CircuitSimulationRequest::CopyFrom(const CircuitSimulationRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.CircuitSimulationRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CircuitSimulationRequest::InternalSwap(CircuitSimulationRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.solver_mode_, &other->_impl_.solver_mode_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.precision_, &other->_impl_.precision_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.analysis_)
+      + sizeof(CircuitSimulationRequest::_impl_.analysis_)
+      - PROTOBUF_FIELD_OFFSET(CircuitSimulationRequest, _impl_.netlist_json_)>(
+          reinterpret_cast<char*>(&_impl_.netlist_json_),
+          reinterpret_cast<char*>(&other->_impl_.netlist_json_));
+}
+
+::google::protobuf::Metadata CircuitSimulationRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class CircuitSimulationLog::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<CircuitSimulationLog>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_._has_bits_);
+};
+
+CircuitSimulationLog::CircuitSimulationLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CircuitSimulationLog_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.CircuitSimulationLog)
+}
+PROTOBUF_NDEBUG_INLINE CircuitSimulationLog::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::CircuitSimulationLog& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        log_line_(arena, from.log_line_),
+        result_chunk_(arena, from.result_chunk_) {}
+
+CircuitSimulationLog::CircuitSimulationLog(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CircuitSimulationLog& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CircuitSimulationLog_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CircuitSimulationLog* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.is_finished_ = from._impl_.is_finished_;
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.CircuitSimulationLog)
+}
+PROTOBUF_NDEBUG_INLINE CircuitSimulationLog::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        log_line_(arena),
+        result_chunk_(arena) {}
+
+inline void CircuitSimulationLog::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.is_finished_ = {};
+}
+CircuitSimulationLog::~CircuitSimulationLog() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.CircuitSimulationLog)
+  SharedDtor(*this);
+}
+inline void CircuitSimulationLog::SharedDtor(MessageLite& self) {
+  CircuitSimulationLog& this_ = static_cast<CircuitSimulationLog&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.log_line_.Destroy();
+  this_._impl_.result_chunk_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL CircuitSimulationLog::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CircuitSimulationLog(arena);
+}
+constexpr auto CircuitSimulationLog::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CircuitSimulationLog),
+                                            alignof(CircuitSimulationLog));
+}
+constexpr auto CircuitSimulationLog::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_CircuitSimulationLog_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &CircuitSimulationLog::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CircuitSimulationLog>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CircuitSimulationLog::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CircuitSimulationLog>(), &CircuitSimulationLog::ByteSizeLong,
+              &CircuitSimulationLog::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_._cached_size_),
+          false,
+      },
+      &CircuitSimulationLog::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CircuitSimulationLog_class_data_ =
+        CircuitSimulationLog::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CircuitSimulationLog::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CircuitSimulationLog_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CircuitSimulationLog_class_data_.tc_table);
+  return CircuitSimulationLog_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 0, 59, 2>
+CircuitSimulationLog::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    CircuitSimulationLog_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::CircuitSimulationLog>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // bytes result_chunk = 4;
+    {::_pbi::TcParser::FastBS1,
+     {34, 2, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_.result_chunk_)}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_.job_id_)}},
+    // string log_line = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_.log_line_)}},
+    // bool is_finished = 3;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CircuitSimulationLog, _impl_.is_finished_), 3>(),
+     {24, 3, 0,
+      PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_.is_finished_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string log_line = 2;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_.log_line_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bool is_finished = 3;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_.is_finished_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    // bytes result_chunk = 4;
+    {PROTOBUF_FIELD_OFFSET(CircuitSimulationLog, _impl_.result_chunk_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+  }},
+  // no aux_entries
+  {{
+    "\44\6\10\0\0\0\0\0"
+    "acutesim.worker.CircuitSimulationLog"
+    "job_id"
+    "log_line"
+  }},
+};
+PROTOBUF_NOINLINE void CircuitSimulationLog::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.CircuitSimulationLog)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.log_line_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.result_chunk_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_.is_finished_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CircuitSimulationLog::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CircuitSimulationLog& this_ = static_cast<const CircuitSimulationLog&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CircuitSimulationLog::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CircuitSimulationLog& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.CircuitSimulationLog)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.CircuitSimulationLog.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // string log_line = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_log_line().empty()) {
+      const ::std::string& _s = this_._internal_log_line();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.CircuitSimulationLog.log_line");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // bool is_finished = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_is_finished() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_is_finished(), target);
+    }
+  }
+
+  // bytes result_chunk = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_result_chunk().empty()) {
+      const ::std::string& _s = this_._internal_result_chunk();
+      target = stream->WriteBytesMaybeAliased(4, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.CircuitSimulationLog)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CircuitSimulationLog::ByteSizeLong(const MessageLite& base) {
+  const CircuitSimulationLog& this_ = static_cast<const CircuitSimulationLog&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CircuitSimulationLog::ByteSizeLong() const {
+  const CircuitSimulationLog& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.CircuitSimulationLog)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string log_line = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_log_line().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_log_line());
+      }
+    }
+    // bytes result_chunk = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_result_chunk().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_result_chunk());
+      }
+    }
+    // bool is_finished = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_is_finished() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CircuitSimulationLog::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<CircuitSimulationLog*>(&to_msg);
+  auto& from = static_cast<const CircuitSimulationLog&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.CircuitSimulationLog)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_log_line().empty()) {
+        _this->_internal_set_log_line(from._internal_log_line());
+      } else {
+        if (_this->_impl_.log_line_.IsDefault()) {
+          _this->_internal_set_log_line("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_result_chunk().empty()) {
+        _this->_internal_set_result_chunk(from._internal_result_chunk());
+      } else {
+        if (_this->_impl_.result_chunk_.IsDefault()) {
+          _this->_internal_set_result_chunk("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_is_finished() != 0) {
+        _this->_impl_.is_finished_ = from._impl_.is_finished_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CircuitSimulationLog::CopyFrom(const CircuitSimulationLog& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.CircuitSimulationLog)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CircuitSimulationLog::InternalSwap(CircuitSimulationLog* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.log_line_, &other->_impl_.log_line_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.result_chunk_, &other->_impl_.result_chunk_, arena);
+  swap(_impl_.is_finished_, other->_impl_.is_finished_);
+}
+
+::google::protobuf::Metadata CircuitSimulationLog::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class RegressionRequest::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<RegressionRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_._has_bits_);
+};
+
+RegressionRequest::RegressionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RegressionRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.RegressionRequest)
+}
+PROTOBUF_NDEBUG_INLINE RegressionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::RegressionRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        suite_name_(arena, from.suite_name_),
+        solver_mode_(arena, from.solver_mode_),
+        precision_(arena, from.precision_) {}
+
+RegressionRequest::RegressionRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RegressionRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RegressionRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RegressionRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.RegressionRequest)
+}
+PROTOBUF_NDEBUG_INLINE RegressionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        suite_name_(arena),
+        solver_mode_(arena),
+        precision_(arena) {}
+
+inline void RegressionRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+RegressionRequest::~RegressionRequest() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.RegressionRequest)
+  SharedDtor(*this);
+}
+inline void RegressionRequest::SharedDtor(MessageLite& self) {
+  RegressionRequest& this_ = static_cast<RegressionRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.suite_name_.Destroy();
+  this_._impl_.solver_mode_.Destroy();
+  this_._impl_.precision_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL RegressionRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RegressionRequest(arena);
+}
+constexpr auto RegressionRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RegressionRequest),
+                                            alignof(RegressionRequest));
+}
+constexpr auto RegressionRequest::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_RegressionRequest_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &RegressionRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RegressionRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RegressionRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RegressionRequest>(), &RegressionRequest::ByteSizeLong,
+              &RegressionRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_._cached_size_),
+          false,
+      },
+      &RegressionRequest::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RegressionRequest_class_data_ =
+        RegressionRequest::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RegressionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RegressionRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RegressionRequest_class_data_.tc_table);
+  return RegressionRequest_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 4, 0, 78, 2>
+RegressionRequest::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_._has_bits_),
+    0, // no _extensions_
+    4, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967280,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    4,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    RegressionRequest_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::RegressionRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // string precision = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 3, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_.precision_)}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_.job_id_)}},
+    // string suite_name = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_.suite_name_)}},
+    // string solver_mode = 3;
+    {::_pbi::TcParser::FastUS1,
+     {26, 2, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_.solver_mode_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string suite_name = 2;
+    {PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_.suite_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string solver_mode = 3;
+    {PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_.solver_mode_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string precision = 4;
+    {PROTOBUF_FIELD_OFFSET(RegressionRequest, _impl_.precision_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  // no aux_entries
+  {{
+    "\41\6\12\13\11\0\0\0"
+    "acutesim.worker.RegressionRequest"
+    "job_id"
+    "suite_name"
+    "solver_mode"
+    "precision"
+  }},
+};
+PROTOBUF_NOINLINE void RegressionRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.RegressionRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.suite_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.solver_mode_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.precision_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RegressionRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RegressionRequest& this_ = static_cast<const RegressionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RegressionRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RegressionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.RegressionRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.RegressionRequest.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // string suite_name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_suite_name().empty()) {
+      const ::std::string& _s = this_._internal_suite_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.RegressionRequest.suite_name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string solver_mode = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_solver_mode().empty()) {
+      const ::std::string& _s = this_._internal_solver_mode();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.RegressionRequest.solver_mode");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string precision = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_precision().empty()) {
+      const ::std::string& _s = this_._internal_precision();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.RegressionRequest.precision");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.RegressionRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RegressionRequest::ByteSizeLong(const MessageLite& base) {
+  const RegressionRequest& this_ = static_cast<const RegressionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RegressionRequest::ByteSizeLong() const {
+  const RegressionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.RegressionRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string suite_name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_suite_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_suite_name());
+      }
+    }
+    // string solver_mode = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_solver_mode().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_solver_mode());
+      }
+    }
+    // string precision = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_precision().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_precision());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RegressionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<RegressionRequest*>(&to_msg);
+  auto& from = static_cast<const RegressionRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.RegressionRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_suite_name().empty()) {
+        _this->_internal_set_suite_name(from._internal_suite_name());
+      } else {
+        if (_this->_impl_.suite_name_.IsDefault()) {
+          _this->_internal_set_suite_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_solver_mode().empty()) {
+        _this->_internal_set_solver_mode(from._internal_solver_mode());
+      } else {
+        if (_this->_impl_.solver_mode_.IsDefault()) {
+          _this->_internal_set_solver_mode("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_precision().empty()) {
+        _this->_internal_set_precision(from._internal_precision());
+      } else {
+        if (_this->_impl_.precision_.IsDefault()) {
+          _this->_internal_set_precision("");
+        }
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RegressionRequest::CopyFrom(const RegressionRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.RegressionRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RegressionRequest::InternalSwap(RegressionRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.suite_name_, &other->_impl_.suite_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.solver_mode_, &other->_impl_.solver_mode_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.precision_, &other->_impl_.precision_, arena);
+}
+
+::google::protobuf::Metadata RegressionRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class RegressionLog::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<RegressionLog>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_._has_bits_);
+};
+
+RegressionLog::RegressionLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RegressionLog_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.RegressionLog)
+}
+PROTOBUF_NDEBUG_INLINE RegressionLog::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::RegressionLog& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        log_line_(arena, from.log_line_),
+        result_json_(arena, from.result_json_) {}
+
+RegressionLog::RegressionLog(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RegressionLog& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RegressionLog_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RegressionLog* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, is_error_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, is_error_),
+           offsetof(Impl_, passed_) -
+               offsetof(Impl_, is_error_) +
+               sizeof(Impl_::passed_));
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.RegressionLog)
+}
+PROTOBUF_NDEBUG_INLINE RegressionLog::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        log_line_(arena),
+        result_json_(arena) {}
+
+inline void RegressionLog::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, is_error_),
+           0,
+           offsetof(Impl_, passed_) -
+               offsetof(Impl_, is_error_) +
+               sizeof(Impl_::passed_));
+}
+RegressionLog::~RegressionLog() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.RegressionLog)
+  SharedDtor(*this);
+}
+inline void RegressionLog::SharedDtor(MessageLite& self) {
+  RegressionLog& this_ = static_cast<RegressionLog&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.log_line_.Destroy();
+  this_._impl_.result_json_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL RegressionLog::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RegressionLog(arena);
+}
+constexpr auto RegressionLog::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RegressionLog),
+                                            alignof(RegressionLog));
+}
+constexpr auto RegressionLog::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_RegressionLog_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &RegressionLog::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RegressionLog>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RegressionLog::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RegressionLog>(), &RegressionLog::ByteSizeLong,
+              &RegressionLog::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_._cached_size_),
+          false,
+      },
+      &RegressionLog::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RegressionLog_class_data_ =
+        RegressionLog::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RegressionLog::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RegressionLog_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RegressionLog_class_data_.tc_table);
+  return RegressionLog_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 6, 0, 63, 2>
+RegressionLog::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_._has_bits_),
+    0, // no _extensions_
+    6, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967232,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    6,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    RegressionLog_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::RegressionLog>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.job_id_)}},
+    // string log_line = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.log_line_)}},
+    // bool is_error = 3;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(RegressionLog, _impl_.is_error_), 3>(),
+     {24, 3, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.is_error_)}},
+    // bool is_finished = 4;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(RegressionLog, _impl_.is_finished_), 4>(),
+     {32, 4, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.is_finished_)}},
+    // bool passed = 5;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(RegressionLog, _impl_.passed_), 5>(),
+     {40, 5, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.passed_)}},
+    // string result_json = 6;
+    {::_pbi::TcParser::FastUS1,
+     {50, 2, 0,
+      PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.result_json_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string log_line = 2;
+    {PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.log_line_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bool is_error = 3;
+    {PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.is_error_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    // bool is_finished = 4;
+    {PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.is_finished_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    // bool passed = 5;
+    {PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.passed_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    // string result_json = 6;
+    {PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.result_json_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  // no aux_entries
+  {{
+    "\35\6\10\0\0\0\13\0"
+    "acutesim.worker.RegressionLog"
+    "job_id"
+    "log_line"
+    "result_json"
+  }},
+};
+PROTOBUF_NOINLINE void RegressionLog::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.RegressionLog)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.log_line_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.result_json_.ClearNonDefaultToEmpty();
+    }
+  }
+  ::memset(&_impl_.is_error_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.passed_) -
+      reinterpret_cast<char*>(&_impl_.is_error_)) + sizeof(_impl_.passed_));
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RegressionLog::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RegressionLog& this_ = static_cast<const RegressionLog&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RegressionLog::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RegressionLog& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.RegressionLog)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.RegressionLog.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // string log_line = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_log_line().empty()) {
+      const ::std::string& _s = this_._internal_log_line();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.RegressionLog.log_line");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // bool is_error = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_is_error() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_is_error(), target);
+    }
+  }
+
+  // bool is_finished = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_is_finished() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_is_finished(), target);
+    }
+  }
+
+  // bool passed = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_passed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_passed(), target);
+    }
+  }
+
+  // string result_json = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_result_json().empty()) {
+      const ::std::string& _s = this_._internal_result_json();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.RegressionLog.result_json");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.RegressionLog)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RegressionLog::ByteSizeLong(const MessageLite& base) {
+  const RegressionLog& this_ = static_cast<const RegressionLog&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RegressionLog::ByteSizeLong() const {
+  const RegressionLog& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.RegressionLog)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string log_line = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_log_line().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_log_line());
+      }
+    }
+    // string result_json = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_result_json().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_result_json());
+      }
+    }
+    // bool is_error = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_is_error() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool is_finished = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_is_finished() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool passed = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_passed() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RegressionLog::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<RegressionLog*>(&to_msg);
+  auto& from = static_cast<const RegressionLog&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.RegressionLog)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_log_line().empty()) {
+        _this->_internal_set_log_line(from._internal_log_line());
+      } else {
+        if (_this->_impl_.log_line_.IsDefault()) {
+          _this->_internal_set_log_line("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_result_json().empty()) {
+        _this->_internal_set_result_json(from._internal_result_json());
+      } else {
+        if (_this->_impl_.result_json_.IsDefault()) {
+          _this->_internal_set_result_json("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_is_error() != 0) {
+        _this->_impl_.is_error_ = from._impl_.is_error_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_is_finished() != 0) {
+        _this->_impl_.is_finished_ = from._impl_.is_finished_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_passed() != 0) {
+        _this->_impl_.passed_ = from._impl_.passed_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RegressionLog::CopyFrom(const RegressionLog& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.RegressionLog)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RegressionLog::InternalSwap(RegressionLog* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.log_line_, &other->_impl_.log_line_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.result_json_, &other->_impl_.result_json_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.passed_)
+      + sizeof(RegressionLog::_impl_.passed_)
+      - PROTOBUF_FIELD_OFFSET(RegressionLog, _impl_.is_error_)>(
+          reinterpret_cast<char*>(&_impl_.is_error_),
+          reinterpret_cast<char*>(&other->_impl_.is_error_));
+}
+
+::google::protobuf::Metadata RegressionLog::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class SignOffRequest::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<SignOffRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_._has_bits_);
+};
+
+SignOffRequest::SignOffRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SignOffRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.SignOffRequest)
+}
+PROTOBUF_NDEBUG_INLINE SignOffRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::SignOffRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        check_type_(arena, from.check_type_) {}
+
+SignOffRequest::SignOffRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SignOffRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SignOffRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SignOffRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.layout_file_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.layout_file_)
+                : nullptr;
+  _impl_.script_file_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.script_file_)
+                : nullptr;
+  _impl_.reference_netlist_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.reference_netlist_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.SignOffRequest)
+}
+PROTOBUF_NDEBUG_INLINE SignOffRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        check_type_(arena) {}
+
+inline void SignOffRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, layout_file_),
+           0,
+           offsetof(Impl_, reference_netlist_) -
+               offsetof(Impl_, layout_file_) +
+               sizeof(Impl_::reference_netlist_));
+}
+SignOffRequest::~SignOffRequest() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.SignOffRequest)
+  SharedDtor(*this);
+}
+inline void SignOffRequest::SharedDtor(MessageLite& self) {
+  SignOffRequest& this_ = static_cast<SignOffRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.check_type_.Destroy();
+  delete this_._impl_.layout_file_;
+  delete this_._impl_.script_file_;
+  delete this_._impl_.reference_netlist_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL SignOffRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SignOffRequest(arena);
+}
+constexpr auto SignOffRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SignOffRequest),
+                                            alignof(SignOffRequest));
+}
+constexpr auto SignOffRequest::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_SignOffRequest_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &SignOffRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SignOffRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SignOffRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SignOffRequest>(), &SignOffRequest::ByteSizeLong,
+              &SignOffRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_._cached_size_),
+          false,
+      },
+      &SignOffRequest::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SignOffRequest_class_data_ =
+        SignOffRequest::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SignOffRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SignOffRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SignOffRequest_class_data_.tc_table);
+  return SignOffRequest_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 5, 3, 55, 2>
+SignOffRequest::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_._has_bits_),
+    0, // no _extensions_
+    5, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967264,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    5,  // num_field_entries
+    3,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    SignOffRequest_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::SignOffRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.job_id_)}},
+    // .acutesim.worker.FileData layout_file = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 2, 0,
+      PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.layout_file_)}},
+    // .acutesim.worker.FileData script_file = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 3, 1,
+      PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.script_file_)}},
+    // string check_type = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 1, 0,
+      PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.check_type_)}},
+    // .acutesim.worker.FileData reference_netlist = 5;
+    {::_pbi::TcParser::FastMtS1,
+     {42, 4, 2,
+      PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.reference_netlist_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .acutesim.worker.FileData layout_file = 2;
+    {PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.layout_file_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .acutesim.worker.FileData script_file = 3;
+    {PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.script_file_), _Internal::kHasBitsOffset + 3, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // string check_type = 4;
+    {PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.check_type_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .acutesim.worker.FileData reference_netlist = 5;
+    {PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.reference_netlist_), _Internal::kHasBitsOffset + 4, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+  }},
+  {{
+    "\36\6\0\0\12\0\0\0"
+    "acutesim.worker.SignOffRequest"
+    "job_id"
+    "check_type"
+  }},
+};
+PROTOBUF_NOINLINE void SignOffRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.SignOffRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.check_type_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.layout_file_ != nullptr);
+      _impl_.layout_file_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(_impl_.script_file_ != nullptr);
+      _impl_.script_file_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(_impl_.reference_netlist_ != nullptr);
+      _impl_.reference_netlist_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SignOffRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SignOffRequest& this_ = static_cast<const SignOffRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SignOffRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SignOffRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.SignOffRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.SignOffRequest.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .acutesim.worker.FileData layout_file = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.layout_file_, this_._impl_.layout_file_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .acutesim.worker.FileData script_file = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.script_file_, this_._impl_.script_file_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string check_type = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_check_type().empty()) {
+      const ::std::string& _s = this_._internal_check_type();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.SignOffRequest.check_type");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // .acutesim.worker.FileData reference_netlist = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.reference_netlist_, this_._impl_.reference_netlist_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.SignOffRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SignOffRequest::ByteSizeLong(const MessageLite& base) {
+  const SignOffRequest& this_ = static_cast<const SignOffRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SignOffRequest::ByteSizeLong() const {
+  const SignOffRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.SignOffRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string check_type = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_check_type().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_check_type());
+      }
+    }
+    // .acutesim.worker.FileData layout_file = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.layout_file_);
+    }
+    // .acutesim.worker.FileData script_file = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.script_file_);
+    }
+    // .acutesim.worker.FileData reference_netlist = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.reference_netlist_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SignOffRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<SignOffRequest*>(&to_msg);
+  auto& from = static_cast<const SignOffRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.SignOffRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_check_type().empty()) {
+        _this->_internal_set_check_type(from._internal_check_type());
+      } else {
+        if (_this->_impl_.check_type_.IsDefault()) {
+          _this->_internal_set_check_type("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.layout_file_ != nullptr);
+      if (_this->_impl_.layout_file_ == nullptr) {
+        _this->_impl_.layout_file_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.layout_file_);
+      } else {
+        _this->_impl_.layout_file_->MergeFrom(*from._impl_.layout_file_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(from._impl_.script_file_ != nullptr);
+      if (_this->_impl_.script_file_ == nullptr) {
+        _this->_impl_.script_file_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.script_file_);
+      } else {
+        _this->_impl_.script_file_->MergeFrom(*from._impl_.script_file_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.reference_netlist_ != nullptr);
+      if (_this->_impl_.reference_netlist_ == nullptr) {
+        _this->_impl_.reference_netlist_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.reference_netlist_);
+      } else {
+        _this->_impl_.reference_netlist_->MergeFrom(*from._impl_.reference_netlist_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SignOffRequest::CopyFrom(const SignOffRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.SignOffRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SignOffRequest::InternalSwap(SignOffRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.check_type_, &other->_impl_.check_type_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.reference_netlist_)
+      + sizeof(SignOffRequest::_impl_.reference_netlist_)
+      - PROTOBUF_FIELD_OFFSET(SignOffRequest, _impl_.layout_file_)>(
+          reinterpret_cast<char*>(&_impl_.layout_file_),
+          reinterpret_cast<char*>(&other->_impl_.layout_file_));
+}
+
+::google::protobuf::Metadata SignOffRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class SignOffLog::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<SignOffLog>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_._has_bits_);
+};
+
+SignOffLog::SignOffLog(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SignOffLog_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.SignOffLog)
+}
+PROTOBUF_NDEBUG_INLINE SignOffLog::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::SignOffLog& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        log_line_(arena, from.log_line_) {}
+
+SignOffLog::SignOffLog(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SignOffLog& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SignOffLog_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SignOffLog* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.report_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.report_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, is_error_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, is_error_),
+           offsetof(Impl_, is_finished_) -
+               offsetof(Impl_, is_error_) +
+               sizeof(Impl_::is_finished_));
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.SignOffLog)
+}
+PROTOBUF_NDEBUG_INLINE SignOffLog::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        log_line_(arena) {}
+
+inline void SignOffLog::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, report_),
+           0,
+           offsetof(Impl_, is_finished_) -
+               offsetof(Impl_, report_) +
+               sizeof(Impl_::is_finished_));
+}
+SignOffLog::~SignOffLog() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.SignOffLog)
+  SharedDtor(*this);
+}
+inline void SignOffLog::SharedDtor(MessageLite& self) {
+  SignOffLog& this_ = static_cast<SignOffLog&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.log_line_.Destroy();
+  delete this_._impl_.report_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL SignOffLog::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SignOffLog(arena);
+}
+constexpr auto SignOffLog::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SignOffLog),
+                                            alignof(SignOffLog));
+}
+constexpr auto SignOffLog::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_SignOffLog_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &SignOffLog::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SignOffLog>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SignOffLog::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SignOffLog>(), &SignOffLog::ByteSizeLong,
+              &SignOffLog::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_._cached_size_),
+          false,
+      },
+      &SignOffLog::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SignOffLog_class_data_ =
+        SignOffLog::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SignOffLog::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SignOffLog_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SignOffLog_class_data_.tc_table);
+  return SignOffLog_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 5, 1, 49, 2>
+SignOffLog::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_._has_bits_),
+    0, // no _extensions_
+    5, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967264,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    5,  // num_field_entries
+    1,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    SignOffLog_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::SignOffLog>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.job_id_)}},
+    // string log_line = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.log_line_)}},
+    // bool is_error = 3;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SignOffLog, _impl_.is_error_), 3>(),
+     {24, 3, 0,
+      PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.is_error_)}},
+    // bool is_finished = 4;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SignOffLog, _impl_.is_finished_), 4>(),
+     {32, 4, 0,
+      PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.is_finished_)}},
+    // .acutesim.worker.FileData report = 5;
+    {::_pbi::TcParser::FastMtS1,
+     {42, 2, 0,
+      PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.report_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string log_line = 2;
+    {PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.log_line_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bool is_error = 3;
+    {PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.is_error_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    // bool is_finished = 4;
+    {PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.is_finished_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    // .acutesim.worker.FileData report = 5;
+    {PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.report_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+  }},
+  {{
+    "\32\6\10\0\0\0\0\0"
+    "acutesim.worker.SignOffLog"
+    "job_id"
+    "log_line"
+  }},
+};
+PROTOBUF_NOINLINE void SignOffLog::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.SignOffLog)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.log_line_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.report_ != nullptr);
+      _impl_.report_->Clear();
+    }
+  }
+  ::memset(&_impl_.is_error_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.is_finished_) -
+      reinterpret_cast<char*>(&_impl_.is_error_)) + sizeof(_impl_.is_finished_));
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SignOffLog::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SignOffLog& this_ = static_cast<const SignOffLog&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SignOffLog::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SignOffLog& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.SignOffLog)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.SignOffLog.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // string log_line = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_log_line().empty()) {
+      const ::std::string& _s = this_._internal_log_line();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.SignOffLog.log_line");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // bool is_error = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_is_error() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_is_error(), target);
+    }
+  }
+
+  // bool is_finished = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_is_finished() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_is_finished(), target);
+    }
+  }
+
+  // .acutesim.worker.FileData report = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.report_, this_._impl_.report_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.SignOffLog)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SignOffLog::ByteSizeLong(const MessageLite& base) {
+  const SignOffLog& this_ = static_cast<const SignOffLog&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SignOffLog::ByteSizeLong() const {
+  const SignOffLog& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.SignOffLog)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string log_line = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_log_line().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_log_line());
+      }
+    }
+    // .acutesim.worker.FileData report = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.report_);
+    }
+    // bool is_error = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_is_error() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool is_finished = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_is_finished() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SignOffLog::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<SignOffLog*>(&to_msg);
+  auto& from = static_cast<const SignOffLog&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.SignOffLog)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_log_line().empty()) {
+        _this->_internal_set_log_line(from._internal_log_line());
+      } else {
+        if (_this->_impl_.log_line_.IsDefault()) {
+          _this->_internal_set_log_line("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.report_ != nullptr);
+      if (_this->_impl_.report_ == nullptr) {
+        _this->_impl_.report_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.report_);
+      } else {
+        _this->_impl_.report_->MergeFrom(*from._impl_.report_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_is_error() != 0) {
+        _this->_impl_.is_error_ = from._impl_.is_error_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_is_finished() != 0) {
+        _this->_impl_.is_finished_ = from._impl_.is_finished_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SignOffLog::CopyFrom(const SignOffLog& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.SignOffLog)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SignOffLog::InternalSwap(SignOffLog* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.log_line_, &other->_impl_.log_line_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.is_finished_)
+      + sizeof(SignOffLog::_impl_.is_finished_)
+      - PROTOBUF_FIELD_OFFSET(SignOffLog, _impl_.report_)>(
+          reinterpret_cast<char*>(&_impl_.report_),
+          reinterpret_cast<char*>(&other->_impl_.report_));
+}
+
+::google::protobuf::Metadata SignOffLog::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class LVSRequest::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<LVSRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_._has_bits_);
+};
+
+LVSRequest::LVSRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, LVSRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.LVSRequest)
+}
+PROTOBUF_NDEBUG_INLINE LVSRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::LVSRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        rule_deck_(arena, from.rule_deck_),
+        top_cell_(arena, from.top_cell_),
+        mode_(arena, from.mode_) {}
+
+LVSRequest::LVSRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const LVSRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, LVSRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  LVSRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.layout_file_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.layout_file_)
+                : nullptr;
+  _impl_.schematic_netlist_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.schematic_netlist_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.LVSRequest)
+}
+PROTOBUF_NDEBUG_INLINE LVSRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        rule_deck_(arena),
+        top_cell_(arena),
+        mode_(arena) {}
+
+inline void LVSRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, layout_file_),
+           0,
+           offsetof(Impl_, schematic_netlist_) -
+               offsetof(Impl_, layout_file_) +
+               sizeof(Impl_::schematic_netlist_));
+}
+LVSRequest::~LVSRequest() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.LVSRequest)
+  SharedDtor(*this);
+}
+inline void LVSRequest::SharedDtor(MessageLite& self) {
+  LVSRequest& this_ = static_cast<LVSRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.rule_deck_.Destroy();
+  this_._impl_.top_cell_.Destroy();
+  this_._impl_.mode_.Destroy();
+  delete this_._impl_.layout_file_;
+  delete this_._impl_.schematic_netlist_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL LVSRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) LVSRequest(arena);
+}
+constexpr auto LVSRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(LVSRequest),
+                                            alignof(LVSRequest));
+}
+constexpr auto LVSRequest::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_LVSRequest_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &LVSRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<LVSRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &LVSRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<LVSRequest>(), &LVSRequest::ByteSizeLong,
+              &LVSRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_._cached_size_),
+          false,
+      },
+      &LVSRequest::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull LVSRequest_class_data_ =
+        LVSRequest::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+LVSRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&LVSRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(LVSRequest_class_data_.tc_table);
+  return LVSRequest_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 6, 2, 62, 2>
+LVSRequest::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_._has_bits_),
+    0, // no _extensions_
+    6, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967232,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    6,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    LVSRequest_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::LVSRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.job_id_)}},
+    // .acutesim.worker.FileData layout_file = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 4, 0,
+      PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.layout_file_)}},
+    // .acutesim.worker.FileData schematic_netlist = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 5, 1,
+      PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.schematic_netlist_)}},
+    // string rule_deck = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 1, 0,
+      PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.rule_deck_)}},
+    // string top_cell = 5;
+    {::_pbi::TcParser::FastUS1,
+     {42, 2, 0,
+      PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.top_cell_)}},
+    // string mode = 6;
+    {::_pbi::TcParser::FastUS1,
+     {50, 3, 0,
+      PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.mode_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .acutesim.worker.FileData layout_file = 2;
+    {PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.layout_file_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .acutesim.worker.FileData schematic_netlist = 3;
+    {PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.schematic_netlist_), _Internal::kHasBitsOffset + 5, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // string rule_deck = 4;
+    {PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.rule_deck_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string top_cell = 5;
+    {PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.top_cell_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string mode = 6;
+    {PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.mode_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+  }},
+  {{
+    "\32\6\0\0\11\10\4\0"
+    "acutesim.worker.LVSRequest"
+    "job_id"
+    "rule_deck"
+    "top_cell"
+    "mode"
+  }},
+};
+PROTOBUF_NOINLINE void LVSRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.LVSRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.rule_deck_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.top_cell_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.mode_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(_impl_.layout_file_ != nullptr);
+      _impl_.layout_file_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(_impl_.schematic_netlist_ != nullptr);
+      _impl_.schematic_netlist_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL LVSRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const LVSRequest& this_ = static_cast<const LVSRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL LVSRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const LVSRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.LVSRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.LVSRequest.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .acutesim.worker.FileData layout_file = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.layout_file_, this_._impl_.layout_file_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .acutesim.worker.FileData schematic_netlist = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.schematic_netlist_, this_._impl_.schematic_netlist_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string rule_deck = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_rule_deck().empty()) {
+      const ::std::string& _s = this_._internal_rule_deck();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.LVSRequest.rule_deck");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // string top_cell = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_top_cell().empty()) {
+      const ::std::string& _s = this_._internal_top_cell();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.LVSRequest.top_cell");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // string mode = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_mode().empty()) {
+      const ::std::string& _s = this_._internal_mode();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.LVSRequest.mode");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.LVSRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t LVSRequest::ByteSizeLong(const MessageLite& base) {
+  const LVSRequest& this_ = static_cast<const LVSRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t LVSRequest::ByteSizeLong() const {
+  const LVSRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.LVSRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string rule_deck = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_rule_deck().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_rule_deck());
+      }
+    }
+    // string top_cell = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_top_cell().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_top_cell());
+      }
+    }
+    // string mode = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_mode().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_mode());
+      }
+    }
+    // .acutesim.worker.FileData layout_file = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.layout_file_);
+    }
+    // .acutesim.worker.FileData schematic_netlist = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.schematic_netlist_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void LVSRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<LVSRequest*>(&to_msg);
+  auto& from = static_cast<const LVSRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.LVSRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_rule_deck().empty()) {
+        _this->_internal_set_rule_deck(from._internal_rule_deck());
+      } else {
+        if (_this->_impl_.rule_deck_.IsDefault()) {
+          _this->_internal_set_rule_deck("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_top_cell().empty()) {
+        _this->_internal_set_top_cell(from._internal_top_cell());
+      } else {
+        if (_this->_impl_.top_cell_.IsDefault()) {
+          _this->_internal_set_top_cell("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_mode().empty()) {
+        _this->_internal_set_mode(from._internal_mode());
+      } else {
+        if (_this->_impl_.mode_.IsDefault()) {
+          _this->_internal_set_mode("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.layout_file_ != nullptr);
+      if (_this->_impl_.layout_file_ == nullptr) {
+        _this->_impl_.layout_file_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.layout_file_);
+      } else {
+        _this->_impl_.layout_file_->MergeFrom(*from._impl_.layout_file_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(from._impl_.schematic_netlist_ != nullptr);
+      if (_this->_impl_.schematic_netlist_ == nullptr) {
+        _this->_impl_.schematic_netlist_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.schematic_netlist_);
+      } else {
+        _this->_impl_.schematic_netlist_->MergeFrom(*from._impl_.schematic_netlist_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void LVSRequest::CopyFrom(const LVSRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.LVSRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void LVSRequest::InternalSwap(LVSRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.rule_deck_, &other->_impl_.rule_deck_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.top_cell_, &other->_impl_.top_cell_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.mode_, &other->_impl_.mode_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.schematic_netlist_)
+      + sizeof(LVSRequest::_impl_.schematic_netlist_)
+      - PROTOBUF_FIELD_OFFSET(LVSRequest, _impl_.layout_file_)>(
+          reinterpret_cast<char*>(&_impl_.layout_file_),
+          reinterpret_cast<char*>(&other->_impl_.layout_file_));
+}
+
+::google::protobuf::Metadata LVSRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class PEXRequest::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<PEXRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_._has_bits_);
+};
+
+PEXRequest::PEXRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PEXRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.PEXRequest)
+}
+PROTOBUF_NDEBUG_INLINE PEXRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::PEXRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        output_spef_(arena, from.output_spef_),
+        engine_(arena, from.engine_) {}
+
+PEXRequest::PEXRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PEXRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PEXRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PEXRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.layout_file_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.layout_file_)
+                : nullptr;
+  _impl_.tech_file_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.tech_file_)
+                : nullptr;
+  _impl_.coupling_caps_ = from._impl_.coupling_caps_;
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.PEXRequest)
+}
+PROTOBUF_NDEBUG_INLINE PEXRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        output_spef_(arena),
+        engine_(arena) {}
+
+inline void PEXRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, layout_file_),
+           0,
+           offsetof(Impl_, coupling_caps_) -
+               offsetof(Impl_, layout_file_) +
+               sizeof(Impl_::coupling_caps_));
+}
+PEXRequest::~PEXRequest() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.PEXRequest)
+  SharedDtor(*this);
+}
+inline void PEXRequest::SharedDtor(MessageLite& self) {
+  PEXRequest& this_ = static_cast<PEXRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.output_spef_.Destroy();
+  this_._impl_.engine_.Destroy();
+  delete this_._impl_.layout_file_;
+  delete this_._impl_.tech_file_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL PEXRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PEXRequest(arena);
+}
+constexpr auto PEXRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PEXRequest),
+                                            alignof(PEXRequest));
+}
+constexpr auto PEXRequest::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_PEXRequest_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &PEXRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PEXRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PEXRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PEXRequest>(), &PEXRequest::ByteSizeLong,
+              &PEXRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_._cached_size_),
+          false,
+      },
+      &PEXRequest::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PEXRequest_class_data_ =
+        PEXRequest::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PEXRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PEXRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PEXRequest_class_data_.tc_table);
+  return PEXRequest_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 6, 2, 58, 2>
+PEXRequest::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_._has_bits_),
+    0, // no _extensions_
+    6, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967232,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    6,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    PEXRequest_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::PEXRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.job_id_)}},
+    // .acutesim.worker.FileData layout_file = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 3, 0,
+      PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.layout_file_)}},
+    // .acutesim.worker.FileData tech_file = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 4, 1,
+      PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.tech_file_)}},
+    // string output_spef = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 1, 0,
+      PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.output_spef_)}},
+    // bool coupling_caps = 5;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PEXRequest, _impl_.coupling_caps_), 5>(),
+     {40, 5, 0,
+      PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.coupling_caps_)}},
+    // string engine = 6;
+    {::_pbi::TcParser::FastUS1,
+     {50, 2, 0,
+      PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.engine_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .acutesim.worker.FileData layout_file = 2;
+    {PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.layout_file_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .acutesim.worker.FileData tech_file = 3;
+    {PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.tech_file_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // string output_spef = 4;
+    {PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.output_spef_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bool coupling_caps = 5;
+    {PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.coupling_caps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    // string engine = 6;
+    {PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.engine_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+  }},
+  {{
+    "\32\6\0\0\13\0\6\0"
+    "acutesim.worker.PEXRequest"
+    "job_id"
+    "output_spef"
+    "engine"
+  }},
+};
+PROTOBUF_NOINLINE void PEXRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.PEXRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.output_spef_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.engine_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(_impl_.layout_file_ != nullptr);
+      _impl_.layout_file_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(_impl_.tech_file_ != nullptr);
+      _impl_.tech_file_->Clear();
+    }
+  }
+  _impl_.coupling_caps_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PEXRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PEXRequest& this_ = static_cast<const PEXRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PEXRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PEXRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.PEXRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.PEXRequest.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .acutesim.worker.FileData layout_file = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.layout_file_, this_._impl_.layout_file_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .acutesim.worker.FileData tech_file = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.tech_file_, this_._impl_.tech_file_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string output_spef = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_output_spef().empty()) {
+      const ::std::string& _s = this_._internal_output_spef();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.PEXRequest.output_spef");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // bool coupling_caps = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_coupling_caps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_coupling_caps(), target);
+    }
+  }
+
+  // string engine = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_engine().empty()) {
+      const ::std::string& _s = this_._internal_engine();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.PEXRequest.engine");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.PEXRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PEXRequest::ByteSizeLong(const MessageLite& base) {
+  const PEXRequest& this_ = static_cast<const PEXRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PEXRequest::ByteSizeLong() const {
+  const PEXRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.PEXRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string output_spef = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_output_spef().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_output_spef());
+      }
+    }
+    // string engine = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_engine().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_engine());
+      }
+    }
+    // .acutesim.worker.FileData layout_file = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.layout_file_);
+    }
+    // .acutesim.worker.FileData tech_file = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.tech_file_);
+    }
+    // bool coupling_caps = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_coupling_caps() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PEXRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<PEXRequest*>(&to_msg);
+  auto& from = static_cast<const PEXRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.PEXRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_output_spef().empty()) {
+        _this->_internal_set_output_spef(from._internal_output_spef());
+      } else {
+        if (_this->_impl_.output_spef_.IsDefault()) {
+          _this->_internal_set_output_spef("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_engine().empty()) {
+        _this->_internal_set_engine(from._internal_engine());
+      } else {
+        if (_this->_impl_.engine_.IsDefault()) {
+          _this->_internal_set_engine("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(from._impl_.layout_file_ != nullptr);
+      if (_this->_impl_.layout_file_ == nullptr) {
+        _this->_impl_.layout_file_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.layout_file_);
+      } else {
+        _this->_impl_.layout_file_->MergeFrom(*from._impl_.layout_file_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.tech_file_ != nullptr);
+      if (_this->_impl_.tech_file_ == nullptr) {
+        _this->_impl_.tech_file_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.tech_file_);
+      } else {
+        _this->_impl_.tech_file_->MergeFrom(*from._impl_.tech_file_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_coupling_caps() != 0) {
+        _this->_impl_.coupling_caps_ = from._impl_.coupling_caps_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PEXRequest::CopyFrom(const PEXRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.PEXRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PEXRequest::InternalSwap(PEXRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.output_spef_, &other->_impl_.output_spef_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.engine_, &other->_impl_.engine_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.coupling_caps_)
+      + sizeof(PEXRequest::_impl_.coupling_caps_)
+      - PROTOBUF_FIELD_OFFSET(PEXRequest, _impl_.layout_file_)>(
+          reinterpret_cast<char*>(&_impl_.layout_file_),
+          reinterpret_cast<char*>(&other->_impl_.layout_file_));
+}
+
+::google::protobuf::Metadata PEXRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class GDSExportRequest::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<GDSExportRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_._has_bits_);
+};
+
+GDSExportRequest::GDSExportRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GDSExportRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:acutesim.worker.GDSExportRequest)
+}
+PROTOBUF_NDEBUG_INLINE GDSExportRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::acutesim::worker::GDSExportRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        job_id_(arena, from.job_id_),
+        output_gds_(arena, from.output_gds_),
+        top_cell_(arena, from.top_cell_) {}
+
+GDSExportRequest::GDSExportRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GDSExportRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GDSExportRequest_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GDSExportRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.input_file_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.input_file_)
+                : nullptr;
+  _impl_.tech_file_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.tech_file_)
+                : nullptr;
+  _impl_.compress_ = from._impl_.compress_;
+
+  // @@protoc_insertion_point(copy_constructor:acutesim.worker.GDSExportRequest)
+}
+PROTOBUF_NDEBUG_INLINE GDSExportRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        job_id_(arena),
+        output_gds_(arena),
+        top_cell_(arena) {}
+
+inline void GDSExportRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, input_file_),
+           0,
+           offsetof(Impl_, compress_) -
+               offsetof(Impl_, input_file_) +
+               sizeof(Impl_::compress_));
+}
+GDSExportRequest::~GDSExportRequest() {
+  // @@protoc_insertion_point(destructor:acutesim.worker.GDSExportRequest)
+  SharedDtor(*this);
+}
+inline void GDSExportRequest::SharedDtor(MessageLite& self) {
+  GDSExportRequest& this_ = static_cast<GDSExportRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.job_id_.Destroy();
+  this_._impl_.output_gds_.Destroy();
+  this_._impl_.top_cell_.Destroy();
+  delete this_._impl_.input_file_;
+  delete this_._impl_.tech_file_;
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL GDSExportRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GDSExportRequest(arena);
+}
+constexpr auto GDSExportRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GDSExportRequest),
+                                            alignof(GDSExportRequest));
+}
+constexpr auto GDSExportRequest::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_GDSExportRequest_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &GDSExportRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GDSExportRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GDSExportRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GDSExportRequest>(), &GDSExportRequest::ByteSizeLong,
+              &GDSExportRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_._cached_size_),
+          false,
+      },
+      &GDSExportRequest::kDescriptorMethods,
+      &descriptor_table_worker_5fservice_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GDSExportRequest_class_data_ =
+        GDSExportRequest::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GDSExportRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GDSExportRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GDSExportRequest_class_data_.tc_table);
+  return GDSExportRequest_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 6, 2, 65, 2>
+GDSExportRequest::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_._has_bits_),
+    0, // no _extensions_
+    6, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967232,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    6,  // num_field_entries
+    2,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    GDSExportRequest_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::acutesim::worker::GDSExportRequest>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string job_id = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0,
+      PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.job_id_)}},
+    // .acutesim.worker.FileData input_file = 2;
+    {::_pbi::TcParser::FastMtS1,
+     {18, 3, 0,
+      PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.input_file_)}},
+    // .acutesim.worker.FileData tech_file = 3;
+    {::_pbi::TcParser::FastMtS1,
+     {26, 4, 1,
+      PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.tech_file_)}},
+    // string output_gds = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 1, 0,
+      PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.output_gds_)}},
+    // string top_cell = 5;
+    {::_pbi::TcParser::FastUS1,
+     {42, 2, 0,
+      PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.top_cell_)}},
+    // bool compress = 6;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GDSExportRequest, _impl_.compress_), 5>(),
+     {48, 5, 0,
+      PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.compress_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string job_id = 1;
+    {PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.job_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // .acutesim.worker.FileData input_file = 2;
+    {PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.input_file_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .acutesim.worker.FileData tech_file = 3;
+    {PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.tech_file_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // string output_gds = 4;
+    {PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.output_gds_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string top_cell = 5;
+    {PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.top_cell_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bool compress = 6;
+    {PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.compress_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+      {::_pbi::TcParser::GetTable<::acutesim::worker::FileData>()},
+  }},
+  {{
+    "\40\6\0\0\12\10\0\0"
+    "acutesim.worker.GDSExportRequest"
+    "job_id"
+    "output_gds"
+    "top_cell"
+  }},
+};
+PROTOBUF_NOINLINE void GDSExportRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:acutesim.worker.GDSExportRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.job_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.output_gds_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.top_cell_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(_impl_.input_file_ != nullptr);
+      _impl_.input_file_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(_impl_.tech_file_ != nullptr);
+      _impl_.tech_file_->Clear();
+    }
+  }
+  _impl_.compress_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GDSExportRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GDSExportRequest& this_ = static_cast<const GDSExportRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GDSExportRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GDSExportRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:acutesim.worker.GDSExportRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string job_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_job_id().empty()) {
+      const ::std::string& _s = this_._internal_job_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.GDSExportRequest.job_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .acutesim.worker.FileData input_file = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.input_file_, this_._impl_.input_file_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .acutesim.worker.FileData tech_file = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.tech_file_, this_._impl_.tech_file_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string output_gds = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_output_gds().empty()) {
+      const ::std::string& _s = this_._internal_output_gds();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.GDSExportRequest.output_gds");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // string top_cell = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_top_cell().empty()) {
+      const ::std::string& _s = this_._internal_top_cell();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "acutesim.worker.GDSExportRequest.top_cell");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // bool compress = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_compress() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          6, this_._internal_compress(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:acutesim.worker.GDSExportRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GDSExportRequest::ByteSizeLong(const MessageLite& base) {
+  const GDSExportRequest& this_ = static_cast<const GDSExportRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GDSExportRequest::ByteSizeLong() const {
+  const GDSExportRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:acutesim.worker.GDSExportRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string job_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_job_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_job_id());
+      }
+    }
+    // string output_gds = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_output_gds().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_output_gds());
+      }
+    }
+    // string top_cell = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_top_cell().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_top_cell());
+      }
+    }
+    // .acutesim.worker.FileData input_file = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.input_file_);
+    }
+    // .acutesim.worker.FileData tech_file = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.tech_file_);
+    }
+    // bool compress = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_compress() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GDSExportRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<GDSExportRequest*>(&to_msg);
+  auto& from = static_cast<const GDSExportRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:acutesim.worker.GDSExportRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_job_id().empty()) {
+        _this->_internal_set_job_id(from._internal_job_id());
+      } else {
+        if (_this->_impl_.job_id_.IsDefault()) {
+          _this->_internal_set_job_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_output_gds().empty()) {
+        _this->_internal_set_output_gds(from._internal_output_gds());
+      } else {
+        if (_this->_impl_.output_gds_.IsDefault()) {
+          _this->_internal_set_output_gds("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_top_cell().empty()) {
+        _this->_internal_set_top_cell(from._internal_top_cell());
+      } else {
+        if (_this->_impl_.top_cell_.IsDefault()) {
+          _this->_internal_set_top_cell("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(from._impl_.input_file_ != nullptr);
+      if (_this->_impl_.input_file_ == nullptr) {
+        _this->_impl_.input_file_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.input_file_);
+      } else {
+        _this->_impl_.input_file_->MergeFrom(*from._impl_.input_file_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.tech_file_ != nullptr);
+      if (_this->_impl_.tech_file_ == nullptr) {
+        _this->_impl_.tech_file_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.tech_file_);
+      } else {
+        _this->_impl_.tech_file_->MergeFrom(*from._impl_.tech_file_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_compress() != 0) {
+        _this->_impl_.compress_ = from._impl_.compress_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GDSExportRequest::CopyFrom(const GDSExportRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:acutesim.worker.GDSExportRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GDSExportRequest::InternalSwap(GDSExportRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.job_id_, &other->_impl_.job_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.output_gds_, &other->_impl_.output_gds_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.top_cell_, &other->_impl_.top_cell_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.compress_)
+      + sizeof(GDSExportRequest::_impl_.compress_)
+      - PROTOBUF_FIELD_OFFSET(GDSExportRequest, _impl_.input_file_)>(
+          reinterpret_cast<char*>(&_impl_.input_file_),
+          reinterpret_cast<char*>(&other->_impl_.input_file_));
+}
+
+::google::protobuf::Metadata GDSExportRequest::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

@@ -21,20 +21,25 @@ void PhysicalOverlayItem::setDEFData(
 
     int upm = design.unitsPerMicron;
 
-    // Convert die area to canvas coordinates
-    QPointF dieLower = DEFParser::defToCanvas(
-        design.dieArea.topLeft(), canvasHeight, pixelToMicronScale, upm);
-    QPointF dieUpper = DEFParser::defToCanvas(
-        design.dieArea.bottomRight(), canvasHeight, pixelToMicronScale, upm);
+    // Convert die area to canvas coordinates (Point2D → QPointF at GUI boundary)
+    using P2D = acutesim::compute::orchestration::Point2D;
+    auto toQPt = [](const P2D& p) { return QPointF(p.x, p.y); };
+
+    P2D dieOrigin{ design.dieArea.x, design.dieArea.y };
+    P2D dieCorner{ design.dieArea.x + design.dieArea.width,
+                   design.dieArea.y + design.dieArea.height };
+
+    QPointF dieLower = toQPt(DEFParser::defToCanvas(dieOrigin, canvasHeight, pixelToMicronScale, upm));
+    QPointF dieUpper = toQPt(DEFParser::defToCanvas(dieCorner, canvasHeight, pixelToMicronScale, upm));
     m_dieBounds = QRectF(dieLower, dieUpper).normalized();
 
     // Convert placements
     for (const auto& defPlace : design.placements) {
         CanvasPlacement cp;
-        cp.instanceName = defPlace.instanceName;
-        cp.cellName = defPlace.cellName;
-        cp.canvasPos = DEFParser::defToCanvas(
-            defPlace.defPosition, canvasHeight, pixelToMicronScale, upm);
+        cp.instanceName = QString::fromStdString(defPlace.instanceName);
+        cp.cellName     = QString::fromStdString(defPlace.cellName);
+        cp.canvasPos    = toQPt(DEFParser::defToCanvas(
+            defPlace.defPosition, canvasHeight, pixelToMicronScale, upm));
         m_placements.append(cp);
     }
 

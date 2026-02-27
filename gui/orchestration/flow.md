@@ -53,3 +53,4 @@ private slots:
 ## Development Rules
 1.  **Thread Safety**: gRPC calls happen on a background thread. NEVER touch Qt widgets directly from the gRPC callback; utilize `Q_EMIT` to pass data to the main thread.
 2.  **Loose Coupling**: The GUI doesn't know *what* the worker is (Docker Container, remote cluster, WSL instance)—only that it speaks the gRPC protocol.
+3.  **Strict Layering Isolation**: The GUI layer MUST NEVER directly `#include` any files from the `physics/` or `compute/solvers/` namespaces. This boundary is rigidly enforced during compilation by the `check_layering.py` pre-build hook. Any violations will break the local and CI build logic seamlessly.

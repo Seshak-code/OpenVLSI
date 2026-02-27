@@ -32,6 +32,8 @@
 #include "../orchestration/rtl_pipeline_panel.h"
 #include "../widgets/debug_suggestions_panel.h"
 #include "../widgets/command_palette.h"
+#include "../widgets/engine_log_panel.h"
+#include "../widgets/engine_console.h"
 
 class WelcomeWidget;
 class DockingManager;
@@ -110,6 +112,14 @@ private:
 
     // RTL -> GDS Pipeline Panel
     acutesim::gui::orchestration::RtlPipelinePanel* rtlPipelinePanel = nullptr;
+
+    // Engine Log Panel
+    QDockWidget* engineLogDock_ = nullptr;
+    acutesim::gui::widgets::EngineLogPanel* engineLogPanel_ = nullptr;
+
+    // Engine Console
+    QDockWidget* consoleDock_ = nullptr;
+    acutesim::gui::widgets::EngineConsole* engineConsole_ = nullptr;
 
     // Phase 11.2: Docking Manager
     DockingManager* dockingManager;

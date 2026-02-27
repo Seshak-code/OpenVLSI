@@ -13,7 +13,7 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QMessageBox>
-#include "circuit.h"
+#include <QJsonObject>
 
 class SchematicEditor;
 
@@ -31,8 +31,8 @@ class ComponentWizard : public QWizard {
 public:
     explicit ComponentWizard(SchematicEditor* editor, QWidget* parent = nullptr);
     
-    // Get the resulting SubCircuitDefinition after wizard completes
-    SubCircuitDefinition getResult() const { return resultDefinition; }
+    // Get the resulting JSON metadata after wizard completes
+    QJsonObject getResult() const { return resultDefinition; }
     
     // Check if the wizard completed successfully
     bool wasSuccessful() const { return success; }
@@ -42,7 +42,7 @@ private slots:
 
 private:
     SchematicEditor* schematicEditor;
-    SubCircuitDefinition resultDefinition;
+    QJsonObject resultDefinition;
     bool success = false;
     
     // Wizard pages
@@ -83,7 +83,7 @@ public:
     PinMappingPage(SchematicEditor* editor, QWidget* parent = nullptr);
     
     void initializePage() override;
-    std::vector<PortInfo> getPortInfo() const;
+    QList<QPair<QString, QString>> getPortInfo() const;
     
 private slots:
     void onAddPin();

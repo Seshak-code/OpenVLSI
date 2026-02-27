@@ -48,7 +48,7 @@ void batchDiodePhysics_avx2(DiodeTensor& tensor, const std::vector<double>& volt
     for (; i + 3 < n; i += 4) {
 
         // Gather terminal voltages (manual gather)
-        const double* v_ptr = voltages.data();
+        const double* __restrict__ v_ptr = voltages.data();
         const int v_size = (int)voltages.size();
 
         alignas(32) double _buf_a[4];
@@ -76,11 +76,11 @@ void batchDiodePhysics_avx2(DiodeTensor& tensor, const std::vector<double>& volt
         _mm256_storeu_pd(&tensor.v_d[i], v_v_d);
         __m256d v_n_vt = _mm256_mul_pd(v_N, v_Vt);
         __m256d v_arg = _mm256_div_pd(v_v_d, v_n_vt);
-        __m256d v_arg_clamped = _mm256_min_pd(v_arg, _mm256_set1_pd(30.0));
+        __m256d v_arg_clamped = _mm256_min_pd(v_arg, vc_30);
         __m256d v_exp_val = _mm256_exp_pd_fallback(v_arg_clamped);
-        __m256d v_i_base = _mm256_mul_pd(_mm256_sub_pd(v_exp_val, _mm256_set1_pd(1.0)), v_Is);
+        __m256d v_i_base = _mm256_mul_pd(_mm256_sub_pd(v_exp_val, vc_1), v_Is);
         __m256d v_g_base = _mm256_mul_pd(_mm256_div_pd(v_Is, v_n_vt), v_exp_val);
-        __m256d v_delta = _mm256_max_pd(_mm256_setzero_pd(), _mm256_sub_pd(v_v_d, _mm256_mul_pd(_mm256_set1_pd(30.0), v_n_vt)));
+        __m256d v_delta = _mm256_max_pd(_mm256_setzero_pd(), _mm256_sub_pd(v_v_d, _mm256_mul_pd(vc_30, v_n_vt)));
         __m256d v_i_d = _mm256_add_pd(_mm256_mul_pd(v_delta, v_g_base), v_i_base);
         _mm256_storeu_pd(&tensor.i_d[i], v_i_d);
         __m256d v_g_d = _mm256_max_pd(v_GMIN, v_g_base);
@@ -127,7 +127,7 @@ void batchMosfetPhysics_avx2(MosfetTensor& tensor, const std::vector<double>& vo
     size_t i = 0;
     // --- SIMD Loop: 4 devices per iteration ---
     for (; i + 3 < n; i += 4) {
-        const double* v_ptr = voltages.data();
+        const double* __restrict__ v_ptr = voltages.data();
         const int v_size = (int)voltages.size();
 
         // Gather terminal voltages
@@ -160,10 +160,10 @@ void batchMosfetPhysics_avx2(MosfetTensor& tensor, const std::vector<double>& vo
         __m256d v_lambda = _mm256_loadu_pd(&tensor.lambda[i]);
 
         // vgs, vds
-        __m256d v_vgs = _mm256_sub_pd(v_v_g, v_v_s);
-        __m256d v_vds = _mm256_sub_pd(v_v_d, v_v_s);
-        _mm256_storeu_pd(&tensor.vgs[i], v_vgs);
-        _mm256_storeu_pd(&tensor.vds[i], v_vds);
+        __m256d vgs_val = _mm256_sub_pd(v_v_g, v_v_s);
+        __m256d vds_val = _mm256_sub_pd(v_v_d, v_v_s);
+        _mm256_storeu_pd(&tensor.vgs[i], vgs_val);
+        _mm256_storeu_pd(&tensor.vds[i], vds_val);
 
         // beta = Kp * (W / L)
         __m256d v_beta = _mm256_mul_pd(_mm256_div_pd(v_W, v_L), v_Kp);

@@ -8,7 +8,7 @@
 #include "components/standard_cells.h"
 #include "gui/editors/schematic_editor.h"
 #include "gui/components/visual_component.h"
-#include "components/pdk_compliance.h"
+#include "gui/analysis/pdk_compliance.h"
 #include <QLineF>
 
 // --- Part 1: Structural Tests (Standard Library) ---

@@ -3,7 +3,7 @@
 #include <QDockWidget>
 #include <QTableView>
 #include <QToolBar>
-#include "../../../compute/orchestration/simulation_context.h"
+#include "engine_api/simulation_context.h"
 
 namespace acutesim::gui::analysis {
 

@@ -454,6 +454,159 @@ public:
         return Status::OK;
     }
 
+    // =========================================================================
+    // Phase 3.5: Explicit Sign-Off Stage RPCs
+    // =========================================================================
+
+    Status RunLVS(ServerContext* context, const LVSRequest* request, ServerWriter<SignOffLog>* writer) override {
+        std::string job_id = request->job_id();
+        if (job_id.empty()) job_id = "lvs-" + std::to_string(std::rand());
+
+        fs::path sandboxDir = fs::current_path() / "sandbox" / job_id;
+        try { fs::create_directories(sandboxDir); }
+        catch (const fs::filesystem_error& e) {
+            return Status(grpc::INTERNAL, std::string("Failed to create LVS sandbox: ") + e.what());
+        }
+
+        auto logMsg = [&](const std::string& msg, bool isError = false) {
+            SignOffLog log; log.set_job_id(job_id); log.set_log_line(msg); log.set_is_error(isError);
+            writer->Write(log);
+        };
+
+        if (request->has_layout_file()) {
+            fs::path p = sandboxDir / request->layout_file().filename();
+            std::ofstream ofs(p, std::ios::binary);
+            ofs.write(request->layout_file().content().data(), request->layout_file().content().size());
+        }
+        if (request->has_schematic_netlist()) {
+            fs::path p = sandboxDir / request->schematic_netlist().filename();
+            std::ofstream ofs(p, std::ios::binary);
+            ofs.write(request->schematic_netlist().content().data(), request->schematic_netlist().content().size());
+        }
+
+        logMsg("Running LVS (mode: " + (request->mode().empty() ? "hierarchical" : request->mode()) + ")...");
+        std::string ruleDeck = request->rule_deck().empty() ? "lvs_rule_deck.rb" : request->rule_deck();
+        Subprocess proc("klayout", {"-b", "-r", ruleDeck});
+        proc.setWorkingDirectory(sandboxDir.string());
+        proc.setTimeout(std::chrono::minutes(15));
+        SubprocessResult res = proc.runWithStreaming(
+            [&](const std::string& l) { logMsg(l); },
+            [&](const std::string& l) { logMsg("ERR: " + l, true); }
+        );
+        SignOffLog endLog; endLog.set_job_id(job_id); endLog.set_is_finished(true);
+        if (res.timed_out) { endLog.set_is_error(true); endLog.set_log_line("LVS timed out"); }
+        else if (res.exit_code != 0) { endLog.set_is_error(true); endLog.set_log_line("KLayout LVS failed (exit " + std::to_string(res.exit_code) + ")"); }
+        writer->Write(endLog);
+        return Status::OK;
+    }
+
+    Status RunPEX(ServerContext* context, const PEXRequest* request, ServerWriter<SignOffLog>* writer) override {
+        std::string job_id = request->job_id();
+        if (job_id.empty()) job_id = "pex-" + std::to_string(std::rand());
+
+        fs::path sandboxDir = fs::current_path() / "sandbox" / job_id;
+        try { fs::create_directories(sandboxDir); }
+        catch (const fs::filesystem_error& e) {
+            return Status(grpc::INTERNAL, std::string("Failed to create PEX sandbox: ") + e.what());
+        }
+
+        auto logMsg = [&](const std::string& msg, bool isError = false) {
+            SignOffLog log; log.set_job_id(job_id); log.set_log_line(msg); log.set_is_error(isError);
+            writer->Write(log);
+        };
+
+        if (request->has_layout_file()) {
+            fs::path p = sandboxDir / request->layout_file().filename();
+            std::ofstream ofs(p, std::ios::binary);
+            ofs.write(request->layout_file().content().data(), request->layout_file().content().size());
+        }
+
+        std::string engine  = request->engine().empty() ? "openroad_rcx" : request->engine();
+        std::string spefOut = request->output_spef().empty() ? "output.spef" : request->output_spef();
+        std::string defFile = request->has_layout_file() ? request->layout_file().filename() : "";
+        logMsg("Running PEX engine: " + engine + "...");
+
+        if (engine == "openroad_rcx") {
+            std::string tcl = "read_def " + defFile + "\nextract_parasitics -max_res 0\nwrite_spef " + spefOut + "\nexit\n";
+            fs::path tclPath = sandboxDir / "rcx.tcl";
+            { std::ofstream ofs(tclPath); ofs << tcl; }
+            Subprocess proc("openroad", {"-no_init", "rcx.tcl"});
+            proc.setWorkingDirectory(sandboxDir.string());
+            proc.setTimeout(std::chrono::minutes(20));
+            SubprocessResult res = proc.runWithStreaming(
+                [&](const std::string& l) { logMsg(l); },
+                [&](const std::string& l) { logMsg("ERR: " + l, true); }
+            );
+            SignOffLog endLog; endLog.set_job_id(job_id); endLog.set_is_finished(true);
+            if (res.timed_out) { endLog.set_is_error(true); endLog.set_log_line("PEX timed out"); }
+            else if (res.exit_code != 0) { endLog.set_is_error(true); endLog.set_log_line("OpenROAD RCX failed"); }
+            else { endLog.set_log_line("PEX complete. SPEF: " + spefOut); }
+            writer->Write(endLog);
+        } else {
+            logMsg("Unknown PEX engine: " + engine, true);
+            SignOffLog endLog; endLog.set_job_id(job_id); endLog.set_is_finished(true); endLog.set_is_error(true);
+            writer->Write(endLog);
+        }
+        return Status::OK;
+    }
+
+    Status RunGDSExport(ServerContext* context, const GDSExportRequest* request, ServerWriter<SignOffLog>* writer) override {
+        std::string job_id = request->job_id();
+        if (job_id.empty()) job_id = "gds-" + std::to_string(std::rand());
+
+        fs::path sandboxDir = fs::current_path() / "sandbox" / job_id;
+        try { fs::create_directories(sandboxDir); }
+        catch (const fs::filesystem_error& e) {
+            return Status(grpc::INTERNAL, std::string("Failed to create GDS sandbox: ") + e.what());
+        }
+
+        auto logMsg = [&](const std::string& msg, bool isError = false) {
+            SignOffLog log; log.set_job_id(job_id); log.set_log_line(msg); log.set_is_error(isError);
+            writer->Write(log);
+        };
+
+        std::string inputName = request->has_input_file() ? request->input_file().filename() : "";
+        std::string outputGDS = request->output_gds().empty() ? "output.gds" : request->output_gds();
+
+        if (request->has_input_file()) {
+            fs::path p = sandboxDir / inputName;
+            std::ofstream ofs(p, std::ios::binary);
+            ofs.write(request->input_file().content().data(), request->input_file().content().size());
+        }
+
+        logMsg("Exporting GDSII: " + inputName + " → " + outputGDS);
+        std::string ruby = "layout = RBA::Layout::new\nlayout.read(\"" + inputName + "\")\n"
+                           "opts = RBA::SaveLayoutOptions::new\nopts.format = \"GDS2\"\n"
+                           "layout.write(\"" + outputGDS + "\", opts)\n"
+                           "puts \"GDS export complete: " + outputGDS + "\"\n";
+        fs::path rbPath = sandboxDir / "gds_export.rb";
+        { std::ofstream ofs(rbPath); ofs << ruby; }
+
+        Subprocess proc("klayout", {"-b", "-r", "gds_export.rb"});
+        proc.setWorkingDirectory(sandboxDir.string());
+        proc.setTimeout(std::chrono::minutes(10));
+        SubprocessResult res = proc.runWithStreaming(
+            [&](const std::string& l) { logMsg(l); },
+            [&](const std::string& l) { logMsg("ERR: " + l, true); }
+        );
+
+        SignOffLog endLog; endLog.set_job_id(job_id); endLog.set_is_finished(true);
+        if (res.timed_out) { endLog.set_is_error(true); endLog.set_log_line("GDS export timed out"); }
+        else if (res.exit_code != 0) { endLog.set_is_error(true); endLog.set_log_line("KLayout GDS export failed"); }
+        else {
+            endLog.set_log_line("GDSII export complete: " + outputGDS);
+            fs::path gdsPath = sandboxDir / outputGDS;
+            if (fs::exists(gdsPath)) {
+                auto* report = endLog.mutable_report();
+                report->set_filename(outputGDS);
+                std::ifstream ifs(gdsPath, std::ios::binary);
+                report->set_content({std::istreambuf_iterator<char>(ifs), {}});
+            }
+        }
+        writer->Write(endLog);
+        return Status::OK;
+    }
+
     Status RunCircuitSimulation(ServerContext* context, const CircuitSimulationRequest* request, ServerWriter<CircuitSimulationLog>* writer) override {
         std::string job_id = request->job_id();
 

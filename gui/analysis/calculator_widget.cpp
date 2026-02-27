@@ -1,4 +1,6 @@
 #include "calculator_widget.h"
+#include <string>
+#include <unordered_map>
 #include <QVBoxLayout>
 #include <QDebug>
 
@@ -8,11 +10,11 @@ CalculatorWidget::CalculatorWidget(QWidget* parent) : QWidget(parent) {
     setupUI();
 }
 
-void CalculatorWidget::setWaveforms(const QMap<QString, acutesim::compute::postproc::Waveform>& waves) {
+void CalculatorWidget::setWaveforms(const std::unordered_map<std::string, acutesim::compute::postproc::Waveform>& waves) {
     engine_.setWaveforms(waves);
     waveList_->clear();
-    for (auto k : waves.keys()) {
-        waveList_->addItem(k);
+    for (const auto& [key, _] : waves) {
+        waveList_->addItem(QString::fromStdString(key));
     }
 }
 
@@ -87,7 +89,7 @@ void CalculatorWidget::onWaveSelected() {
 void CalculatorWidget::onEvalClicked() {
     QString expr = exprInput_->text();
     // Use engine to parse/eval
-    auto res = engine_.evaluate(expr);
+    auto res = engine_.evaluate(expr.toStdString());
     emit expressionEvaluated(expr, res);
 }
 

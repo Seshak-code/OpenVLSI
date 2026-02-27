@@ -68,15 +68,73 @@ class WorkerService final {
     std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::PnRLog>> PrepareAsyncRunPlaceAndRoute(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::PnRLog>>(PrepareAsyncRunPlaceAndRouteRaw(context, request, cq));
     }
-    // Digital Simulation (Verilog/VHDL)
-    std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SimulationLog>> RunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request) {
-      return std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SimulationLog>>(RunSimulationRaw(context, request));
+    // Digital Logic Simulation (Verilator/Icarus)
+    std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::HDLSimulationLog>> RunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::HDLSimulationLog>>(RunHDLSimulationRaw(context, request));
     }
-    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SimulationLog>> AsyncRunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
-      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SimulationLog>>(AsyncRunSimulationRaw(context, request, cq, tag));
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::HDLSimulationLog>> AsyncRunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::HDLSimulationLog>>(AsyncRunHDLSimulationRaw(context, request, cq, tag));
     }
-    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SimulationLog>> PrepareAsyncRunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SimulationLog>>(PrepareAsyncRunSimulationRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::HDLSimulationLog>> PrepareAsyncRunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::HDLSimulationLog>>(PrepareAsyncRunHDLSimulationRaw(context, request, cq));
+    }
+    // Analog/Mixed-Signal Circuit Simulation (Tensor MNA)
+    std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::CircuitSimulationLog>> RunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::CircuitSimulationLog>>(RunCircuitSimulationRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::CircuitSimulationLog>> AsyncRunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::CircuitSimulationLog>>(AsyncRunCircuitSimulationRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::CircuitSimulationLog>> PrepareAsyncRunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::CircuitSimulationLog>>(PrepareAsyncRunCircuitSimulationRaw(context, request, cq));
+    }
+    // Sign-Off (DRC/LVS/PEX via KLayout) — generic unified RPC
+    std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>> RunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>>(RunSignOffRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>> AsyncRunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>>(AsyncRunSignOffRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>> PrepareAsyncRunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>>(PrepareAsyncRunSignOffRaw(context, request, cq));
+    }
+    // Explicit Sign-Off stages (Phase 3.5) — typed results vs generic SignOffLog
+    std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>> RunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>>(RunLVSRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>> AsyncRunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>>(AsyncRunLVSRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>> PrepareAsyncRunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>>(PrepareAsyncRunLVSRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>> RunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>>(RunPEXRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>> AsyncRunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>>(AsyncRunPEXRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>> PrepareAsyncRunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>>(PrepareAsyncRunPEXRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>> RunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>>(RunGDSExportRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>> AsyncRunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>>(AsyncRunGDSExportRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>> PrepareAsyncRunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>>(PrepareAsyncRunGDSExportRaw(context, request, cq));
+    }
+    // Parity Validation (Regression Harness)
+    std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::RegressionLog>> RunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReaderInterface< ::acutesim::worker::RegressionLog>>(RunRegressionRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::RegressionLog>> AsyncRunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::RegressionLog>>(AsyncRunRegressionRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::RegressionLog>> PrepareAsyncRunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::RegressionLog>>(PrepareAsyncRunRegressionRaw(context, request, cq));
     }
     class async_interface {
      public:
@@ -88,8 +146,18 @@ class WorkerService final {
       virtual void RunSynthesis(::grpc::ClientContext* context, const ::acutesim::worker::SynthesisRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SynthesisLog>* reactor) = 0;
       // Place & Route (Netlist -> GDSII/DEF)
       virtual void RunPlaceAndRoute(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::PnRLog>* reactor) = 0;
-      // Digital Simulation (Verilog/VHDL)
-      virtual void RunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SimulationLog>* reactor) = 0;
+      // Digital Logic Simulation (Verilator/Icarus)
+      virtual void RunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::HDLSimulationLog>* reactor) = 0;
+      // Analog/Mixed-Signal Circuit Simulation (Tensor MNA)
+      virtual void RunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::CircuitSimulationLog>* reactor) = 0;
+      // Sign-Off (DRC/LVS/PEX via KLayout) — generic unified RPC
+      virtual void RunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) = 0;
+      // Explicit Sign-Off stages (Phase 3.5) — typed results vs generic SignOffLog
+      virtual void RunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) = 0;
+      virtual void RunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) = 0;
+      virtual void RunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) = 0;
+      // Parity Validation (Regression Harness)
+      virtual void RunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::RegressionLog>* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -103,9 +171,27 @@ class WorkerService final {
     virtual ::grpc::ClientReaderInterface< ::acutesim::worker::PnRLog>* RunPlaceAndRouteRaw(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest& request) = 0;
     virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::PnRLog>* AsyncRunPlaceAndRouteRaw(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
     virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::PnRLog>* PrepareAsyncRunPlaceAndRouteRaw(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientReaderInterface< ::acutesim::worker::SimulationLog>* RunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request) = 0;
-    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SimulationLog>* AsyncRunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
-    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SimulationLog>* PrepareAsyncRunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientReaderInterface< ::acutesim::worker::HDLSimulationLog>* RunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::HDLSimulationLog>* AsyncRunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::HDLSimulationLog>* PrepareAsyncRunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientReaderInterface< ::acutesim::worker::CircuitSimulationLog>* RunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::CircuitSimulationLog>* AsyncRunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::CircuitSimulationLog>* PrepareAsyncRunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>* RunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>* AsyncRunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>* PrepareAsyncRunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>* RunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>* AsyncRunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>* PrepareAsyncRunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>* RunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>* AsyncRunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>* PrepareAsyncRunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientReaderInterface< ::acutesim::worker::SignOffLog>* RunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>* AsyncRunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::SignOffLog>* PrepareAsyncRunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientReaderInterface< ::acutesim::worker::RegressionLog>* RunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::RegressionLog>* AsyncRunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq, void* tag) = 0;
+    virtual ::grpc::ClientAsyncReaderInterface< ::acutesim::worker::RegressionLog>* PrepareAsyncRunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -135,14 +221,68 @@ class WorkerService final {
     std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::PnRLog>> PrepareAsyncRunPlaceAndRoute(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::PnRLog>>(PrepareAsyncRunPlaceAndRouteRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SimulationLog>> RunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request) {
-      return std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SimulationLog>>(RunSimulationRaw(context, request));
+    std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::HDLSimulationLog>> RunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::HDLSimulationLog>>(RunHDLSimulationRaw(context, request));
     }
-    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SimulationLog>> AsyncRunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
-      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SimulationLog>>(AsyncRunSimulationRaw(context, request, cq, tag));
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::HDLSimulationLog>> AsyncRunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::HDLSimulationLog>>(AsyncRunHDLSimulationRaw(context, request, cq, tag));
     }
-    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SimulationLog>> PrepareAsyncRunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SimulationLog>>(PrepareAsyncRunSimulationRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::HDLSimulationLog>> PrepareAsyncRunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::HDLSimulationLog>>(PrepareAsyncRunHDLSimulationRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::CircuitSimulationLog>> RunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::CircuitSimulationLog>>(RunCircuitSimulationRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::CircuitSimulationLog>> AsyncRunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::CircuitSimulationLog>>(AsyncRunCircuitSimulationRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::CircuitSimulationLog>> PrepareAsyncRunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::CircuitSimulationLog>>(PrepareAsyncRunCircuitSimulationRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SignOffLog>> RunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SignOffLog>>(RunSignOffRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>> AsyncRunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>>(AsyncRunSignOffRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>> PrepareAsyncRunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>>(PrepareAsyncRunSignOffRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SignOffLog>> RunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SignOffLog>>(RunLVSRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>> AsyncRunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>>(AsyncRunLVSRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>> PrepareAsyncRunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>>(PrepareAsyncRunLVSRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SignOffLog>> RunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SignOffLog>>(RunPEXRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>> AsyncRunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>>(AsyncRunPEXRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>> PrepareAsyncRunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>>(PrepareAsyncRunPEXRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SignOffLog>> RunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::SignOffLog>>(RunGDSExportRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>> AsyncRunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>>(AsyncRunGDSExportRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>> PrepareAsyncRunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>>(PrepareAsyncRunGDSExportRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::RegressionLog>> RunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request) {
+      return std::unique_ptr< ::grpc::ClientReader< ::acutesim::worker::RegressionLog>>(RunRegressionRaw(context, request));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::RegressionLog>> AsyncRunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::RegressionLog>>(AsyncRunRegressionRaw(context, request, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::RegressionLog>> PrepareAsyncRunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncReader< ::acutesim::worker::RegressionLog>>(PrepareAsyncRunRegressionRaw(context, request, cq));
     }
     class async final :
       public StubInterface::async_interface {
@@ -151,7 +291,13 @@ class WorkerService final {
       void GetStatus(::grpc::ClientContext* context, const ::acutesim::worker::StatusRequest* request, ::acutesim::worker::StatusResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void RunSynthesis(::grpc::ClientContext* context, const ::acutesim::worker::SynthesisRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SynthesisLog>* reactor) override;
       void RunPlaceAndRoute(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::PnRLog>* reactor) override;
-      void RunSimulation(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SimulationLog>* reactor) override;
+      void RunHDLSimulation(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::HDLSimulationLog>* reactor) override;
+      void RunCircuitSimulation(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::CircuitSimulationLog>* reactor) override;
+      void RunSignOff(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) override;
+      void RunLVS(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) override;
+      void RunPEX(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) override;
+      void RunGDSExport(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::SignOffLog>* reactor) override;
+      void RunRegression(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest* request, ::grpc::ClientReadReactor< ::acutesim::worker::RegressionLog>* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -171,13 +317,37 @@ class WorkerService final {
     ::grpc::ClientReader< ::acutesim::worker::PnRLog>* RunPlaceAndRouteRaw(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest& request) override;
     ::grpc::ClientAsyncReader< ::acutesim::worker::PnRLog>* AsyncRunPlaceAndRouteRaw(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
     ::grpc::ClientAsyncReader< ::acutesim::worker::PnRLog>* PrepareAsyncRunPlaceAndRouteRaw(::grpc::ClientContext* context, const ::acutesim::worker::PnRRequest& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientReader< ::acutesim::worker::SimulationLog>* RunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request) override;
-    ::grpc::ClientAsyncReader< ::acutesim::worker::SimulationLog>* AsyncRunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
-    ::grpc::ClientAsyncReader< ::acutesim::worker::SimulationLog>* PrepareAsyncRunSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::SimulationRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientReader< ::acutesim::worker::HDLSimulationLog>* RunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::HDLSimulationLog>* AsyncRunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::HDLSimulationLog>* PrepareAsyncRunHDLSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::HDLSimulationRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientReader< ::acutesim::worker::CircuitSimulationLog>* RunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::CircuitSimulationLog>* AsyncRunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::CircuitSimulationLog>* PrepareAsyncRunCircuitSimulationRaw(::grpc::ClientContext* context, const ::acutesim::worker::CircuitSimulationRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientReader< ::acutesim::worker::SignOffLog>* RunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* AsyncRunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* PrepareAsyncRunSignOffRaw(::grpc::ClientContext* context, const ::acutesim::worker::SignOffRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientReader< ::acutesim::worker::SignOffLog>* RunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* AsyncRunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* PrepareAsyncRunLVSRaw(::grpc::ClientContext* context, const ::acutesim::worker::LVSRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientReader< ::acutesim::worker::SignOffLog>* RunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* AsyncRunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* PrepareAsyncRunPEXRaw(::grpc::ClientContext* context, const ::acutesim::worker::PEXRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientReader< ::acutesim::worker::SignOffLog>* RunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* AsyncRunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::SignOffLog>* PrepareAsyncRunGDSExportRaw(::grpc::ClientContext* context, const ::acutesim::worker::GDSExportRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientReader< ::acutesim::worker::RegressionLog>* RunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::RegressionLog>* AsyncRunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq, void* tag) override;
+    ::grpc::ClientAsyncReader< ::acutesim::worker::RegressionLog>* PrepareAsyncRunRegressionRaw(::grpc::ClientContext* context, const ::acutesim::worker::RegressionRequest& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_GetStatus_;
     const ::grpc::internal::RpcMethod rpcmethod_RunSynthesis_;
     const ::grpc::internal::RpcMethod rpcmethod_RunPlaceAndRoute_;
-    const ::grpc::internal::RpcMethod rpcmethod_RunSimulation_;
+    const ::grpc::internal::RpcMethod rpcmethod_RunHDLSimulation_;
+    const ::grpc::internal::RpcMethod rpcmethod_RunCircuitSimulation_;
+    const ::grpc::internal::RpcMethod rpcmethod_RunSignOff_;
+    const ::grpc::internal::RpcMethod rpcmethod_RunLVS_;
+    const ::grpc::internal::RpcMethod rpcmethod_RunPEX_;
+    const ::grpc::internal::RpcMethod rpcmethod_RunGDSExport_;
+    const ::grpc::internal::RpcMethod rpcmethod_RunRegression_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -191,8 +361,18 @@ class WorkerService final {
     virtual ::grpc::Status RunSynthesis(::grpc::ServerContext* context, const ::acutesim::worker::SynthesisRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SynthesisLog>* writer);
     // Place & Route (Netlist -> GDSII/DEF)
     virtual ::grpc::Status RunPlaceAndRoute(::grpc::ServerContext* context, const ::acutesim::worker::PnRRequest* request, ::grpc::ServerWriter< ::acutesim::worker::PnRLog>* writer);
-    // Digital Simulation (Verilog/VHDL)
-    virtual ::grpc::Status RunSimulation(::grpc::ServerContext* context, const ::acutesim::worker::SimulationRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SimulationLog>* writer);
+    // Digital Logic Simulation (Verilator/Icarus)
+    virtual ::grpc::Status RunHDLSimulation(::grpc::ServerContext* context, const ::acutesim::worker::HDLSimulationRequest* request, ::grpc::ServerWriter< ::acutesim::worker::HDLSimulationLog>* writer);
+    // Analog/Mixed-Signal Circuit Simulation (Tensor MNA)
+    virtual ::grpc::Status RunCircuitSimulation(::grpc::ServerContext* context, const ::acutesim::worker::CircuitSimulationRequest* request, ::grpc::ServerWriter< ::acutesim::worker::CircuitSimulationLog>* writer);
+    // Sign-Off (DRC/LVS/PEX via KLayout) — generic unified RPC
+    virtual ::grpc::Status RunSignOff(::grpc::ServerContext* context, const ::acutesim::worker::SignOffRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* writer);
+    // Explicit Sign-Off stages (Phase 3.5) — typed results vs generic SignOffLog
+    virtual ::grpc::Status RunLVS(::grpc::ServerContext* context, const ::acutesim::worker::LVSRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* writer);
+    virtual ::grpc::Status RunPEX(::grpc::ServerContext* context, const ::acutesim::worker::PEXRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* writer);
+    virtual ::grpc::Status RunGDSExport(::grpc::ServerContext* context, const ::acutesim::worker::GDSExportRequest* request, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* writer);
+    // Parity Validation (Regression Harness)
+    virtual ::grpc::Status RunRegression(::grpc::ServerContext* context, const ::acutesim::worker::RegressionRequest* request, ::grpc::ServerWriter< ::acutesim::worker::RegressionLog>* writer);
   };
   template <class BaseClass>
   class WithAsyncMethod_GetStatus : public BaseClass {
@@ -255,26 +435,146 @@ class WorkerService final {
     }
   };
   template <class BaseClass>
-  class WithAsyncMethod_RunSimulation : public BaseClass {
+  class WithAsyncMethod_RunHDLSimulation : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithAsyncMethod_RunSimulation() {
+    WithAsyncMethod_RunHDLSimulation() {
       ::grpc::Service::MarkMethodAsync(3);
     }
-    ~WithAsyncMethod_RunSimulation() override {
+    ~WithAsyncMethod_RunHDLSimulation() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status RunSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SimulationLog>* /*writer*/) override {
+    ::grpc::Status RunHDLSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::HDLSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::HDLSimulationLog>* /*writer*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestRunSimulation(::grpc::ServerContext* context, ::acutesim::worker::SimulationRequest* request, ::grpc::ServerAsyncWriter< ::acutesim::worker::SimulationLog>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestRunHDLSimulation(::grpc::ServerContext* context, ::acutesim::worker::HDLSimulationRequest* request, ::grpc::ServerAsyncWriter< ::acutesim::worker::HDLSimulationLog>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncServerStreaming(3, context, request, writer, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_GetStatus<WithAsyncMethod_RunSynthesis<WithAsyncMethod_RunPlaceAndRoute<WithAsyncMethod_RunSimulation<Service > > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_RunCircuitSimulation : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RunCircuitSimulation() {
+      ::grpc::Service::MarkMethodAsync(4);
+    }
+    ~WithAsyncMethod_RunCircuitSimulation() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunCircuitSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::CircuitSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::CircuitSimulationLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunCircuitSimulation(::grpc::ServerContext* context, ::acutesim::worker::CircuitSimulationRequest* request, ::grpc::ServerAsyncWriter< ::acutesim::worker::CircuitSimulationLog>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(4, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RunSignOff : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RunSignOff() {
+      ::grpc::Service::MarkMethodAsync(5);
+    }
+    ~WithAsyncMethod_RunSignOff() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunSignOff(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SignOffRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunSignOff(::grpc::ServerContext* context, ::acutesim::worker::SignOffRequest* request, ::grpc::ServerAsyncWriter< ::acutesim::worker::SignOffLog>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(5, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RunLVS : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RunLVS() {
+      ::grpc::Service::MarkMethodAsync(6);
+    }
+    ~WithAsyncMethod_RunLVS() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunLVS(::grpc::ServerContext* /*context*/, const ::acutesim::worker::LVSRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunLVS(::grpc::ServerContext* context, ::acutesim::worker::LVSRequest* request, ::grpc::ServerAsyncWriter< ::acutesim::worker::SignOffLog>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(6, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RunPEX : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RunPEX() {
+      ::grpc::Service::MarkMethodAsync(7);
+    }
+    ~WithAsyncMethod_RunPEX() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunPEX(::grpc::ServerContext* /*context*/, const ::acutesim::worker::PEXRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunPEX(::grpc::ServerContext* context, ::acutesim::worker::PEXRequest* request, ::grpc::ServerAsyncWriter< ::acutesim::worker::SignOffLog>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(7, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RunGDSExport : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RunGDSExport() {
+      ::grpc::Service::MarkMethodAsync(8);
+    }
+    ~WithAsyncMethod_RunGDSExport() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunGDSExport(::grpc::ServerContext* /*context*/, const ::acutesim::worker::GDSExportRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunGDSExport(::grpc::ServerContext* context, ::acutesim::worker::GDSExportRequest* request, ::grpc::ServerAsyncWriter< ::acutesim::worker::SignOffLog>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(8, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RunRegression : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RunRegression() {
+      ::grpc::Service::MarkMethodAsync(9);
+    }
+    ~WithAsyncMethod_RunRegression() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunRegression(::grpc::ServerContext* /*context*/, const ::acutesim::worker::RegressionRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::RegressionLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunRegression(::grpc::ServerContext* context, ::acutesim::worker::RegressionRequest* request, ::grpc::ServerAsyncWriter< ::acutesim::worker::RegressionLog>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(9, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_GetStatus<WithAsyncMethod_RunSynthesis<WithAsyncMethod_RunPlaceAndRoute<WithAsyncMethod_RunHDLSimulation<WithAsyncMethod_RunCircuitSimulation<WithAsyncMethod_RunSignOff<WithAsyncMethod_RunLVS<WithAsyncMethod_RunPEX<WithAsyncMethod_RunGDSExport<WithAsyncMethod_RunRegression<Service > > > > > > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_GetStatus : public BaseClass {
    private:
@@ -347,28 +647,160 @@ class WorkerService final {
       ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::PnRRequest* /*request*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithCallbackMethod_RunSimulation : public BaseClass {
+  class WithCallbackMethod_RunHDLSimulation : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithCallbackMethod_RunSimulation() {
+    WithCallbackMethod_RunHDLSimulation() {
       ::grpc::Service::MarkMethodCallback(3,
-          new ::grpc::internal::CallbackServerStreamingHandler< ::acutesim::worker::SimulationRequest, ::acutesim::worker::SimulationLog>(
+          new ::grpc::internal::CallbackServerStreamingHandler< ::acutesim::worker::HDLSimulationRequest, ::acutesim::worker::HDLSimulationLog>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::acutesim::worker::SimulationRequest* request) { return this->RunSimulation(context, request); }));
+                   ::grpc::CallbackServerContext* context, const ::acutesim::worker::HDLSimulationRequest* request) { return this->RunHDLSimulation(context, request); }));
     }
-    ~WithCallbackMethod_RunSimulation() override {
+    ~WithCallbackMethod_RunHDLSimulation() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status RunSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SimulationLog>* /*writer*/) override {
+    ::grpc::Status RunHDLSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::HDLSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::HDLSimulationLog>* /*writer*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerWriteReactor< ::acutesim::worker::SimulationLog>* RunSimulation(
-      ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::SimulationRequest* /*request*/)  { return nullptr; }
+    virtual ::grpc::ServerWriteReactor< ::acutesim::worker::HDLSimulationLog>* RunHDLSimulation(
+      ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::HDLSimulationRequest* /*request*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_GetStatus<WithCallbackMethod_RunSynthesis<WithCallbackMethod_RunPlaceAndRoute<WithCallbackMethod_RunSimulation<Service > > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_RunCircuitSimulation : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RunCircuitSimulation() {
+      ::grpc::Service::MarkMethodCallback(4,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::acutesim::worker::CircuitSimulationRequest, ::acutesim::worker::CircuitSimulationLog>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::acutesim::worker::CircuitSimulationRequest* request) { return this->RunCircuitSimulation(context, request); }));
+    }
+    ~WithCallbackMethod_RunCircuitSimulation() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunCircuitSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::CircuitSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::CircuitSimulationLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::acutesim::worker::CircuitSimulationLog>* RunCircuitSimulation(
+      ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::CircuitSimulationRequest* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RunSignOff : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RunSignOff() {
+      ::grpc::Service::MarkMethodCallback(5,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::acutesim::worker::SignOffRequest, ::acutesim::worker::SignOffLog>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::acutesim::worker::SignOffRequest* request) { return this->RunSignOff(context, request); }));
+    }
+    ~WithCallbackMethod_RunSignOff() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunSignOff(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SignOffRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::acutesim::worker::SignOffLog>* RunSignOff(
+      ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::SignOffRequest* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RunLVS : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RunLVS() {
+      ::grpc::Service::MarkMethodCallback(6,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::acutesim::worker::LVSRequest, ::acutesim::worker::SignOffLog>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::acutesim::worker::LVSRequest* request) { return this->RunLVS(context, request); }));
+    }
+    ~WithCallbackMethod_RunLVS() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunLVS(::grpc::ServerContext* /*context*/, const ::acutesim::worker::LVSRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::acutesim::worker::SignOffLog>* RunLVS(
+      ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::LVSRequest* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RunPEX : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RunPEX() {
+      ::grpc::Service::MarkMethodCallback(7,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::acutesim::worker::PEXRequest, ::acutesim::worker::SignOffLog>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::acutesim::worker::PEXRequest* request) { return this->RunPEX(context, request); }));
+    }
+    ~WithCallbackMethod_RunPEX() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunPEX(::grpc::ServerContext* /*context*/, const ::acutesim::worker::PEXRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::acutesim::worker::SignOffLog>* RunPEX(
+      ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::PEXRequest* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RunGDSExport : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RunGDSExport() {
+      ::grpc::Service::MarkMethodCallback(8,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::acutesim::worker::GDSExportRequest, ::acutesim::worker::SignOffLog>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::acutesim::worker::GDSExportRequest* request) { return this->RunGDSExport(context, request); }));
+    }
+    ~WithCallbackMethod_RunGDSExport() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunGDSExport(::grpc::ServerContext* /*context*/, const ::acutesim::worker::GDSExportRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::acutesim::worker::SignOffLog>* RunGDSExport(
+      ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::GDSExportRequest* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RunRegression : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RunRegression() {
+      ::grpc::Service::MarkMethodCallback(9,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::acutesim::worker::RegressionRequest, ::acutesim::worker::RegressionLog>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::acutesim::worker::RegressionRequest* request) { return this->RunRegression(context, request); }));
+    }
+    ~WithCallbackMethod_RunRegression() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunRegression(::grpc::ServerContext* /*context*/, const ::acutesim::worker::RegressionRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::RegressionLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::acutesim::worker::RegressionLog>* RunRegression(
+      ::grpc::CallbackServerContext* /*context*/, const ::acutesim::worker::RegressionRequest* /*request*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_GetStatus<WithCallbackMethod_RunSynthesis<WithCallbackMethod_RunPlaceAndRoute<WithCallbackMethod_RunHDLSimulation<WithCallbackMethod_RunCircuitSimulation<WithCallbackMethod_RunSignOff<WithCallbackMethod_RunLVS<WithCallbackMethod_RunPEX<WithCallbackMethod_RunGDSExport<WithCallbackMethod_RunRegression<Service > > > > > > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_GetStatus : public BaseClass {
@@ -422,18 +854,120 @@ class WorkerService final {
     }
   };
   template <class BaseClass>
-  class WithGenericMethod_RunSimulation : public BaseClass {
+  class WithGenericMethod_RunHDLSimulation : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithGenericMethod_RunSimulation() {
+    WithGenericMethod_RunHDLSimulation() {
       ::grpc::Service::MarkMethodGeneric(3);
     }
-    ~WithGenericMethod_RunSimulation() override {
+    ~WithGenericMethod_RunHDLSimulation() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status RunSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SimulationLog>* /*writer*/) override {
+    ::grpc::Status RunHDLSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::HDLSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::HDLSimulationLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RunCircuitSimulation : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RunCircuitSimulation() {
+      ::grpc::Service::MarkMethodGeneric(4);
+    }
+    ~WithGenericMethod_RunCircuitSimulation() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunCircuitSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::CircuitSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::CircuitSimulationLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RunSignOff : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RunSignOff() {
+      ::grpc::Service::MarkMethodGeneric(5);
+    }
+    ~WithGenericMethod_RunSignOff() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunSignOff(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SignOffRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RunLVS : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RunLVS() {
+      ::grpc::Service::MarkMethodGeneric(6);
+    }
+    ~WithGenericMethod_RunLVS() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunLVS(::grpc::ServerContext* /*context*/, const ::acutesim::worker::LVSRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RunPEX : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RunPEX() {
+      ::grpc::Service::MarkMethodGeneric(7);
+    }
+    ~WithGenericMethod_RunPEX() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunPEX(::grpc::ServerContext* /*context*/, const ::acutesim::worker::PEXRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RunGDSExport : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RunGDSExport() {
+      ::grpc::Service::MarkMethodGeneric(8);
+    }
+    ~WithGenericMethod_RunGDSExport() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunGDSExport(::grpc::ServerContext* /*context*/, const ::acutesim::worker::GDSExportRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RunRegression : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RunRegression() {
+      ::grpc::Service::MarkMethodGeneric(9);
+    }
+    ~WithGenericMethod_RunRegression() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunRegression(::grpc::ServerContext* /*context*/, const ::acutesim::worker::RegressionRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::RegressionLog>* /*writer*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -499,23 +1033,143 @@ class WorkerService final {
     }
   };
   template <class BaseClass>
-  class WithRawMethod_RunSimulation : public BaseClass {
+  class WithRawMethod_RunHDLSimulation : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawMethod_RunSimulation() {
+    WithRawMethod_RunHDLSimulation() {
       ::grpc::Service::MarkMethodRaw(3);
     }
-    ~WithRawMethod_RunSimulation() override {
+    ~WithRawMethod_RunHDLSimulation() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status RunSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SimulationLog>* /*writer*/) override {
+    ::grpc::Status RunHDLSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::HDLSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::HDLSimulationLog>* /*writer*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestRunSimulation(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncWriter< ::grpc::ByteBuffer>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestRunHDLSimulation(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncWriter< ::grpc::ByteBuffer>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncServerStreaming(3, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RunCircuitSimulation : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RunCircuitSimulation() {
+      ::grpc::Service::MarkMethodRaw(4);
+    }
+    ~WithRawMethod_RunCircuitSimulation() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunCircuitSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::CircuitSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::CircuitSimulationLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunCircuitSimulation(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncWriter< ::grpc::ByteBuffer>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(4, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RunSignOff : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RunSignOff() {
+      ::grpc::Service::MarkMethodRaw(5);
+    }
+    ~WithRawMethod_RunSignOff() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunSignOff(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SignOffRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunSignOff(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncWriter< ::grpc::ByteBuffer>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(5, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RunLVS : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RunLVS() {
+      ::grpc::Service::MarkMethodRaw(6);
+    }
+    ~WithRawMethod_RunLVS() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunLVS(::grpc::ServerContext* /*context*/, const ::acutesim::worker::LVSRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunLVS(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncWriter< ::grpc::ByteBuffer>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(6, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RunPEX : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RunPEX() {
+      ::grpc::Service::MarkMethodRaw(7);
+    }
+    ~WithRawMethod_RunPEX() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunPEX(::grpc::ServerContext* /*context*/, const ::acutesim::worker::PEXRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunPEX(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncWriter< ::grpc::ByteBuffer>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(7, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RunGDSExport : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RunGDSExport() {
+      ::grpc::Service::MarkMethodRaw(8);
+    }
+    ~WithRawMethod_RunGDSExport() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunGDSExport(::grpc::ServerContext* /*context*/, const ::acutesim::worker::GDSExportRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunGDSExport(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncWriter< ::grpc::ByteBuffer>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(8, context, request, writer, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RunRegression : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RunRegression() {
+      ::grpc::Service::MarkMethodRaw(9);
+    }
+    ~WithRawMethod_RunRegression() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunRegression(::grpc::ServerContext* /*context*/, const ::acutesim::worker::RegressionRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::RegressionLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRunRegression(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncWriter< ::grpc::ByteBuffer>* writer, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncServerStreaming(9, context, request, writer, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -585,25 +1239,157 @@ class WorkerService final {
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithRawCallbackMethod_RunSimulation : public BaseClass {
+  class WithRawCallbackMethod_RunHDLSimulation : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawCallbackMethod_RunSimulation() {
+    WithRawCallbackMethod_RunHDLSimulation() {
       ::grpc::Service::MarkMethodRawCallback(3,
           new ::grpc::internal::CallbackServerStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
-                   ::grpc::CallbackServerContext* context, const::grpc::ByteBuffer* request) { return this->RunSimulation(context, request); }));
+                   ::grpc::CallbackServerContext* context, const::grpc::ByteBuffer* request) { return this->RunHDLSimulation(context, request); }));
     }
-    ~WithRawCallbackMethod_RunSimulation() override {
+    ~WithRawCallbackMethod_RunHDLSimulation() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status RunSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SimulationLog>* /*writer*/) override {
+    ::grpc::Status RunHDLSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::HDLSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::HDLSimulationLog>* /*writer*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerWriteReactor< ::grpc::ByteBuffer>* RunSimulation(
+    virtual ::grpc::ServerWriteReactor< ::grpc::ByteBuffer>* RunHDLSimulation(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RunCircuitSimulation : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RunCircuitSimulation() {
+      ::grpc::Service::MarkMethodRawCallback(4,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const::grpc::ByteBuffer* request) { return this->RunCircuitSimulation(context, request); }));
+    }
+    ~WithRawCallbackMethod_RunCircuitSimulation() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunCircuitSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::CircuitSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::CircuitSimulationLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::grpc::ByteBuffer>* RunCircuitSimulation(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RunSignOff : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RunSignOff() {
+      ::grpc::Service::MarkMethodRawCallback(5,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const::grpc::ByteBuffer* request) { return this->RunSignOff(context, request); }));
+    }
+    ~WithRawCallbackMethod_RunSignOff() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunSignOff(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SignOffRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::grpc::ByteBuffer>* RunSignOff(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RunLVS : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RunLVS() {
+      ::grpc::Service::MarkMethodRawCallback(6,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const::grpc::ByteBuffer* request) { return this->RunLVS(context, request); }));
+    }
+    ~WithRawCallbackMethod_RunLVS() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunLVS(::grpc::ServerContext* /*context*/, const ::acutesim::worker::LVSRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::grpc::ByteBuffer>* RunLVS(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RunPEX : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RunPEX() {
+      ::grpc::Service::MarkMethodRawCallback(7,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const::grpc::ByteBuffer* request) { return this->RunPEX(context, request); }));
+    }
+    ~WithRawCallbackMethod_RunPEX() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunPEX(::grpc::ServerContext* /*context*/, const ::acutesim::worker::PEXRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::grpc::ByteBuffer>* RunPEX(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RunGDSExport : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RunGDSExport() {
+      ::grpc::Service::MarkMethodRawCallback(8,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const::grpc::ByteBuffer* request) { return this->RunGDSExport(context, request); }));
+    }
+    ~WithRawCallbackMethod_RunGDSExport() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunGDSExport(::grpc::ServerContext* /*context*/, const ::acutesim::worker::GDSExportRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::grpc::ByteBuffer>* RunGDSExport(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RunRegression : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RunRegression() {
+      ::grpc::Service::MarkMethodRawCallback(9,
+          new ::grpc::internal::CallbackServerStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const::grpc::ByteBuffer* request) { return this->RunRegression(context, request); }));
+    }
+    ~WithRawCallbackMethod_RunRegression() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RunRegression(::grpc::ServerContext* /*context*/, const ::acutesim::worker::RegressionRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::RegressionLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerWriteReactor< ::grpc::ByteBuffer>* RunRegression(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -689,34 +1475,196 @@ class WorkerService final {
     virtual ::grpc::Status StreamedRunPlaceAndRoute(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::PnRRequest,::acutesim::worker::PnRLog>* server_split_streamer) = 0;
   };
   template <class BaseClass>
-  class WithSplitStreamingMethod_RunSimulation : public BaseClass {
+  class WithSplitStreamingMethod_RunHDLSimulation : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithSplitStreamingMethod_RunSimulation() {
+    WithSplitStreamingMethod_RunHDLSimulation() {
       ::grpc::Service::MarkMethodStreamed(3,
         new ::grpc::internal::SplitServerStreamingHandler<
-          ::acutesim::worker::SimulationRequest, ::acutesim::worker::SimulationLog>(
+          ::acutesim::worker::HDLSimulationRequest, ::acutesim::worker::HDLSimulationLog>(
             [this](::grpc::ServerContext* context,
                    ::grpc::ServerSplitStreamer<
-                     ::acutesim::worker::SimulationRequest, ::acutesim::worker::SimulationLog>* streamer) {
-                       return this->StreamedRunSimulation(context,
+                     ::acutesim::worker::HDLSimulationRequest, ::acutesim::worker::HDLSimulationLog>* streamer) {
+                       return this->StreamedRunHDLSimulation(context,
                          streamer);
                   }));
     }
-    ~WithSplitStreamingMethod_RunSimulation() override {
+    ~WithSplitStreamingMethod_RunHDLSimulation() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status RunSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SimulationLog>* /*writer*/) override {
+    ::grpc::Status RunHDLSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::HDLSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::HDLSimulationLog>* /*writer*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     // replace default version of method with split streamed
-    virtual ::grpc::Status StreamedRunSimulation(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::SimulationRequest,::acutesim::worker::SimulationLog>* server_split_streamer) = 0;
+    virtual ::grpc::Status StreamedRunHDLSimulation(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::HDLSimulationRequest,::acutesim::worker::HDLSimulationLog>* server_split_streamer) = 0;
   };
-  typedef WithSplitStreamingMethod_RunSynthesis<WithSplitStreamingMethod_RunPlaceAndRoute<WithSplitStreamingMethod_RunSimulation<Service > > > SplitStreamedService;
-  typedef WithStreamedUnaryMethod_GetStatus<WithSplitStreamingMethod_RunSynthesis<WithSplitStreamingMethod_RunPlaceAndRoute<WithSplitStreamingMethod_RunSimulation<Service > > > > StreamedService;
+  template <class BaseClass>
+  class WithSplitStreamingMethod_RunCircuitSimulation : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithSplitStreamingMethod_RunCircuitSimulation() {
+      ::grpc::Service::MarkMethodStreamed(4,
+        new ::grpc::internal::SplitServerStreamingHandler<
+          ::acutesim::worker::CircuitSimulationRequest, ::acutesim::worker::CircuitSimulationLog>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerSplitStreamer<
+                     ::acutesim::worker::CircuitSimulationRequest, ::acutesim::worker::CircuitSimulationLog>* streamer) {
+                       return this->StreamedRunCircuitSimulation(context,
+                         streamer);
+                  }));
+    }
+    ~WithSplitStreamingMethod_RunCircuitSimulation() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RunCircuitSimulation(::grpc::ServerContext* /*context*/, const ::acutesim::worker::CircuitSimulationRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::CircuitSimulationLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with split streamed
+    virtual ::grpc::Status StreamedRunCircuitSimulation(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::CircuitSimulationRequest,::acutesim::worker::CircuitSimulationLog>* server_split_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithSplitStreamingMethod_RunSignOff : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithSplitStreamingMethod_RunSignOff() {
+      ::grpc::Service::MarkMethodStreamed(5,
+        new ::grpc::internal::SplitServerStreamingHandler<
+          ::acutesim::worker::SignOffRequest, ::acutesim::worker::SignOffLog>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerSplitStreamer<
+                     ::acutesim::worker::SignOffRequest, ::acutesim::worker::SignOffLog>* streamer) {
+                       return this->StreamedRunSignOff(context,
+                         streamer);
+                  }));
+    }
+    ~WithSplitStreamingMethod_RunSignOff() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RunSignOff(::grpc::ServerContext* /*context*/, const ::acutesim::worker::SignOffRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with split streamed
+    virtual ::grpc::Status StreamedRunSignOff(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::SignOffRequest,::acutesim::worker::SignOffLog>* server_split_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithSplitStreamingMethod_RunLVS : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithSplitStreamingMethod_RunLVS() {
+      ::grpc::Service::MarkMethodStreamed(6,
+        new ::grpc::internal::SplitServerStreamingHandler<
+          ::acutesim::worker::LVSRequest, ::acutesim::worker::SignOffLog>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerSplitStreamer<
+                     ::acutesim::worker::LVSRequest, ::acutesim::worker::SignOffLog>* streamer) {
+                       return this->StreamedRunLVS(context,
+                         streamer);
+                  }));
+    }
+    ~WithSplitStreamingMethod_RunLVS() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RunLVS(::grpc::ServerContext* /*context*/, const ::acutesim::worker::LVSRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with split streamed
+    virtual ::grpc::Status StreamedRunLVS(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::LVSRequest,::acutesim::worker::SignOffLog>* server_split_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithSplitStreamingMethod_RunPEX : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithSplitStreamingMethod_RunPEX() {
+      ::grpc::Service::MarkMethodStreamed(7,
+        new ::grpc::internal::SplitServerStreamingHandler<
+          ::acutesim::worker::PEXRequest, ::acutesim::worker::SignOffLog>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerSplitStreamer<
+                     ::acutesim::worker::PEXRequest, ::acutesim::worker::SignOffLog>* streamer) {
+                       return this->StreamedRunPEX(context,
+                         streamer);
+                  }));
+    }
+    ~WithSplitStreamingMethod_RunPEX() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RunPEX(::grpc::ServerContext* /*context*/, const ::acutesim::worker::PEXRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with split streamed
+    virtual ::grpc::Status StreamedRunPEX(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::PEXRequest,::acutesim::worker::SignOffLog>* server_split_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithSplitStreamingMethod_RunGDSExport : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithSplitStreamingMethod_RunGDSExport() {
+      ::grpc::Service::MarkMethodStreamed(8,
+        new ::grpc::internal::SplitServerStreamingHandler<
+          ::acutesim::worker::GDSExportRequest, ::acutesim::worker::SignOffLog>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerSplitStreamer<
+                     ::acutesim::worker::GDSExportRequest, ::acutesim::worker::SignOffLog>* streamer) {
+                       return this->StreamedRunGDSExport(context,
+                         streamer);
+                  }));
+    }
+    ~WithSplitStreamingMethod_RunGDSExport() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RunGDSExport(::grpc::ServerContext* /*context*/, const ::acutesim::worker::GDSExportRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::SignOffLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with split streamed
+    virtual ::grpc::Status StreamedRunGDSExport(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::GDSExportRequest,::acutesim::worker::SignOffLog>* server_split_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithSplitStreamingMethod_RunRegression : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithSplitStreamingMethod_RunRegression() {
+      ::grpc::Service::MarkMethodStreamed(9,
+        new ::grpc::internal::SplitServerStreamingHandler<
+          ::acutesim::worker::RegressionRequest, ::acutesim::worker::RegressionLog>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerSplitStreamer<
+                     ::acutesim::worker::RegressionRequest, ::acutesim::worker::RegressionLog>* streamer) {
+                       return this->StreamedRunRegression(context,
+                         streamer);
+                  }));
+    }
+    ~WithSplitStreamingMethod_RunRegression() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RunRegression(::grpc::ServerContext* /*context*/, const ::acutesim::worker::RegressionRequest* /*request*/, ::grpc::ServerWriter< ::acutesim::worker::RegressionLog>* /*writer*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with split streamed
+    virtual ::grpc::Status StreamedRunRegression(::grpc::ServerContext* context, ::grpc::ServerSplitStreamer< ::acutesim::worker::RegressionRequest,::acutesim::worker::RegressionLog>* server_split_streamer) = 0;
+  };
+  typedef WithSplitStreamingMethod_RunSynthesis<WithSplitStreamingMethod_RunPlaceAndRoute<WithSplitStreamingMethod_RunHDLSimulation<WithSplitStreamingMethod_RunCircuitSimulation<WithSplitStreamingMethod_RunSignOff<WithSplitStreamingMethod_RunLVS<WithSplitStreamingMethod_RunPEX<WithSplitStreamingMethod_RunGDSExport<WithSplitStreamingMethod_RunRegression<Service > > > > > > > > > SplitStreamedService;
+  typedef WithStreamedUnaryMethod_GetStatus<WithSplitStreamingMethod_RunSynthesis<WithSplitStreamingMethod_RunPlaceAndRoute<WithSplitStreamingMethod_RunHDLSimulation<WithSplitStreamingMethod_RunCircuitSimulation<WithSplitStreamingMethod_RunSignOff<WithSplitStreamingMethod_RunLVS<WithSplitStreamingMethod_RunPEX<WithSplitStreamingMethod_RunGDSExport<WithSplitStreamingMethod_RunRegression<Service > > > > > > > > > > StreamedService;
 };
 
 }  // namespace worker

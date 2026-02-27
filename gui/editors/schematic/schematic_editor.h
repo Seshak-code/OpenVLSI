@@ -17,7 +17,7 @@
 #include "../../core/editor_manager.h" // For IEditor
 #include "../../core/hierarchy_path.h" // Phase 5: Hierarchical Navigation
 #include "../../components/visual_component.h"
-#include "../../../components/circuit.h"
+#include "../../../compute/orchestration/dto/schematic_dto.h"
 #include "schematic_view.h"
 
 
@@ -27,7 +27,7 @@
 #include "../../analysis/erc_engine.h"
 #include "../../analysis/erc_autofix.h"
 #include "../../analysis/erc_autofix.h"
-#include "../../../physics/simulation_profile.h"
+#include "../../analysis/simulation_profile.h"
 #include "../../../components/design_db.h"
 
 // Forward declarations
@@ -84,7 +84,7 @@ public:
     // Quick Preview
     void setQuickPreviewEnabled(bool enabled);
     bool isQuickPreviewEnabled() const { return quickPreviewEnabled_; }
-    TensorNetlist generateNetlist();
+    acutesim::compute::orchestration::HierarchicalSchematicDTO generateSchematicGraph();
     QStringList runERC();
 
     // DC Operating Point Annotations (Phase 2)
@@ -100,7 +100,7 @@ public:
     // Check if a region is occupied by components or wires
     int getGridSnap() const { return GRID_STEP; }
     
-    // Spatial net lookup — valid after generateNetlist()
+    // Spatial net lookup — valid after generateSchematicGraph()
     acutesim::components::NetUUID netUUIDAtPosition(QPointF scenePos) const;
 
     // Geometric Query
@@ -165,7 +165,7 @@ signals:
 private:
     bool isPlacementValid(const QPointF& pos, QGraphicsItem* item);
 
-    // ─── Spatial Net State (populated by generateNetlist()) ────────────────
+    // ─── Spatial Net State (populated by generateSchematicGraph()) ────────────────
     // Marked mutable so netUUIDAtPosition() can be const.
     mutable QMap<QPair<int,int>, int> m_pointToNetID;
     mutable QMap<int, int>            m_merges;
@@ -278,7 +278,7 @@ public:
     // Topology hash (for simulation state tracking)
     size_t getTopologyHash() const { return topologyHash_; }
 
-    TensorNetlist toNetlist() { return scene->generateNetlist(); }
+    acutesim::compute::orchestration::HierarchicalSchematicDTO toSchematicGraph() { return scene->generateSchematicGraph(); }
     
     GridScene* getScene() const { return scene; }
     SchematicView* getView() const { return view; }

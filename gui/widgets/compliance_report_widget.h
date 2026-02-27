@@ -4,7 +4,7 @@
 #include <QWidget>
 #include <QTableWidget>
 #include <QLabel>
-#include "../../components/pdk_compliance.h"
+#include "../analysis/pdk_compliance.h"
 
 class ComplianceReportWidget : public QWidget {
     Q_OBJECT

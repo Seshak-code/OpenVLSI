@@ -356,8 +356,8 @@ void RtlPipelinePanel::startFullPipeline() {
 
     // Build synthesis config from UI
     acutesim::compute::orchestration::SynthesisConfig synthConfig;
-    synthConfig.topModule = m_topModuleEdit->text();
-    synthConfig.targetLibrary = m_targetLibCombo->currentText();
+    synthConfig.topModule = m_topModuleEdit->text().toStdString();
+    synthConfig.targetLibrary = m_targetLibCombo->currentText().toStdString();
 
     QString goalStr = m_synthGoalCombo->currentText();
     if (goalStr == "AREA") synthConfig.goal = acutesim::compute::orchestration::SynthesisGoal::AREA;
@@ -400,13 +400,13 @@ void RtlPipelinePanel::advanceToNextStep() {
         using namespace acutesim::compute::orchestration;
 
         FloorplanConfig fpConfig;
-        fpConfig.designName = m_topModuleEdit->text();
-        fpConfig.dieArea = QSizeF(m_dieWidthSpin->value(), m_dieHeightSpin->value());
+        fpConfig.designName = m_topModuleEdit->text().toStdString();
+        fpConfig.dieArea = Size2D{ m_dieWidthSpin->value(), m_dieHeightSpin->value() };
         fpConfig.coreUtilization = m_coreUtilSpin->value();
-        fpConfig.synthesizedNetlist = prevArtifact;
+        fpConfig.synthesizedNetlist = prevArtifact.toStdString();
 
         PlacementConfig placeConfig;
-        placeConfig.designName = m_topModuleEdit->text();
+        placeConfig.designName = m_topModuleEdit->text().toStdString();
         placeConfig.targetDensity = m_targetDensitySpin->value();
         QString placementStr = m_placementGoalCombo->currentText();
         if (placementStr == "TIMING") placeConfig.goal = PlacementGoal::TIMING;
@@ -415,10 +415,10 @@ void RtlPipelinePanel::advanceToNextStep() {
         else placeConfig.goal = PlacementGoal::BALANCED;
 
         CTSConfig ctsConfig;
-        ctsConfig.clockNet = m_clockNetEdit->text();
+        ctsConfig.clockNet = m_clockNetEdit->text().toStdString();
 
         RoutingConfig routeConfig;
-        routeConfig.designName = m_topModuleEdit->text();
+        routeConfig.designName = m_topModuleEdit->text().toStdString();
         routeConfig.repairAntennas = m_repairAntennasCheck->isChecked();
         QString effortStr = m_routingEffortCombo->currentText();
         if (effortStr == "LOW") routeConfig.effort = RoutingEffort::LOW;
@@ -437,7 +437,7 @@ void RtlPipelinePanel::advanceToNextStep() {
         using namespace acutesim::compute::orchestration;
 
         DRCConfig drcConfig;
-        drcConfig.layoutFile = prevArtifact;
+        drcConfig.layoutFile = prevArtifact.toStdString();
 
         QString jobId = m_workerMgr->submitSignOff(drcConfig);
         m_steps[nextStep].jobId = jobId;
