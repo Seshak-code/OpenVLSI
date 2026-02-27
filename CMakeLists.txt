@@ -551,6 +551,11 @@ if(NOT EMSCRIPTEN)
     )
 endif()
 
+# ===========================================================================
+# acutesim_engine — standalone simulation library (link-time sovereignty)
+# ===========================================================================
+add_subdirectory(acutesim_engine)
+
 qt_add_executable(${PROJECT_NAME} main.cpp ${ACUTESIM_SOURCES})
 
 # Enforce strict GUI -> Physics layering via Python static check
@@ -685,6 +690,14 @@ else()
         LINK_OPTIONS "SHELL:-s ALLOW_MEMORY_GROWTH=1 -s ASSERTIONS=1"
     )
 endif()
+
+# ===========================================================================
+# Link acutesim_engine — AcuteSim depends on engine, not the other way round.
+# acutesim_engine is PRIVATE: its internals (Dawn, AVX kernels) don't propagate.
+# engine_api/ headers propagate via the PUBLIC include set on acutesim_engine.
+# ===========================================================================
+target_link_libraries(${PROJECT_NAME} PRIVATE acutesim_engine)
+
 
 # Link OpenMP only if found (and not Wasm)
 # Link OpenMP
@@ -855,6 +868,27 @@ endif()
 add_executable(test_numerical_parity tests/test_numerical_parity.cpp)
 target_link_libraries(test_numerical_parity PRIVATE acutesim_compute_core)
 target_include_directories(test_numerical_parity PRIVATE
+
+# ===========================================================================
+# Engine Parity & Isolation Test (Phase F — Engine Migration Verification)
+# ===========================================================================
+# CRITICAL: Links ONLY against acutesim_engine + engine_api.
+# If this target builds, it proves:
+#   - engine_api/ has no internal header leakage
+#   - SessionImpl is correctly wired (6 analysis methods)
+#   - ISimulationEngine::create() factory is reachable as ENGINE_API symbol
+# Run: ctest -R test_engine_parity --verbose
+if(NOT EMSCRIPTEN)
+    add_executable(test_engine_parity tests/test_engine_parity.cpp)
+    target_link_libraries(test_engine_parity PRIVATE acutesim_engine)
+    target_include_directories(test_engine_parity PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine_api
+    )
+    target_compile_features(test_engine_parity PUBLIC cxx_std_17)
+    add_test(NAME EngineParityTest COMMAND test_engine_parity)
+endif()
+
     ${CMAKE_CURRENT_SOURCE_DIR}/tests
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
