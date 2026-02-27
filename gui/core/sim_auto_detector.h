@@ -1,24 +1,26 @@
 #pragma once
 // sim_auto_detector.h
 // Auto-detection utilities for simulation mode selection.
+// GUI-side only — uses only primitive types (no engine internals).
 
-#include "../../acutesim_engine/physics/circuitsim.h"   // ExecutionMode
-#include "../../acutesim_engine/netlist/circuit.h"        // TensorNetlist
+#include <string>
 
 namespace gui::core {
 
 class SimAutoDetector {
 public:
+    // Mode as a string to avoid pulling in engine internals.
+    // Callers convert to CircuitSim::ExecutionMode inside engine_impl.cpp.
     struct Recommendation {
-        CircuitSim::ExecutionMode mode    = CircuitSim::ExecutionMode::LEGACY_AOS;
-        std::string               reason;
-        double                    confidence        = 0.0;
-        int                       estimatedNodeCount  = 0;
-        int                       estimatedDeviceCount = 0;
+        std::string mode;          // "GPU" | "TENSOR_SOA_SIMD" | "LEGACY_AOS"
+        std::string reason;
+        double      confidence        = 0.0;
+        int         estimatedNodeCount  = 0;
+        int         estimatedDeviceCount = 0;
     };
 
-    // Analyze netlist topology and recommend an execution mode
-    static Recommendation analyze(const TensorNetlist& netlist);
+    // Analyze by primitive counts — stays GUI-layer-safe (no TensorNetlist ref).
+    static Recommendation analyze(int numNodes, int numMosfets, int numDiodes, int numBJTs);
 };
 
 } // namespace gui::core
