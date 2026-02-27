@@ -228,7 +228,7 @@ set(ACUTESIM_SOURCES
     resources/icons.qrc
     gui/editors/schematic/schematic_editor.cpp
     gui/editors/schematic/schematic_editor_sync.cpp
-    components/netlist_export.cpp
+    acutesim_engine/netlist/netlist_export.cpp
     gui/editors/schematic/schematic_editor.h
     gui/editors/code_editor.cpp
     gui/editors/code_editor.h
@@ -288,7 +288,7 @@ set(ACUTESIM_SOURCES
     gui/analysis/parametric_sweep_dialog.cpp
     gui/analysis/parametric_sweep_dialog.h
     gui/analysis/simulation_profile.h
-    physics/quick_analysis.h
+    acutesim_engine/physics/quick_analysis.h
     gui/ai/ai_action_history.cpp
     gui/ai/ai_action_history.h
     gui/ai/ai_action_envelope.h
@@ -380,7 +380,7 @@ set(ACUTESIM_SOURCES
     gui/widgets/project_explorer.h
     gui/widgets/search_dock.cpp
     gui/widgets/search_dock.h
-    components/circuit.h
+    acutesim_engine/netlist/circuit.h
     components/design_db.cpp
     gui/orchestration/library_index.cpp
     gui/orchestration/library_index.h
@@ -405,22 +405,22 @@ target_include_directories(acutesim_math_core INTERFACE
 # Exposes: physics/, autodiff/, components/, compute/* headers as PUBLIC
 # ============================================================================
 add_library(acutesim_compute_core STATIC
-    physics/quick_analysis.cpp
+    acutesim_engine/physics/quick_analysis.cpp
     components/veriloga_generator.cpp
-    compute/tensors/physics_tensors.cpp
-    compute/tensors/kernel_dispatch.cpp
-    compute/tensors/physics_kernels_avx512.cpp
-    compute/tensors/physics_kernels_avx2.cpp
-    compute/solvers/superposition.cpp
-    compute/solvers/circuitsim_solver.cpp
-    compute/infrastructure/netlist_compiler.cpp
-    compute/infrastructure/netlist_compiler_ctx.cpp
-    compute/infrastructure/postproc_engine.cpp
-    physics/veriloga/lexer.cpp
-    physics/veriloga/parser.cpp
-    physics/veriloga/ast.cpp
-    physics/veriloga/analyzer.cpp
-    physics/veriloga/graph_assembler.cpp
+    acutesim_engine/tensors/physics_tensors.cpp
+    acutesim_engine/tensors/kernel_dispatch.cpp
+    acutesim_engine/tensors/physics_kernels_avx512.cpp
+    acutesim_engine/tensors/physics_kernels_avx2.cpp
+    acutesim_engine/solvers/superposition.cpp
+    acutesim_engine/solvers/circuitsim_solver.cpp
+    acutesim_engine/infrastructure/netlist_compiler.cpp
+    acutesim_engine/infrastructure/netlist_compiler_ctx.cpp
+    acutesim_engine/infrastructure/postproc_engine.cpp
+    acutesim_engine/physics/veriloga/lexer.cpp
+    acutesim_engine/physics/veriloga/parser.cpp
+    acutesim_engine/physics/veriloga/ast.cpp
+    acutesim_engine/physics/veriloga/analyzer.cpp
+    acutesim_engine/physics/veriloga/graph_assembler.cpp
 )
 target_include_directories(acutesim_compute_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
@@ -437,13 +437,14 @@ target_include_directories(acutesim_compute_core PUBLIC
 target_compile_features(acutesim_compute_core PUBLIC cxx_std_17)
 
 # ============================================================================
-# acutesim_engine — Standalone simulation engine (Qt-free, no gRPC)
-# = acutesim_compute_core + Qt-free orchestration drivers + POSIX subprocess
-# Linkable into any C++17 binary without Qt dependency.
-# Phase 3.3
+# ============================================================================
+# acutesim_sim_layer — Orchestration drivers + compute_core (RENAMED from acutesim_engine)
+# This is the LEGACY simulation integration layer. New code should use the
+# canonical acutesim_engine library from acutesim_engine/CMakeLists.txt.
+# TODO: migrate tests that link this to link acutesim_engine + acutesim_orchestration
 # ============================================================================
 if(NOT EMSCRIPTEN)
-    add_library(acutesim_engine STATIC
+    add_library(acutesim_sim_layer STATIC
         compute/orchestration/simulation_context.cpp
         compute/orchestration/driver/local_worker_driver.cpp
         compute/orchestration/driver/batch_execution_engine.cpp
@@ -454,19 +455,15 @@ if(NOT EMSCRIPTEN)
         # Phase 4 additions
         compute/analysis_registry.cpp
         compute/staged_dispatcher.cpp
-        compute/solvers/tf_analysis.cpp
-        compute/solvers/pz_analysis.cpp
-        compute/solvers/fourier_analysis.cpp
-        compute/solvers/register_analyses.cpp
     )
-    target_include_directories(acutesim_engine PUBLIC
+    target_include_directories(acutesim_sim_layer PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/dto
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/driver
     )
-    target_link_libraries(acutesim_engine PUBLIC acutesim_compute_core)
-    target_compile_features(acutesim_engine PUBLIC cxx_std_17)
+    target_link_libraries(acutesim_sim_layer PUBLIC acutesim_compute_core)
+    target_compile_features(acutesim_sim_layer PUBLIC cxx_std_17)
 endif()
 
 # ============================================================================
@@ -502,7 +499,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration
     )
     target_link_libraries(acutesim_orchestration
-        PRIVATE acutesim_engine
+        PRIVATE acutesim_sim_layer
         PUBLIC Qt6::Core
     )
     target_compile_features(acutesim_orchestration PUBLIC cxx_std_17)
@@ -575,6 +572,21 @@ add_custom_target(check_engine_isolation
     VERBATIM
 )
 add_dependencies(${PROJECT_NAME} check_engine_isolation)
+
+# ABI Stability Test — verifies no GUI recompile after engine-only patch
+# Run explicitly after a full build: cmake --build build --target abi_stability_test
+# NOT wired as add_dependencies (needs prior full build to fingerprint against)
+if(NOT EMSCRIPTEN)
+    add_custom_target(abi_stability_test
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/abi_stability_test.py
+                        --skip-configure
+                        --jobs ${CMAKE_BUILD_PARALLEL_LEVEL}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "ABI stability: patch engine internal, verify 0 GUI files recompile"
+        VERBATIM
+    )
+endif()
+
 
 # Phase 12: Orchestration Library (gRPC Worker Client)
 if(NOT EMSCRIPTEN)
@@ -709,20 +721,20 @@ endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i[3-6]86)")
     if(NOT EMSCRIPTEN AND NOT MSVC)
         set_source_files_properties(
-            compute/tensors/physics_kernels_avx2.cpp
+            acutesim_engine/tensors/physics_kernels_avx2.cpp
             PROPERTIES COMPILE_FLAGS "-mavx2 -mfma"
         )
         set_source_files_properties(
-            compute/tensors/physics_kernels_avx512.cpp
+            acutesim_engine/tensors/physics_kernels_avx512.cpp
             PROPERTIES COMPILE_FLAGS "-mavx512f"
         )
     elseif(MSVC)
         set_source_files_properties(
-            compute/tensors/physics_kernels_avx2.cpp
+            acutesim_engine/tensors/physics_kernels_avx2.cpp
             PROPERTIES COMPILE_FLAGS "/arch:AVX2"
         )
         set_source_files_properties(
-            compute/tensors/physics_kernels_avx512.cpp
+            acutesim_engine/tensors/physics_kernels_avx512.cpp
             PROPERTIES COMPILE_FLAGS "/arch:AVX512"
         )
     endif()
@@ -898,9 +910,9 @@ target_compile_features(test_numerical_parity PUBLIC cxx_std_17)
 if(NOT EMSCRIPTEN)
     add_executable(test_gpu_parity
         tests/test_gpu_parity.cpp
-        compute/solvers/webgpu_solver.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/infrastructure/netlist_compiler.cpp
+        acutesim_engine/solvers/webgpu_solver.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+        acutesim_engine/infrastructure/netlist_compiler.cpp
     )
     target_include_directories(test_gpu_parity PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -960,7 +972,7 @@ if(NOT EMSCRIPTEN)
     gui/scripting/tcl_bridge.cpp
     gui/analysis/pdk_compliance.cpp
     gui/widgets/compliance_report_widget.cpp
-        components/netlist_export.cpp
+        acutesim_engine/netlist/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -1106,7 +1118,7 @@ if(NOT EMSCRIPTEN)
         gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
         gui/orchestration/pdk_browser_panel.cpp
-        components/netlist_export.cpp
+        acutesim_engine/netlist/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -1414,7 +1426,7 @@ add_executable(test_pdk_swap
     tests/test_pdk_swap.cpp
     gui/analysis/pdk_manager.cpp
     gui/analysis/pdk_compliance.cpp
-    components/netlist_export.cpp
+    acutesim_engine/netlist/netlist_export.cpp
 
     gui/components/visual_component.cpp
 
@@ -1513,7 +1525,7 @@ if(NOT EMSCRIPTEN)
         gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
         gui/orchestration/pdk_browser_panel.cpp
-        components/netlist_export.cpp
+        acutesim_engine/netlist/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -1719,7 +1731,7 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/library_index.h
         components/design_db.cpp
         gui/analysis/pdk_manager.cpp
-        components/netlist_export.cpp
+        acutesim_engine/netlist/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
         gui/editors/json_viewer.cpp
         gui/editors/image_viewer.cpp
@@ -1816,7 +1828,7 @@ if(NOT EMSCRIPTEN)
         components/design_db.cpp
         gui/analysis/pdk_manager.cpp
         gui/orchestration/library_index.cpp
-        components/netlist_export.cpp
+        acutesim_engine/netlist/netlist_export.cpp
         gui/analysis/pdk_compliance.cpp
         gui/scripting/tcl_bridge.cpp
         gui/orchestration/worker_manager.cpp
@@ -1906,19 +1918,19 @@ target_include_directories(test_docking_interaction PRIVATE
 )
 
 # Netlist Export Tests
-add_executable(test_verilog_export tests/test_verilog_export.cpp components/netlist_export.cpp)
+add_executable(test_verilog_export tests/test_verilog_export.cpp acutesim_engine/netlist/netlist_export.cpp)
 target_link_libraries(test_verilog_export PRIVATE Qt6::Core) # Utils only
 target_include_directories(test_verilog_export PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(test_spef_export tests/test_spef_export.cpp components/netlist_export.cpp)
+add_executable(test_spef_export tests/test_spef_export.cpp acutesim_engine/netlist/netlist_export.cpp)
 target_link_libraries(test_spef_export PRIVATE Qt6::Core)
 target_include_directories(test_spef_export PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(test_export_consistency tests/test_export_consistency.cpp components/netlist_export.cpp)
+add_executable(test_export_consistency tests/test_export_consistency.cpp acutesim_engine/netlist/netlist_export.cpp)
 target_link_libraries(test_export_consistency PRIVATE Qt6::Core)
 target_include_directories(test_export_consistency PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(test_multi_domain_power tests/test_multi_domain_power.cpp components/netlist_export.cpp)
+add_executable(test_multi_domain_power tests/test_multi_domain_power.cpp acutesim_engine/netlist/netlist_export.cpp)
 target_link_libraries(test_multi_domain_power PRIVATE Qt6::Core)
 target_include_directories(test_multi_domain_power PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(test_docking_interaction PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
@@ -2156,7 +2168,7 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/library_index.h
         components/design_db.cpp
         gui/analysis/pdk_manager.cpp
-        components/netlist_export.cpp
+        acutesim_engine/netlist/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
         gui/editors/json_viewer.cpp
         gui/editors/image_viewer.cpp
@@ -2199,7 +2211,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     )
-    target_sources(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors/kernel_dispatch.cpp)
+    target_sources(test_flow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors/kernel_dispatch.cpp)
     # test_introspection gets kernel_dispatch via acutesim_orchestration → acutesim_compute_core
     target_include_directories(test_introspection PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
@@ -2211,10 +2223,10 @@ endif()
 if(NOT EMSCRIPTEN)
     add_executable(test_gpu_connectivity
         tests/test_gpu_connectivity.cpp
-        compute/solvers/webgpu_solver.cpp
-        compute/tensors/physics_tensors.cpp
-        compute/tensors/kernel_dispatch.cpp
-        compute/infrastructure/netlist_compiler.cpp
+        acutesim_engine/solvers/webgpu_solver.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+        acutesim_engine/infrastructure/netlist_compiler.cpp
     )
     target_include_directories(test_gpu_connectivity PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -2476,7 +2488,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/components
     )
     target_link_libraries(test_gui_headless_scenarios PRIVATE
-        acutesim_engine
+        acutesim_sim_layer
         Qt6::Core Qt6::Test
     )
     target_compile_definitions(test_gui_headless_scenarios PRIVATE
