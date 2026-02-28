@@ -2,7 +2,7 @@
 #include <QSignalSpy>
 #include <QPushButton>
 #include "gui/analysis/statistical_dashboard.h"
-#include "physics/statistical_engine.h"
+#include "acutesim_engine/physics/statistical_engine.h"
 
 class TestStatisticalInteractivity : public QObject {
     Q_OBJECT

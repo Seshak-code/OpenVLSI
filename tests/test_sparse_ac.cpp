@@ -9,7 +9,7 @@
  *   4. Performance Sanity           — Sparse path terminates without crashing
  */
 
-#include "../compute/solvers/ac_solver.h"
+#include "acutesim_engine/solvers/ac_solver.h"
 #include "../physics/circuitsim.h"
 #include <iostream>
 #include <cmath>

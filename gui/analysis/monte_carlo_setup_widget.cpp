@@ -77,7 +77,7 @@ void MonteCarloSetupWidget::populateTable() {
             nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
             table_->setItem(row, 0, nameItem);
 
-            auto* valItem = new QTableWidgetItem(QString::number(value));
+            auto* valItem = new QTableWidgetItem(QString::fromStdString(value));
             valItem->setFlags(valItem->flags() & ~Qt::ItemIsEditable);
             table_->setItem(row, 1, valItem);
 

@@ -4,7 +4,7 @@
 #include <iomanip>
 #include "physics/circuitsim.h"
 #include "components/standard_cells.h"
-#include "compute/tensors/physics_tensors.h"
+#include "acutesim_engine/tensors/physics_tensors.h"
 
 using namespace StandardCells;
 

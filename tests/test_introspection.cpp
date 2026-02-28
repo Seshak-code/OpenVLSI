@@ -1,5 +1,5 @@
 #include "../ai_api/introspection_api.h"
-#include "../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include <iostream>
 
 /**

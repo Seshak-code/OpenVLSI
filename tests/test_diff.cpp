@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cassert>
-#include "../components/circuit.h"
-#include "../components/netlist_diff.h"
+#include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/netlist/netlist_diff.h"
 
 void check(bool condition, const std::string& message) {
     if (condition) {

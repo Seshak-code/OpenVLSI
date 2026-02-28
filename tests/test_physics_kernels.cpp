@@ -3,8 +3,8 @@
 #include <cmath>
 #include <iostream>
 
-#include "physics/device_physics.h"
-#include "compute/math/emulated_f64.h"
+#include "acutesim_engine/physics/device_physics.h"
+#include "acutesim_engine/math/emulated_f64.h"
 
 class TestPhysicsKernels : public QObject {
     Q_OBJECT

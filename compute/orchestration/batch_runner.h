@@ -4,8 +4,8 @@
 #include <unordered_map>
 #include <functional>
 #include "engine_api/simulation_context.h"
-#include "../infrastructure/netlist_compiler.h"
-#include "../infrastructure/postproc_engine.h"
+#include "acutesim_engine/infrastructure/netlist_compiler.h"
+#include "acutesim_engine/infrastructure/postproc_engine.h"
 
 namespace acutesim::compute::orchestration {
 

@@ -8,7 +8,7 @@
 #include <QCheckBox>
 #include <QVBoxLayout>
 #include <QLabel>
-#include "../components/circuit.h" // For Enums/Structs
+// #include "acutesim_engine/netlist/circuit.h" // Removed: Avoid deep engine include in GUI header
 
 class SystemInspector : public QWidget {
     Q_OBJECT

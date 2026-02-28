@@ -71,7 +71,7 @@ public:
     acutesim::gui::analysis::SimulationDriverAdapter* driverAdapter() const { return driverAdapter_; }
     
     // Set active simulation context
-    void setContext(const acutesim::gui::core::SimulationContext& context);
+    void setContext(const acutesim::orchestration::SimulationContext& context);
     
     // Connection to schematic (Legacy wrapper)
     void setSchematicEditor(SchematicEditor* editor);
@@ -157,7 +157,7 @@ private:
     
     // State
     SchematicEditor* schematicEditor_ = nullptr;
-    acutesim::gui::core::SimulationContext currentContext_;
+    acutesim::orchestration::SimulationContext currentContext_;
     acutesim::orchestration::SimulationContext simParams_; // Design variables / simulation parameters
     QMap<QString, Simulation::SimulationProfile> profiles_;
     QString currentProfileId_;

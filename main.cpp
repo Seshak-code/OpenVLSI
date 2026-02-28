@@ -3,7 +3,7 @@
 #include <string>
 #include "gui/styling/theme_manager.h"
 #ifndef __EMSCRIPTEN__
-#include "compute/hardware_capabilities.h"
+#include "acutesim_engine/infrastructure/hardware_capabilities.h"
 #endif
 
 #include <QApplication>

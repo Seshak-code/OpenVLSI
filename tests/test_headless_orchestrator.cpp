@@ -124,7 +124,7 @@ int testDTOPurity() {
     std::cout << "\n=== Test: DTO Purity Check ===" << std::endl;
 
     SimulationRequestDTO req;
-    TEST_ASSERT(req.netlistJson.empty(), "Default netlist should be empty");
+    TEST_ASSERT(req.source.payload.empty(), "Default netlist should be empty");
     TEST_ASSERT(req.analysis == AnalysisTypeDTO::DC, "Default analysis should be DC");
     TEST_ASSERT(req.topologyHash == 0, "Default hash should be 0");
     TEST_ASSERT(req.corner.temperature == 27.0, "Default temp should be 27°C");

@@ -4,7 +4,11 @@
 #include <QVector>
 #include <QMap>
 #include <QPainter>
-#include "circuit.h"
+
+#include "engine_api/simulation_dto.h"
+
+namespace acutesim::components { struct BusProbe { struct DigitalSample { double time; uint64_t value; }; }; }
+#include "engine_api/simulation_dto.h"
 
 // ============================================================================
 // Logic Analyzer UI (Phase 13.2)
@@ -38,7 +42,7 @@ public:
     
     // Data Ingestion
     void clear();
-    void addBusData(const std::string& name, const std::vector<BusProbe::DigitalSample>& history, int bitWidth);
+    void addBusData(const std::string& name, const std::vector<acutesim::components::BusProbe::DigitalSample>& history, int bitWidth);
     
     // View Controls
     void setTimeRange(double maxTime); // Updates horizontal scroll scale

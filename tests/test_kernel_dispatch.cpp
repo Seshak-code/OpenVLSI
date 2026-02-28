@@ -2,8 +2,8 @@
 #include <vector>
 #include <cmath>
 #include <cassert>
-#include "../compute/tensors/kernel_dispatch.h"
-#include "../compute/tensors/physics_tensors.h"
+#include "acutesim_engine/tensors/kernel_dispatch.h"
+#include "acutesim_engine/tensors/physics_tensors.h"
 
 using namespace acutesim::compute;
 

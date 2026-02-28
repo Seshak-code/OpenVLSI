@@ -1,5 +1,5 @@
 #pragma once
-#include "circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include <string>
 #include <cmath>
 

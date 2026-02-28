@@ -1,4 +1,4 @@
-#include "compute/staged_dispatcher.h"
+#include "acutesim_engine/solvers/staged_dispatcher.h"
 #include <algorithm>
 
 namespace acutesim {

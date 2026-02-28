@@ -14,6 +14,8 @@
 
 #include "../compute/orchestration/dto/schematic_dto.h"
 
+struct TensorNetlist;
+
 namespace acutesim {
 namespace components {
 
@@ -448,6 +450,9 @@ public:
 
     // Returns graph + net-to-node-index map (used by tests and netlist export)
     GraphSnapshotResult snapshotWithNodeMap() const;
+
+    // Bridge to Engine Physics Layer
+    TensorNetlist toNetlist() const;
 
     /**
      * @brief Generate a hierarchical DTO by recursively resolving subcircuits.

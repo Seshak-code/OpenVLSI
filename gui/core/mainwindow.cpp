@@ -190,7 +190,7 @@ void MainWindow::setupCentralWidget() {
 
     // Sync Simulation Context (Unified Architecture)
     connect(editorManager, &acutesim::gui::core::EditorManager::contextChanged,
-            this, [this](const acutesim::gui::core::SimulationContext& ctx){
+            this, [this](const acutesim::orchestration::SimulationContext& ctx){
         if (simulationWorkspace) {
              simulationWorkspace->setContext(ctx);
         }

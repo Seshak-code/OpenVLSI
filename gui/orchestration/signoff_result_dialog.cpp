@@ -93,7 +93,7 @@ void SignOffResultDialog::buildDRCView(const DRCResult& result) {
     m_tabs->addTab(summaryWidget, "Summary");
 
     // --- Violations Table Tab ---
-    if (!result.violations.isEmpty()) {
+    if (!result.violations.empty()) {
         auto* table = new QTableWidget(result.violations.size(), 5, this);
         table->setHorizontalHeaderLabels({"Rule", "Category", "Layer", "Count", "Severity"});
         table->setAlternatingRowColors(true);
@@ -103,12 +103,12 @@ void SignOffResultDialog::buildDRCView(const DRCResult& result) {
 
         for (int i = 0; i < result.violations.size(); ++i) {
             const auto& v = result.violations[i];
-            table->setItem(i, 0, new QTableWidgetItem(v.ruleName));
-            table->setItem(i, 1, new QTableWidgetItem(v.category));
-            table->setItem(i, 2, new QTableWidgetItem(v.layer));
+            table->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(v.ruleName)));
+            table->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(v.category)));
+            table->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(v.layer)));
             table->setItem(i, 3, new QTableWidgetItem(QString::number(v.count)));
 
-            auto* sevItem = new QTableWidgetItem(v.severity.toUpper());
+            auto* sevItem = new QTableWidgetItem(QString::fromStdString(v.severity).toUpper());
             if (v.severity == "error") {
                 sevItem->setForeground(QColor("#f44747"));
             } else if (v.severity == "warning") {
@@ -125,7 +125,7 @@ void SignOffResultDialog::buildDRCView(const DRCResult& result) {
     // --- Raw Log Tab ---
     auto* logEdit = new QTextEdit(this);
     logEdit->setReadOnly(true);
-    logEdit->setPlainText(result.rawOutput);
+    logEdit->setPlainText(QString::fromStdString(result.rawOutput));
     m_tabs->addTab(logEdit, "Raw Log");
 }
 
@@ -184,7 +184,7 @@ void SignOffResultDialog::buildLVSView(const LVSResult& result) {
     m_tabs->addTab(summaryWidget, "Summary");
 
     // --- Mismatches Table Tab ---
-    if (!result.mismatches.isEmpty()) {
+    if (!result.mismatches.empty()) {
         auto* table = new QTableWidget(result.mismatches.size(), 4, this);
         table->setHorizontalHeaderLabels({"Type", "Layout Name", "Schematic Name", "Details"});
         table->setAlternatingRowColors(true);
@@ -194,10 +194,10 @@ void SignOffResultDialog::buildLVSView(const LVSResult& result) {
 
         for (int i = 0; i < result.mismatches.size(); ++i) {
             const auto& mm = result.mismatches[i];
-            table->setItem(i, 0, new QTableWidgetItem(mm.type.toUpper()));
-            table->setItem(i, 1, new QTableWidgetItem(mm.layoutName));
-            table->setItem(i, 2, new QTableWidgetItem(mm.schematicName));
-            table->setItem(i, 3, new QTableWidgetItem(mm.details));
+            table->setItem(i, 0, new QTableWidgetItem(QString::fromStdString(mm.type).toUpper()));
+            table->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(mm.layoutName)));
+            table->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(mm.schematicName)));
+            table->setItem(i, 3, new QTableWidgetItem(QString::fromStdString(mm.details)));
         }
 
         m_tabs->addTab(table, QString("Mismatches (%1)").arg(result.mismatches.size()));
@@ -206,7 +206,7 @@ void SignOffResultDialog::buildLVSView(const LVSResult& result) {
     // --- Raw Log Tab ---
     auto* logEdit = new QTextEdit(this);
     logEdit->setReadOnly(true);
-    logEdit->setPlainText(result.rawOutput);
+    logEdit->setPlainText(QString::fromStdString(result.rawOutput));
     m_tabs->addTab(logEdit, "Raw Log");
 }
 

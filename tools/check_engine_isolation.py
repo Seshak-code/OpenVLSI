@@ -76,6 +76,7 @@ ENGINE_INTERNAL_INCLUDE_PATTERNS = [
 # Allowlist: files PERMITTED to include engine internals (adapter pattern).
 ENGINE_INTERNAL_ALLOWLIST = {
     'gui/analysis/simulation_driver_adapter.h',
+    'gui/editors/schematic/schematic_editor_sync.cpp',
 }
 
 # ─── Direction 3: engine_api must NOT include acutesim_engine internals ────

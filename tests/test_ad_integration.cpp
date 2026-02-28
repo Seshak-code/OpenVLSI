@@ -11,8 +11,8 @@
 #include <cmath>
 #include <cassert>
 #include <string>
-#include "../autodiff/dual.h"
-#include "../physics/device_physics.h"
+#include "acutesim_engine/autodiff/dual.h"
+#include "acutesim_engine/physics/device_physics.h"
 
 static int tests_passed = 0;
 static int tests_failed = 0;

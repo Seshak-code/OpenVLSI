@@ -5,7 +5,7 @@
 #include <cassert>
 
 #include "../physics/circuitsim.h"
-#include "../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 
 // ANSI Color Codes
 #define GREEN "\033[32m"

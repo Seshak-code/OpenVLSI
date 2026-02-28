@@ -3,7 +3,7 @@
 #include <cmath>
 #include <vector>
 #include "../physics/circuitsim.h"
-#include "../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 
 int main() {
     std::cout << "=== DEPENDENT SOURCE SIMULATION TEST ===\n\n";

@@ -4,7 +4,7 @@
 #include <cmath>
 #include <QJsonObject>
 
-#include "components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include "components/standard_cells.h"
 #include "gui/editors/schematic_editor.h"
 #include "gui/components/visual_component.h"

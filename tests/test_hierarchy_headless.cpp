@@ -26,9 +26,9 @@
 
 // ── Data-layer headers (no GUI) ─────────────────────────────────────────────
 #include "components/design_db.h"
-#include "components/circuit.h"
-#include "compute/infrastructure/compiled_block.h"
-#include "compute/infrastructure/netlist_compiler.h"
+#include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/infrastructure/compiled_block.h"
+#include "acutesim_engine/infrastructure/netlist_compiler.h"
 
 using namespace acutesim::components;
 

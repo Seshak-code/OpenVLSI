@@ -4,7 +4,7 @@
 #include <cassert>
 #include <vector>
 #include <cfenv>
-#include "../compute/math/fpu_control.h"
+#include "acutesim_engine/math/fpu_control.h"
 
 int main() {
     std::cout << "Starting FPU Determinism Test..." << std::endl;

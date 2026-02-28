@@ -38,8 +38,8 @@ static constexpr double EXPECTED_V2 = 5.0 * 2000.0 / 3000.0;
 
 static SimulationRequestDTO makeDividerReq(int seed = 0) {
     SimulationRequestDTO req;
-    req.analysisType  = "DC";
-    req.rawNetlistText = 
+    req.analysis      = AnalysisTypeDTO::DC;
+    req.source.payload =
         "* Resistive divider test\n"
         "V1 1 0 DC 5\n"
         "R1 1 2 1000\n"
@@ -105,7 +105,7 @@ static void test_dc_accuracy() {
     auto result  = session->runDC(makeDividerReq());
 
     EXPECT_TRUE(result.converged, "DC converged");
-    EXPECT_NEAR(getV2(result), EXPECTED_V2, 1e-6, "V(2) accuracy (1 ppm)");
+    EXPECT_NEAR(getV2(result), EXPECTED_V2, EXPECTED_V2 * 1e-6, "V(2) accuracy (1 ppm)");
 }
 
 // ── Test 3: CPU scalar vs SIMD parity ─────────────────────────────────────

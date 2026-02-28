@@ -7,6 +7,7 @@ build_wasm/
 build_wasm_fresh/
 build2/
 build-*/
+build_abi_test/
 cmake-build-*/
 out/
 bin/
@@ -193,11 +194,11 @@ AI_copilot_complete_guide.txt
 test_subcircuit
 test_flow
 
-# Stale dev/test files
-test_node.js
-test_pw.py
-tmp_patch.py
 build_wasm_log.txt
+abi_test_log.txt
+serve.log
+build_verbose.log
+analytics_snapshot.html
 ACUTESIM_CODEBASE_BOOK.docx
 
 # ============================================

@@ -1,13 +1,13 @@
-#include "../components/circuit.h"
-#include "../components/subcircuit_validator.h"
+#include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/netlist/subcircuit_validator.h"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
 
-// Include solver implementation (paths updated for reorganized compute/)
-#include "../compute/solvers/circuitsim_solver.cpp"
-#include "../compute/tensors/physics_tensors.cpp"
-#include "../compute/solvers/superposition.cpp"
+// Include solver implementation (paths updated for acutesim_engine/ extraction)
+#include "acutesim_engine/solvers/circuitsim_solver.cpp"
+#include "acutesim_engine/tensors/physics_tensors.cpp"
+#include "acutesim_engine/solvers/superposition.cpp"
 
 /**
  * test_subcircuit.cpp

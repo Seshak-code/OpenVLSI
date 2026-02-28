@@ -12,9 +12,8 @@
 #include <iostream>
 #include <cassert>
 #include <cmath>
-#include <QString>
-#include <QPointF>
-#include <QSizeF>
+#include <string>
+#include <algorithm>
 
 #include "compute/orchestration/drivers/yosys_task.h"
 #include "compute/orchestration/drivers/yosys_log_parser.h"
@@ -28,20 +27,24 @@ using namespace acutesim::compute::orchestration;
 // HELPERS
 // ============================================================================
 
+#include "compute/orchestration/drivers/eda_types.h"
+using acutesim::compute::orchestration::Point2D;
+using acutesim::compute::orchestration::Size2D;
+
 #define ASSERT_CONTAINS(haystack, needle) \
     do { \
-        if (!(haystack).contains(needle)) { \
-            std::cerr << "FAIL: Expected to find \"" << qPrintable(QString(needle)) \
+        if ((haystack).find(needle) == std::string::npos) { \
+            std::cerr << "FAIL: Expected to find \"" << (needle) \
                       << "\" in output.\n" \
-                      << "Output was:\n" << qPrintable(haystack) << "\n"; \
+                      << "Output was:\n" << (haystack) << "\n"; \
             assert(false && "ASSERT_CONTAINS failed"); \
         } \
     } while (0)
 
 #define ASSERT_NOT_CONTAINS(haystack, needle) \
     do { \
-        if ((haystack).contains(needle)) { \
-            std::cerr << "FAIL: Did NOT expect \"" << qPrintable(QString(needle)) \
+        if ((haystack).find(needle) != std::string::npos) { \
+            std::cerr << "FAIL: Did NOT expect \"" << (needle) \
                       << "\" in output.\n"; \
             assert(false && "ASSERT_NOT_CONTAINS failed"); \
         } \
@@ -86,7 +89,7 @@ TEST(yosys_tcl_area_goal) {
     config.targetLibrary = "sky130_fd_sc_hd";
     config.goal = SynthesisGoal::AREA;
     
-    QString tcl = YosysTask::generateTcl(config);
+    std::string tcl = YosysTask::generateTcl(config);
     
     ASSERT_CONTAINS(tcl, "read_liberty -lib sky130_fd_sc_hd.lib");
     ASSERT_CONTAINS(tcl, "read_verilog counter.v");
@@ -107,7 +110,7 @@ TEST(yosys_tcl_speed_goal) {
     config.targetLibrary = "sky130_fd_sc_hd";
     config.goal = SynthesisGoal::SPEED;
     
-    QString tcl = YosysTask::generateTcl(config);
+    std::string tcl = YosysTask::generateTcl(config);
     
     ASSERT_CONTAINS(tcl, "read_verilog alu.v");
     ASSERT_CONTAINS(tcl, "read_verilog adder.v");
@@ -122,7 +125,7 @@ TEST(yosys_tcl_power_goal) {
     config.targetLibrary = "sky130_fd_sc_hd";
     config.goal = SynthesisGoal::POWER;
     
-    QString tcl = YosysTask::generateTcl(config);
+    std::string tcl = YosysTask::generateTcl(config);
     
     ASSERT_CONTAINS(tcl, "scorr");   // Power-specific optimization
     ASSERT_CONTAINS(tcl, "dc2");     // Power-specific optimization
@@ -134,7 +137,7 @@ TEST(yosys_tcl_balanced_goal) {
     config.sourceFiles = {"top.v"};
     config.goal = SynthesisGoal::BALANCED;
     
-    QString tcl = YosysTask::generateTcl(config);
+    std::string tcl = YosysTask::generateTcl(config);
     
     // Balanced should NOT have specific optimization scripts
     ASSERT_NOT_CONTAINS(tcl, "map,-a");
@@ -148,14 +151,14 @@ TEST(yosys_json_tcl) {
     config.sourceFiles = {"top.v"};
     config.targetLibrary = "sky130_fd_sc_hd";
     
-    QString tcl = YosysTask::generateJsonTcl(config);
+    std::string tcl = YosysTask::generateJsonTcl(config);
     
     ASSERT_CONTAINS(tcl, "stat -json -liberty");
     ASSERT_CONTAINS(tcl, "JSON Output Mode");
 }
 
 TEST(yosys_batch_command) {
-    QString cmd = YosysTask::generateBatchCommand("/tmp/script.tcl");
+    std::string cmd = YosysTask::generateBatchCommand("/tmp/script.tcl");
     assert(cmd == "yosys -s /tmp/script.tcl");
 }
 
@@ -164,7 +167,7 @@ TEST(yosys_batch_command) {
 // ============================================================================
 
 TEST(yosys_parse_single_module) {
-    QString golden = R"(
+    std::string golden = R"(
 -- Running command `stat -liberty sky130_fd_sc_hd.lib' --
 
 === inverter ===
@@ -188,21 +191,21 @@ TEST(yosys_parse_single_module) {
     ASSERT_NEAR(result.estimatedArea, 5.3824, 0.001);
     
     // Per-module check
-    assert(result.modules.contains("inverter"));
-    const auto& mod = result.modules["inverter"];
+    assert(result.modules.count("inverter") > 0);
+    const auto& mod = result.modules.at("inverter");
     assert(mod.moduleName == "inverter");
     assert(mod.cellCount == 2);
     assert(mod.wireCount == 3);
     assert(mod.wireBits == 3);
     assert(mod.publicWires == 2);
-    assert(mod.cellBreakdown.contains("$_NOT_"));
-    assert(mod.cellBreakdown["$_NOT_"] == 1);
-    assert(mod.cellBreakdown.contains("sky130_fd_sc_hd__inv_1"));
-    assert(mod.cellBreakdown["sky130_fd_sc_hd__inv_1"] == 1);
+    assert(mod.cellBreakdown.count("$_NOT_") > 0);
+    assert(mod.cellBreakdown.at("$_NOT_") == 1);
+    assert(mod.cellBreakdown.count("sky130_fd_sc_hd__inv_1") > 0);
+    assert(mod.cellBreakdown.at("sky130_fd_sc_hd__inv_1") == 1);
 }
 
 TEST(yosys_parse_multi_module) {
-    QString golden = R"(
+    std::string golden = R"(
 === adder ===
 
    Number of wires:                10
@@ -230,14 +233,14 @@ TEST(yosys_parse_multi_module) {
     
     // Per-module
     assert(result.modules.size() == 2);
-    assert(result.modules.contains("adder"));
-    assert(result.modules.contains("counter"));
+    assert(result.modules.count("adder") > 0);
+    assert(result.modules.count("counter") > 0);
     assert(result.modules["adder"].cellCount == 5);
     assert(result.modules["counter"].cellCount == 12);
 }
 
 TEST(yosys_parse_with_errors) {
-    QString golden = R"(
+    std::string golden = R"(
 ERROR: Module 'missing_module' not found!
 Warning: Unused wire 'x' in module 'top'.
 )";
@@ -247,7 +250,7 @@ Warning: Unused wire 'x' in module 'top'.
     assert(!result.success);
     assert(result.errors.size() >= 1);
     assert(result.warnings.size() >= 1);
-    assert(result.errors[0].contains("missing_module"));
+    assert(result.errors[0].find("missing_module") != std::string::npos);
 }
 
 TEST(yosys_parse_empty_output) {
@@ -268,12 +271,12 @@ TEST(yosys_isSuccessful) {
 TEST(openroad_floorplan_tcl) {
     FloorplanConfig config;
     config.designName = "counter";
-    config.dieArea = QSizeF(100.0, 100.0);
+    config.dieArea = Size2D{.width=100.0, .height=100.0};
     config.techLef = "sky130_tech.lef";
     config.cellLefs = {"sky130_fd_sc_hd.lef"};
     config.synthesizedNetlist = "syn_counter.v";
     
-    QString tcl = OpenRoadTask::generateFloorplanTcl(config);
+    std::string tcl = OpenRoadTask::generateFloorplanTcl(config);
     
     ASSERT_CONTAINS(tcl, "read_lef sky130_tech.lef");
     ASSERT_CONTAINS(tcl, "read_lef sky130_fd_sc_hd.lef");
@@ -289,7 +292,7 @@ TEST(openroad_placement_tcl) {
     config.goal = PlacementGoal::TIMING;
     config.targetDensity = 0.7;
     
-    QString tcl = OpenRoadTask::generatePlacementTcl(config);
+    std::string tcl = OpenRoadTask::generatePlacementTcl(config);
     
     ASSERT_CONTAINS(tcl, "global_placement");
     ASSERT_CONTAINS(tcl, "0.7");
@@ -303,7 +306,7 @@ TEST(openroad_cts_tcl) {
     config.clockNet = "clk";
     config.bufferCell = "sky130_fd_sc_hd__clkbuf_4";
     
-    QString tcl = OpenRoadTask::generateCTSTcl(config);
+    std::string tcl = OpenRoadTask::generateCTSTcl(config);
     
     ASSERT_CONTAINS(tcl, "clock_tree_synthesis");
     ASSERT_CONTAINS(tcl, "sky130_fd_sc_hd__clkbuf_4");
@@ -316,7 +319,7 @@ TEST(openroad_routing_tcl) {
     config.effort = RoutingEffort::HIGH;
     config.repairAntennas = true;
     
-    QString tcl = OpenRoadTask::generateRoutingTcl(config);
+    std::string tcl = OpenRoadTask::generateRoutingTcl(config);
     
     ASSERT_CONTAINS(tcl, "global_route");
     ASSERT_CONTAINS(tcl, "detailed_route");
@@ -327,7 +330,7 @@ TEST(openroad_routing_tcl) {
 TEST(openroad_full_flow_tcl) {
     FloorplanConfig fpConfig;
     fpConfig.designName = "counter";
-    fpConfig.dieArea = QSizeF(200, 200);
+    fpConfig.dieArea = Size2D{.width=200, .height=200};
     fpConfig.techLef = "tech.lef";
     fpConfig.synthesizedNetlist = "syn.v";
     
@@ -340,7 +343,7 @@ TEST(openroad_full_flow_tcl) {
     RoutingConfig rtConfig;
     rtConfig.designName = "counter";
     
-    QString tcl = OpenRoadTask::generateFullFlowTcl(fpConfig, plConfig, ctsConfig, rtConfig);
+    std::string tcl = OpenRoadTask::generateFullFlowTcl(fpConfig, plConfig, ctsConfig, rtConfig);
     
     ASSERT_CONTAINS(tcl, "PHASE 1: FLOORPLAN");
     ASSERT_CONTAINS(tcl, "PHASE 2: PLACEMENT");
@@ -357,7 +360,7 @@ TEST(openroad_full_flow_tcl) {
 // ============================================================================
 
 TEST(openroad_parse_design_area) {
-    QString golden = "Design area 12345.678 u^2 67% utilization.\n";
+    std::string golden = "Design area 12345.678 u^2 67% utilization.\n";
     auto result = OpenRoadReportParser::parseDesignArea(golden);
     
     ASSERT_NEAR(result.totalArea, 12345.678, 0.01);
@@ -365,7 +368,7 @@ TEST(openroad_parse_design_area) {
 }
 
 TEST(openroad_parse_timing_clean) {
-    QString golden = R"(
+    std::string golden = R"(
 worst slack 0.500
 tns 0.000
 )";
@@ -377,7 +380,7 @@ tns 0.000
 }
 
 TEST(openroad_parse_timing_violation) {
-    QString golden = R"(
+    std::string golden = R"(
 worst slack -0.123
 tns -4.567
 Failing endpoints: 3
@@ -391,7 +394,7 @@ Failing endpoints: 3
 }
 
 TEST(openroad_parse_power) {
-    QString golden = R"(
+    std::string golden = R"(
 Total Power     = 1.234 mW
 Dynamic Power   = 0.567 mW
 Leakage Power   = 0.012 mW
@@ -406,7 +409,7 @@ Internal Power  = 0.345 mW
 }
 
 TEST(openroad_parse_routing_clean) {
-    QString golden = R"(
+    std::string golden = R"(
 Number of routed nets: 1234
 Number of unrouted nets: 0
 DRC violations: 0
@@ -421,7 +424,7 @@ Antenna violations: 0
 }
 
 TEST(openroad_parse_routing_violations) {
-    QString golden = R"(
+    std::string golden = R"(
 Number of routed nets: 1200
 Number of unrouted nets: 34
 DRC violations: 5
@@ -437,7 +440,7 @@ Antenna violations: 2
 }
 
 TEST(openroad_parse_full_output) {
-    QString golden = R"(
+    std::string golden = R"(
 OpenROAD v2.0
 Design area 500.123 u^2 45% utilization.
 worst slack 0.200
@@ -462,12 +465,12 @@ DRC violations: 0
 }
 
 TEST(openroad_parse_with_errors) {
-    QString golden = "[ERROR] Cannot read LEF file: missing.lef\n";
+    std::string golden = "[ERROR] Cannot read LEF file: missing.lef\n";
     PnRResult result;
     OpenRoadReportParser::parseErrors(golden, result);
     
     assert(result.errors.size() == 1);
-    assert(result.errors[0].contains("missing.lef"));
+    assert(result.errors[0].find("missing.lef") != std::string::npos);
 }
 
 // ============================================================================
@@ -481,18 +484,18 @@ TEST(def_coordinate_flip) {
     // defX = 100 * 0.1 * 1000 = 10000
     // defY = (1000 - 200) * 0.1 * 1000 = 80000
     
-    QList<SchematicPlacement> placements;
+    std::vector<SchematicPlacement> placements;
     SchematicPlacement p;
     p.instanceName = "U1";
     p.cellName = "sky130_fd_sc_hd__inv_1";
-    p.canvasPosition = QPointF(100.0, 200.0);
+    p.canvasPosition = Point2D{100.0, 200.0};
     p.rotation = 0.0;
     p.mirrored = false;
-    placements.append(p);
+    placements.push_back(p);
     
-    QString def = DEFTranslator::generateDEF(
+    std::string def = DEFTranslator::generateDEF(
         "test_design", placements,
-        QSizeF(100.0, 100.0),  // 100x100 um die
+        Size2D{.width=100.0, .height=100.0},  // 100x100 um die
         0.1, 1000.0, 1000);
     
     ASSERT_CONTAINS(def, "DESIGN test_design");
@@ -517,31 +520,31 @@ TEST(def_orientation_mapping) {
 }
 
 TEST(def_multiple_components) {
-    QList<SchematicPlacement> placements;
+    std::vector<SchematicPlacement> placements;
     
     SchematicPlacement p1;
     p1.instanceName = "U1";
     p1.cellName = "sky130_fd_sc_hd__inv_1";
-    p1.canvasPosition = QPointF(0, 0);
-    placements.append(p1);
+    p1.canvasPosition = Point2D{0, 0};
+    placements.push_back(p1);
     
     SchematicPlacement p2;
     p2.instanceName = "U2";
     p2.cellName = "sky130_fd_sc_hd__nand2_1";
-    p2.canvasPosition = QPointF(500, 500);
+    p2.canvasPosition = Point2D{500, 500};
     p2.rotation = 90.0;
-    placements.append(p2);
+    placements.push_back(p2);
     
     SchematicPlacement p3;
     p3.instanceName = "U3";
     p3.cellName = "sky130_fd_sc_hd__buf_2";
-    p3.canvasPosition = QPointF(250, 750);
+    p3.canvasPosition = Point2D{250, 750};
     p3.mirrored = true;
-    placements.append(p3);
+    placements.push_back(p3);
     
-    QString def = DEFTranslator::generateDEF(
+    std::string def = DEFTranslator::generateDEF(
         "multi_test", placements,
-        QSizeF(200.0, 200.0), 0.1, 1000.0, 1000);
+        Size2D{.width=200.0, .height=200.0}, 0.1, 1000.0, 1000);
     
     ASSERT_CONTAINS(def, "COMPONENTS 3");
     ASSERT_CONTAINS(def, "U1 sky130_fd_sc_hd__inv_1");
@@ -552,17 +555,17 @@ TEST(def_multiple_components) {
 }
 
 TEST(def_empty_placements) {
-    QList<SchematicPlacement> empty;
-    QString def = DEFTranslator::generateDEF("empty_design", empty,
-                                              QSizeF(10, 10));
+    std::vector<SchematicPlacement> empty;
+    std::string def = DEFTranslator::generateDEF("empty_design", empty,
+                                              Size2D{.width=10, .height=10});
     ASSERT_CONTAINS(def, "COMPONENTS 0");
     ASSERT_CONTAINS(def, "END DESIGN");
 }
 
 TEST(def_header_format) {
-    QList<SchematicPlacement> placements;
-    QString def = DEFTranslator::generateDEF("mydesign", placements,
-                                              QSizeF(50, 50));
+    std::vector<SchematicPlacement> placements;
+    std::string def = DEFTranslator::generateDEF("mydesign", placements,
+                                              Size2D{.width=50, .height=50});
     ASSERT_CONTAINS(def, "VERSION 5.8");
     ASSERT_CONTAINS(def, "DIVIDERCHAR \"/\"");
     ASSERT_CONTAINS(def, "BUSBITCHARS \"[]\"");
@@ -574,7 +577,7 @@ TEST(def_header_format) {
 // ============================================================================
 
 TEST(klayout_drc_clean) {
-    QString output = R"(
+    std::string output = R"(
 KLayout DRC Report
 ==================
 Rule: metal1.width | Category: Width | Layer: metal1 | Violations: 0
@@ -591,7 +594,7 @@ DRC clean
 }
 
 TEST(klayout_drc_violations) {
-    QString output = R"(
+    std::string output = R"(
 KLayout DRC Report
 ==================
 Rule: metal1.width | Category: Width | Layer: metal1 | Violations: 5
@@ -612,10 +615,10 @@ Total DRC violations: 8
 }
 
 TEST(klayout_drc_empty) {
-    QString output = "";
+    std::string output = "";
     auto result = KLayoutReportParser::parseDRC(output);
     assert(!result.success);
-    assert(!result.errors.isEmpty());
+    assert(!result.errors.empty());
 }
 
 // ============================================================================
@@ -623,7 +626,7 @@ TEST(klayout_drc_empty) {
 // ============================================================================
 
 TEST(klayout_lvs_match) {
-    QString output = R"(
+    std::string output = R"(
 KLayout LVS Report
 ==================
 Layout devices: 8 | Schematic devices: 8
@@ -642,7 +645,7 @@ MATCH — Layout matches schematic.
 }
 
 TEST(klayout_lvs_mismatch) {
-    QString output = R"(
+    std::string output = R"(
 KLayout LVS Report
 ==================
 Layout devices: 9 | Schematic devices: 8

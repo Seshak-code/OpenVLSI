@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../components/circuit.h"
-#include "../components/component_library.h"
-#include "../physics/design_rules.h"
+#include "engine_api/simulation_dto.h"
+#include "components/component_library.h"
+#include "acutesim_engine/physics/design_rules.h"
 #include <string>
 #include <sstream>
 #include <vector>

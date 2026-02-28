@@ -5,7 +5,7 @@
 #include <numeric>
 #include <mutex>
 #include <vector>
-#include "../../math/portable_rng.h"
+#include "acutesim_engine/math/portable_rng.h"
 
 namespace acutesim {
 namespace compute {
@@ -109,7 +109,7 @@ SimulationBatchResponseDTO BatchExecutionEngine::executeBatchParallel(
             if (cancelled.load()) {
                 SimulationResponseDTO r;
                 r.success = false;
-                r.errorMessage = "Cancelled";
+                r.errorDetail = "Cancelled";
                 r.runIndex = static_cast<int32_t>(run->runIndex);
                 batchResp.runResults[slot] = std::move(r);
             } else {
@@ -162,8 +162,8 @@ SimulationBatchResponseDTO BatchExecutionEngine::executeMonteCarlo(
     batchReq.corner       = baseRequest.corner;
     batchReq.sessionToken = baseRequest.sessionToken;
 
-    batchReq.runs.reserve(config.sampleCount);
-    for (uint32_t i = 0; i < config.sampleCount; ++i) {
+    batchReq.runs.reserve(config.numRuns);
+    for (uint32_t i = 0; i < config.numRuns; ++i) {
         // Per-sample seed: XOR with index makes each sample independent and
         // reproducible no matter whether threads execute in which order.
         acutesim::math::PortableRNG sampleRng(config.seed ^ static_cast<uint64_t>(i));

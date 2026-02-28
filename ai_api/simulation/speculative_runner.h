@@ -1,6 +1,6 @@
 #pragma once
 #include "simulation_trace.h"
-#include "circuitsim.h"
+#include "acutesim_engine/physics/circuitsim.h"
 #include <QString>
 #include <QJsonObject>
 

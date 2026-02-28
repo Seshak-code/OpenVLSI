@@ -23,7 +23,7 @@ orchestration::SimulationResponseDTO AnalysisRegistry::dispatch(
     if (it == handlers_.end()) {
         orchestration::SimulationResponseDTO resp;
         resp.success = false;
-        resp.errorMessage = "No handler registered for analysis type " +
+        resp.errorDetail = "No handler registered for analysis type " +
                             std::to_string(static_cast<int>(type));
         return resp;
     }

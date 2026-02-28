@@ -16,7 +16,7 @@
 #include <cmath>
 
 #include "../components/design_db.h"
-#include "../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include "../gui/analysis/erc_engine.h"
 
 using namespace acutesim::components;

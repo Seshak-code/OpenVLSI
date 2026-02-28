@@ -344,15 +344,15 @@ QString SimulationWorkspace::getAnalysisHelp(Simulation::AnalysisType type) cons
 
 // Helper to get help text (moved down)
 
-void SimulationWorkspace::setContext(const acutesim::gui::core::SimulationContext& context) {
+void SimulationWorkspace::setContext(const acutesim::orchestration::SimulationContext& context) {
     currentContext_ = context;
     
     // Adapt UI based on context
-    if (context.type == acutesim::gui::core::SimulationType::Digital_Verilog) {
+    if (context.type == acutesim::orchestration::SimulationType::Digital) {
         // Hide analog specific widgets or change labels?
         // For now, minimal adaptation
         findChild<QLabel*>("statusLabel")->setText("Ready (Digital)");
-    } else if (context.type == acutesim::gui::core::SimulationType::Analog_SPICE) {
+    } else if (context.type == acutesim::orchestration::SimulationType::Analog) {
          findChild<QLabel*>("statusLabel")->setText("Ready (Analog)");
     } else {
          findChild<QLabel*>("statusLabel")->setText("Ready");
@@ -637,7 +637,7 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     // Show the exact source being sent to the driver
     updateVerilogADock(req.source.payload);
     req.sessionToken = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8).toStdString();
-    req.compute_mode = computeEngineCombo_->currentData().toInt();
+    // compute_mode removed from DTO (see SimulationRequestDTO.solverMode)
 
     auto* profile = currentProfile();
     if (!profile) return;
@@ -1056,7 +1056,8 @@ void SimulationWorkspace::runMonteCarlo() {
         return;
     }
 
-    auto* setupWidget = new acutesim::gui::analysis::MonteCarloSetupWidget(netlist);
+    static acutesim::compute::orchestration::HierarchicalSchematicDTO emptyDto;
+    auto* setupWidget = new acutesim::gui::analysis::MonteCarloSetupWidget(emptyDto);
     InlineDialog::showCustom(this, "Monte Carlo Setup", setupWidget,
         DialogButton::Ok | DialogButton::Cancel,
         [this, setupWidget](const DialogResult& r) {

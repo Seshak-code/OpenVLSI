@@ -66,7 +66,7 @@ int main() {
 
     SimulationRequestDTO req;
     req.analysis = AnalysisTypeDTO::TRANSIENT;
-    req.netlistJson = "{}";
+    req.source.payload = "{}";
     JobID j1 = base->submitJob(req);
     assert(j1 > 0);
     assert(driver.lastAnalysis_ == AnalysisTypeDTO::TRANSIENT);

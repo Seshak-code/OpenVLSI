@@ -142,10 +142,10 @@ PnRResultDialog::PnRResultDialog(
             "font-family: 'Menlo', 'Consolas', monospace; font-size: 11px; }");
 
         for (const auto& w : result.warnings)
-            logEdit->append("<span style='color:#dcdcaa;'>WARNING: " + w.toHtmlEscaped() + "</span>");
+            logEdit->append("<span style='color:#dcdcaa;'>WARNING: " + QString::fromStdString(w).toHtmlEscaped() + "</span>");
         for (const auto& e : result.errors)
-            logEdit->append("<span style='color:#f44747;'>ERROR: " + e.toHtmlEscaped() + "</span>");
-        if (result.warnings.isEmpty() && result.errors.isEmpty())
+            logEdit->append("<span style='color:#f44747;'>ERROR: " + QString::fromStdString(e).toHtmlEscaped() + "</span>");
+        if (result.warnings.empty() && result.errors.empty())
             logEdit->setPlainText("No warnings or errors.");
         tabs->addTab(logEdit, "Log");
     }

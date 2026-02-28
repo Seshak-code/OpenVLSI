@@ -1,5 +1,5 @@
 #include "auto_harness.h"
-#include "../../physics/circuitsim.h"
+#include "acutesim_engine/physics/circuitsim.h"
 #include <QDebug>
 
 namespace AIAPI {

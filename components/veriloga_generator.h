@@ -14,7 +14,7 @@
 // ============================================================================
 
 #include <string>
-#include "circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include "../compute/orchestration/dto/schematic_dto.h"
 
 namespace VerilogAGenerator {

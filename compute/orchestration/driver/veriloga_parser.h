@@ -20,14 +20,14 @@ namespace orchestration {
 struct VerilogAParseResult {
     TensorNetlist netlist;
     bool          success      = false;
-    std::string   errorMessage;
+    std::string   errorDetail;
     int           errorLine    = -1;
 };
 
 // Parse Verilog-A source produced by VerilogAGenerator::generate().
-// Returns a populated TensorNetlist on success, errorMessage on failure.
+// Returns a populated TensorNetlist on success, errorDetail on failure.
 // Falls back gracefully: on any unrecognized pattern the item is skipped
-// and a warning is appended to errorMessage but success can still be true
+// and a warning is appended to errorDetail but success can still be true
 // if core components were parsed.
 VerilogAParseResult parseVerilogA(const std::string& source);
 

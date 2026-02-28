@@ -31,4 +31,19 @@ SimAutoDetector::Recommendation SimAutoDetector::analyze(
     return r;
 }
 
+acutesim::orchestration::SimulationContext SimAutoDetector::detect(const QString& path) {
+    acutesim::orchestration::SimulationContext ctx;
+    ctx.type = acutesim::orchestration::SimulationType::Analog;
+    
+    acutesim::orchestration::FileRef ref;
+    ref.path = path.toStdString();
+    ref.isTop = true;
+    ctx.sources.push_back(ref);
+    
+    ctx.contextId = path.toStdString();
+    ctx.solverMode = "LEGACY_AOS";
+    
+    return ctx;
+}
+
 } // namespace gui::core

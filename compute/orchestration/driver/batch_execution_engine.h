@@ -14,7 +14,7 @@
 // ============================================================================
 
 #include "../dto/simulation_dto.h"
-#include "../../math/portable_rng.h"
+#include "acutesim_engine/math/portable_rng.h"
 #include <functional>
 #include <atomic>
 #include <random>

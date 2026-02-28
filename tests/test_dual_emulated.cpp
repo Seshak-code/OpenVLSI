@@ -1,7 +1,7 @@
 #include <QtTest/QtTest>
 #include <cmath>
-#include "autodiff/dual.h"
-#include "compute/math/emulated_f64.h"
+#include "acutesim_engine/autodiff/dual.h"
+#include "acutesim_engine/math/emulated_f64.h"
 
 class TestDualEmulated : public QObject {
     Q_OBJECT

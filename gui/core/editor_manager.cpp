@@ -104,13 +104,13 @@ void EditorManager::onTabChanged(int index) {
     if (editor) {
         updateContext(editor->filePath(), editor);
     } else {
-        currentContext_ = SimulationContext();
+        currentContext_ = ::acutesim::orchestration::SimulationContext();
         emit contextChanged(currentContext_);
     }
 }
 
 void EditorManager::updateContext(const QString& filePath, IEditor* editor) {
-    SimulationContext ctx = detector_.detect(filePath);
+    acutesim::orchestration::SimulationContext ctx = ::gui::core::SimAutoDetector::detect(filePath);
     currentContext_ = ctx;
     emit contextChanged(ctx);
 }

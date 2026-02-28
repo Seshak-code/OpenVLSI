@@ -76,7 +76,7 @@ int main(int argc, char* argv[]) {
     // ── Run 1: Legacy submitJob() ──
     std::cout << "Running Path 1: submitJob()...\n";
     SimulationRequestDTO req1;
-    req1.netlistJson = TEST_NETLIST;
+    req1.source.payload = TEST_NETLIST;
     req1.analysis = AnalysisTypeDTO::TRANSIENT;
     req1.parameters["tstop"] = "5e-9";
     req1.parameters["tstep"] = "10e-12";
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
     // ── Run 2: Orchestrated submitBatchJob() ──
     std::cout << "Running Path 2: submitBatchJob()...\n";
     SimulationBatchRequestDTO req2;
-    req2.baseNetlistJson = TEST_NETLIST;
+    req2.source.payload = TEST_NETLIST;
     req2.analysis = AnalysisTypeDTO::TRANSIENT;
     req2.parameters["tstop"] = "5e-9";
     req2.parameters["tstep"] = "10e-12";

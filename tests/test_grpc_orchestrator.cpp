@@ -94,7 +94,7 @@ int testRemoteBatchSweep() {
 
     SimulationBatchRequestDTO batchReq;
     batchReq.sessionToken = "batch-sweep-1";
-    batchReq.baseNetlistJson = makeResistiveDividerJson();
+    batchReq.source.payload = makeResistiveDividerJson();
     batchReq.analysis = AnalysisTypeDTO::DC;
     
     for (int i = 0; i < 10; ++i) {
@@ -136,7 +136,7 @@ int testSeedDeterminism() {
 
     SimulationRequestDTO baseReq;
     baseReq.sessionToken = "mc-test";
-    baseReq.netlistJson = makeResistiveDividerJson();
+    baseReq.source.payload = makeResistiveDividerJson();
     baseReq.analysis = AnalysisTypeDTO::DC;
 
     MonteCarloConfigDTO mcConfig;

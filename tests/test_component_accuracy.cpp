@@ -4,10 +4,10 @@
 #include <cassert>
 #include <iomanip>
 
-#include "../components/circuit.h"
-#include "../physics/circuitsim.h"
-#include "../components/standard_cells.h"
-#include "../compute/infrastructure/netlist_compiler.h"
+#include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/physics/circuitsim.h"
+#include "components/standard_cells.h"
+#include "acutesim_engine/infrastructure/netlist_compiler.h"
 
 #define GREEN "\033[32m"
 #define RED "\033[31m"

@@ -1,5 +1,8 @@
 #pragma once
 
+struct TensorNetlist;
+namespace acutesim::components { struct BusProbe; }
+
 #include <QWidget>
 #include <QGraphicsView>
 #include <QGraphicsScene>
@@ -86,6 +89,8 @@ public:
     bool isQuickPreviewEnabled() const { return quickPreviewEnabled_; }
     acutesim::compute::orchestration::HierarchicalSchematicDTO generateSchematicGraph();
     QStringList runERC();
+    TensorNetlist toNetlist();
+    void generateNetlist(); // Legacy sync
 
     // DC Operating Point Annotations (Phase 2)
     void setDCResults(const QJsonObject& results);
@@ -95,7 +100,8 @@ public:
     
     // Automation API (GenAI Hook)
     // Returns full circuit state for AI context
-    QJsonObject getCircuitState() const;
+    QJsonObject getCircuitState();
+    QJsonObject getSceneJSON();
     
     // Check if a region is occupied by components or wires
     int getGridSnap() const { return GRID_STEP; }
@@ -279,6 +285,7 @@ public:
     size_t getTopologyHash() const { return topologyHash_; }
 
     acutesim::compute::orchestration::HierarchicalSchematicDTO toSchematicGraph() { return scene->generateSchematicGraph(); }
+    TensorNetlist toNetlist();
     
     GridScene* getScene() const { return scene; }
     SchematicView* getView() const { return view; }
@@ -293,6 +300,7 @@ public:
     
     // Returns full circuit state as JSON object
     QJsonObject getCircuitState();
+    QJsonObject getSceneJSON();
     void loadState(const QJsonObject& state);
     
     // Returns a list of all available component types

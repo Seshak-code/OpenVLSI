@@ -2,7 +2,7 @@
 #include <QDebug>
 #include <cassert>
 #include <QJsonObject>
-#include "../gui/editors/schematic_editor.h"
+#include "../gui/editors/schematic/schematic_editor.h"
 
 // Define main for standalone test
 int main(int argc, char *argv[]) {
@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
     
     // Generate Netlist locally (since we don't have full MainWindow loop)
     // Note: GridScene::generateNetlist calls DesignDb::clear() inside.
-    TensorNetlist nl = editor.toNetlist();
+    
     
     // Verify Netlist has a net connecting them?
     // TensorNetlist conversion might be complex to parse here.

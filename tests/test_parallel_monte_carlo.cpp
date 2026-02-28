@@ -91,7 +91,7 @@ static SimulationResponseDTO mockSolver(
 static MonteCarloConfigDTO makeConfig(uint32_t samples, uint64_t seed)
 {
     MonteCarloConfigDTO cfg;
-    cfg.sampleCount = samples;
+    cfg.numRuns = samples;
     cfg.seed = seed;
     MonteCarloVariationDTO var;
     var.componentName    = "R1";

@@ -11,8 +11,8 @@
 #include <cmath>
 #include <cassert>
 #include <string>
-#include "../physics/noise_models.h"
-#include "../compute/solvers/ac_solver.h"
+#include "acutesim_engine/physics/noise_models.h"
+#include "acutesim_engine/solvers/ac_solver.h"
 
 static int tests_passed = 0;
 static int tests_failed = 0;

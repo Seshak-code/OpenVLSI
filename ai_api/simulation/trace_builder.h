@@ -4,7 +4,7 @@
 #include "trace_chunker.h"
 #include "../analysis/failure_classifier.h"
 #include "../../gui/analysis/simulation_profile.h"
-#include "../../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include <QUuid>
 #include <QDateTime>
 

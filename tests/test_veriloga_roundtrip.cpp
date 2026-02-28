@@ -283,7 +283,7 @@ static bool testDriverVerilogAPath() {
     req.analysis               = AnalysisTypeDTO::DC;
     req.source.format          = NetlistFormatDTO::VERILOG_A;
     req.source.payload         = vaSrc;
-    req.netlistJson            = "{}";  // empty — driver must use VA path
+    req.source.payload         = "{}";  // empty — driver must use VA path
     req.topologyHash           = 0;
     req.sessionToken           = "test_va_path";
 

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <cassert>
-#include "compute/solvers/webgpu_solver.h"
+#include "acutesim_engine/solvers/webgpu_solver.h"
 
 int main() {
     std::cout << "Starting GPU Connectivity Test (Google Dawn)..." << std::endl;

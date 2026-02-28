@@ -4,6 +4,8 @@
 // GUI-side only — uses only primitive types (no engine internals).
 
 #include <string>
+#include <QString>
+#include "engine_api/simulation_context.h"
 
 namespace gui::core {
 
@@ -21,6 +23,9 @@ public:
 
     // Analyze by primitive counts — stays GUI-layer-safe (no TensorNetlist ref).
     static Recommendation analyze(int numNodes, int numMosfets, int numDiodes, int numBJTs);
+
+    // Context detection from file path
+    static acutesim::orchestration::SimulationContext detect(const QString& path);
 };
 
 } // namespace gui::core

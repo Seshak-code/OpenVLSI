@@ -5,16 +5,17 @@
 #include <iostream>
 #include <chrono>
 
-#include "../../../physics/circuitsim.h"
-#include "../../../components/circuit.h"
-#include "../../../compute/solvers/ac_solver.h"
-#include "../../../compute/solvers/tf_analysis.h"
-#include "../../../compute/solvers/pz_analysis.h"
-#include "../../../compute/solvers/fourier_analysis.h"
-#include "../../../compute/solvers/register_analyses.h"
-#include "compute/analysis_registry.h"
-#include "../../../compute/infrastructure/compiled_block.h"
-#include "../../../compute/infrastructure/netlist_compiler.h"
+#include "acutesim_engine/physics/circuitsim.h"
+#include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/solvers/ac_solver.h"
+#include "acutesim_engine/solvers/tf_analysis.h"
+#include "acutesim_engine/solvers/pz_analysis.h"
+#include "acutesim_engine/solvers/fourier_analysis.h"
+#include "acutesim_engine/solvers/register_analyses.h"
+#include "acutesim_engine/solvers/analysis_registry.h"
+#include "acutesim_engine/solvers/staged_dispatcher.h"
+#include "acutesim_engine/infrastructure/compiled_block.h"
+#include "acutesim_engine/infrastructure/netlist_compiler.h"
 
 #include <mutex>
 #include <atomic>
@@ -98,7 +99,7 @@ struct LocalWorkerDriver::Impl {
             auto r = parseVerilogA(source.payload);
             if (r.success) return r.netlist;
             
-            std::cerr << "LocalWorkerDriver: Verilog-A Parse Error: " << r.errorMessage << std::endl;
+            std::cerr << "LocalWorkerDriver: Verilog-A Parse Error: " << r.errorDetail << std::endl;
         }
         
         // Return empty netlist if no valid Verilog-A source provided.
@@ -257,10 +258,10 @@ void LocalWorkerDriver::Impl::executeJob(const InternalJob& job) {
 
     // Capture originating request metadata (topology hash + compute mode)
     const uint64_t baseTopologyHash = job.singleRequest.topologyHash;
-    const int      baseComputeMode  = job.singleRequest.compute_mode;
+    const std::string baseSolverMode = job.singleRequest.solverMode;
 
     // RunSolver: DTO → internal override application → solver dispatch
-    auto solverLambda = [this, &baseNetlist, &jobParams, baseTopologyHash, baseComputeMode](
+    auto solverLambda = [this, &baseNetlist, &jobParams, baseTopologyHash, baseSolverMode](
         AnalysisTypeDTO analysis,
         const std::vector<ParameterVariationDTO>& overrides,
         const CornerParametersDTO& corner) -> SimulationResponseDTO
@@ -286,24 +287,23 @@ void LocalWorkerDriver::Impl::executeJob(const InternalJob& job) {
         runReq.parameters    = jobParams;
         // Propagate topology hash and compute mode from the originating request
         runReq.topologyHash  = baseTopologyHash;
-        runReq.compute_mode  = baseComputeMode;
+        runReq.solverMode    = baseSolverMode;
 
         // Phase 4 Reconcile: each worker thread gets its own CircuitSim —
         // no shared numeric state across Monte Carlo parallel workers.
         CircuitSim sim;
-        sim.execMode = static_cast<CircuitSim::ExecutionMode>(runReq.compute_mode);
+        sim.execMode = (runReq.solverMode == "GPU") ? CircuitSim::ExecutionMode::GPU : CircuitSim::ExecutionMode::TENSOR_SOA_SIMD;
 
         try {
             // Pure registry dispatch — zero switch statement.
             // All analysis types (DC, TRANSIENT, AC, TF, PZ, FOURIER, ...)
-            // are handled by registered handlers. Adding a new analysis type
-            // requires only a new handler + registerHandler() call.
+            // are handled by registered handlers.
             return acutesim::compute::AnalysisRegistry::instance()
                 .dispatch(analysis, runReq, runNetlist, sim);
         } catch (const std::exception& ex) {
             SimulationResponseDTO e;
             e.success = false;
-            e.errorMessage = std::string("Solver exception: ") + ex.what();
+            e.errorDetail = std::string("Solver exception: ") + ex.what();
             return e;
         }
     };
@@ -338,7 +338,7 @@ void LocalWorkerDriver::Impl::executeJob(const InternalJob& job) {
         } else {
             SimulationResponseDTO emptyResp;
             emptyResp.success = false;
-            emptyResp.errorMessage = "No results from single-run batch";
+            emptyResp.errorDetail = "No results from single-run batch";
             q_ptr->onJobCompleted(job.id, emptyResp);
         }
     }
@@ -381,7 +381,7 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runDC(
             double v_neg = (probe.nodeNegative > 0 &&
                            probe.nodeNegative <= (int)result.nodeVoltages.size())
                           ? result.nodeVoltages[probe.nodeNegative - 1] : 0.0;
-            resp.probeValues[probe.name] = {v_pos - v_neg};
+            resp.probeValues[probe.name].push_back(v_pos - v_neg);
         }
 
         // Convergence telemetry
@@ -404,7 +404,7 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runDC(
         resp.convergence.gminInjections     = result.stats.regularization.injections;
     } else {
         resp.success = false;
-        resp.errorMessage = result.stats.error_detail.empty()
+        resp.errorDetail = result.stats.error_detail.empty()
             ? "DC solver diverged"
             : result.stats.error_detail;
     }
@@ -452,7 +452,7 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runTransient(
 
         if (!result.stats.converged) {
             resp.success = false;
-            resp.errorMessage = "Transient failed at t=" + std::to_string(currentTime) +
+            resp.errorDetail = "Transient failed at t=" + std::to_string(currentTime) +
                 "s: " + result.stats.error_detail;
             failed = true;
             break;
@@ -516,7 +516,7 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runAC(
     SolverStep dcResult = sim.solveDC(runNetlist);
     if (!dcResult.stats.converged) {
         resp.success = false;
-        resp.errorMessage = "AC: DC operating point failed: " + dcResult.stats.error_detail;
+        resp.errorDetail = "AC: DC operating point failed: " + dcResult.stats.error_detail;
         return resp;
     }
 
@@ -578,7 +578,7 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runTF(
     if (!dcResult.stats.converged) {
         SimulationResponseDTO e;
         e.success      = false;
-        e.errorMessage = "TF: DC operating point failed: " + dcResult.stats.error_detail;
+        e.errorDetail = "TF: DC operating point failed: " + dcResult.stats.error_detail;
         return e;
     }
 
@@ -601,7 +601,7 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runPZ(
     if (!dcResult.stats.converged) {
         SimulationResponseDTO e;
         e.success      = false;
-        e.errorMessage = "PZ: DC operating point failed: " + dcResult.stats.error_detail;
+        e.errorDetail = "PZ: DC operating point failed: " + dcResult.stats.error_detail;
         return e;
     }
 
@@ -617,7 +617,7 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runFourier(
     // Run a transient first, then extract the probe node waveform.
     SimulationResponseDTO tranResp = runTransient(sim, netlist, req);
     if (!tranResp.success) {
-        tranResp.errorMessage = "FOURIER: transient failed: " + tranResp.errorMessage;
+        tranResp.errorDetail = "FOURIER: transient failed: " + tranResp.errorDetail;
         return tranResp;
     }
 
@@ -759,7 +759,7 @@ TerminalResponseDTO LocalWorkerDriver::executeCommand(const TerminalCommandDTO& 
     if (verb == "run") {
         if (tokens.size() < 2) {
             resp.success = false;
-            resp.errorMessage = "Usage: run <dc|tran|ac> [params]";
+            resp.errorDetail = "Usage: run <dc|tran|ac> [params]";
             return resp;
         }
 
@@ -780,7 +780,7 @@ TerminalResponseDTO LocalWorkerDriver::executeCommand(const TerminalCommandDTO& 
             req.analysis = AnalysisTypeDTO::AC;
         } else {
             resp.success = false;
-            resp.errorMessage = "Unknown analysis type: " + analysisStr + ". Use: dc, tran, ac";
+            resp.errorDetail = "Unknown analysis type: " + analysisStr + ". Use: dc, tran, ac";
             return resp;
         }
 
@@ -795,7 +795,7 @@ TerminalResponseDTO LocalWorkerDriver::executeCommand(const TerminalCommandDTO& 
     if (verb == "sweep") {
         if (tokens.size() < 5) {
             resp.success = false;
-            resp.errorMessage = "Usage: sweep <component> <lo> <hi> <steps>";
+            resp.errorDetail = "Usage: sweep <component> <lo> <hi> <steps>";
             return resp;
         }
 
@@ -832,7 +832,7 @@ TerminalResponseDTO LocalWorkerDriver::executeCommand(const TerminalCommandDTO& 
     if (verb == "mc") {
         if (tokens.size() < 2) {
             resp.success = false;
-            resp.errorMessage = "Usage: mc <samples> [seed=<N>]";
+            resp.errorDetail = "Usage: mc <samples> [seed=<N>]";
             return resp;
         }
 
@@ -841,7 +841,7 @@ TerminalResponseDTO LocalWorkerDriver::executeCommand(const TerminalCommandDTO& 
         baseReq.analysis = AnalysisTypeDTO::DC;
 
         MonteCarloConfigDTO mcConfig;
-        mcConfig.sampleCount = static_cast<uint32_t>(std::stoi(tokens[1]));
+        mcConfig.numRuns = static_cast<uint32_t>(std::stoi(tokens[1]));
         mcConfig.seed = 0; // random seed by default
 
         // Parse optional seed=N
@@ -859,7 +859,7 @@ TerminalResponseDTO LocalWorkerDriver::executeCommand(const TerminalCommandDTO& 
     }
 
     resp.success = false;
-    resp.errorMessage = "Unknown command: '" + verb + "'. Type 'help' for available commands.";
+    resp.errorDetail = "Unknown command: '" + verb + "'. Type 'help' for available commands.";
     return resp;
 }
 

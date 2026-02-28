@@ -4,6 +4,7 @@
 #include <QDir>
 #include "gui/editors/schematic_editor.h"
 #include "gui/components/visual_component.h"
+#include "acutesim_engine/netlist/circuit.h"
 
 void test_load_inverter(SchematicEditor& editor) {
     std::cout << "[Test 1] Loading inverter.sch..." << std::endl;

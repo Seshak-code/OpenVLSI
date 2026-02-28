@@ -28,7 +28,7 @@ void LogicWaveformWidget::clear() {
     update();
 }
 
-void LogicWaveformWidget::addBusData(const std::string& name, const std::vector<BusProbe::DigitalSample>& history, int bitWidth) {
+void LogicWaveformWidget::addBusData(const std::string& name, const std::vector<acutesim::components::BusProbe::DigitalSample>& history, int bitWidth) {
     WaveformTrack track;
     track.name = QString::fromStdString(name);
     track.isBus = (bitWidth > 1);

@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include "../gui/analysis/simulation_profile.h"
 #include "../physics/quick_analysis.h"
-#include "../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 
 namespace SimulationTests {
 

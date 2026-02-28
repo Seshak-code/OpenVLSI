@@ -408,6 +408,7 @@ add_library(acutesim_compute_core STATIC
     acutesim_engine/physics/quick_analysis.cpp
     components/veriloga_generator.cpp
     acutesim_engine/tensors/physics_tensors.cpp
+    compute/orchestration/drivers/def_parser.cpp
     acutesim_engine/tensors/kernel_dispatch.cpp
     acutesim_engine/tensors/physics_kernels_avx512.cpp
     acutesim_engine/tensors/physics_kernels_avx2.cpp
@@ -432,6 +433,14 @@ target_include_directories(acutesim_compute_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
     ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
     ${CMAKE_CURRENT_SOURCE_DIR}
+    # acutesim_engine/ transitional paths — migrated files live here now
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/models
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/solvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
 )
 # Phase 3.1: acutesim_compute_core is Qt-free. Downstream targets that need Qt link it directly.
 target_compile_features(acutesim_compute_core PUBLIC cxx_std_17)
@@ -451,10 +460,10 @@ if(NOT EMSCRIPTEN)
         compute/orchestration/driver/job_scheduler.cpp
         compute/orchestration/driver/veriloga_parser.cpp
         compute/orchestration/server/subprocess.cpp
-        compute/hardware_capabilities.cpp
+        acutesim_engine/infrastructure/hardware_capabilities.cpp
         # Phase 4 additions
-        compute/analysis_registry.cpp
-        compute/staged_dispatcher.cpp
+        acutesim_engine/solvers/analysis_registry.cpp
+        acutesim_engine/solvers/staged_dispatcher.cpp
     )
     target_include_directories(acutesim_sim_layer PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -462,7 +471,7 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/dto
         ${CMAKE_CURRENT_SOURCE_DIR}/compute/orchestration/driver
     )
-    target_link_libraries(acutesim_sim_layer PUBLIC acutesim_compute_core)
+    target_link_libraries(acutesim_sim_layer PUBLIC acutesim_compute_core acutesim_engine)
     target_compile_features(acutesim_sim_layer PUBLIC cxx_std_17)
 endif()
 
@@ -880,6 +889,10 @@ endif()
 add_executable(test_numerical_parity tests/test_numerical_parity.cpp)
 target_link_libraries(test_numerical_parity PRIVATE acutesim_compute_core)
 target_include_directories(test_numerical_parity PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_features(test_numerical_parity PUBLIC cxx_std_17)
 
 # ===========================================================================
 # Engine Parity & Isolation Test (Phase F — Engine Migration Verification)
@@ -900,11 +913,6 @@ if(NOT EMSCRIPTEN)
     target_compile_features(test_engine_parity PUBLIC cxx_std_17)
     add_test(NAME EngineParityTest COMMAND test_engine_parity)
 endif()
-
-    ${CMAKE_CURRENT_SOURCE_DIR}/tests
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-target_compile_features(test_numerical_parity PUBLIC cxx_std_17)
 
 # GPU Parity Verification Test (Phase D5c — requires Dawn native)
 if(NOT EMSCRIPTEN)
@@ -1472,7 +1480,7 @@ target_include_directories(test_pdk_swap PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
     ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
 )
-target_link_libraries(test_pdk_swap PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_link_libraries(test_pdk_swap PRIVATE acutesim_compute_core Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
 target_compile_features(test_pdk_swap PUBLIC cxx_std_17)
 
 # Emscripten link options for all test targets
@@ -1798,7 +1806,7 @@ add_test(NAME test_session_manager COMMAND test_session_manager)
 # Spatial Logic Test (Headless-ish GUI)
 if(NOT EMSCRIPTEN)
     add_executable(test_spatial_logic tests/test_spatial_logic.cpp)
-    target_link_libraries(test_spatial_logic PRIVATE Qt6::Widgets Qt6::Core Qt6::Gui ${TCL_LIBRARY})
+    target_link_libraries(test_spatial_logic PRIVATE acutesim_compute_core Qt6::Widgets Qt6::Core Qt6::Gui ${TCL_LIBRARY})
     # Link against app objects or sources?
     # Currently CuteApp sources are scattered. Best to add them or link a library if available.
     # Since we don't have a library target for gui/components, we must add sources interactively.
@@ -1895,7 +1903,7 @@ target_include_directories(test_gui_logic PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/physics
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_link_libraries(test_gui_logic PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+target_link_libraries(test_gui_logic PRIVATE acutesim_compute_core Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
 # visual_component.cpp needs these to link if it references SchemeEditor or similar? 
 # VisualComponent only depends on Qt Graphics, so simple link should work unless circular deps exist.
 add_test(NAME test_gui_logic COMMAND test_gui_logic)
@@ -2225,6 +2233,7 @@ if(NOT EMSCRIPTEN)
         tests/test_gpu_connectivity.cpp
         acutesim_engine/solvers/webgpu_solver.cpp
         acutesim_engine/tensors/physics_tensors.cpp
+    compute/orchestration/drivers/def_parser.cpp
         acutesim_engine/tensors/kernel_dispatch.cpp
         acutesim_engine/infrastructure/netlist_compiler.cpp
     )
@@ -2434,7 +2443,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_parallel_batch
         tests/test_parallel_batch.cpp
     )
-    target_link_libraries(test_parallel_batch PRIVATE acutesim_engine)
+    target_link_libraries(test_parallel_batch PRIVATE acutesim_sim_layer acutesim_orchestration acutesim_engine)
     target_include_directories(test_parallel_batch PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/compute
@@ -2454,7 +2463,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_parallel_monte_carlo
         tests/test_parallel_monte_carlo.cpp
     )
-    target_link_libraries(test_parallel_monte_carlo PRIVATE acutesim_engine)
+    target_link_libraries(test_parallel_monte_carlo PRIVATE acutesim_sim_layer acutesim_orchestration acutesim_engine)
     target_include_directories(test_parallel_monte_carlo PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/compute
@@ -2489,6 +2498,8 @@ if(NOT EMSCRIPTEN)
     )
     target_link_libraries(test_gui_headless_scenarios PRIVATE
         acutesim_sim_layer
+        acutesim_orchestration
+        acutesim_engine
         Qt6::Core Qt6::Test
     )
     target_compile_definitions(test_gui_headless_scenarios PRIVATE

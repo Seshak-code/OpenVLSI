@@ -1,5 +1,6 @@
 #pragma once
-#include "sim_auto_detector.h"
+#include "engine_api/simulation_context.h"
+#include "gui/core/sim_auto_detector.h"
 #include <QObject>
 #include <QTabWidget>
 #include <QMap>
@@ -54,11 +55,11 @@ public:
     // Editor Access
     IEditor* currentEditor() const;
     IEditor* getEditor(int index) const;
-    SimulationContext currentContext() const { return currentContext_; }
+    acutesim::orchestration::SimulationContext currentContext() const { return currentContext_; }
 
 signals:
     void activeEditorChanged(IEditor* editor);
-    void contextChanged(const SimulationContext& context);
+    void contextChanged(const acutesim::orchestration::SimulationContext& context);
     void editorsChanged(); // Count changed
 
 private slots:
@@ -69,8 +70,8 @@ private slots:
 private:
     QTabWidget* tabWidget_;
     QMap<QWidget*, IEditor*> editorMap_; // Maps tab widget back to interface
-    SimAutoDetector detector_;
-    SimulationContext currentContext_;
+    ::gui::core::SimAutoDetector  detector_;
+    acutesim::orchestration::SimulationContext currentContext_;
     
     // Helpers
     IEditor* createEditorForFile(const QString& path, const QString& typeHint);

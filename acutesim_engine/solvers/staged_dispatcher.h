@@ -9,7 +9,7 @@
 // Phase 4.2
 // ============================================================================
 
-#include "compute/hardware_capabilities.h"
+#include "acutesim_engine/infrastructure/hardware_capabilities.h"
 #include "engine_api/simulation_dto.h"
 
 namespace acutesim {

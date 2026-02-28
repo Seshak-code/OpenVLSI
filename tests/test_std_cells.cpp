@@ -7,7 +7,7 @@
 
 #include "../components/standard_cells.h"
 #include "../physics/circuitsim.h"
-#include "../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 
 // ANSI Colors
 #define GREEN "\033[32m"

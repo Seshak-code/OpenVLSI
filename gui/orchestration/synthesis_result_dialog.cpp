@@ -45,7 +45,11 @@ SynthesisResultDialog::SynthesisResultDialog(
         auto* tabLayout = new QVBoxLayout(tab);
 
         auto* pieChart = new acutesim::gui::widgets::CellPieChartWidget(tab);
-        pieChart->setData(result.cellBreakdown);
+        QMap<QString, int> qBreakdown;
+        for (const auto& [name, count] : result.cellBreakdown) {
+            qBreakdown.insert(QString::fromStdString(name), count);
+        }
+        pieChart->setData(qBreakdown);
         pieChart->setMinimumHeight(180);
         tabLayout->addWidget(pieChart);
 
@@ -57,11 +61,11 @@ SynthesisResultDialog::SynthesisResultDialog(
         table->setStyleSheet("QTableWidget { background: #2d2d2d; color: #ccc; }");
 
         int row = 0;
-        int total = result.cellCount > 0 ? result.cellCount : 1;
-        for (auto it = result.cellBreakdown.constBegin(); it != result.cellBreakdown.constEnd(); ++it) {
-            table->setItem(row, 0, new QTableWidgetItem(it.key()));
-            table->setItem(row, 1, new QTableWidgetItem(QString::number(it.value())));
-            double pct = 100.0 * it.value() / total;
+        int totalCells = result.cellCount > 0 ? result.cellCount : 1;
+        for (const auto& [name, count] : result.cellBreakdown) {
+            table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(name)));
+            table->setItem(row, 1, new QTableWidgetItem(QString::number(count)));
+            double pct = 100.0 * count / totalCells;
             table->setItem(row, 2, new QTableWidgetItem(QString::number(pct, 'f', 1) + "%"));
             row++;
         }
@@ -77,14 +81,13 @@ SynthesisResultDialog::SynthesisResultDialog(
         table->setEditTriggers(QAbstractItemView::NoEditTriggers);
         table->setStyleSheet("QTableWidget { background: #2d2d2d; color: #ccc; }");
 
-        int row = 0;
-        for (auto it = result.modules.constBegin(); it != result.modules.constEnd(); ++it) {
-            const auto& mod = it.value();
-            table->setItem(row, 0, new QTableWidgetItem(mod.moduleName));
-            table->setItem(row, 1, new QTableWidgetItem(QString::number(mod.cellCount)));
-            table->setItem(row, 2, new QTableWidgetItem(QString::number(mod.wireCount)));
-            table->setItem(row, 3, new QTableWidgetItem(QString::number(mod.chipArea, 'f', 2)));
-            row++;
+        int m_row = 0;
+        for (const auto& [name, mod] : result.modules) {
+            table->setItem(m_row, 0, new QTableWidgetItem(QString::fromStdString(mod.moduleName)));
+            table->setItem(m_row, 1, new QTableWidgetItem(QString::number(mod.cellCount)));
+            table->setItem(m_row, 2, new QTableWidgetItem(QString::number(mod.wireCount)));
+            table->setItem(m_row, 3, new QTableWidgetItem(QString::number(mod.chipArea, 'f', 2)));
+            m_row++;
         }
         tabs->addTab(table, "Module Stats");
     }
@@ -98,10 +101,10 @@ SynthesisResultDialog::SynthesisResultDialog(
             "font-family: 'Menlo', 'Consolas', monospace; font-size: 11px; }");
 
         for (const auto& w : result.warnings)
-            logEdit->append("<span style='color:#dcdcaa;'>WARNING: " + w.toHtmlEscaped() + "</span>");
+            logEdit->append("<span style='color:#dcdcaa;'>WARNING: " + QString::fromStdString(w).toHtmlEscaped() + "</span>");
         for (const auto& e : result.errors)
-            logEdit->append("<span style='color:#f44747;'>ERROR: " + e.toHtmlEscaped() + "</span>");
-        if (result.warnings.isEmpty() && result.errors.isEmpty())
+            logEdit->append("<span style='color:#f44747;'>ERROR: " + QString::fromStdString(e).toHtmlEscaped() + "</span>");
+        if (result.warnings.empty() && result.errors.empty())
             logEdit->setPlainText("No warnings or errors.");
         tabs->addTab(logEdit, "Log");
     }

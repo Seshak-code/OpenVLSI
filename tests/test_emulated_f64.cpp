@@ -1,6 +1,6 @@
 #include <QtTest/QtTest>
 #include <cmath>
-#include "compute/math/emulated_f64.h"
+#include "acutesim_engine/math/emulated_f64.h"
 
 class TestEmulatedF64 : public QObject {
     Q_OBJECT

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cassert>
-#include "components/circuit.h"
-#include "components/netlist_export.h"
+#include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/netlist/netlist_export.h"
 
 void test_multi_domain() {
     std::cout << "[Test] Multi-Domain Power Export... ";

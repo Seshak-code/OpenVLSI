@@ -25,10 +25,8 @@
 
 namespace acutesim {
 
-using namespace acutesim::compute::orchestration;
-
 // ── Streaming result callback (for live waveform updates) ─────────────────
-using ResultChunkCallback = std::function<void(const WaveformDataPoint&, uint64_t timeStepIdx)>;
+using ResultChunkCallback = std::function<void(const compute::orchestration::WaveformDataPoint&, uint64_t timeStepIdx)>;
 
 // ── SimulationSession ──────────────────────────────────────────────────────
 class ENGINE_API SimulationSession {
@@ -36,26 +34,27 @@ public:
     virtual ~SimulationSession() = default;
 
     // === Analysis methods ===
-    // These are the only virtual dispatch points.
-    // Internal solver steps (Newton iterations, matrix solve) are NOT virtual.
-    virtual SimulationResponseDTO runDC(const SimulationRequestDTO&,
-                                         const EngineCallbacks& = {}) = 0;
+    virtual compute::orchestration::SimulationResponseDTO runDC(
+        const compute::orchestration::SimulationRequestDTO&,
+        const EngineCallbacks& = {}) = 0;
 
-    virtual SimulationResponseDTO runAC(const SimulationRequestDTO&,
-                                         const EngineCallbacks& = {}) = 0;
+    virtual compute::orchestration::SimulationResponseDTO runAC(
+        const compute::orchestration::SimulationRequestDTO&,
+        const EngineCallbacks& = {}) = 0;
 
-    virtual SimulationResponseDTO runTransient(
-        const SimulationRequestDTO&,
+    virtual compute::orchestration::SimulationResponseDTO runTransient(
+        const compute::orchestration::SimulationRequestDTO&,
         const EngineCallbacks& = {},
         ResultChunkCallback   streamCallback = nullptr) = 0;
 
-    virtual SimulationResponseDTO runMonteCarlo(
-        const SimulationRequestDTO&,
-        const MonteCarloConfigDTO&,
+    virtual compute::orchestration::SimulationResponseDTO runMonteCarlo(
+        const compute::orchestration::SimulationRequestDTO&,
+        const compute::orchestration::MonteCarloConfigDTO&,
         const EngineCallbacks& = {}) = 0;
 
-    virtual SimulationResponseDTO runNoise(const SimulationRequestDTO&,
-                                            const EngineCallbacks& = {}) = 0;
+    virtual compute::orchestration::SimulationResponseDTO runNoise(
+        const compute::orchestration::SimulationRequestDTO&,
+        const EngineCallbacks& = {}) = 0;
 
     // === Lifecycle ===
     virtual JobID       jobId()   const = 0;
@@ -69,7 +68,3 @@ public:
 };
 
 } // namespace acutesim
-
-#ifndef ENGINE_API
-  #define ENGINE_API
-#endif

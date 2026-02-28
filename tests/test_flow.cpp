@@ -1,16 +1,16 @@
-#include "../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include "../components/component_library.h"
-#include "../components/subcircuit_validator.h"
-#include "../physics/design_rules.h"
+#include "acutesim_engine/netlist/subcircuit_validator.h"
+#include "acutesim_engine/physics/design_rules.h"
 #include <iostream>
 #include <iomanip>
 #include <cassert>
 
 // Include solver
-#include "../compute/solvers/circuitsim_solver.cpp"
-#include "../compute/tensors/physics_tensors.cpp"
-#include "../compute/solvers/superposition.cpp"
-#include "../compute/infrastructure/netlist_compiler.cpp"
+#include "acutesim_engine/solvers/circuitsim_solver.cpp"
+#include "acutesim_engine/tensors/physics_tensors.cpp"
+#include "acutesim_engine/solvers/superposition.cpp"
+#include "acutesim_engine/infrastructure/netlist_compiler.cpp"
 
 /**
  * Automated flow testing for Raw State component integration.

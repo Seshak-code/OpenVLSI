@@ -9,7 +9,7 @@
 #include <cassert>
 #include <cmath>
 #include <string>
-#include "../compute/solvers/convergence_engine.h"
+#include "acutesim_engine/solvers/convergence_engine.h"
 
 static int tests_passed = 0;
 static int tests_failed = 0;

@@ -1,7 +1,7 @@
 #pragma once
 #include "simulation_trace.h"
 #include "failure_taxonomy.h"
-#include "linalg.h" // For SolverResult, Csr_matrix
+#include "acutesim_engine/math/linalg.h" // For SolverResult, Csr_matrix
 
 namespace AIAPI {
 

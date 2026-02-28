@@ -8,10 +8,10 @@
 //   4. StagedDispatcher selects MULTICORE_CPU for a nonlinear heavy circuit
 // ============================================================================
 
-#include "compute/analysis_registry.h"
-#include "compute/staged_dispatcher.h"
-#include "compute/hardware_capabilities.h"
-#include "compute/solvers/register_analyses.h"
+#include "acutesim_engine/solvers/analysis_registry.h"
+#include "acutesim_engine/solvers/staged_dispatcher.h"
+#include "acutesim_engine/infrastructure/hardware_capabilities.h"
+#include "acutesim_engine/solvers/register_analyses.h"
 
 #include <cassert>
 #include <cstdio>

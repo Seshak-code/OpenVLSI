@@ -90,7 +90,7 @@ public:
         (void)cmd;
         TerminalResponseDTO resp;
         resp.success = false;
-        resp.errorMessage = "Terminal not supported by this driver.";
+        resp.errorDetail = "Terminal not supported by this driver.";
         return resp;
     }
 

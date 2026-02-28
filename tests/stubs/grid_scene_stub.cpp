@@ -40,7 +40,7 @@ bool GridScene::isSegmentLegal(const QLineF& line, const VisualWire* context) { 
 void GridScene::clearGhostWires() {}
 bool GridScene::isPlacementValid(const QPointF& pos, QGraphicsItem* item) { return true; }
 QStringList GridScene::runERC() { return {}; }
-QJsonObject GridScene::getCircuitState() const { return {}; }
+QJsonObject GridScene::getCircuitState() { return {}; }
 void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {}
 
 // SchematicEditor Stubs (needed because MOC generates calls to these)

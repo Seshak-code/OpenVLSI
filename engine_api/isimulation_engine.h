@@ -20,16 +20,22 @@
 #include <string>
 #include <cstddef>
 
+// ENGINE_API visibility macro (provided by engine, consumed by clients)
+#ifndef ENGINE_API
+  #if defined(_WIN32)
+    #ifdef ACUTESIM_ENGINE_INTERNAL
+      #define ENGINE_API __declspec(dllexport)
+    #else
+      #define ENGINE_API __declspec(dllimport)
+    #endif
+  #else
+    #define ENGINE_API __attribute__((visibility("default")))
+  #endif
+#endif
+
 namespace acutesim {
 
-using namespace acutesim::compute::orchestration;
-
-// ── Precision control ──────────────────────────────────────────────────────
-enum class PrecisionMode : uint8_t {
-    Native_F64,     // IEEE 754 double — CPU scalar paths
-    Emulated_F64,   // Hi-lo pair splitting — GPU determinism paths
-    Mixed           // F64 for NR outer loop, EmF64 for GPU kernels (default)
-};
+// PrecisionMode is defined in simulation_dto.h
 
 // ── Engine capabilities descriptor ────────────────────────────────────────
 // Clients query this instead of probing internals.
@@ -74,8 +80,3 @@ public:
 };
 
 } // namespace acutesim
-
-// ENGINE_API visibility macro (provided by engine, consumed by clients)
-#ifndef ENGINE_API
-  #define ENGINE_API
-#endif

@@ -4,9 +4,9 @@
 #include <cassert>
 #include "gui/editors/schematic/schematic_editor.h"
 #include "gui/components/visual_component.h"
-#include "components/circuit.h"
-#include "compute/infrastructure/netlist_compiler.h"
-#include "compute/infrastructure/compiled_block.h"
+#include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/infrastructure/netlist_compiler.h"
+#include "acutesim_engine/infrastructure/compiled_block.h"
 
 // Helper to check assertion
 #define TEST_ASSERT(cond) \
@@ -67,7 +67,8 @@ int main(int argc, char *argv[]) {
 
     // 5. Generate Netlist
     qDebug() << "Test: Generating Netlist...";
-    TensorNetlist netlist = scene.generateNetlist();
+    scene.generateNetlist();
+    TensorNetlist netlist = scene.toNetlist();
 
     // 6. Compile Netlist
     qDebug() << "Test: Compiling Netlist...";

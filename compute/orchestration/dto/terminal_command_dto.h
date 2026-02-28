@@ -22,7 +22,7 @@ struct TerminalCommandDTO {
 struct TerminalResponseDTO {
     bool        success = false;
     std::string output;         // Human-readable result or info
-    std::string errorMessage;   // Non-empty on failure
+    std::string errorDetail;   // Non-empty on failure
 };
 
 } // namespace orchestration

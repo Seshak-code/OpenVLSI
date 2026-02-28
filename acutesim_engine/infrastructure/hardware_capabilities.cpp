@@ -77,17 +77,22 @@ static HardwareCapabilities::SIMDTier detectSIMDTier() {
 static void probeGPU(HardwareCapabilities& caps) {
 #ifdef ACUTESIM_GPU_PROBE_AVAILABLE
     dawn::native::Instance dawnInst;
-    dawnInst.DiscoverDefaultAdapters();
-    auto adapters = dawnInst.GetAdapters();
+    // EnumerateAdapters replaces DiscoverDefaultAdapters+GetAdapters (Dawn chromium/6943+)
+    auto adapters = dawnInst.EnumerateAdapters(); // uses default wgpu::RequestAdapterOptions* = nullptr
     for (const auto& adapter : adapters) {
-        WGPUAdapterProperties props{};
-        adapter.GetProperties(&props);
-        if (props.adapterType == WGPUAdapterType_DiscreteGPU ||
-            props.adapterType == WGPUAdapterType_IntegratedGPU) {
+        WGPUAdapterInfo info{};
+        wgpuAdapterGetInfo(adapter.Get(), &info);
+        if (info.adapterType == WGPUAdapterType_DiscreteGPU ||
+            info.adapterType == WGPUAdapterType_IntegratedGPU) {
             caps.hasGPU = true;
-            caps.gpuAdapterName = props.name ? props.name : "Unknown GPU";
+            if (info.device.length > 0)
+                caps.gpuAdapterName = std::string(info.device.data, info.device.length);
+            else
+                caps.gpuAdapterName = "Unknown GPU";
+            wgpuAdapterInfoFreeMembers(info);
             break; // Take the first usable adapter
         }
+        wgpuAdapterInfoFreeMembers(info);
     }
 #else
     (void)caps; // GPU probing unavailable without Dawn

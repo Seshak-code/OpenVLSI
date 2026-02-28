@@ -1,4 +1,4 @@
-#include "../components/circuit.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include "../physics/design_rules.h"
 #include <iostream>
 #include <cassert>

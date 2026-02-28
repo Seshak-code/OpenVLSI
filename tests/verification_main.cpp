@@ -6,8 +6,8 @@
 #include <cmath>
 #include <iomanip>
 
-#include "../compute/math/linalg.h"
-#include "../compute/tensors/physics_tensors.h"
+#include "acutesim_engine/math/linalg.h"
+#include "acutesim_engine/tensors/physics_tensors.h"
 
 // Define a dummy backend capability for the test
 enum class Backend {
@@ -42,8 +42,8 @@ void verify_gpu_alignment() {
     dTensor.reserve(100);
     for(int i=0; i<100; ++i) dTensor.push(0,0,0,0,0); // Populate dummy
     
-    assert(dTensor.anodes.size() == 100);
-    assert((void*)dTensor.anodes.data() != nullptr);
+    assert(dTensor.node_a.size() == 100);
+    assert((void*)dTensor.node_a.data() != nullptr);
     
     // Check alignment of the pointer itself (checking 16-byte alignment is good for SIMD/GPU load)
     size_t addr = reinterpret_cast<size_t>(dTensor.g_d.data());
@@ -171,14 +171,14 @@ void run_benchmark() {
     
     // B. Stamping (Batch)
     {
-        size_t nD = diodes.anodes.size();
+        size_t nD = diodes.node_a.size();
         std::vector<int> rows, cols;
         std::vector<double> vals;
         rows.reserve(nD*4); cols.reserve(nD*4); vals.reserve(nD*4);
         
         for(size_t i=0; i<nD; ++i) {
-            int nA = diodes.anodes[i];
-            int nC = diodes.cathodes[i];
+            int nA = diodes.node_a[i];
+            int nC = diodes.node_c[i];
             double g = diodes.g_d[i];
             if (nA!=0 && nC!=0) {
                  rows.push_back(nA-1); cols.push_back(nA-1); vals.push_back(g);

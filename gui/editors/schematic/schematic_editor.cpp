@@ -25,6 +25,9 @@
 #include "../../components/standard_cell_visualizer.h" // Phase 14: Visualizer
 #include <QFileInfo>
 #include "../../widgets/inline_dialog.h"
+#include <QUuid>
+#include <QSet>
+#include "engine_api/simulation_dto.h"
 #include <QMenu>
 #include <QAction>
 #include <QDateTime>
@@ -462,17 +465,28 @@ bool GridScene::isSegmentLegal(const QLineF& line, const VisualWire* context) {
     for (auto* item : collisions) {
         if (auto* comp = dynamic_cast<VisualComponent*>(item)) {
             // Check if the intersection is ONLY at the endpoints
-            QPainterPath compShape = comp->shape().translated(comp->pos());
-            if (compShape.intersects(stroke)) {
-                // If the intersection is more than just the endpoints being on terminals, it's illegal.
-                // We already checked endpoints in isEndpointLegal. 
-                // Here we check if the LINE body crosses the COMP body.
-                
-                // Simple heuristic: if mid-point is inside, it's a collision.
-                if (compShape.contains(line.pointAt(0.5))) return false;
-                
-                // More robust: check if segment length inside is > epsilon
-                // For now, mid-point + endpoint check is usually sufficient for grid-aligned EDA.
+            // QPainterPath compShape = comp->shape().translated(comp->pos());
+            // if (compShape.intersects(stroke)) {
+            //     // If the intersection is more than just the endpoints being on terminals, it's illegal.
+            //     // We already checked endpoints in isEndpointLegal. 
+            //     // Here we check if the LINE body crosses the COMP body.
+            //     
+            //     // Simple heuristic: if mid-point is inside, it's a collision.
+            //     if (compShape.contains(line.pointAt(0.5))) return false;
+            //     
+            //     // More robust: check if segment length inside is > epsilon
+            //     // For now, mid-point + endpoint check is usually sufficient for grid-aligned EDA.
+            // }
+            // Simplified check: if the component's bounding rect intersects the wire segment's bounding rect,
+            // and it's not one of the wire's endpoints, it's a collision.
+            // This is a bit aggressive, but safer for now.
+            QRectF compRect = comp->sceneBoundingRect();
+            QRectF wireRect = stroke.boundingRect();
+            if (compRect.intersects(wireRect)) {
+                // Exclude cases where only endpoints touch
+                if (!compRect.contains(line.p1()) && !compRect.contains(line.p2())) {
+                    return false;
+                }
             }
         }
     }
@@ -866,7 +880,7 @@ void GridScene::drawForeground(QPainter* painter, const QRectF& rect) {
                 
                 painter->setPen(QPen(Qt::cyan, 2));
                 painter->drawLine(snap.point.x() - 10, snap.point.y(), snap.point.x() + 10, snap.point.y());
-                painter->drawLine(snap.point.x(), snap.point.y() - 10, snap.point.x(), snap.point.y() + 10);
+                painter->drawLine(snap.point.x(), snap.point.y() - 10, snap.point.y(), snap.point.y() + 10);
                 painter->restore();
             }
         }
@@ -1819,8 +1833,8 @@ void SchematicEditor::placePhysicallyAwareWire(const QVector<QPointF>& points, f
 
 
 QJsonObject SchematicEditor::getCircuitState() {
-    QJsonObject state = scene->getCircuitState();
-    // mode metadata removed - unified component library
+    if (!scene) return QJsonObject();
+    QJsonObject state = scene->getSceneJSON();
     return state;
 }
 
@@ -1862,10 +1876,13 @@ QString SchematicEditor::dumpSceneState() {
     return dump;
 }
 
-// ============================================================================
+QJsonObject GridScene::getCircuitState() {
+    return getSceneJSON();
+}
+
 // GRID SCENE JSON SERIALIZATION
 // ============================================================================
-QJsonObject GridScene::getCircuitState() const {
+QJsonObject GridScene::getSceneJSON() {
     QJsonObject root;
     
     // 1. Components
@@ -1875,7 +1892,7 @@ QJsonObject GridScene::getCircuitState() const {
             QJsonObject compInfo;
             compInfo["id"] = c->name; // Use component Name as stable ID (e.g. R1)
             compInfo["name"] = c->name;
-            compInfo["type"] = componentTypeToString(c->type); 
+            compInfo["type"] = QString::fromUtf8(componentTypeToString(c->type).toUtf8().constData(), (int)componentTypeToString(c->type).toUtf8().size()); 
             compInfo["x"] = c->pos().x();
             compInfo["y"] = c->pos().y();
             compInfo["rotation"] = c->rotation();
@@ -1942,10 +1959,20 @@ QJsonObject GridScene::getCircuitState() const {
     meta["snappingEnabled"] = snappingEnabled;
     
     // Pass mode from editor if possible, or just add it here
-    // For now, let's assume we'll inject it from SchematicEditor::getCircuitState
-    root["metadata"] = meta;
+    // Note: Probes, BusProbes, and other runtime-only structures are NOT copied
+    // to the subcircuit definition (they are measurement tools, not circuit elements).
+    QJsonObject rootResult; rootResult["metadata"] = meta;
     
-    return root;
+    return rootResult;
+}
+
+void GridScene::generateNetlist() {
+    generateSchematicGraph();
+}
+
+TensorNetlist GridScene::toNetlist() {
+    generateNetlist();
+    return designDb.toNetlist();
 }
 
 bool GridScene::isOccupied(const QRectF& rect, QGraphicsItem* exclude) {
@@ -1984,6 +2011,10 @@ bool GridScene::isOccupied(const QRectF& rect, QGraphicsItem* exclude) {
         }
     }
     return false;
+}
+
+TensorNetlist SchematicEditor::toNetlist() {
+    return scene ? scene->toNetlist() : TensorNetlist();
 }
 
 QStringList SchematicEditor::runERC() {

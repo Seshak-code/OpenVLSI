@@ -107,7 +107,7 @@ void EngineConsole::onCommandEntered() {
             appendOutput(QString::fromStdString(resp.output), QColor(166, 227, 161));
         }
     } else {
-        appendOutput("Error: " + QString::fromStdString(resp.errorMessage), QColor(255, 120, 120));
+        appendOutput("Error: " + QString::fromStdString(resp.errorDetail), QColor(255, 120, 120));
     }
 
     appendPrompt();

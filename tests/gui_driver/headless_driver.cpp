@@ -9,8 +9,8 @@
 
 #include "local_worker_driver.h"
 
-#include "../../components/circuit.h"          // TensorNetlist
-#include "../../components/veriloga_generator.h" // VerilogAGenerator
+#include "acutesim_engine/netlist/circuit.h"          // TensorNetlist
+#include "components/veriloga_generator.h"      // VerilogAGenerator
 
 #include <atomic>
 #include <chrono>

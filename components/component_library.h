@@ -1,7 +1,7 @@
 #pragma once
 
-#include "circuit.h"
-#include "subcircuit_validator.h"
+#include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/netlist/subcircuit_validator.h"
 #include <string>
 #include <fstream>
 #include <sstream>
