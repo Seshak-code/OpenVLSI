@@ -12,6 +12,18 @@
 | **GMIN / Source Stepping** | Robustness heuristics for find DC operating points in non-linear circuits. |
 | **Standard IR** | Unified Intermediate Representations for Netlists, Timing (SDF), and Parasitics (SPEF). |
 | **LTE** | Local Truncation Error; oversight of integration accuracy in transient analysis. |
+| **Factor Graph** | Bipartite graph of variable nodes (circuit voltages) and factor nodes (device constraints); intermediate representation between netlist and tensor network. |
+| **Tensor Network (TN)** | Algebraic framework where circuit MNA equations are represented as interconnected multi-dimensional tensors; contraction replaces sparse matrix factorization. |
+| **Matrix Product Operator (MPO)** | Rank-k tensor encoding a device's local Jacobian contribution; k = number of terminals. |
+| **Bond Dimension (χ)** | Maximum size of the shared index between contracted tensors; controls memory and compute cost of TN contraction. |
+| **Treewidth** | Graph-theoretic measure of circuit connectivity density; determines TN contraction complexity O(N·χ^tw). |
+| **Contraction Tree** | DAG defining the optimal sequence for tensor contractions; computed once per topology, cached across NR iterations. |
+| **Schur Complement** | Matrix reduction eliminating internal nodes to produce a boundary-only system; enables hybrid TN + sparse solver. |
+| **cuTensorNet** | NVIDIA's tensor network contraction library (cuQuantum SDK); provides hyper-optimized contraction path finding via simulated annealing. |
+| **Electrical Area Law** | Empirical law for real circuits: signal influence decays $V(d) \sim e^{-d/\xi}$ due to dissipation, meaning circuit correlations are finite-range and tensor bond dimension $\chi$ stays bounded for analog subsystems. Does NOT apply to digital logic or ideal lossless networks. |
+| **Dissipation-Regeneration Rule** | Core architectural constraint: Dissipative subsystems (Analog, RF) maintain bounded $\chi \rightarrow$ Must be contracted via TN Engine. Regenerative subsystems (CMOS logic) preserve global correlation ($\xi \rightarrow \infty, \chi \sim 2^{fanout}$) $\rightarrow$ Must be conditioned via Event/Symbolic Engine. |
+| **Bond Dimension Growth Experiment** | Pre-validation measurement: plot effective bond dimension $\chi$ vs circuit size $N$ under graph elimination ordering for target circuit classes. Decision gate: $\chi = O(\text{constant})$ or $O(\log N) \rightarrow$ TN viable; $\chi = O(\exp N) \rightarrow$ use sparse solver for that class. Must be run before any TN engine implementation. |
+| **Macro Factors** | The representation of digital standard cells in a mixed-signal TN simulator: treated as Boolean operators or state transition constraints rather than expanded transistor-level tensor blocks. |
 
 ---
 
@@ -27,6 +39,8 @@ This roadmap evolves CuteApp from a standalone open-source simulator into an Age
 | **TEE / Enclave** | Trusted Execution Environment (e.g., Keystone, SGX); a hardware-encrypted memory region where open-source tools can securely process proprietary PDKs. |
 | **HBOM** | Hardware Bill of Materials; a standardized digital ledger tracking IP provenance and compliance, critical for supply chain security (CISA framework). |
 | **STDF** | Standard Test Data Format; the binary format for ATE (Automated Test Equipment) logs, used here to close the loop between silicon and simulation. |
+| **Tensor Network Contraction** | The process of summing over shared indices between tensors, analogous to sparse matrix multiplication but operating on multi-dimensional arrays. |
+| **Bond Cutting (Tensor Slicing)** | Technique to decompose a large contraction into independent sub-problems by severing specific high-connectivity edges, enabling multi-GPU distribution. |
 
 ### 📅 Cognitive Milestone Calendar
 *   **Q1 (The Physics Core)**: Numerical authority, Tensor foundations, and WASM parity. (Phase 1)
@@ -318,6 +332,8 @@ Now with explicit exit conditions and quality gates:
 - [ ] **IEEE-754 Rounding Lockdown**: Enforcing strict `round-to-nearest-even` across all platforms to ensure bit-bit identity.
 - [ ] **Vectorized Kernel Dispatch**: Logic to select between AVX-512, Neon, or generic C++ kernels at runtime.
 - [ ] **Future SIMD Architectures**: Extension support for AVX2, AVX10-128, AVX10-256, and AVX10-512 instruction sets.
+- [ ] **FGMRES/GMRES Iterative Solver**: Non-symmetric Krylov method for Schur boundary systems arising from tensor-network domain decomposition.
+- [ ] **Schur Complement Assembly**: Compute $S = A_{\Gamma\Gamma} - A_{\Gamma I} A_{II}^{-1} A_{I\Gamma}$ from TN-native boundary contributions; the $A_{II}^{-1}$ term is produced by tensor contraction, not explicit matrix inversion.
 
 **Verification:**
 *   Numerical stability tests including pivot threshold sweeps.
@@ -339,6 +355,16 @@ Now with explicit exit conditions and quality gates:
 **Verification:**
 *   Benchmark against hierarchical MNA for consistency.
 *   Inject synthetic noise and verify invariant identities hold.
+
+#### 0.3.2 Factor Graph Intermediate Representation (TN Foundation)
+**Purpose**: Translate the flat MNA netlist into a factor graph that serves as the mathematical bridge between classical MNA stamping and tensor network contraction.
+- [ ] **Factor Graph Construction**: Translate `TensorizedBlock` → `FactorGraph` (variable nodes = circuit node voltages + MNA branch currents, factor nodes = devices enforcing constitutive equations + KCL/KVL constraints).
+- [ ] **Device-Local Dense Jacobian Tensors**: Replace scalar MNA stamps with rank-$k$ dense core tensors ($k$ = number of device terminals). Each device's analytical derivatives form a small dense matrix rather than scattered entries in a global sparse matrix.
+- [ ] **Copy/Delta Tensors**: Insert sparse identity tensors at multi-way node junctions (nodes shared by >2 devices) to enforce the single-voltage constraint across all connected factor nodes.
+
+**Verification:**
+*   Factor graph → global MNA matrix reconstruction must be bit-identical to direct `MatrixConstructor` output.
+*   Copy tensor insertion verified for all multi-fanout nodes in regression netlist set.
 
 ---
 
@@ -383,15 +409,39 @@ Now with explicit exit conditions and quality gates:
 ## PHASE 1 — TENSOR NETLIST & SCHEMATIC ENTRY (STRUCTURE AS DATA)
 **Purpose**: Turn "a circuit" into a batchable, hashable, immutable object.
 
-### 1.1 Backend: Tensor Architecture
+### 1.1 Backend: Tensor Architecture & Treewidth Compiler
 - [x] SoA (Structure of Arrays): Solver-integrated physics buffers (physics_tensors.h & circuitsim.h integration).
 - [x] Immutable Topology Hash: Structural sharing and isomorphism identification.
 - [x] Semantic Diffing: Connectivity-aware version comparison (components/netlist_diff.h).
 
-#### 1.1.1 Tensor Data Flow Objectives
+#### 1.1.1 The Adaptive Treewidth-Aware Multi-Physics Compiler
+**Core Concept:** Tensor networks are not the solver; they are a graph-complexity management strategy. Treewidth (correlation span) is the strict constraint. The compiler must detect $\rightarrow$ partition $\rightarrow$ hybridize $\rightarrow$ contract locally.
+
+- [ ] **Phase A — Analytical Topology Engine (Treewidth Analyzer)**:
+    - Compute graph elimination width, separator growth, and correlation radius *before* tensorization via Approximate Tree Decomposition.
+    - Automatic Routing: `TN-viable? YES -> tensorize | NO -> sparse/event solver`.
+- [ ] **Phase B — Hierarchical Tensorization (Multi-Scale Engine)**:
+    - Never tensorize flat SoCs. Tensorize recursively: `Transistor -> Cell -> Analog Block -> Subsystem`.
+    - At each level, perform internal contraction and emit a boundary tensor, converting exponential treewidth growth into logarithmic growth.
+- [ ] **Phase C — Boundary Cutting (Treewidth Pressure Valve)**:
+    - Cut edges with the highest betweenness centrality (clock nets, power rails, memory buses).
+    - Convert these global correlations into boundary conditions rather than internal contractions.
+- [ ] **Phase D — Hybrid Schur Complement Core**:
+    - Route local physics to GPU Tensor Cores. Route global topological coupling (Schur boundaries) to the CPU Krylov solver.
+
+#### 1.1.2 Physical Extraction & Topology Optimization
+- [ ] **Physical Layout (SPEF/GDS) as Optimization Signals**:
+    - Utilize hierarchical layout extraction to provide the strongest Tensor Network optimization signals.
+    - Physical design enforces the *Electrical Area Law*. More physical realism (parasitics, bounding boxes) mathematically isolates correlation lengths faster than ideal digital abstractions.
+    - Map spatial coordinates directly to tensor slicing planes to minimize inter-GPU communication across the Schur boundary.
+
+#### 1.1.3 Tensor Data Flow Objectives
 - [ ] **Index Map Optimization**: Implement a static index mapping layer to route schematic IDs to tensor indices without lookups.
 - [ ] **Multi-GPU Context Manager**: Logic for managing multiple GPU devices for massive multi-corner batching.
 - [ ] **Tensor Slicing Logic**: Allow real-time inspection of device internals (Inner-Is, Vgs) via tensor slice views.
+- [ ] **Factor Tensor (MPO)**: Local Jacobian-contribution tensors per graph partition, replacing per-device scalar MNA stamps with rank-$k$ dense operators that compose via tensor contraction.
+- [ ] **Contraction Tree DAG**: Data structure defining the optimal tensor contraction sequence; output of cuTensorNet hyper-optimizer, stored in `CompiledTensorBlock` alongside topology hash.
+- [ ] **Tensor Dimension Padding/Alignment**: Static zero-padding for odd device tensor dimensions to fit hardware matrix unit constraints (e.g., 8×8×4 FP64, 16×16×16 FP16 for Tensor Cores).
 
 **Architectural Theme: Standard IRs**
 - [ ] **Unified Design Graph (UDG) IR**: High-performance, versioned structural representation mapping schematic nodes ↔ netlist entries ↔ performance constraints.
@@ -745,6 +795,11 @@ graph TD
 - [x] Verify clamp logic in device_physics.h @1.4
 - [ ] Ebers-Moll Model in device_physics.h.
 - [ ] Support for per-instance parameters (Beta, Is) in circuit.h.
+
+#### 1.3.2 🔴 Global Structural Invariant: Static Contraction Signatures
+**Critical Constraint:** All semiconductor models (MOS1-9, BSIM3/4, SOI, JFET, MESFET, VBIC, EKV) must compile into **persistent Tensor Generators with topology-invariant index signatures**. 
+- [ ] **Fixed-Rank Contract**: Models must expose fixed index arity, a fixed contraction signature, and static tensor dimensionality. 
+- [ ] **No Structural Reallocation**: Legacy models dynamically change derivative count based on operating region. This is strictly forbidden. Models may perform dynamic value updates but may not alter contraction topology or matrix sparsity after initialization. Failure to enforce this destroys contraction path caching.
 - [ ] KCL Residual Audit (Physical Conservation).
 - [ ] Sensitivity Analysis (dV/dIs, dV/dBeta).
 - [ ] Newton-Raphson Voltage Limiting (pnjlim for BJT).
@@ -829,12 +884,16 @@ graph TD
 - [x] Thermal & SoA Refactor: Implemented DiodeTensor, MosfetTensor, and stampSoABlock.
 - [ ] Implement Temperature Scaling in BJT Kernels (currently solving at ref temp).
 - [ ] Reorganized all tests into a dedicated /tests folder.
+- [ ] **Mixed-Precision NR Framework**: Decouple Jacobian inversion precision from residual evaluation precision. FP16/FP32 Tensor Core contraction for the search direction $\Delta x_k$, FP64 for the residual vector $R_k$. Outer iterative refinement loop in FP64 absorbs precision noise while achieving quadratic NR convergence.
+- [ ] **Dynamic Loss Scaling**: Shift exponents of localized tensor inputs before FP16 multiplication to prevent catastrophic underflow/overflow in circuits with extreme dynamic range (mΩ to TΩ resistances, pA to A currents).
 
 ### Phase 2.9: Accuracy & Numerical Authority (Silent Failure Elimination)
 - [ ] Residual Provenance Tracking: Implement ResidualContribution struct to track per-device KCL and Jacobian impact.
 - [ ] Rank-Deficiency Detection: Symbolic and numeric detection of disconnected components or voltage source loops.
 - [ ] Auto-Regularization: Intelligent local GMIN injection where stability is decayed.
 - [ ] Device-Level Energy Accounting: Track instantaneous power and integrate energy per device to detect non-passive artifacts.
+- [ ] **TCI & prrLU Bond Truncation Bounds**: When tensor network contraction produces intermediate tensors exceeding memory thresholds, classical SVD truncation requires prohibitive full tensor instantiation. Instead, apply Tensor Cross Interpolation (TCI) using partial rank-revealing LU (prrLU) to sample configurations. Truncation threshold must be strictly bounded, with TCI acting as an implicit regularizer preventing round-off amplification beneath the solver's noise floor.
+- [ ] **Contraction Ordering Stability**: Maintain a static contraction path across all NR iterations within a timestep. Different contraction orderings produce different FP round-off accumulation patterns; holding the sequence constant ensures the outer FP64 refinement loop absorbs a consistent noise profile, preventing erratic convergence or artificial timestep shrinking.
 
 #### 2.9.1 Calibration & Tolerance Objectives
 - [ ] **Per-Device Tolerance Pools**: Ability to set independent RELTOL/ABSTOL values for critical analog sub-systems vs non-critical logic.
@@ -862,13 +921,15 @@ graph TD
 - [ ] Noise Figure (NF): For RF amplifier chains
 - [ ] Equivalent Input Noise: Referred to input for SNR calculation
 
-#### Harmonic Distortion Analysis
+#### Harmonic Distortion & PSS Analysis
 - [ ] THD (Total Harmonic Distortion): Sum of harmonic power ratio
 - [ ] HD2, HD3, ... HDn: Individual harmonic components
 - [ ] Intermodulation Distortion (IMD): Two-tone IM3, IM5
 - [ ] 1dB Compression Point: P1dB for amplifier linearity
 - [ ] IP3 (Third-Order Intercept): IIP3/OIP3 calculation
 - [ ] FFT Engine: High-resolution spectral analysis
+- [ ] **Periodic Steady State (PSS)**: Implement block-diagonal tensor lifting for harmonic balance. Use frequency-domain tensor stacking with a **shared elimination ordering**.
+- [ ] **Frequency-Coupled Frontier Sets**: Precompute frontiers because PSS introduces block-frequency coupling. You must reuse the fundamental topology across all harmonics. Without this shared ordering, the effective treewidth multiplies by the harmonic count, instantly exhausting GPU memory.
 
 #### PVT Sweep Automation
 - [ ] Process Corners: TT, FF, SS, SF, FS matrix generation
@@ -1012,6 +1073,9 @@ graph TD
 - [ ] GNN Parasitic Estimation: Predicted $C_{\text{parasitic}}$ from topology.
 - [ ] M5: Hierarchical & Incremental Re-Simulation: Block-level dependency tracking.
 - [ ] Incremental Newton updates for local design edits.
+- [ ] **Parameterized TN Block Templates**: Compute tensor contraction path once per unique IP topology hash (via cuTensorNet hyper-optimizer); batch-execute across all instances of the same IP block in a single GPU dispatch.
+- [ ] **Contraction Path Caching**: Store the optimized contraction DAG alongside `topologyHash` in `CompiledTensorBlock`. Because circuit topology is static during transient analysis, the path is computed once and reused across all NR iterations and timesteps.
+- [ ] **Static Contraction Path Reuse**: Holding the contraction sequence constant across iterations ensures consistent floating-point round-off profiles, preventing artificial timestep shrinking from erratic numerical noise.
 
 ### 🎯 PHASE 4 SUCCESS CRITERIA
 *   **Graph Isomorphism**: 100% detection accuracy for identical sub-circuit topologies across disparate files.
@@ -1060,6 +1124,107 @@ graph TD
 - [ ] **Multi-Physics Feedback Loop**: Dynamic coupling between power density maps and thermal/mechanical solvers (ElmerFEM/3D-ICE) back to the timing engine.
 - [ ] **UCIe Interface Synthesis**: Automated generation of UCIe-compliant wrappers and physical bump-pattern constraints for chiplet-to-chiplet communication.
 
+### 5.3 Tensor-Network-Native Solver (TN Engine)
+**Purpose**: Replace sparse Jacobian assembly + LU/PCG with GPU-accelerated tensor network contraction, shifting the simulation bottleneck from memory-bound (irregular scatter-gather) to compute-bound (dense matrix-multiply-accumulate). The TN engine maintains exact SPICE MNA equivalence — the equations solved are identical; only the mechanism of computation changes.
+
+**Architectural Foundation**: The existing `TensorizedBlock` SoA layout, `GraphPartitioner` (Phase C), and `CachedCsrPattern` serve as stepping stones. The `TensorPartition::nodeSet` becomes the bond indices of each TN subgraph; `deviceIndices` becomes the factor node set.
+
+#### 5.3.0 TN Viability Pre-Assessment (Go/No-Go Gate)
+**Purpose**: Empirically validate that target circuit classes exhibit bounded tensor bond dimension χ before committing to any TN implementation. This experiment gates all 5.3.1–5.3.5 work. The Electrical Area Law predicts bounded χ for dissipative analog circuits; this section confirms it holds in practice.
+- [ ] **Bond Dimension Growth Measurement**: Run tensor network eliminations on four representative circuits: (1) inverter chain, (2) SRAM array, (3) op-amp, (4) PDN mesh. Plot effective bond dimension χ vs circuit size N under graph elimination ordering.
+- [ ] **Decision Gate**: If χ grows as O(constant) or O(log N) for a target circuit class → TN approach viable for that class; proceed to 5.3.1. If χ grows as O(exp N) for a class → route that class to the Sparse Algebraic Engine; do not tensorize.
+- [ ] **Electrical Area Law Validation**: Verify that dissipation induces a finite correlation length λ for each target analog IP block, confirming V(d) ~ e^(-d/λ) spatial decay of signal influence.
+
+#### 5.3.1 TN Compiler Pipeline
+- [ ] **Graph Extraction**: Circuit AST → Factor Graph → Einstein summation (einsum) expressions. Each device's constitutive equations become a local dense tensor contraction over parameter modes and state variable modes.
+- [ ] **Contraction Path Optimization**: cuTensorNet hyper-optimizer (simulated annealing + graph partitioning) explores the NP-hard search space for a near-optimal contraction sequence. Executed once per topology, cached in `CompiledTensorBlock`.
+- [ ] **Instruction Lowering**: Abstract einsum operations → PTX `tcgen05.mma` / `mma.sync.aligned` instructions targeting 5th-gen Tensor Cores. Matrix-free sum-factorization with autonomous dimension padding.
+- [ ] **Dimension Padding**: Static zero-padding for odd tensor dimensions (e.g., 5-terminal device) to fit hardware matrix unit shapes (8×8×4 FP64, 16×16×16 FP16). Eliminates dynamic bounds checking within warps.
+- [ ] **Trajectory Batching**: Vectorize simulation execution over a batch dimension to process thousands of identical sub-circuit topologies concurrently (e.g., massive SRAM arrays, Monte Carlo). Reshape disparate vector-matrix operations into massive GEMMs to fully saturate continuous Tensor Core arithmetic throughput.
+- [ ] **Persistent Kernels (PERKS)**: Emplace the entire Newton-Raphson time-stepping loop inside a massively long-running GPU kernel. Thread blocks safely stay resident utilizing device-wide barriers (CUDA cooperative groups). Completely eliminates host-device PCIe bus latency and caches updated Schur complements and intermediate state arrays directly in ultra-fast SM shared memory and registers.
+
+#### 5.3.2 Hybrid Schur Complement Solver
+- [ ] **Domain Decomposition**: Non-overlapping partitioning — dense analog IP (dissipative: RF, PLLs, ADC front-ends, bias) → TN subgraphs; digital logic (regenerative: standard cells, CMOS gates, DFFs) → Event/Symbolic Engine; sparse global interconnects (PDN, clock trees, routing) → FGMRES.
+- [ ] **TN-Native Schur Boundary Extraction**: Contract each partition's internal nodes ($A_{II}^{-1}$) via tensor network; output is the dense Schur complement contribution ($S = A_{\Gamma\Gamma} - A_{\Gamma I} A_{II}^{-1} A_{I\Gamma}$).
+- [ ] **Global Schur System**: $S \cdot \Delta x_\Gamma = R_\Gamma$ solved via preconditioned Krylov (FGMRES) on sparse CSR using existing `linalg.h` infrastructure.
+- [ ] **Back-Substitution**: Once $\Delta x_\Gamma$ is known, local internal variables $\Delta x_I$ recovered via secondary TN contraction within each partition.
+- [ ] **Belief Propagation (BP) Scheduling Preconditioner**: BP messages = effective impedance seen at partition boundaries; BP-like iteration guides contraction scheduling and ordering across partition interfaces for faster convergence. **CONSTRAINT: BP is strictly a scheduling preconditioner — it guides contraction order only. The Newton residual must remain exact FP64 and is never replaced by a BP approximation.**
+
+| Solver Domain | Circuit Topologies | Physics Character | Mathematical Approach | GPU Execution |
+|:---|:---|:---|:---|:---|
+| **TN Native Engine** | Analog IP, RF macros, PLLs, ADC front-ends, bias networks | Dissipative — χ bounded by Electrical Area Law | Exact factor graph contraction, Schur boundary extraction | Tensor Cores via PTX mma |
+| **Event/Symbolic Engine** | Digital logic, standard cells, CMOS gates, DFFs, clock trees | Regenerative — gain restoration, rail-to-rail, **TN-hostile** | Event-driven propagation, symbolic Boolean | CPU discrete-event kernel |
+| **Sparse Algebraic Engine** | PDN, global routing meshes, parasitic RC grids, clock distribution | Dissipative but high treewidth — mesh topology | Preconditioned FGMRES, Sparse LU | CUDA Cores / cuSPARSE |
+| **Interface Coupling** | DAC/ADC, sense amps, comparators, IO buffers, AMS boundaries | Mixed dissipative + regenerative | Coupled Schur / Non-overlapping Domain Decomposition | Hybrid async staging |
+
+#### 5.3.3 Mixed-Precision Iterative Refinement & Contraction Stability
+- [ ] **FP64 Residual Evaluation**: Device physics and residual vector $R_k$ computed in uncompromised FP64. Residual accuracy defines the final operating point.
+- [ ] **FP16/FP32 Tensor Core Contraction**: Jacobian inversion (search direction $\Delta x_k$) executed via Tensor Cores — FP16 multiply, FP32 accumulate. The approximate $\Delta x_k$ serves as an exceptionally powerful preconditioner.
+- [ ] **Outer FP64 Newton Refinement Loop**: Wraps the TN contraction in iterative refinement running in FP64. Guarantees quadratic convergence and exact SPICE user tolerances.
+- [ ] **Dynamic Loss Scaling**: Shift exponents of localized tensor inputs before FP16 hardware multiplication and inverse-shift output. Prevents catastrophic underflow/overflow within the narrow FP16 exponent range for circuits with massive dynamic range (mΩ to TΩ resistances).
+- [ ] **Rank-1 Newton Updates (Base Camp Theorem)**: To maintain the validity of pre-compiled contraction schedules as non-linear devices iterate, exploit physical circuit latency. Instead of resolving the interchange-for-stability problem dynamically, represent pivoting operators as structural algebraic rank-1 updates. The static TN graph in GPU instruction cache stays untouched while numerical stability updates flow independently through pre-allocated tensor bonds.
+
+#### 5.3.4 Treewidth-Bounded Partitioning & 🔴 Structural Compression Governance
+- [ ] **Dissipation/Regeneration Classification**: Before partitioning, classify every subsystem by physics character. Dissipative (R, C, bandwidth-limited, energy-loss) → TN eligible. Regenerative (CMOS logic, gain stages with rail-to-rail swing) → Event Engine, **DO NOT tensorize**. Synchronized (clock domains, global buses) → decouple as boundary conditions.
+- [ ] **Complexity Equivalence Warning**: Tensor network bond dimension growth is mathematically equivalent to sparse LU fill-in — the same fundamental adversary expressed differently. The advantage is that dissipative analog circuits bound χ via the Electrical Area Law; this advantage evaporates for regenerative digital circuits, where TN bond dimension may grow exponentially. Do not attempt to tensorize digital subsystems.
+- [ ] **Evolve `GraphPartitioner`**: Transition from workgroup-size-bounded (current Phase C: ≤64 devices) to treewidth-bounded partitioning. The treewidth of each partition's subgraph determines TN contraction complexity $\mathcal{O}(N \cdot \chi^{tw})$.
+- [ ] **Active Tensor Compression (TCI & prrLU)**: Overcome the catastrophic memory overhead of exact Schur complements or full-tensor SVD instantiation. Apply Tensor Cross Interpolation (TCI) using partial rank-revealing LU (prrLU) decomposition to actively sample relevant multi-dimensional configurations.
+- [ ] **🔴 Strict Compression Scope Constraint**: All tensor compression operations must be rigidly constrained within elimination-defined domains. **No rank-revealing or compression operation may span across Schur boundary interfaces.** If `tensor.spansMultipleDomains()` evaluates true, compression must be dynamically prohibited to prevent artificial global entanglement and rank creeping across Newton iterations.
+- [ ] **🔴 Frontier Rank Monitoring**: Maintain a monotonic rank ceiling per frontier. If the `frontier_rank_over_time` metric grows monotonically across Newton iterations, trigger a domain re-slicing event rather than applying further destructive compression. Never allow compression to create couplings that the elimination ordering did not inherently create.
+- [ ] **Partition Alignment with Designer Hierarchy**: Align the tensor tree decomposition with IP block boundaries. Repeated IP instances share a single parameterized contraction path, maximizing GPU SIMD occupancy.
+
+#### 5.3.5 Multi-GPU Tensor Slicing
+- [ ] **Bond Cutting**: Mathematically decompose high-dimensional tensor contraction into a sum of independent lower-dimensional sub-contractions by severing specific highly connected edges (variables) in the factor graph.
+- [ ] **Distributed Execution**: Sub-contractions dispatched to separate GPUs across NVLink/PCIe. Slicing increases aggregate FLOPs but transforms an impossible memory requirement into an embarrassingly parallel compute task.
+- [ ] **Asynchronous Accumulation**: Sliced sub-results accumulated back into a unified residual vector on the primary GPU.
+
+#### 5.3.6 Analog-Digital Boundary Entanglement
+- [ ] **Entanglement Rank Explosion Management**: Digital feedback loops spanning analog blocks introduce instantaneous discrete transitions, spiking topological correlation (entanglement entropy) and forcing uncontrollable tensor rank/bond dimension ($\chi$) growth. Sharp transitions natively require a massive superposition of high-frequency modes; aggressively truncating them causes spurious analog oscillations and Newton-Raphson failures.
+- [ ] **Tree Tensor Networks (TTNs) & Fork Tensor Products (FTP)**: Implement advanced hierarchical tree structures for mixed-signal boundaries to cluster highly correlated digital transitions. Localize dense high-rank entanglement into isolated root nodes, preventing high-frequency discrete data from polluting smooth low-rank continuous analog leaf nodes.
+- [ ] **Cholesky-Based Compression (CBC)**: Coordinate algorithmic contraction to manage wildly varying boundary bond dimensions. Sweep from leaf to root nodes and back using continuous QR-decompositions to dynamically generate optimized local tensors absorbing the shock of digital transitions.
+- [ ] **🔴 Bounded-Rank Schur Interfaces**: All Analog-to-Digital (A2D) and Digital-to-Analog (D2A) node bridges must be implemented mathematically as strictly bounded-rank Schur boundary tensors.
+- [ ] **Digital State Invariant**: Digital state transitions cannot introduce new tensor indices into the analog manifold. They are only permitted to toggle pre-allocated boundary tensor states.
+
+#### 5.3.7 🔴 Persistent Tensor Execution Engine
+- [ ] **Structural Freeze**: Formally define the execution environment such that the contraction graph is compiled exactly once per topology. 
+- [ ] **In-Place Updates**: Device tensors are updated purely in-place during the Newton sweep. 
+- [ ] **Resident Execution**: Contraction kernels remain entirely resident on the GPU, the symbolic elimination ordering is irrevocably frozen, and boundary ranks are systematically monitored to maintain mathematical purity and guarantee amortization.
+
+#### 5.3.8 🔴 Graphics-Inspired Tensor Optimizations
+- [ ] **Adaptive Device Bypassing (Variable Rate Shading)**: Assign 'Compute Rates' to tensor sub-graphs based on activity. High-resolution FP64 NR iterations for highly active nodes (e.g., clock trees), and FP16/cached tensor bypasses for dormant blocks (e.g., static memory), allowing latent tensors to coast.
+- [ ] **Confidence-Weighted Predictors (Temporal Anti-Aliasing)**: Apply history rejection to voltage predictor polynomials. Calculate a confidence weight on the local tensor's history using $dV/dt$ 'Motion Vectors'. Instantaneously discard the predictor and fall back to safer stepping algorithms for violently switching nodes, preventing costly NR divergence and time-step cuts.
+- [ ] **Shared Memory Tensor Blocking (Tile-Based Rendering)**: Eliminate VRAM bottleneck by partitioning the circuit hypergraph into 'Tensor Tiles' that strictly fit within the 163KB Shared Memory of the GPU Streaming Multiprocessor (SM). Pre-load boundary conditions, deeply contract the sub-network locally, and write only the final collapsed 'tile tensor' back to global VRAM.
+- [ ] **Neural Convergence Seeding (DLSS Upsampling)**: Bypass expensive NR iterations by running an ultra-cheap, low-rank linear iteration at the start of a time step. Feed this low-fidelity state into a hardware-accelerated Tensor Core neural surrogate model to hallucinate the converged non-linear state. Use this highly accurate prediction as the initial seed, reducing the NR solver burden to a single mathematical verification pass.
+
+### 🎯 PHASE 5.3 SUCCESS CRITERIA
+*   **Pre-condition Gate**: Bond dimension growth experiment (5.3.0) must confirm χ ≤ O(log N) for target analog circuit classes before any 5.3.1–5.3.5 implementation proceeds. Classes failing this gate route to the Sparse Algebraic Engine.
+*   **Numerical Parity**: TN solver result deviation vs classical LU < 1e-12 across all regression circuits.
+*   **Throughput KPI**: >10x speedup for 10k+ node analog IP blocks on Tensor Cores vs single-threaded CPU LU.
+*   **Scaling**: Linear O(N) scaling for hierarchical SoC topologies with bounded local treewidth.
+
+---
+
+### 5.4 Multi-Vendor Matrix Acceleration Backend
+**Purpose**: Hardware abstraction for tensor contraction across vendor-specific matrix acceleration units. CUDA Tensor Cores are the primary target; research tracks for AMD, Intel, and Apple ensure future portability.
+
+- [ ] **NVIDIA**: CUDA PTX `mma` instructions via cuTensorNet (cuQuantum SDK). Primary target. Ada/Hopper/Blackwell Tensor Cores.
+- [ ] **AMD** (Research): HIP/ROCm WMMA for RDNA 3+ matrix cores. Investigate `rocWMMA` library.
+- [ ] **Intel** (Research): oneAPI/SYCL XMX for Arc/Xe GPUs. Evaluate `oneMKL` tensor contraction support.
+- [ ] **Apple** (Research): Metal `simdgroup_matrix` for Apple Silicon GPU (M1+). Investigate Metal Performance Shaders for dense GEMM.
+- [ ] **WebGPU Fallback**: Dense GEMM compute shaders for cross-platform portability. No Tensor Core access in current WGSL spec. Performance lower than native but preserves WASM/browser deployment.
+- [ ] **Future**: Monitor W3C cooperative matrix extension proposal for WebGPU — may eventually provide cross-platform Tensor Core access.
+- [ ] **Automatic Solver Steering**: Select TN-native vs classical sparse solver based on detected hardware capabilities (`GPUContextManager::adapterInfo()`) and circuit topology (treewidth analysis from `GraphPartitioner`).
+
+| Vendor | Matrix Accel Unit | Native API | WebGPU Access |
+|:---|:---|:---|:---|
+| NVIDIA | Tensor Cores (mma) | CUDA PTX / cuTensorNet | Not possible (no coop matrix in WGSL) |
+| AMD | WMMA (RDNA 3+) | HIP / ROCm | Not possible |
+| Intel | XMX (Arc/Xe) | oneAPI / SYCL | Not possible |
+| Apple | AMX (CPU) + simdgroup (GPU) | Metal `simdgroup_matrix` | Not possible (Metal-only) |
+| NPU (any) | INT8/FP16 inference | CoreML / ONNX Runtime | N/A — wrong workload class for SPICE |
+
+---
+
 ### 🔁 Phase 5.9: Physical Feedback Loop (M2/M5 Bridge)
 **Purpose**: explicit feedback mechanism for Layout ↔ Simulation.
 - [ ] **Extraction Loop**: OpenROAD/KLayout `SPEF` extraction automation.
@@ -1067,16 +1232,21 @@ graph TD
 - [ ] **Re-Run Triggers**: Auto-trigger IR/Noise/Delay analysis on layout update.
 - [ ] **Trust Surface Deltas**: Visual diff of Pre-Layout vs Post-Layout simulation results.
 - [ ] **AI Physical Grounding**: AI suggestions must reference physical coordinates (x,y) and extracted nets.
+- [ ] **Multi-GPU Tensor Slicing for Parasitics**: Post-layout simulations with 100M+ parasitic RC elements require bond cutting to decompose the tensor contraction across a GPU cluster (NVLink/PCIe). Sliced sub-results asynchronously accumulated on primary GPU.
+- [ ] **Parasitic RC Mesh → Factor Graph Mapping**: Translate extracted SPEF parasitic networks into factor graph representation for TN-native post-layout simulation, leveraging the highly regular mesh structure for treewidth-bounded partitioning.
 
 ---
 
 ## PHASE 5.5 — HDL & CUSTOM DEVICE DEFINITION
 **Purpose**: Enable user-defined devices without recompilation.
 
-### Implementation
-- [ ] Real-time Verilog-AMS parsing.
-- [ ] Synthesize HDL into TensorNetlist blocks.
-- [ ] Generate behavioral or physics-backed kernels.
+### Implementation & OpenVAF Adapter Layer
+- [ ] Utilize OpenVAF / OSDI (Open-Source Device Interface) compiler to ingest Verilog-A natively.
+- [ ] **🔴 Tensorization Adapter Layer**: Because compiled OpenVAF models output traditional matrix stamps (reintroducing dynamic matrix assembly and destroying the Tensor architecture), an interception adapter is required.
+    - Intercept standard stamp callbacks.
+    - Translate matrix stamps directly into fixed-arity Tensor Generators.
+    - Cache the index structure at model load time.
+    - **Invariant**: Verilog-A models may update tensor numerical values, but they are strictly prohibited from changing the contraction topology or arity after instantiation.
 
 ### Integration
 - [ ] HDL blocks usable in Bench, Block, and System modes.
@@ -1160,13 +1330,16 @@ graph TD
 ## PHASE 8 — MIXED-SIGNAL & MULTI-DOMAIN
 **Purpose**: Co-simulation with digital logic and adjacent domains.
 
-### 8.1 Mixed-Signal Co-Simulation
+### 8.1 Mixed-Signal Co-Simulation (XSPICE Parity)
 - [ ] Event-Driven Digital Engine: Logic primitives (NAND, DFF) solved efficiently.
 - [ ] A/D Interface Elements: DAC/ADC bridges with impedance modeling.
-- [ ] Verilog-AMS Support: Behavioral modeling for mixed domains.
+- [ ] **🔴 A/D & D/A Node Bridges**: These boundaries must absolutely map to the **Bounded-Rank Schur Interfaces** defined in Phase 5.3.6. Discontinuous digital events may toggle states but cannot spawn new tensor dimensionality.
+- [ ] **🔴 User-Defined Nodes (UDNs)**: Support for custom variable domains (Thermal, Digital logic states) natively. **Constraint**: UDNs must exist in a decoupled auxiliary tensor subspace strictly separated from the FP64 electrical refinement tensors, preventing non-electrical parameters from polluting convergence limits. 
 - [ ] SystemVerilog DPI: Co-sim with external logic simulators (Verilator/Icarus).
 - [ ] **Hybrid Simulation Coordinator**: Orchestration of sparse (analog) and dense (digital) solvers including Cloud + Local hardware distribution.
 - [ ] **Multi-Rate Synchronization**: Advanced time-step control for synchronizing fast digital clocks with slow analog thermal time constants.
+- [ ] **Schur Complement Domain Decomposition at A/D Boundary**: The analog/digital interface is a natural Schur boundary. Dense analog cores are modeled as TN subgraphs; digital logic uses the event-driven engine. The Schur complement couples the two domains at their shared interface nodes.
+- [ ] **TN-Native Dense Analog + Event-Driven Digital + Schur Interface Coupling**: Tensor network contraction handles the analog partition (dense, highly coupled); event-driven simulation handles the digital partition — **not as a design preference but as a mathematical necessity**: digital CMOS logic implements gain restoration and rail-to-rail swing, making it regenerative and TN-hostile (bond dimension grows exponentially, mirroring sparse LU fill-in). The Schur boundary system couples interface variables via FGMRES on the reduced system.
 
 #### 8.1.1 Advanced Verification & Signoff
 - [ ] **UVM Constraint Solver**: Integrate SAT/SMT solvers (e.g., Z3) into Verilator to support SystemVerilog Constrained Random Verification (CRV).

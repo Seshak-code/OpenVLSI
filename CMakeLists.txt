@@ -914,6 +914,226 @@ if(NOT EMSCRIPTEN)
     add_test(NAME EngineParityTest COMMAND test_engine_parity)
 endif()
 
+# Phase C: Graph Partitioner Unit Test
+# Verifies: all device indices covered, no duplicates, each partition ≤ devicesPerWorkgroup.
+if(NOT EMSCRIPTEN)
+    add_executable(test_graph_partitioner
+        tests/test_graph_partitioner.cpp
+        acutesim_engine/infrastructure/graph_partitioner.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_graph_partitioner PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+    )
+    target_compile_features(test_graph_partitioner PUBLIC cxx_std_17)
+    # Note: test_graph_partitioner is NOT registered with ctest; run directly.
+endif()
+
+# Phase A: Factor Graph + Treewidth Analyzer Unit Test
+# Verifies: FactorGraph construction (incl. branch-current MNA variables),
+#           Min-Fill elimination ordering, treewidth estimates, isAcyclic flag.
+if(NOT EMSCRIPTEN)
+    add_executable(test_factor_graph
+        tests/test_factor_graph.cpp
+        acutesim_engine/infrastructure/factor_graph.cpp
+        acutesim_engine/infrastructure/treewidth_analyzer.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_factor_graph PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+    )
+    target_compile_features(test_factor_graph PUBLIC cxx_std_17)
+    # Note: test_factor_graph is NOT registered with ctest; run directly.
+endif()
+
+# Phase B: Sparse LU Solver Unit Test
+# Verifies: symbolic factorization, numeric solve parity with dense LU,
+#           permutation correctness, symbolic reuse across numeric phases.
+if(NOT EMSCRIPTEN)
+    add_executable(test_sparse_lu
+        tests/test_sparse_lu.cpp
+        acutesim_engine/math/sparse_lu.cpp
+    )
+    target_include_directories(test_sparse_lu PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
+    )
+    target_compile_features(test_sparse_lu PUBLIC cxx_std_17)
+    # Note: test_sparse_lu is NOT registered with ctest; run directly.
+endif()
+
+# Phase 5.3.0: Bond Dimension Profiler Test
+# Verifies: per-step bond dimension profiling, scaling across circuit families,
+#           Electrical Area Law decision gate.
+if(NOT EMSCRIPTEN)
+    add_executable(test_bond_dimension
+        tests/test_bond_dimension.cpp
+        acutesim_engine/infrastructure/bond_dimension_profiler.cpp
+        acutesim_engine/infrastructure/factor_graph.cpp
+        acutesim_engine/infrastructure/treewidth_analyzer.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_bond_dimension PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+    )
+    target_compile_features(test_bond_dimension PUBLIC cxx_std_17)
+    # Note: test_bond_dimension is NOT registered with ctest; run directly.
+endif()
+
+# Phase 5.3.1: MPO Builder Test
+# Verifies: device-local Jacobian tensors match stamp functions.
+if(NOT EMSCRIPTEN)
+    add_executable(test_mpo_builder
+        tests/test_mpo_builder.cpp
+        acutesim_engine/infrastructure/mpo_builder.cpp
+        acutesim_engine/infrastructure/factor_graph.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_mpo_builder PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
+    )
+    target_compile_features(test_mpo_builder PUBLIC cxx_std_17)
+    # Note: test_mpo_builder is NOT registered with ctest; run directly.
+endif()
+
+# Phase 5.3.1: Contraction Tree Test
+# Verifies: tree structure, FLOP estimates, leaf coverage.
+if(NOT EMSCRIPTEN)
+    add_executable(test_contraction_tree
+        tests/test_contraction_tree.cpp
+        acutesim_engine/infrastructure/contraction_tree.cpp
+        acutesim_engine/infrastructure/mpo_builder.cpp
+        acutesim_engine/infrastructure/factor_graph.cpp
+        acutesim_engine/infrastructure/treewidth_analyzer.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_contraction_tree PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
+    )
+    target_compile_features(test_contraction_tree PUBLIC cxx_std_17)
+    # Note: test_contraction_tree is NOT registered with ctest; run directly.
+endif()
+
+# Phase 5.3.2: Schur Complement Solver Test
+# Verifies: Schur decomposition parity with dense LU within 1e-13.
+if(NOT EMSCRIPTEN)
+    add_executable(test_schur_solver
+        tests/test_schur_solver.cpp
+        acutesim_engine/solvers/schur_solver.cpp
+        acutesim_engine/infrastructure/bond_dimension_profiler.cpp
+        acutesim_engine/infrastructure/tn_compiler.cpp
+        acutesim_engine/infrastructure/contraction_tree.cpp
+        acutesim_engine/infrastructure/mpo_builder.cpp
+        acutesim_engine/infrastructure/factor_graph.cpp
+        acutesim_engine/infrastructure/treewidth_analyzer.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_schur_solver PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
+    )
+    target_compile_features(test_schur_solver PUBLIC cxx_std_17)
+    # Note: test_schur_solver is NOT registered with ctest; run directly.
+endif()
+
+# Phase 5.3.3: Contraction Executor Test
+# Verifies: bottom-up contraction solve, back-substitution, workspace reuse.
+if(NOT EMSCRIPTEN)
+    add_executable(test_contraction_executor
+        tests/test_contraction_executor.cpp
+        acutesim_engine/solvers/contraction_executor.cpp
+        acutesim_engine/infrastructure/contraction_tree.cpp
+        acutesim_engine/infrastructure/mpo_builder.cpp
+        acutesim_engine/infrastructure/bond_dimension_profiler.cpp
+        acutesim_engine/infrastructure/tn_compiler.cpp
+        acutesim_engine/infrastructure/factor_graph.cpp
+        acutesim_engine/infrastructure/treewidth_analyzer.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_contraction_executor PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
+    )
+    target_compile_features(test_contraction_executor PUBLIC cxx_std_17)
+    # Note: test_contraction_executor is NOT registered with ctest; run directly.
+endif()
+
+# Phase 5.3.3: Contraction Executor Parity Test
+# Verifies: contraction executor matches dense LU, sparse LU, Schur within 1e-13.
+if(NOT EMSCRIPTEN)
+    add_executable(test_contraction_parity
+        tests/test_contraction_parity.cpp
+        acutesim_engine/solvers/contraction_executor.cpp
+        acutesim_engine/infrastructure/contraction_tree.cpp
+        acutesim_engine/infrastructure/mpo_builder.cpp
+        acutesim_engine/infrastructure/bond_dimension_profiler.cpp
+        acutesim_engine/infrastructure/tn_compiler.cpp
+        acutesim_engine/infrastructure/factor_graph.cpp
+        acutesim_engine/infrastructure/treewidth_analyzer.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+    )
+    target_include_directories(test_contraction_parity PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/solvers
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
+    )
+    target_compile_features(test_contraction_parity PUBLIC cxx_std_17)
+    # Note: test_contraction_parity is NOT registered with ctest; run directly.
+endif()
+
 # GPU Parity Verification Test (Phase D5c — requires Dawn native)
 if(NOT EMSCRIPTEN)
     add_executable(test_gpu_parity
