@@ -1,0 +1,81 @@
+name: Sync acutesim_engine → Karam (Weekly)
+
+# Runs every Sunday at midnight UTC
+# Can also be triggered manually via the Actions tab
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force push (use if histories diverged)'
+        required: false
+        default: 'false'
+
+jobs:
+  sync-karam:
+    name: Subtree push to Karam
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout CuteApp (full history needed for subtree)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # Full history — required for git subtree
+          token: ${{ secrets.KARAM_SYNC_PAT }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add Karam remote
+        run: |
+          git remote add karam https://x-access-token:${{ secrets.KARAM_SYNC_PAT }}@github.com/Seshak-code/Karam.git
+
+      - name: Check if acutesim_engine has changed since last sync
+        id: check_changes
+        run: |
+          # Fetch karam main to compare
+          git fetch karam main || true
+
+          # Get the tree SHA of acutesim_engine/ at HEAD
+          ENGINE_SHA=$(git rev-parse HEAD:acutesim_engine)
+          echo "engine_sha=$ENGINE_SHA" >> $GITHUB_OUTPUT
+
+          # Get the last synced subtree SHA from Karam (if it exists)
+          KARAM_SHA=$(git ls-remote karam refs/heads/main | cut -f1) || KARAM_SHA=""
+          echo "karam_sha=$KARAM_SHA" >> $GITHUB_OUTPUT
+
+          echo "Engine tree SHA: $ENGINE_SHA"
+          echo "Karam HEAD SHA: $KARAM_SHA"
+
+      - name: Push acutesim_engine subtree → Karam
+        run: |
+          FORCE_FLAG=""
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            FORCE_FLAG="--force"
+            echo "⚠️  Force push requested via manual dispatch"
+          fi
+
+          echo "🚀 Starting subtree push to Karam..."
+
+          # Split the subtree first (fast, cached by git)
+          SPLIT_SHA=$(git subtree split --prefix=acutesim_engine)
+          echo "Subtree split SHA: $SPLIT_SHA"
+
+          # Push to Karam main
+          git push $FORCE_FLAG karam ${SPLIT_SHA}:refs/heads/main
+
+          echo "✅ Sync complete!"
+
+      - name: Report sync summary
+        if: always()
+        run: |
+          echo "## Karam Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Sync time | $(date -u '+%Y-%m-%d %H:%M UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Source | Seshak-code/CuteApp \`acutesim_engine/\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | Seshak-code/Karam \`main\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
