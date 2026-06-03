@@ -1270,7 +1270,130 @@ graph TD
 
 ---
 
+## Phase 5.7 — HARDWARE BACKEND SPECIALIZATION
+**Purpose**: Extract maximum throughput from each compute platform by exploiting vendor-specific memory and compute architectures, without compromising the tensor-network solver's mathematical correctness invariants.  
+**Gate**: Gaps 3 & 4 must be complete. Core TN solver must be verified bit-identical on CPU and GPU.
+
+> **Structural Invariant**: No hardware-specific path may bypass the KCL residual check or the Dense LU fallback mandated in `solvers/flow.md`. Every backend is a **performance path**, not a correctness path.
+
+---
+
+### 5.7.1 — NVIDIA & AMD: Maximize Memory Bandwidth
+
+Both architectures are bandwidth-bound during tensor contraction. The dominant cost is VRAM ↔ SM data movement, not FLOPs.
+
+#### Memory Coalescing for Workspace Reads
+- **Problem**: `tn_merge_accum` reads workspace slots via `index_map_left/right`. On unaligned circuits, access is strided and non-coalesced.
+- **Fix**: Insert a **slot canonicalization pass** in `uploadContractionProgram()` — reorder MPO column layout to produce sequential access patterns for the dominant merge step.
+- **Implementation**: New `solvers/workspace_canonicalizer.h`.
+
+#### Async Double-Buffer Upload
+- **Problem**: MPO re-upload between NR iterations stalls the GPU command queue.
+- **Fix**: Double-buffer scheme — `tnWorkspaceHi[2]` / `tnWorkspaceLo[2]`. While GPU contracts on buffer A, CPU writes updated MPO matrices into buffer B. Swap at iteration boundary.
+- **Gate**: Requires Gap 1 tree-walk dispatch loop to be complete.
+
+#### Sub-group / Wave Optimization (Ampere / RDNA3)
+- `tn_schur_elim` uses `workgroupBarrier()` to synchronize the shared memory tile load. On Wave32-class hardware (NVIDIA Ampere, AMD RDNA3), a rank≤8 tile fits in a single warp — the barrier becomes a no-op at runtime, but emitting a warp-scoped sync via `subgroupBarrier()` removes it entirely from the instruction stream.
+- **Fix**: Query `WGPUAdapterInfo` → `subgroupSize`. If `subgroupSize >= MAX_TILE_ELEMS`, specialize `tn_schur_elim` to use `subgroupBarrier()` instead of `workgroupBarrier()`.
+
+---
+
+### 5.7.2 — Apple Silicon: Unified Memory Architecture (UMA)
+
+Apple M-series chips share DRAM between CPU and GPU. MPO matrices never need to be physically copied — the GPU can access CPU memory directly if buffers are page-aligned and created with `MTLStorageModeShared`.
+
+#### Zero-Copy MPO Upload
+- **Problem**: `wgpuQueueWriteBuffer()` triggers an implicit `memcpy` to GPU-private VRAM on Metal, even though the data is already accessible.
+- **Fix**: Allocate workspace and MPO buffers via `MTLBuffer` with `StorageMode::Shared`. Expose as `WGPUBuffer` via Dawn's Metal backend using `wgpuDeviceCreateBufferMapped()` with persistent mapping. The CPU writes into the mapped pointer; the GPU reads without copy.
+- **Savings**: Eliminates ~40% of `uploadContractionProgram()` latency for large circuits.
+- **Guard**: `#if TARGET_OS_MAC && !defined(__EMSCRIPTEN__)`.
+
+#### Apple Neural Engine (ANE) — Neural Convergence Seeder Integration
+- The Gap 4 `NeuralSeeder` (`neural_seeder.h`) is the natural ANE workload. On Apple Silicon, compile a CoreML MLP (≤3 layers, 64 hidden units) predicting the next-step voltage vector from `[dV/dt, V_prev, topology_features]`.
+- CoreML dispatches to ANE automatically — leaving the GPU entirely free for the contraction sweep during the same NR iteration.
+- **Invariant**: ANE output seeds `voltageEstimate` only. The full NR loop still runs.
+- **Implementation**: `solvers/neural_seeder_coreml.mm` (Objective-C++ bridge) satisfying the `NeuralSeeder` abstract interface from Gap 4.
+
+#### Thermal Budget Awareness
+- Apple Silicon has a shared thermal envelope for CPU+GPU+ANE. Sustained simulation creates thermal pressure.
+- **Fix**: Poll `IOPMCopyCPUPowerStatus()` via a platform shim; reduce contraction tile batch size when thermal headroom < 15%.
+
+---
+
+### 5.7.3 — Intel: AMX Tiles + Arc GPU
+
+#### CPU-Side AMX Contractions (Sapphire Rapids / Meteor Lake)
+- Intel AMX provides hardware `TMUL` for `bfloat16`/`int8` tiles. The `ContractionExecutor` CPU inner loop currently uses scalar `double` arithmetic.
+- **Target**: Rank≤8 MPO merges — these fit exactly in one 8×8 AMX tile register.
+- **Fix**: Emit `_tile_loadd / _tile_dpbssd / _tile_stored` intrinsics inside the merge loop when `__AMX_TILE__` is defined.
+- **Precision note**: AMX `bfloat16` gives ~4 decimal digits. **Only** used for `FP32_RELAXED` tier partitions from Gap 3. `FP64_FULL` partitions use scalar `double`.
+- **Implementation**: `infrastructure/amx_contraction.h`.
+
+#### Intel Arc GPU (Xe HPG — XMX Matrix Extensions)
+- Arc supports WebGPU via Dawn's Vulkan/Level Zero backend. The existing WGSL shaders run unchanged.
+- **XMX (Xe Matrix Extensions)**: Intel's equivalent of Tensor Cores. Accessible in SPIR-V via `CooperativeMatrixMulAddNV` through Dawn's Vulkan path.
+- **Planned**: `#ifdef ACUTESIM_INTEL_XMX` path in `webgpu_solver.cpp` emitting a SPIR-V cooperative matrix variant of `tn_merge_accum`.
+- **Immediate fix needed**: `initWebGPU()` currently prefers Metal, then any adapter. Arc users on Linux/Windows never get GPU mode. Update adapter selection to prefer `WGPUBackendType_Vulkan` on non-Mac platforms.
+
+---
+
+### 5.7.4 — Render Graph Scheduler for the Contraction Tree
+
+The contraction tree is a natural **render graph** — a DAG of compute passes with well-defined read/write dependencies on workspace buffer slots.
+
+**What needs to be built** (no existing implementation):
+
+#### `infrastructure/contraction_render_graph.h` *(New)*
+- **Resource lifetime analysis**: For each workspace slot, compute `first_write` and `last_read` across the tree walk. Slots whose lifetimes don't overlap can be **aliased** — reducing workspace VRAM from O(numTreeNodes × maxRank²) down to O(treewidth × maxRank²).
+- **Barrier insertion**: Before each `tn_merge_accum` or `tn_schur_elim` dispatch, insert a `WGPUCommandEncoder` buffer barrier on all slots consumed by that node. Currently absent — correctness relies on serial submission order.
+- **Wave-front parallelism**: Nodes at the same tree depth with no shared slot dependencies can be batched into a single command buffer as independent dispatches. The GPU executes them in parallel across independent SMs.
+- **Slot reuse table**: `std::vector<uint32_t> freeList` managed by a simple first-fit allocator. Freed on `last_read`, reallocated on `first_write`.
+
+**Expected VRAM reduction for a 1000-device circuit** (treewidth ≈ 12, maxRank = 8):
+- Without aliasing: 1000 slots × 64 floats × 2 (hi/lo) = ~512KB  
+- With aliasing: 12 active slots × 64 × 2 = ~6KB
+
+**Implementation sequence**: Build after 5.7.1 double-buffer is landed (both require understanding resource lifetimes).
+
+---
+
+### 5.7.5 — Implementation Sequence
+
+```
+Gap 3 complete → Gap 4 complete
+       │
+       ▼
+5.7.2 Apple UMA zero-copy           ←── lowest risk, immediate ROI on primary dev platform
+       │
+       ▼
+5.7.1 NVIDIA/AMD double-buffer      ←── requires Gap 1 dispatch loop
+       │
+       ▼
+5.7.4 Render graph scheduler        ←── requires dispatch loop + understanding lifetimes
+       │
+       ▼
+5.7.2 ANE CoreML seeder             ←── requires Gap 4 neural_seeder.h
+       │
+       ▼
+5.7.3 AMX CPU contraction           ←── requires Gap 3 precision router
+       │
+       ▼
+5.7.3 Arc XMX Vulkan cooperative matrix
+```
+
+### Success Criteria
+| Metric | Target |
+|:---|:---|
+| Apple M-series upload latency | ≤ 40% of baseline via zero-copy |
+| NVIDIA/AMD NR iteration throughput | ≥ 1.5× via double-buffer overlap |
+| Workspace VRAM (render graph aliasing) | ≤ 15% of unaliased allocation |
+| ANE seeder NR reduction | Converges in ≤ 2 iterations vs. ≤ 4 average |
+| AMX FP32_RELAXED speedup | ≥ 2× CPU contraction for rank≤8 circuits |
+
+---
+
 ## 🏭 PHASE 6 — PDK INTEGRATION, INDUSTRY COMPLIANCE & RTL→GDS FLOW
+
 **Purpose**: Generic foundry-agnostic PDK integration.
 **Critical Goal**: Ensure strict adherence to PDK specifications across all schematic types (Test Bench, Block, System Integration). Every project must define a valid Die Area / PCB constraints in System Mode to enable Yosys → OpenROAD → KLayout flow.
 

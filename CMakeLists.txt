@@ -412,6 +412,7 @@ add_library(acutesim_compute_core STATIC
     acutesim_engine/tensors/kernel_dispatch.cpp
     acutesim_engine/tensors/physics_kernels_avx512.cpp
     acutesim_engine/tensors/physics_kernels_avx2.cpp
+    acutesim_engine/tensors/physics_kernels_neon.cpp
     acutesim_engine/solvers/superposition.cpp
     acutesim_engine/solvers/circuitsim_solver.cpp
     acutesim_engine/infrastructure/netlist_compiler.cpp
@@ -1132,6 +1133,66 @@ if(NOT EMSCRIPTEN)
     )
     target_compile_features(test_contraction_parity PUBLIC cxx_std_17)
     # Note: test_contraction_parity is NOT registered with ctest; run directly.
+endif()
+
+# Phase 5.7.4: Render Graph Scheduler Test
+# Verifies: slot aliasing, wavefront grouping, barrier computation, memory stats.
+if(NOT EMSCRIPTEN)
+    add_executable(test_render_graph
+        tests/test_render_graph.cpp
+        acutesim_engine/infrastructure/contraction_render_graph.cpp
+        acutesim_engine/infrastructure/contraction_tree.cpp
+        acutesim_engine/infrastructure/mpo_builder.cpp
+        acutesim_engine/infrastructure/factor_graph.cpp
+        acutesim_engine/infrastructure/treewidth_analyzer.cpp
+        acutesim_engine/tensors/physics_tensors.cpp
+        acutesim_engine/tensors/kernel_dispatch.cpp
+        acutesim_engine/tensors/physics_kernels_neon.cpp
+    )
+    target_include_directories(test_render_graph PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
+        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
+    )
+    target_compile_features(test_render_graph PUBLIC cxx_std_17)
+    # Note: test_render_graph is NOT registered with ctest; run directly.
+endif()
+
+# Solver Tier Benchmarking Suite
+# Compares all 5 solver tiers on reference circuits with wall-clock timing.
+# Also benchmarks SIMD kernel throughput (Generic/NEON/AVX2/AVX-512).
+# Run: ./build/test_benchmark_solvers [--nodes 100] [--csv]
+if(NOT EMSCRIPTEN)
+    add_executable(test_benchmark_solvers
+        tests/test_benchmark_solvers.cpp
+    )
+    target_link_libraries(test_benchmark_solvers PRIVATE acutesim_engine)
+    target_include_directories(test_benchmark_solvers PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine_api
+    )
+    target_compile_features(test_benchmark_solvers PUBLIC cxx_std_17)
+    # Note: test_benchmark_solvers is NOT registered with ctest; run directly.
+endif()
+
+# Demo: SPICE-style netlist → node voltages output
+# Exercises the full CircuitSim::solveDC() pipeline end-to-end.
+# Run: ./build/demo_spice_netlist
+if(NOT EMSCRIPTEN)
+    add_executable(demo_spice_netlist
+        tests/demo_spice_netlist.cpp
+    )
+    target_link_libraries(demo_spice_netlist PRIVATE acutesim_engine)
+    target_include_directories(demo_spice_netlist PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine_api
+    )
+    target_compile_features(demo_spice_netlist PUBLIC cxx_std_17)
 endif()
 
 # GPU Parity Verification Test (Phase D5c — requires Dawn native)
