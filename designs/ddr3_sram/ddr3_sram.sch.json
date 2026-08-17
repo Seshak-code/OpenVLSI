@@ -1,0 +1,652 @@
+{
+  "name": "DDR3 SRAM Module (8x8 6T Array + SSTL-15 I/O)",
+  "filename": "ddr3_sram.sch",
+  "pdk": "SkyWater 130nm (sky130A)",
+  "description": "64-bit 6T SRAM core with precharge, 3-8 row decoder, sense amps, write drivers, and DDR3 SSTL-15 DQ interface. Block-level representative slice.",
+  "components": [
+    {
+      "id": "VDD",
+      "type": "VDC",
+      "x": 120,
+      "y": 100,
+      "label": "VDD",
+      "val": "DC 1.8V",
+      "rot": 90,
+      "dc": "1.800V"
+    },
+    {
+      "id": "VDDQ",
+      "type": "VDC",
+      "x": 560,
+      "y": 100,
+      "label": "VDDQ",
+      "val": "DC 1.5V",
+      "rot": 90,
+      "dc": "1.500V"
+    },
+    {
+      "id": "VTT",
+      "type": "VDC",
+      "x": 700,
+      "y": 300,
+      "label": "VTT",
+      "val": "DC 0.75V",
+      "rot": 90,
+      "dc": "0.750V"
+    },
+    {
+      "id": "VREF",
+      "type": "VDC",
+      "x": 60,
+      "y": 300,
+      "label": "VREF",
+      "val": "DC 0.75V",
+      "rot": 90,
+      "dc": "0.750V"
+    },
+    {
+      "id": "GND",
+      "type": "GND",
+      "x": 360,
+      "y": 460,
+      "label": "VSS",
+      "val": "0V",
+      "rot": 0,
+      "dc": "0.000V"
+    },
+    {
+      "id": "PU1",
+      "type": "PMOS",
+      "x": 240,
+      "y": 160,
+      "label": "PU1 (Pull-Up)",
+      "val": "pfet_01v8 W=0.42u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=-1.8V, Id=0A"
+    },
+    {
+      "id": "PU2",
+      "type": "PMOS",
+      "x": 320,
+      "y": 160,
+      "label": "PU2 (Pull-Up)",
+      "val": "pfet_01v8 W=0.42u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=-1.8V, Id=0A"
+    },
+    {
+      "id": "PD1",
+      "type": "NMOS",
+      "x": 240,
+      "y": 260,
+      "label": "PD1 (Pull-Dn)",
+      "val": "nfet_01v8 W=1.0u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=1.8V, Id=58uA"
+    },
+    {
+      "id": "PD2",
+      "type": "NMOS",
+      "x": 320,
+      "y": 260,
+      "label": "PD2 (Pull-Dn)",
+      "val": "nfet_01v8 W=1.0u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=0V, Id=0A"
+    },
+    {
+      "id": "PG1",
+      "type": "NMOS",
+      "x": 180,
+      "y": 220,
+      "label": "PG1 (Access)",
+      "val": "nfet_01v8 W=0.5u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=1.8V (WL0)"
+    },
+    {
+      "id": "PG2",
+      "type": "NMOS",
+      "x": 380,
+      "y": 220,
+      "label": "PG2 (Access)",
+      "val": "nfet_01v8 W=0.5u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=1.8V (WL0)"
+    },
+    {
+      "id": "PREa",
+      "type": "PMOS",
+      "x": 140,
+      "y": 140,
+      "label": "PRE (BL)",
+      "val": "pfet_01v8 W=1u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=-1.8V"
+    },
+    {
+      "id": "PREb",
+      "type": "PMOS",
+      "x": 420,
+      "y": 140,
+      "label": "PRE (BLB)",
+      "val": "pfet_01v8 W=1u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=-1.8V"
+    },
+    {
+      "id": "WLD",
+      "type": "INV",
+      "x": 100,
+      "y": 220,
+      "label": "WL Driver (3-8 Dec)",
+      "val": "sky130_fd_sc_hd__inv_1",
+      "rot": 0,
+      "dc": "WL0=1.8V"
+    },
+    {
+      "id": "SAa",
+      "type": "NMOS",
+      "x": 460,
+      "y": 240,
+      "label": "SA (BL side)",
+      "val": "nfet_01v8 W=2u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=0.75V, Id=92uA"
+    },
+    {
+      "id": "SAb",
+      "type": "NMOS",
+      "x": 520,
+      "y": 240,
+      "label": "SA (BLB side)",
+      "val": "nfet_01v8 W=2u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=0.75V, Id=92uA"
+    },
+    {
+      "id": "WDa",
+      "type": "NMOS",
+      "x": 460,
+      "y": 340,
+      "label": "WDrv (DIN)",
+      "val": "nfet_01v8 W=1u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=1.8V (Write)"
+    },
+    {
+      "id": "DQp",
+      "type": "PMOS",
+      "x": 620,
+      "y": 180,
+      "label": "DQ Pull-Up",
+      "val": "pfet_01v8 W=60u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=-0.75V, Id=24mA"
+    },
+    {
+      "id": "DQn",
+      "type": "NMOS",
+      "x": 620,
+      "y": 280,
+      "label": "DQ Pull-Dn",
+      "val": "nfet_01v8 W=30u L=0.15u",
+      "rot": 0,
+      "dc": "Vgs=0.75V, Id=24mA"
+    },
+    {
+      "id": "RTT",
+      "type": "R",
+      "x": 700,
+      "y": 200,
+      "label": "Rtt (ODT 40)",
+      "val": "res_high_po 40",
+      "rot": 0,
+      "dc": "I=7.4mA, dV=0.30V"
+    },
+    {
+      "id": "RL",
+      "type": "R",
+      "x": 700,
+      "y": 260,
+      "label": "Z0 (Line 50)",
+      "val": "res_high_po 50",
+      "rot": 0,
+      "dc": "I=7.4mA, dV=0.37V"
+    },
+    {
+      "id": "CL",
+      "type": "C",
+      "x": 760,
+      "y": 320,
+      "label": "Cin (DRAM)",
+      "val": "cap_mim_m3 2pF",
+      "rot": 0,
+      "dc": "Q=1.5pC"
+    }
+  ],
+  "wires": [
+    {
+      "from": {
+        "comp": "VDD",
+        "pin": 0
+      },
+      "to": {
+        "comp": "PU1",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "VDD",
+        "pin": 0
+      },
+      "to": {
+        "comp": "PU2",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "VDD",
+        "pin": 0
+      },
+      "to": {
+        "comp": "PREa",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "VDD",
+        "pin": 0
+      },
+      "to": {
+        "comp": "PREb",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "PU1",
+        "pin": 2
+      },
+      "to": {
+        "comp": "PD1",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "PU2",
+        "pin": 2
+      },
+      "to": {
+        "comp": "PD2",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "PU1",
+        "pin": 2
+      },
+      "to": {
+        "comp": "PU2",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "PU2",
+        "pin": 2
+      },
+      "to": {
+        "comp": "PU1",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "PD1",
+        "pin": 2
+      },
+      "to": {
+        "comp": "GND",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "PD2",
+        "pin": 2
+      },
+      "to": {
+        "comp": "GND",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "PREa",
+        "pin": 2
+      },
+      "to": {
+        "comp": "PG1",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "PREb",
+        "pin": 2
+      },
+      "to": {
+        "comp": "PG2",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "PG1",
+        "pin": 2
+      },
+      "to": {
+        "comp": "PD1",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "PG2",
+        "pin": 2
+      },
+      "to": {
+        "comp": "PD2",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "WLD",
+        "pin": 1
+      },
+      "to": {
+        "comp": "PG1",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "WLD",
+        "pin": 1
+      },
+      "to": {
+        "comp": "PG2",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "PG1",
+        "pin": 1
+      },
+      "to": {
+        "comp": "SAa",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "PG2",
+        "pin": 1
+      },
+      "to": {
+        "comp": "SAb",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "SAa",
+        "pin": 2
+      },
+      "to": {
+        "comp": "GND",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "SAb",
+        "pin": 2
+      },
+      "to": {
+        "comp": "GND",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "WDa",
+        "pin": 2
+      },
+      "to": {
+        "comp": "GND",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "SAa",
+        "pin": 1
+      },
+      "to": {
+        "comp": "DQp",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "SAa",
+        "pin": 1
+      },
+      "to": {
+        "comp": "DQn",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "VDDQ",
+        "pin": 0
+      },
+      "to": {
+        "comp": "DQp",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "DQp",
+        "pin": 2
+      },
+      "to": {
+        "comp": "DQn",
+        "pin": 1
+      }
+    },
+    {
+      "from": {
+        "comp": "DQn",
+        "pin": 2
+      },
+      "to": {
+        "comp": "GND",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "DQn",
+        "pin": 1
+      },
+      "to": {
+        "comp": "RTT",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "RTT",
+        "pin": 1
+      },
+      "to": {
+        "comp": "VTT",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "DQn",
+        "pin": 1
+      },
+      "to": {
+        "comp": "RL",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "RL",
+        "pin": 1
+      },
+      "to": {
+        "comp": "CL",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "CL",
+        "pin": 1
+      },
+      "to": {
+        "comp": "GND",
+        "pin": 0
+      }
+    },
+    {
+      "from": {
+        "comp": "VREF",
+        "pin": 0
+      },
+      "to": {
+        "comp": "SAa",
+        "pin": 0
+      }
+    }
+  ],
+  "dcOp": [
+    {
+      "dev": "PU1",
+      "type": "sky130_fd_pr__pfet_01v8",
+      "vgs": "-1.800 V",
+      "vds": "-1.800 V",
+      "id": "0.0 nA",
+      "gm": "--",
+      "ro": "\u221e",
+      "region": "Cutoff (Q=1)"
+    },
+    {
+      "dev": "PU2",
+      "type": "sky130_fd_pr__pfet_01v8",
+      "vgs": "0.000 V",
+      "vds": "-1.800 V",
+      "id": "58.0 \u03bcA",
+      "gm": "0.31 mS",
+      "ro": "310 k\u03a9",
+      "region": "Linear (QB=0)"
+    },
+    {
+      "dev": "PD1",
+      "type": "sky130_fd_pr__nfet_01v8",
+      "vgs": "1.800 V",
+      "vds": "1.800 V",
+      "id": "58.0 \u03bcA",
+      "gm": "0.62 mS",
+      "ro": "155 k\u03a9",
+      "region": "Linear (Q=1)"
+    },
+    {
+      "dev": "PD2",
+      "type": "sky130_fd_pr__nfet_01v8",
+      "vgs": "0.000 V",
+      "vds": "0.000 V",
+      "id": "0.0 nA",
+      "gm": "--",
+      "ro": "\u221e",
+      "region": "Cutoff (QB=0)"
+    },
+    {
+      "dev": "PG1",
+      "type": "sky130_fd_pr__nfet_01v8",
+      "vgs": "1.800 V",
+      "vds": "1.800 V",
+      "id": "0.0 nA",
+      "gm": "--",
+      "ro": "\u221e",
+      "region": "Access ON (BL held)"
+    },
+    {
+      "dev": "SAa",
+      "type": "sky130_fd_pr__nfet_01v8",
+      "vgs": "0.750 V",
+      "vds": "0.900 V",
+      "id": "92.0 \u03bcA",
+      "gm": "0.95 mS",
+      "ro": "98 k\u03a9",
+      "region": "Saturation (Sense)"
+    },
+    {
+      "dev": "DQp",
+      "type": "sky130_fd_pr__pfet_01v8",
+      "vgs": "-0.750 V",
+      "vds": "-0.250 V",
+      "id": "24.0 mA",
+      "gm": "44.6 mS",
+      "ro": "2.1 k\u03a9",
+      "region": "Linear (SSTL Drive)"
+    },
+    {
+      "dev": "DQn",
+      "type": "sky130_fd_pr__nfet_01v8",
+      "vgs": "0.750 V",
+      "vds": "0.250 V",
+      "id": "24.0 mA",
+      "gm": "48.2 mS",
+      "ro": "1.9 k\u03a9",
+      "region": "Linear (SSTL Drive)"
+    }
+  ],
+  "pvt": [
+    {
+      "corner": "TT (Typ-Typ)",
+      "temp": "27\u00b0C",
+      "vdd": "1.80V",
+      "metric": "Read access = 1.42 ns | SNM = 380 mV | Leakage = 12.4 nA/cell"
+    },
+    {
+      "corner": "SS (Slow-Slow)",
+      "temp": "110\u00b0C",
+      "vdd": "1.62V",
+      "metric": "Read access = 2.18 ns | SNM = 310 mV | Leakage = 96.1 nA/cell"
+    },
+    {
+      "corner": "FF (Fast-Fast)",
+      "temp": "-40\u00b0C",
+      "vdd": "1.98V",
+      "metric": "Read access = 1.05 ns | SNM = 415 mV | Leakage = 2.1 nA/cell"
+    }
+  ]
+}

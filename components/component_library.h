@@ -24,12 +24,6 @@
  * File Format Version: 1.0
  */
 
-namespace fs = std::filesystem;
-
-// ============================================================================
-// PIN TYPE ENUM (for AI API wiring hints)
-// ============================================================================
-
 // ============================================================================
 // PIN TYPE ENUM (for AI API wiring hints)
 // ============================================================================
@@ -299,7 +293,7 @@ inline std::string getLibraryPath() {
     
     // Create directory if it doesn't exist
     std::error_code ec;
-    fs::create_directories(libPath, ec);
+    std::filesystem::create_directories(libPath, ec);
     
     return libPath;
 }
@@ -320,7 +314,7 @@ inline std::vector<ComponentEntry> listLibraryComponents() {
     std::string libPath = getLibraryPath();
     std::error_code ec;
     
-    for (const auto& entry : fs::directory_iterator(libPath, ec)) {
+    for (const auto& entry : std::filesystem::directory_iterator(libPath, ec)) {
         if (entry.is_regular_file() && entry.path().extension() == ".comp") {
             ComponentEntry ce;
             ce.filepath = entry.path().string();
@@ -361,7 +355,7 @@ namespace ComponentLibraryAPI {
     // Check if component exists
     inline bool componentExists(const std::string& name) {
         std::string path = getLibraryPath() + "/" + name + ".comp";
-        return fs::exists(path);
+        return std::filesystem::exists(path);
     }
     
     // Get component file path

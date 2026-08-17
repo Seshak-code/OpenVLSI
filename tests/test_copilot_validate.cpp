@@ -3,7 +3,7 @@
 #include <QTextBrowser>
 #include <QPlainTextEdit>
 #include "../gui/panels/ai_assistant_panel.h"
-#include "../gui/editors/schematic_editor.h"
+#include "../gui/editors/schematic/schematic_editor.h"
 #include "../ai_api/system/schema_api.h"
 
 using acutesim::gui::panels::AiAssistantPanel;

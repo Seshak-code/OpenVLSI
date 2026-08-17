@@ -51,7 +51,6 @@ SimulationSourceDTO fromProto(const acutesim::simulation::SimulationSource& msg)
 acutesim::simulation::SimulationRequest toProto(const SimulationRequestDTO& dto) {
     acutesim::simulation::SimulationRequest msg;
     msg.set_session_token(dto.sessionToken);
-    // msg.set_netlist_json(dto.netlistJson); // DEPRECATED
     *msg.mutable_source() = toProto(dto.source);
     msg.set_analysis(static_cast<acutesim::simulation::AnalysisType>(dto.analysis));
     *msg.mutable_corner() = toProto(dto.corner);
@@ -65,7 +64,6 @@ acutesim::simulation::SimulationRequest toProto(const SimulationRequestDTO& dto)
 SimulationRequestDTO fromProto(const acutesim::simulation::SimulationRequest& msg) {
     SimulationRequestDTO dto;
     dto.sessionToken = msg.session_token();
-    // dto.netlistJson = msg.netlist_json(); // DEPRECATED
     dto.source = fromProto(msg.source());
     dto.analysis = static_cast<AnalysisTypeDTO>(msg.analysis());
     dto.corner = fromProto(msg.corner());
@@ -113,7 +111,6 @@ BatchRunDTO fromProto(const acutesim::simulation::BatchRun& msg) {
 acutesim::simulation::SimulationBatchRequest toProto(const SimulationBatchRequestDTO& dto) {
     acutesim::simulation::SimulationBatchRequest msg;
     msg.set_session_token(dto.sessionToken);
-    // msg.set_base_netlist_json(dto.baseNetlistJson); // DEPRECATED
     *msg.mutable_source() = toProto(dto.source);
     msg.set_analysis(static_cast<acutesim::simulation::AnalysisType>(dto.analysis));
     *msg.mutable_corner() = toProto(dto.corner);
@@ -129,7 +126,6 @@ acutesim::simulation::SimulationBatchRequest toProto(const SimulationBatchReques
 SimulationBatchRequestDTO fromProto(const acutesim::simulation::SimulationBatchRequest& msg) {
     SimulationBatchRequestDTO dto;
     dto.sessionToken = msg.session_token();
-    // dto.baseNetlistJson = msg.base_netlist_json(); // DEPRECATED
     dto.source = fromProto(msg.source());
     dto.analysis = static_cast<AnalysisTypeDTO>(msg.analysis());
     dto.corner = fromProto(msg.corner());

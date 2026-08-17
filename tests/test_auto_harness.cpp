@@ -4,7 +4,7 @@
 #include "../gui/analysis/erc_engine.h"
 #include "../ai_api/simulation/auto_harness.h"
 #include "../gui/components/visual_component.h"
-#include "../gui/editors/schematic_editor.h"
+#include "../gui/editors/schematic/schematic_editor.h"
 
 // Mock for testing without full GUI
 class AutoHarnessTest : public QObject {

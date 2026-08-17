@@ -1,47 +1,6 @@
-{
-  "traceId": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
-  "metadata": {
-    "solver_v": "0.1.1",
-    "platform": "macos_arm64",
-    "flags": "-O3 -ffp-contract=off",
-    "timestamp": "2026-01-25T13:20:00Z"
-  },
-  "results": {
-    "bridge_rectifier": [
-      9.2304491131928934,
-      -0.76946626772233395,
-      8.4609854303437118
-    ],
-    "darlington_pair": [
-      9.9998979900145279,
-      9.8978980045515605,
-      1.4287810003919239,
-      0.77404093286635767
-    ],
-    "diode_iv_1a": [
-      0.99154455374428119
-    ],
-    "linear_divider_10v_2k_2k": [
-      9.9999975000006120,
-      4.9999987450003074
-    ],
-    "_metrics": {
-       "bridge_rectifier": {"iter": 28, "kcl": 1.106e-11},
-       "darlington_pair": {"iter": 84, "kcl": 2.040e-1},
-       "diode_iv_1a": {"iter": 12, "kcl": 9.914e-13},
-       "linear_divider_10v_2k_2k": {"iter": 14, "kcl": 1.045e-11}
-    },
-    "tolerances": {
-      "absolute": 1e-6,
-      "relative": 1e-4
-    },
-    "units": {
-      "time_vector": "ns (double)",
-      "voltage": "V (double)",
-      "current": "A (double)"
-    }
-  },
-  "analytics": {
-    "trend_trigger": "Drift > 3-sigma over last 50 commits triggers email alert."
-  }
-}
+# CircuitSim Regression Database v2
+# Name|Converged|Iter|KCL|Signature|Voltages|Metadata
+bridge_rectifier|1|30|9.2608202226177148e-12|17378878362138765953|9.2304491131938597e+00,-7.6946626772136961e-01,8.4609854303446710e+00|compiler=clang,os=macOS
+darlington_pair|1|35|9.8145658267156932e-12|16058717956876588337|9.9998979900145279e+00,9.8978980045515588e+00,1.4287810003919668e+00,7.7404093286637943e-01|compiler=clang,os=macOS
+diode_iv_1a|1|12|9.9142916099026479e-13|15657233700910549723|9.9154455374428119e-01|compiler=clang,os=macOS
+linear_divider_10v_2k_2k|1|14|1.0450272158041285e-11|15268998031794228183|9.9999975000006120e+00,4.9999987450003074e+00|compiler=clang,os=macOS

@@ -13,7 +13,7 @@
 // a non-null JobScheduler pointer.
 // ============================================================================
 
-#include "../dto/simulation_dto.h"
+#include "engine_api/simulation_dto.h"
 #include "acutesim_engine/math/portable_rng.h"
 #include <functional>
 #include <atomic>

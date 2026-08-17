@@ -1,6 +1,6 @@
 #include "schema_api.h"
-#include "mainwindow.h"
-#include "schematic_editor.h"
+#include "gui/core/mainwindow.h"
+#include "gui/editors/schematic/schematic_editor.h"
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>

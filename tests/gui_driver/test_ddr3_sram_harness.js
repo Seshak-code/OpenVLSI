@@ -1,0 +1,318 @@
+/**
+ * AcuteSim Engine — Full-Feature DOM Test Harness (DDR3 SRAM Module design)
+ * Drives the real UI at http://localhost:8080 via puppeteer-core + system Chrome.
+ * Exercises: file-backed preset loading (designs/ddr3_sram/), schematic from file,
+ * wiring, palette, property editor, simulation (tran/dc/ac), waveforms + cursors +
+ * FFT/Bode, SPICE netlist from file, data-driven 3D layout, terminal CLI,
+ * command palette, split views, undo/redo, exports.
+ */
+const puppeteer = require('puppeteer-core');
+const fs = require('fs');
+const path = require('path');
+
+const BASE_URL = process.env.BASE_URL || 'http://localhost:8080';
+const SHOT_DIR = path.join(__dirname, 'screenshots');
+const CHROME_CANDIDATES = [
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+];
+
+const results = [];
+let pageErrors = [];
+let consoleErrors = [];
+
+function record(name, pass, detail = '') {
+  results.push({ name, pass, detail });
+  console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+(async () => {
+  fs.mkdirSync(SHOT_DIR, { recursive: true });
+  const chrome = CHROME_CANDIDATES.find(p => fs.existsSync(p));
+  if (!chrome) {
+    console.error('No Chrome/Chromium/Edge browser found for puppeteer-core.');
+    process.exit(2);
+  }
+
+  const browser = await puppeteer.launch({
+    executablePath: chrome,
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--enable-webgl', '--use-angle=metal', '--window-size=1600,1000']
+  });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1600, height: 1000 });
+
+  page.on('pageerror', e => pageErrors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+
+  // ---------- 1. Load app ----------
+  await page.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+  await sleep(800);
+  record('App loads on localhost', true, BASE_URL);
+
+  // ---------- 2. Load DDR3 SRAM preset via DOM dropdown (file-backed) ----------
+  await page.select('#preset-selector', 'ddr3_sram');
+  await sleep(900); // async fetch of design files
+  const activePreset = await page.evaluate(() => state.activePreset);
+  record('DDR3 SRAM preset loads via dropdown', activePreset === 'ddr3_sram', `activePreset=${activePreset}`);
+
+  const designFiles = await page.evaluate(() => ({
+    sch: !!state.designFiles.schematic,
+    sp: !!state.designFiles.netlist,
+    layout: !!state.designFiles.layout
+  }));
+  record('Design files fetched from designs/ddr3_sram/', designFiles.sch && designFiles.sp && designFiles.layout,
+    `schematic=${designFiles.sch} netlist=${designFiles.sp} layout=${designFiles.layout}`);
+
+  const compCount = await page.evaluate(() => state.components.length);
+  const wireCount = await page.evaluate(() => state.wires.length);
+  record('SRAM block diagram has devices', compCount === 22, `${compCount} components`);
+  record('SRAM block diagram has nets', wireCount === 32, `${wireCount} wires`);
+
+  // ---------- 3. Schematic SVG rendering ----------
+  const svgComps = await page.evaluate(() => document.querySelectorAll('#schematic-layer-components .sch-component').length);
+  const svgWires = await page.evaluate(() => document.querySelectorAll('#schematic-layer-wires .sch-wire').length);
+  record('Schematic renders components in SVG DOM', svgComps === 22, `${svgComps} <g> nodes`);
+  record('Schematic renders wires in SVG DOM', svgWires === 32, `${svgWires} paths`);
+
+  // SRAM-specific devices present (6T cell + SSTL I/O)
+  const hasSram = await page.evaluate(() =>
+    !!state.components.find(c => c.id === 'PU1' && c.type === 'PMOS') &&
+    !!state.components.find(c => c.id === 'PD1' && c.type === 'NMOS') &&
+    !!state.components.find(c => c.id === 'PG1' && c.type === 'NMOS') &&
+    !!state.components.find(c => c.id === 'DQp' && c.type === 'PMOS') &&
+    !!state.components.find(c => c.id === 'RTT' && c.type === 'R'));
+  record('SRAM 6T cell + SSTL devices present (PU1/PD1/PG1/DQp/RTT)', hasSram);
+
+  await page.screenshot({ path: path.join(SHOT_DIR, '01_sram_schematic.png') });
+
+  // ---------- 4. DC OP table ----------
+  const dcRows = await page.evaluate(() => document.querySelectorAll('#dc-op-table-body tr').length);
+  record('DC operating point table populated', dcRows === 8, `${dcRows} rows`);
+
+  // ---------- 5. PVT grid ----------
+  const pvtCards = await page.evaluate(() => document.querySelectorAll('#pvt-results-grid .pvt-card').length);
+  record('PVT corner matrix populated', pvtCards === 3, `${pvtCards} corners`);
+
+  // ---------- 6. Select / rotate / undo ----------
+  await page.evaluate(() => {
+    const comp = state.components.find(c => c.id === 'RTT');
+    state.selectedComponents = ['RTT'];
+    state.selectedComponent = comp;
+    rotateSelectedComponent();
+  });
+  await sleep(200);
+  const rotVal = await page.evaluate(() => (state.components.find(c => c.id === 'RTT') || {}).rot);
+  record('Component rotate (RTT 0→90°)', rotVal === 90, `rot=${rotVal}`);
+  await page.evaluate(() => undo());
+  await sleep(200);
+  const rotAfterUndo = await page.evaluate(() => (state.components.find(c => c.id === 'RTT') || {}).rot);
+  record('Undo restores rotation', rotAfterUndo === 0, `rot=${rotAfterUndo}`);
+  await page.evaluate(() => redo());
+  await sleep(150);
+
+  // ---------- 7. Property editor ----------
+  await page.evaluate(() => {
+    const comp = state.components.find(c => c.id === 'CL');
+    openComponentPropertyEditor(comp);
+  });
+  await sleep(200);
+  const propModalExists = await page.evaluate(() => !!document.getElementById('prop-editor-modal'));
+  record('Property editor modal opens', propModalExists);
+  await page.evaluate(() => {
+    const input = document.querySelector('#prop-editor-modal input[data-field="cap"]');
+    if (input) input.value = 'cap_mim_m3 3pF';
+    document.getElementById('btn-prop-apply')?.click();
+  });
+  await sleep(200);
+  const clVal = await page.evaluate(() => (state.components.find(c => c.id === 'CL') || {}).val);
+  record('Property editor applies new Cin value', clVal === 'cap_mim_m3 3pF', `val=${clVal}`);
+
+  // ---------- 8. Palette placement ----------
+  const beforeComps = await page.evaluate(() => state.components.length);
+  await page.evaluate(() => placeNewComponent('C', 560, 260));
+  await sleep(200);
+  const afterComps = await page.evaluate(() => state.components.length);
+  record('Component palette places new device', afterComps === beforeComps + 1, `${beforeComps}→${afterComps}`);
+
+  // ---------- 9. Wire tool ----------
+  await page.evaluate(() => {
+    const newC = state.components[state.components.length - 1];
+    state.wires.push({ from: { comp: newC.id, pin: 0 }, to: { comp: 'VTT', pin: 1 } });
+    renderSchematic();
+    saveHistoryState();
+  });
+  await sleep(200);
+  const wireTotal = await page.evaluate(() => state.wires.length);
+  record('Wire routing adds net', wireTotal === 33, `${wireTotal} wires`);
+
+  // ---------- 10. Net highlight ----------
+  const netHighlighted = await page.evaluate(() => {
+    highlightNetForWire(4);
+    renderSchematic();
+    return document.querySelectorAll('#schematic-layer-wires .sch-wire.net-highlighted').length;
+  });
+  record('Net cross-probe highlight works', netHighlighted >= 1, `${netHighlighted} wires highlighted`);
+  await page.screenshot({ path: path.join(SHOT_DIR, '02_sram_net_highlight.png') });
+
+  // ---------- 11. Run transient simulation ----------
+  await page.click('#btn-run-sim');
+  await sleep(900);
+  const simResults = await page.evaluate(() => ({
+    hasData: state.simulationResults.time.length > 0,
+    pts: state.simulationResults.time.length,
+    vref: state.simulationResults.traces['V(VREF)'] ? state.simulationResults.traces['V(VREF)'][10] : null
+  }));
+  record('Transient simulation produces data', simResults.hasData && simResults.pts === 301, `${simResults.pts} points`);
+  record('SRAM VREF trace = 0.75V mid-rail', simResults.vref === 0.75, `V(VREF)[10]=${simResults.vref}`);
+
+  const wavePainted = await page.evaluate(() => {
+    const c = document.getElementById('waveform-canvas');
+    if (!c || !c.width) return false;
+    const ctx = c.getContext('2d');
+    const d = ctx.getImageData(0, 0, c.width, Math.min(c.height, 400)).data;
+    let colored = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] > 0 && !(d[i] === 12 && d[i + 1] === 12 && d[i + 2] === 14)) colored++;
+    }
+    return colored > 500;
+  });
+  record('Waveform canvas renders SRAM read-cycle traces', wavePainted);
+  await page.screenshot({ path: path.join(SHOT_DIR, '03_sram_waveforms.png') });
+
+  // ---------- 12. Cursor measurements ----------
+  const cursorDelta = await page.evaluate(() => {
+    state.cursorA = 1.25; state.cursorB = 2.5;
+    renderWaveforms();
+    return document.getElementById('cur-delta-t').innerText;
+  });
+  record('Waveform cursor Δt measurement', cursorDelta.includes('1.25'), `Δt=${cursorDelta}`);
+
+  await page.evaluate(() => { document.getElementById('btn-wave-fft')?.click(); });
+  await sleep(200);
+  const fftBadge = await page.evaluate(() => document.getElementById('waveform-title-badge').innerText);
+  record('FFT spectrum mode toggles', fftBadge.includes('FOURIER'), fftBadge);
+  await page.evaluate(() => { document.getElementById('btn-wave-bode')?.click(); });
+  await sleep(200);
+  const bodeBadge = await page.evaluate(() => document.getElementById('waveform-title-badge').innerText);
+  record('Bode mode toggles', bodeBadge.includes('BODE'), bodeBadge);
+  await page.evaluate(() => { document.getElementById('btn-wave-bode')?.click(); });
+
+  // ---------- 13. SPICE netlist editor (from file) ----------
+  await page.evaluate(() => openDocument('ddr3_sram.sp', 'spice'));
+  await sleep(300);
+  const netlist = await page.evaluate(() => document.getElementById('spice-code-area').value);
+  record('SPICE netlist editor shows file-backed SRAM netlist',
+    netlist.includes('sram_6t') && netlist.includes('XBC00') && netlist.includes('MDQp') && netlist.includes('.tran'),
+    `${netlist.split('\n').length} lines`);
+  // 64 bitcells present in netlist
+  const bitcellCount = (netlist.match(/XBC\d\d /g) || []).length;
+  record('Netlist contains all 64 6T bitcells', bitcellCount === 64, `${bitcellCount} XBC instances`);
+  await page.screenshot({ path: path.join(SHOT_DIR, '04_sram_spice_netlist.png') });
+
+  // ---------- 14. 3D layout view (data-driven geometry) ----------
+  await page.evaluate(() => openDocument('sky130_silicon.gds', 'layout'));
+  await sleep(700);
+  const glInfo = await page.evaluate(() => state.layout3D.gl ? state.layout3D.gl.constructor.name : null);
+  record('3D silicon layout WebGL context active', !!glInfo, glInfo || 'no GL');
+  const geomCount = await page.evaluate(() => state.layoutGeometry ? state.layoutGeometry.length : 0);
+  record('Data-driven 3D geometry loaded (178 cubes)', geomCount === 178, `${geomCount} cubes`);
+  await page.evaluate(() => { document.getElementById('btn-cam-top')?.click(); });
+  await sleep(300);
+  const camTop = await page.evaluate(() => ({ x: state.layout3D.rotX, y: state.layout3D.rotY }));
+  record('3D camera preset (Top view)', camTop.x === 0 && camTop.y === 0, JSON.stringify(camTop));
+  await page.screenshot({ path: path.join(SHOT_DIR, '05_sram_3d_layout.png') });
+
+  // ---------- 15. Terminal CLI ----------
+  const termOut = await page.evaluate(async () => {
+    switchPanelTab('console');
+    const input = document.getElementById('terminal-input');
+    input.value = 'preset ddr3_sram';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    return document.getElementById('terminal-history').innerText;
+  });
+  await sleep(900); // async file fetch
+  record('Terminal CLI loads SRAM preset', termOut.includes('ddr3_sram'), termOut.slice(0, 80).replace(/\n/g, ' | '));
+
+  const kclOut = await page.evaluate(() => {
+    const input = document.getElementById('terminal-input');
+    input.value = 'kcl';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    return document.getElementById('terminal-history').innerText;
+  });
+  record('Terminal KCL audit command', kclOut.includes('PASS'));
+
+  // ---------- 16. Command palette ----------
+  await page.evaluate(() => openCommandPalette());
+  await sleep(200);
+  await page.type('#palette-input', 'SRAM');
+  await sleep(200);
+  const paletteEntries = await page.evaluate(() => document.querySelectorAll('#palette-results .palette-entry').length);
+  record('Command palette finds SRAM command', paletteEntries >= 1, `${paletteEntries} entries`);
+  await page.evaluate(() => {
+    const first = document.querySelector('#palette-results .palette-entry');
+    if (first) first.click();
+  });
+  await sleep(900);
+  const presetAfterPalette = await page.evaluate(() => state.activePreset);
+  record('Command palette executes SRAM load', presetAfterPalette === 'ddr3_sram');
+
+  // ---------- 17. Split view ----------
+  await page.evaluate(() => document.getElementById('btn-layout-split-h')?.click());
+  await sleep(400);
+  const splitMode = await page.evaluate(() => state.layoutMode);
+  record('Split-horizontal multi-view', splitMode === 'split-horizontal', splitMode);
+  await page.screenshot({ path: path.join(SHOT_DIR, '06_sram_split_view.png') });
+  await page.evaluate(() => document.getElementById('btn-layout-single')?.click());
+  await sleep(200);
+
+  // ---------- 18. Zoom / grid ----------
+  await page.evaluate(() => { zoomFitSchematic(); });
+  const zoomBadge = await page.evaluate(() => {
+    const el = document.getElementById('sb-zoom');
+    return el ? el.innerText : null;
+  });
+  record('Zoom-to-fit resets view', zoomBadge === '100%', `badge=${zoomBadge}`);
+  await page.evaluate(() => { toggleGrid(); toggleGrid(); });
+
+  // ---------- 19. Export netlist ----------
+  const netlistText = await page.evaluate(() => { generateSpiceNetlist(); return state.netlistText; });
+  record('Netlist export content ready (file-backed)',
+    netlistText.includes('sram_6t') && netlistText.includes('.op'), 'SRAM netlist from file');
+
+  // ---------- 20. PDK modal ----------
+  await page.evaluate(() => openModal('pdk-modal'));
+  await sleep(200);
+  const pdkVisible = await page.evaluate(() => !document.getElementById('pdk-modal').classList.contains('hidden'));
+  record('PDK swap modal opens', pdkVisible);
+  await page.evaluate(() => closeModal('pdk-modal'));
+
+  // ---------- 21. ERC / DRC sidebar ----------
+  await page.evaluate(() => { switchSidebarTab('erc'); });
+  await sleep(200);
+  const ercPaneActive = await page.evaluate(() => document.getElementById('pane-erc')?.classList.contains('active'));
+  record('ERC/DRC results pane accessible', !!ercPaneActive);
+
+  // ---------- 22. Page errors check ----------
+  record('Zero page JS errors during session', pageErrors.length === 0, pageErrors.slice(0, 3).join(' ;; '));
+
+  // ---------- Summary ----------
+  const failed = results.filter(r => !r.pass);
+  console.log('\n========================================');
+  console.log(`RESULTS: ${results.length - failed.length}/${results.length} passed`);
+  if (failed.length) {
+    console.log('FAILED TESTS:');
+    failed.forEach(f => console.log(`  ✗ ${f.name} — ${f.detail}`));
+  }
+  console.log('========================================');
+
+  await browser.close();
+  process.exit(failed.length ? 1 : 0);
+})().catch(e => {
+  console.error('HARNESS CRASH:', e);
+  results.forEach(r => console.log(`${r.pass ? 'PASS' : 'FAIL'}  ${r.name}`));
+  process.exit(3);
+});

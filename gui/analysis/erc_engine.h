@@ -154,16 +154,7 @@ public:
         checkCrossDomainSignals(scene); // Power domain isolation check
         checkPowerPorts(scene);         // Floating PowerPort detection
 
-        // Mode-specific checks removed - unified component library
-        // checkBlockModeRules() and checkSystemModeRules() are deprecated
-
         return violations_;
-    }
-
-    // DEPRECATED: Mode-specific checks removed. Kept for API compatibility.
-    void setMode(AppMode mode) {
-        Q_UNUSED(mode);
-        // currentMode_ no longer affects ERC behavior
     }
     
     /**
@@ -557,19 +548,6 @@ private:
         }
     }
     
-    // DEPRECATED: Mode-specific rules removed - unified component library
-    // These methods are kept for backwards compatibility but are no-ops
-    void checkBlockModeRules(QGraphicsScene* scene) {
-        Q_UNUSED(scene);
-        // Block mode rules removed - all component types now allowed
-    }
-
-    // DEPRECATED: Mode-specific rules removed - unified component library
-    void checkSystemModeRules(QGraphicsScene* scene) {
-        Q_UNUSED(scene);
-        // System mode rules removed - all component types now allowed
-    }
-    
     /**
      * @brief Check for signals crossing power domains without proper isolation.
      * Warns when components in different power domains share a net.
@@ -669,11 +647,6 @@ private:
             }
         }
     }
-
-private:
-    // DEPRECATED: Mode is no longer used for ERC checks
-    AppMode currentMode_ = AppMode::BENCH_TEST;  // Kept for API compatibility
 };
-
 
 } // namespace ERC

@@ -1,0 +1,26 @@
+{
+  "name": "acutesim-web-suite",
+  "version": "1.0.0",
+  "description": "AcuteSim - Free Online Cadence Virtuoso Parity EDA & SPICE Suite",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python3 scripts/serve.py",
+    "build": "node -e \"console.log('AcuteSim Vercel Web Distribution Ready')\"",
+    "start": "python3 scripts/serve.py"
+  },
+  "keywords": [
+    "eda",
+    "spice",
+    "cadence-virtuoso",
+    "circuit-simulation",
+    "webassembly",
+    "webgpu",
+    "asic-design",
+    "analog-design"
+  ],
+  "author": "AcuteSim Team",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "puppeteer-core": "^25.7.0"
+  }
+}

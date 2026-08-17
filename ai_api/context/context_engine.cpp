@@ -3,8 +3,8 @@
 #include "schema_api.h"
 #include "crash_report.h"
 #include "../analysis/topology_analyzer.h"
-#include "mainwindow.h"
-#include "schematic_editor.h"
+#include "gui/core/mainwindow.h"
+#include "gui/editors/schematic/schematic_editor.h"
 #include <QJsonArray>
 #include <QStringList>
 #include <QApplication>

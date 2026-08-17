@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dto/simulation_dto.h"
+#include "engine_api/simulation_dto.h"
 #include "simulation_service.pb.h"
 
 namespace acutesim::compute::orchestration::ProtoMapper {

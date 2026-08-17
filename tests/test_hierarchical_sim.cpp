@@ -2,7 +2,7 @@
 #include <iostream>
 #include <cassert>
 #include <QDir>
-#include "gui/editors/schematic_editor.h"
+#include "gui/editors/schematic/schematic_editor.h"
 #include "gui/components/visual_component.h"
 #include "acutesim_engine/netlist/circuit.h"
 

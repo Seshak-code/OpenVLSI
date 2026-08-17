@@ -1,4 +1,4 @@
-#include "gui/editors/schematic_editor.h"
+#include "gui/editors/schematic/schematic_editor.h"
 #include <QJsonObject>
 #include <QStringList>
 

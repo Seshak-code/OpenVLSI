@@ -2,7 +2,7 @@
 // simulation_job_manager.cpp — Implementation
 // ============================================================================
 #include "simulation_job_manager.h"
-#include "../compute/orchestration/driver/isimulation_driver.h"
+#include "isimulation_driver.h"
 
 #include <unordered_map>
 #include <queue>

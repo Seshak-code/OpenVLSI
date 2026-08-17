@@ -3,7 +3,7 @@
 #include "../gui/analysis/pdk_manager.h"
 #include "../gui/analysis/pdk_compliance.h"
 #include "../gui/components/visual_component.h"
-#include "../gui/editors/schematic_editor.h" // For GridScene if needed, or mock it
+#include "../gui/editors/schematic/schematic_editor.h" // For GridScene if needed, or mock it
 
 // Mock Scene for testing
 class MockScene : public QGraphicsScene {

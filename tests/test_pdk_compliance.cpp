@@ -6,7 +6,7 @@
 
 #include "acutesim_engine/netlist/circuit.h"
 #include "components/standard_cells.h"
-#include "gui/editors/schematic_editor.h"
+#include "gui/editors/schematic/schematic_editor.h"
 #include "gui/components/visual_component.h"
 #include "gui/analysis/pdk_compliance.h"
 #include <QLineF>

@@ -39,7 +39,7 @@
 #include "simulation_context.h"
 
 // --- Analysis Registry (Moved to engine_api) ---
-#include "analysis_registry.h"
+#include "acutesim_engine/solvers/analysis_registry.h"
 
 // --- Hardware Capability Detection ---
 #include "acutesim_engine/infrastructure/hardware_capabilities.h"

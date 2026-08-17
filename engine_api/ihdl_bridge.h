@@ -8,6 +8,7 @@
 // ============================================================================
 
 #include <string>
+#include <unordered_map>
 #include <cstdint>
 
 namespace acutesim::engine_api {
