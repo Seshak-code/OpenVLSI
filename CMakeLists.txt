@@ -863,6 +863,16 @@ if(NOT EMSCRIPTEN)
     )
     target_compile_features(test_engine_parity PUBLIC cxx_std_17)
     add_test(NAME EngineParityTest COMMAND test_engine_parity)
+
+    # Regression checks for engine review fixes (NaN, transient hang, diode, DC inductor)
+    add_executable(test_engine_fixes tests/test_engine_fixes.cpp)
+    target_link_libraries(test_engine_fixes PRIVATE acutesim_engine)
+    target_include_directories(test_engine_fixes PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine_api
+    )
+    target_compile_features(test_engine_fixes PUBLIC cxx_std_17)
+    add_test(NAME EngineFixesTest COMMAND test_engine_fixes)
 endif()
 
 # Phase C: Graph Partitioner Unit Test
