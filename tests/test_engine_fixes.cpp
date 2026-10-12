@@ -117,6 +117,35 @@ int main() {
                   std::to_string(V(r, 3)) + ", ideal " + std::to_string(ideal) + ")");
         }
 
+        // Subcircuits: hierarchical and flattened netlists must agree exactly
+        // (instance internals are numbered after the top-level nodes, so only
+        // top-level nodes 1..N are compared). Covers: .subckt defined after use,
+        // nesting, instance capacitor history and instance LTE step control.
+        {
+            auto same = [&](const char* what, const std::string& hier, const std::string& flat,
+                            int nodes, double step, double stop) {
+                auto rh = run(mode, hier, step, stop), rf = run(mode, flat, step, stop);
+                double worst = (rh.waveformPoints.empty() || rf.waveformPoints.empty()) ? INFINITY : 0.0;
+                for (int n = 1; n <= nodes && worst < INFINITY; ++n)
+                    worst = std::max(worst, std::abs(V(rh, n) - V(rf, n)));
+                check(rh.converged && rf.converged && worst < 1e-9,
+                      std::string(what) + " (max |hier-flat| = " + std::to_string(worst) + " V)");
+            };
+            same("nested subcircuits == flattened",
+                 "* h\nV1 1 0 DC 5\nXP 1 2 PAIR\n.subckt PAIR p q\nX1 p n DIV\nX2 n q DIV\nRL q 0 47k\n.ends\n"
+                 ".subckt DIV a b\nR1 a mid 1k\nR2 mid b 1k\nR3 b 0 10k\n.ends\n.op\n",
+                 "* f\nV1 1 0 DC 5\nRL 2 0 47k\nR1a 1 m1 1k\nR2a m1 n 1k\nR3a n 0 10k\n"
+                 "R1b n m2 1k\nR2b m2 2 1k\nR3b 2 0 10k\n.op\n", 2, 0, 0);
+            same("RC ladder in subcircuits == flattened (transient)",
+                 "* h\nV1 1 0 PULSE(0 5 0 1u 1u 1m 2m)\nX1 1 2 RC\nX2 2 3 RC\nX3 3 4 RC\n"
+                 ".subckt RC in out\nR1 in out 1k\nC1 out 0 100n\n.ends\n",
+                 "* f\nV1 1 0 PULSE(0 5 0 1u 1u 1m 2m)\nR1 1 2 1k\nC1 2 0 100n\nR2 2 3 1k\n"
+                 "C2 3 0 100n\nR3 3 4 1k\nC3 4 0 100n\n", 4, 1e-5, 2e-3);
+            r = run(mode, "* e\nV1 1 0 1\nX1 1 0 NOPE\nR1 1 0 1k\n.op\n");
+            check(!r.converged && r.errorDetail.find("unknown subcircuit") != std::string::npos,
+                  "unknown subcircuit is a parse error");
+        }
+
         // Fix 2: RC transient at dt = tau/100 terminates and is accurate
         r = run(mode, "* rc\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n.tran 1e-5 1e-3\n", 1e-5, 1e-3);
         double expect = 5.0 * (1.0 - std::exp(-1.0));
