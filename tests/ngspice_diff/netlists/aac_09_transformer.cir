@@ -1,5 +1,5 @@
 transformer
-v1 1 0 ac 120 sin
+v1 1 0 ac 120
 rbogus0 1 6 1e-3
 l1 6 0 100
 l2 2 4 1

@@ -9,8 +9,6 @@
 // Include solver
 #include "acutesim_engine/solvers/circuitsim_solver.cpp"
 #include "acutesim_engine/tensors/physics_tensors.cpp"
-#include "acutesim_engine/solvers/superposition.cpp"
-#include "acutesim_engine/infrastructure/netlist_compiler.cpp"
 
 /**
  * Automated flow testing for Raw State component integration.

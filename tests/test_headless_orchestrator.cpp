@@ -139,7 +139,7 @@ int testDTOPurity() {
     TEST_ASSERT(resp.convergence.iterations == 0, "Default iterations should be 0");
 
     ConvergenceTelemetryDTO telem;
-    TEST_ASSERT(telem.method == "Newton-Raphson", "Default method should be NR");
+    TEST_ASSERT(telem.method.empty(), "Default method is empty until a solve reports one");
     TEST_ASSERT(!telem.gminSteppingUsed, "Default gmin stepping should be false");
 
     std::cout << "  All DTO defaults verified." << std::endl;

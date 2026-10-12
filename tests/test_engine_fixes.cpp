@@ -62,7 +62,7 @@ int main() {
         check(r.converged && near(V(r, 2), 0.0, 1e-4), "shunt RL: V(2) = 0 V at DC");
 
         // Fix 3: default diode (IS=1e-14) and trailing .model card (IS=1e-12)
-        r = run(mode, "* diode default\nV1 1 0 DC 5\nR1 1 2 1k\nD1 2 0 NOCARD\n.op\n");
+        r = run(mode, "* diode default\nV1 1 0 DC 5\nR1 1 2 1k\nD1 2 0 NOCARD\n.model NOCARD D\n.op\n");
         double vd = V(r, 2), id = (5.0 - vd) / 1e3;
         check(r.converged && near(vd, 0.02585 * std::log(id / 1e-14 + 1), 1e-4),
               "diode with SPICE defaults matches Shockley (V=" + std::to_string(vd) + ")");
@@ -240,9 +240,60 @@ int main() {
         check(r.converged && std::abs(V(r, 2)) > 0.1 && near(V(r, 3) / V(r, 2), 0.99, 1e-3),
               "K coupling: open-circuit v2/v1 = 0.99 (ratio=" + std::to_string(V(r, 3) / V(r, 2)) + ")");
 
-        // Fix 2: invalid timestep is an error, not an infinite loop
-        r = run(mode, "* rc\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n", 0.0, 1e-3);
-        check(!r.converged && !r.errorDetail.empty(), "zero timestep returns an error");
+        // Fix 2: an invalid timestep is an error, not an infinite loop; 0 means automatic
+        r = run(mode, "* rc\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n", -1e-6, 1e-3);
+        check(!r.converged && !r.errorDetail.empty(), "negative timestep returns an error");
+        r = run(mode, "* rc\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n.tran 0 1m uic\n", 0.0, 1e-3);
+        check(r.converged && near(r.waveformPoints.back().timeS, 1e-3, 1e-12) && near(V(r, 2), 5.0 * (1.0 - std::exp(-1.0)), 5e-3),
+              ".tran 0 tstop runs with an automatic step (V(2)=" + std::to_string(V(r, 2)) + ")");
+    }
+
+    // Phase 2.3: native .dc (netlist card or DCConfigDTO); unsupported forms are errors
+    for (PrecisionMode mode : {PrecisionMode::Native_F64, PrecisionMode::Mixed}) {
+        auto r = run(mode, "* dc sweep\nV1 1 0 DC 0\nR1 1 2 1k\nR2 2 0 3k\n.dc V1 0 2 0.5\n");
+        bool ok = r.converged && r.waveformPoints.size() == 5;
+        for (size_t k = 0; ok && k < 5; ++k)
+            ok = near(r.waveformPoints[k].timeS, 0.5 * k, 1e-12) &&
+                 near(r.waveformPoints[k].nodeVoltages[1], 0.375 * k, 1e-6);
+        check(ok, ".dc V1 0 2 0.5: 5 points, V(2) = 0.75*V1");
+        auto engine = ISimulationEngine::create();
+        engine->setPrecisionMode(mode);
+        SimulationRequestDTO req;
+        req.source.payload = "* dto sweep\nI1 0 1 DC 0\nR1 1 0 2k\n.op\n";
+        req.dc = {"i1", 0.0, 1e-3, 1e-3};
+        EngineCallbacks cb;
+        r = engine->createSession()->runDC(req, cb);
+        check(r.converged && r.waveformPoints.size() == 2 && near(r.waveformPoints[1].nodeVoltages[0], 2.0, 1e-6),
+              "DCConfigDTO sweep of a current source: V(1) = 2 V at 1 mA");
+        r = run(mode, "* nested\nV1 1 0 1\nV2 2 0 1\nR1 1 2 1k\n.dc V1 0 1 0.5 V2 0 1 0.5\n");
+        check(!r.converged && r.errorDetail.find("one source") != std::string::npos, "nested .dc is a parse error");
+        r = run(mode, "* missing\nV1 1 0 1\nR1 1 0 1k\n.dc V9 0 1 0.5\n");
+        check(!r.converged && r.errorDetail.find("not found") != std::string::npos, ".dc of an unknown source is an error");
+    }
+
+    // Phase 2.4: AC (G + jwC from the DC Jacobian) and noise through the session
+    for (PrecisionMode mode : {PrecisionMode::Native_F64, PrecisionMode::Mixed}) {
+        auto engine = ISimulationEngine::create();
+        engine->setPrecisionMode(mode);
+        EngineCallbacks cb;
+        SimulationRequestDTO req;
+        req.source.payload = "* rc corner\nV1 1 0 AC 1\nR1 1 2 1k\nC1 2 0 1u\n.ac lin 1 159.15494309189535 159.15494309189535\n";
+        auto r = engine->createSession()->runAC(req, cb);
+        bool ok = r.converged && r.waveformPoints.size() == 1;
+        const double re = ok ? r.waveformPoints[0].nodeVoltages[1] : NAN, im = ok ? r.waveformPoints[0].nodeVoltagesImag[1] : NAN;
+        check(ok && near(std::hypot(re, im), std::sqrt(0.5), 1e-9) && near(std::atan2(im, re), -M_PI / 4, 1e-9),
+              "AC: RC at f = 1/(2 pi RC) gives 1/sqrt(2) at -45 deg");
+        req.source.payload = "* no sweep\nV1 1 0 AC 1\nR1 1 0 1k\n";
+        r = engine->createSession()->runAC(req, cb);
+        check(!r.converged && !r.errorDetail.empty(), "AC without a sweep is an error");
+        req.source.payload = "* divider noise\nV1 1 0 DC 0 AC 1\nR1 1 2 1k\nR2 2 0 1k\n.noise v(2) V1 lin 2 1 2\n";
+        r = engine->createSession()->runNoise(req, cb);
+        const double expect = std::sqrt(4 * 1.380649e-23 * 300.15 * 500.0);  // 1k || 1k thermal
+        ok = r.converged && r.extended.noise.onoise.size() == 2;
+        check(ok && near(r.extended.noise.onoise[0], expect, 1e-6 * expect) &&
+                  near(r.extended.noise.inoise[0], 2 * expect, 2e-6 * expect) &&
+                  near(r.extended.noise.onoiseTotal, expect, 1e-6 * expect),  // white: total over 1 Hz
+              "noise: 1k/1k divider gives sqrt(4kT*500) out, x2 input-referred, white total");
     }
 
     // The CSR pattern cache must not trust the canonical topology hash: it ignores

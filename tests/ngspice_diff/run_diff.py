@@ -59,11 +59,15 @@ def node_map(text):
     return m
 
 def analysis(text):
-    """-> ('op',) | ('dc', src, start, stop, step) | ('tran', tstep, tstop, uic) | ('ac',) | ('unsupported', why)"""
+    """-> ('op',) | ('dc', src, start, stop, step) | ('tran', tstep, tstop, uic) | ('ac', sweep, n, f1, f2)
+       | ('noise', "v(out[,ref])", src, sweep, n, f1, f2) | ('unsupported', why)"""
     for line in cards(text):
         t = line.split()
         kw = t[0].lower()
-        if kw == ".ac": return ("ac",)
+        if kw == ".ac": return ("ac", t[1].lower(), int(num(t[2])), num(t[3]), num(t[4]))
+        if kw == ".noise":
+            k = next(i for i, x in enumerate(t) if x.lower() in ("dec", "oct", "lin"))
+            return ("noise", " ".join(t[1:k - 1]), t[k - 1], t[k].lower(), int(num(t[k + 1])), num(t[k + 2]), num(t[k + 3]))
         if kw == ".dc":
             return ("dc", t[1], *map(num, t[2:5])) if len(t) == 5 else ("unsupported", "nested/multi-source .dc")
         if kw == ".tran":
@@ -78,30 +82,22 @@ def run_engine(args, text, mode, kind, step=0.0, stop=0.0):
     cmd = [args.engine, path, mode, kind] + ([repr(step), repr(stop)] if kind == "tran" else [])
     try: out = subprocess.run(cmd, capture_output=True, text=True, timeout=args.timeout).stdout
     except subprocess.TimeoutExpired: return dict(conv=False, err="TIMEOUT", pts=[])
-    conv, err, pts = False, "", []
+    conv, err, pts, total = False, "", [], None
     for ln in out.splitlines():
-        if ln.startswith("CONVERGED"): conv = ln.split()[1] == "1"
+        if ln.startswith("TOTAL"): total = [float(x) for x in ln.split()[1:]]
+        elif ln.startswith("CONVERGED"): conv = ln.split()[1] == "1"
         elif ln.startswith("ERROR"): err = ln[6:].strip()
         elif ln and (ln[0].isdigit() or ln[0] == "-"):
             try: pts.append([float(x) for x in ln.split()])
             except ValueError: pass
-    return dict(conv=conv, err=err, pts=pts)
-
-def sweep_text(text, src, value):
-    """Emulate .dc: replace the swept source card by a plain DC source of the given value."""
-    out = []
-    for i, ln in enumerate(text.splitlines()):
-        t = ln.split()
-        if i > 0 and t and t[0].lower() == src.lower(): ln = f"{t[0]} {t[1]} {t[2]} dc {value!r}"
-        out.append(ln)
-    return "\n".join(out) + "\n"
+    return dict(conv=conv, err=err, pts=pts, total=total)
 
 # ---------------------------------------------------------------- ngspice side
 def run_ngspice(args, text, an, names):
     """Return (xs, {name: [values]}) for the analysis, or raise RuntimeError. xs = [] for .op.
     Analysis/print cards are removed and replaced by a .control block (batch mode, ngspice defaults);
     the only option set is tmax=tstep/10 on .tran so the reference is dense (see tolerance comment)."""
-    drop = re.compile(r"\.(op|dc|tran|ac|print|plot|four|end)\b", re.I)
+    drop = re.compile(r"\.(op|dc|tran|ac|noise|print|plot|four|end)\b", re.I)
     kept, skip = [], False
     for i, ln in enumerate(text.splitlines()):
         if i > 0 and ln.strip()[:1] == "+":
@@ -110,20 +106,32 @@ def run_ngspice(args, text, an, names):
         skip = i > 0 and bool(drop.match(ln.strip()))
         if not skip: kept.append(ln)
     cmd = {"op": "op", "dc": "dc {1} {2!r} {3!r} {4!r}".format(*an) if an[0] == "dc" else "",
-           "tran": "tran {0!r} {1!r} 0 {2!r}{3}".format(an[1], an[2], an[1] / 10, " uic" if an[3] else "") if an[0] == "tran" else ""}[an[0]]
+           "tran": "tran {0!r} {1!r} 0 {2!r}{3}".format(an[1], an[2], an[1] / 10, " uic" if an[3] else "") if an[0] == "tran" else "",
+           "ac": "ac {1} {2} {3!r} {4!r}".format(*an) if an[0] == "ac" else "", "noise": ""}[an[0]]
     vecs = " ".join(f"v({n.lower()})" for n in names)
     out = os.path.join(args.tmp, "ng.dat")
     if os.path.exists(out): os.remove(out)
     kept.append(f".options temp={args.temp} tnom={args.temp}")
     ctl = [".control", cmd, f"wrdata {out} {vecs}", "quit", ".endc", ".end"]
+    if an[0] == "noise":  # spectra in plot noise1, integrated totals in noise2
+        ctl = [".control", "noise {1} {2} {3} {4} {5!r} {6!r}".format(*an), "setplot noise1",
+               f"wrdata {out} onoise_spectrum inoise_spectrum", "setplot noise2",
+               "print onoise_total inoise_total", "quit", ".endc", ".end"]
     cir = os.path.join(args.tmp, "ng.cir")
     open(cir, "w").write("\n".join(kept + ctl) + "\n")
     p = subprocess.run([args.ngspice, "-b", cir], capture_output=True, text=True, timeout=args.timeout)
     if not os.path.exists(out) or os.path.getsize(out) == 0:
         raise RuntimeError("ngspice produced no data: " + " | ".join((p.stdout + p.stderr).strip().splitlines()[-3:]))
     rows = [[float(x) for x in ln.split()] for ln in open(out) if ln.strip()]
-    # wrdata layout: (scale, v1, scale, v2, ...). For .op the "scale" is meaningless.
+    if an[0] == "noise":
+        tot = dict(re.findall(r"(\w+_total) = (\S+)", p.stdout))
+        return [r[0] for r in rows], {"onoise": [r[1] for r in rows], "inoise": [r[3] for r in rows],
+                                      "total": [float(tot["onoise_total"]), float(tot["inoise_total"])]}
+    # wrdata layout: (scale, v1, scale, v2, ...); complex (.ac): (scale, re, im) per vector.
+    # For .op the "scale" is meaningless.
     xs = [] if an[0] == "op" else [r[0] for r in rows]
+    if an[0] == "ac":
+        return xs, {n: [complex(r[3 * k + 1], r[3 * k + 2]) for r in rows] for k, n in enumerate(names)}
     return xs, {n: [r[2 * k + 1] for r in rows] for k, n in enumerate(names)}
 
 # ---------------------------------------------------------------- comparison
@@ -152,16 +160,46 @@ def compare(args, text, an, mode, nm, ref):
         e = abs(got - exp) if math.isfinite(got) else math.inf
         worst_abs = max(worst_abs, e); worst_rel = max(worst_rel, e / (scale or max(abs(exp), 1e-3)))
         if not e <= tol: bad.append(f"{label}: {got:.6g} vs ngspice {exp:.6g}")
-    if an[0] in ("op", "dc"):
-        points = [(None, 0)] if an[0] == "op" else [(x, k) for k, x in enumerate(xs)]
-        for x, k in points:
-            r = run_engine(args, text if x is None else sweep_text(text, an[1], x), mode, "dc")
-            if unsupported(r): return "ENGINE-UNSUPPORTED", 0, 0, r["err"]
-            if not r["conv"] or not r["pts"]: return "FAIL", math.inf, math.inf, f"engine not converged at {an[1] if x is not None else 'op'}={x}: {r['err']}"
-            row = r["pts"][-1]
+    if an[0] == "noise":
+        r = run_engine(args, text, mode, "noise")
+        if unsupported(r): return "ENGINE-UNSUPPORTED", 0, 0, r["err"]
+        if not r["conv"] or len(r["pts"]) != len(xs) or not r["total"]:
+            return "FAIL", math.inf, math.inf, f"engine gave {len(r['pts'])} of {len(xs)} frequencies: {r['err']}"
+        def rel(label, got, exp):  # noise densities and totals: relative (DC rtol)
+            nonlocal worst_abs, worst_rel
+            e = abs(got - exp); worst_abs = max(worst_abs, e); worst_rel = max(worst_rel, e / max(abs(exp), 1e-300))
+            if not e <= args.dc_rtol * abs(exp): bad.append(f"{label}: {got:.6g} vs ngspice {exp:.6g}")
+        for k, row in enumerate(r["pts"]):
+            rel(f"f={xs[k]:g} onoise", row[1], vals["onoise"][k])
+            rel(f"f={xs[k]:g} inoise", row[2], vals["inoise"][k])
+        rel("onoise_total", r["total"][0], vals["total"][0])
+        rel("inoise_total", r["total"][1], vals["total"][1])
+    elif an[0] == "ac":
+        r = run_engine(args, text, mode, "ac")
+        if unsupported(r): return "ENGINE-UNSUPPORTED", 0, 0, r["err"]
+        if not r["conv"] or len(r["pts"]) != len(xs):
+            return "FAIL", math.inf, math.inf, f"engine gave {len(r['pts'])} of {len(xs)} frequencies: {r['err']}"
+        for k, row in enumerate(r["pts"]):
+            if abs(row[0] - xs[k]) > 1e-9 * xs[k]: bad.append(f"f={row[0]:g} vs ngspice {xs[k]:g}")
+            for n in names:
+                c = 2 * nm[n] - 1
+                got, exp = complex(row[c], row[c + 1]), vals[n][k]
+                e = abs(got - exp)
+                worst_abs = max(worst_abs, e); worst_rel = max(worst_rel, e / max(abs(exp), 1e-3))
+                if not e <= args.dc_atol + args.dc_rtol * abs(exp):
+                    bad.append(f"f={xs[k]:g} v({n}): {got:.6g} vs ngspice {exp:.6g}")
+    elif an[0] in ("op", "dc"):
+        r = run_engine(args, text, mode, "dc")   # .op: one row; .dc: one row per sweep point
+        if unsupported(r): return "ENGINE-UNSUPPORTED", 0, 0, r["err"]
+        if not r["conv"] or not r["pts"]: return "FAIL", math.inf, math.inf, f"engine not converged: {r['err']}"
+        if an[0] == "dc" and len(r["pts"]) != len(xs):
+            return "FAIL", math.inf, math.inf, f"engine swept {len(r['pts'])} points, ngspice {len(xs)}"
+        for k, row in enumerate(r["pts"]):
+            at = "" if an[0] == "op" else f"{an[1]}={row[0]:g} "
+            if an[0] == "dc" and abs(row[0] - xs[k]) > 1e-9 * max(1.0, abs(xs[k])): bad.append(f"{at}sweep value vs ngspice {xs[k]:g}")
             for n in names:
                 exp = vals[n][k]
-                judge(f"{'' if x is None else an[1] + '=' + format(x, 'g') + ' '}v({n})", row[nm[n]], exp, args.dc_atol + args.dc_rtol * abs(exp))
+                judge(f"{at}v({n})", row[nm[n]], exp, args.dc_atol + args.dc_rtol * abs(exp))
     else:
         tstep, tstop = an[1], an[2]
         r = run_engine(args, text, mode, "tran", tstep, tstop)
@@ -169,13 +207,17 @@ def compare(args, text, an, mode, nm, ref):
         if not r["pts"]: return "FAIL", math.inf, math.inf, f"engine produced no waveform: {r['err']}"
         ts = col(r, 0)
         if ts[-1] < tstop * 0.999: bad.append(f"engine stopped at t={ts[-1]:g} < tstop={tstop:g} ({r['err']})")
-        sel = [i for i, t in enumerate(ts) if 0 <= t <= xs[-1]]
+        sel = [i for i, t in enumerate(ts) if xs[0] <= t <= xs[-1]]  # reference may start at TSTART
         for n in names:
             ref_n = vals[n]
             swing = max(ref_n) - min(ref_n)
             tol = max(args.tran_atol, args.tran_rtol * swing)
             eng = col(r, nm[n])
-            for i in sel: judge(f"t={ts[i]:g} v({n})", eng[i], interp(xs, ref_n, ts[i]), tol, max(swing, 1e-3))
+            for i in sel:
+                k = bisect.bisect_left(xs, ts[i])  # a sparse reference cannot be interpolated across a jump
+                if getattr(args, "skip_unresolved", False) and 0 < k < len(xs) and abs(ref_n[k] - ref_n[k - 1]) > tol:
+                    continue
+                judge(f"t={ts[i]:g} v({n})", eng[i], interp(xs, ref_n, ts[i]), tol, max(swing, 1e-3))
         if not r["conv"] and not bad: bad.append(f"engine reports not converged: {r['err']}")
     return ("FAIL" if bad else "PASS"), worst_abs, worst_rel, "; ".join(bad[:3]) + (f" (+{len(bad) - 3} more)" if len(bad) > 3 else "")
 
@@ -199,9 +241,9 @@ def main():
         if args.k not in name: continue
         text = open(path).read()
         an = analysis(text)
-        if an[0] in ("ac", "unsupported"):
-            print(f"{'SKIPPED':<19} {name} " + ("(engine has no AC analysis)" if an[0] == "ac" else f"({an[1]})")); continue
-        nm = node_map(text)
+        if an[0] == "unsupported":
+            print(f"{'SKIPPED':<19} {name} ({an[1]})"); continue
+        nm = node_map(text) if an[0] != "noise" else {}
         try: ref = run_ngspice(args, text, an, list(nm))
         except (RuntimeError, subprocess.TimeoutExpired) as e:
             print(f"{'NGSPICE-ERROR':<19} {name} {e}"); fails += 1; continue
