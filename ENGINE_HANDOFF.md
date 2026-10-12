@@ -5,9 +5,21 @@ then the two Roadmap sections it points to. Everything below was verified by run
 
 ## 0. Where things stand
 
-- **Branch:** `engine/spice-correctness` (10 commits on top of `97a0735`, **not pushed**, tree clean).
-- **Next work, in order:** (1) GUI large-design performance / `NetlistCompiler::compile` slowdown,
-  (2) Roadmap **Phase 2 — Analysis parity**.
+- **Branch:** `engine/spice-correctness` (pushed up to `928910a`; later commits local).
+- **Update 2026-10-12 (third session):** Task 1 and **all of Phase 2** are done; the legacy
+  solver stack is deleted (~40k lines). **Next:** (a) junction gmin (see §6, fixes `aac_10_bridge`),
+  (b) golden datasets: IBM power-grid benchmarks (solver scale) + Xyce regression subset (devices),
+  (c) GUI Verilog-A transport (PULSE + AC magnitude), (d) Roadmap Phase 3.
+- **Update 2026-10-12 (fourth session, committed by Cline):** the third session's uncommitted stretch is now
+  committed and verified: stricter parser (unknown dot-cards/model params/behavioural sources are hard
+  errors, `.global`, `R=0`, auto `.tran 0 <stop>` step, first-order step after waveform corners), Verilog-A
+  transport round-trips PULSE/SIN/AC mag+phase, IBM power-grid datasets downloaded to `datasets/`
+  (git-ignored by design) with new harnesses `tests/ibmpg_diff.py` + `tests/xyce_diff.py`.
+  Verified: clean build; ngspice harness 82/83 (only the known `aac_10_bridge`); full ctest 28/32 —
+  `test_gpu_parity`, `test_kernel_dispatch`, `test_numerical_intelligence`, `test_grpc_orchestrator`
+  fail **identically at the committed baseline** (pre-existing, not from this stretch).
+  Trap: `tests/` is in `.gitignore` ("Local Project Exclusions") — **new** test files are silently
+  untracked; `git add -f` them. Cross-agent protocol: `.clinerules/01-collab-handoff.md`.
 - **Status of the plan:** Roadmap Phase 1 (Foundations) is done. See `Roadmap.md` →
   "⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS" (what works, by device/analysis, with ✅/⚠️/❌/🚫/❓)
   and "🎯 END-TO-END GOAL & ENGINE SCALE PLAN" (phases and gates).
@@ -48,7 +60,7 @@ SPICE text ──► SPICEParser (netlist/spice_parser.*) ──► TensorNetlis
                  • local node scoping in .subckt, X expanded after parse (recursive)
                  • .model/.param/F-H control names resolved after the whole file
                  • unknown/unsupported cards = hard parse error (never silently dropped)
-TensorNetlist ─► CircuitSim::solveDC / stepTransient (solvers/circuitsim_solver.cpp)
+TensorNetlist ─► CircuitSim::solveDC / runTransient / solveAC / solveNoise (solvers/circuitsim_solver.cpp)
                  unknowns x = [N node voltages | B branch currents]   (systemSize())
                  per Newton iteration:
                    stampAllElements (physics/circuitsim.h)
@@ -59,9 +71,13 @@ TensorNetlist ─► CircuitSim::solveDC / stepTransient (solvers/circuitsim_sol
                    solveLinear(A, b) ─► contraction solver (math/contraction_solver.*)
                    kclExcess(...)   ─► audit residual beyond KCL_RELTOL·(|A||x|) (scale-aware)
                    checkConvergence (fail-closed on NaN)
-Session API: engine_impl.cpp (ISimulationEngine) — parse errors returned, transient loop retries
-GUI path:   compute/orchestration/driver/local_worker_driver.cpp calls CircuitSim directly
-            (its own transient loop: fixed step, stops at first failure, no UIC)
+Session API: engine_impl.cpp (ISimulationEngine): .op/.dc/.tran/.ac/.noise from the netlist cards
+            (or DCConfigDTO / ACConfigDTO / TransientConfigDTO::uic)
+GUI path:   compute/orchestration/driver/local_worker_driver.cpp → the same CircuitSim entry points
+            (string parameters: stopTime, stepHint, uic, fStart/fStop/points, inputSource, outputNode)
+AC/noise:   Y(jw) = G + jwC; G = the DC Jacobian at the OP without node gmin, C = capacitors + L/M on
+            the branch rows; real 2N system [[G,-wC],[wC,G]] through the contraction solver; noise uses
+            one adjoint solve per frequency (R^T, own plan) + ngspice Nintegrate for totals
 ```
 
 Key invariants (each was a real bug when broken):
@@ -74,12 +90,14 @@ Key invariants (each was a real bug when broken):
   `CircuitSim::lastSolution_` (seeds transient Newton and sensitivity).
 - **Waveforms:** a single `waveformValue()` (netlist/circuit.h) is used by parser, stamps and audit.
 - **Junction exponent cap:** `PhysicsConstants::JUNCTION_EXP_ARG_MAX = 50`, shared by every diode/BJT
-  kernel, the WGSL shader and `pnjlim` (keep them in sync).
+  kernel and `pnjlim` (keep them in sync).
+- **Device parameters:** `mosfetModel()` (circuit.h) and `mosfetKernelParams()/bjtKernelParams()`
+  (circuitsim.h) are the one definition for tensorize, both KCL audits and noise.
+- **Responses fail closed:** `SimulationResponseDTO::success/converged` default to false.
 - **Contraction solver:** plan once per sparsity pattern (MC64-style matching → hubs to root → nested
   dissection → fronts grouped in levels); factor every iteration (assemble from CSR, add children,
   threshold partial pivoting u = 0.01, delayed pivots to parent); solve + iterative refinement. Levels run
-  on `std::thread` workers (deterministic). The old `sparse_lu.cpp` is dense internally; the legacy
-  TN/MPO/Schur executor and the WebGPU "hybrid" loop are no longer called by `solveDC`.
+  on `std::thread` workers (deterministic). It is the only linear solver.
 
 ## 3. How to build and verify (run all of these after any engine change)
 
@@ -88,19 +106,21 @@ cd CuteApp
 cmake --build build --target acutesim_engine acutesim_engine_dump -j10
 for t in test_engine_fixes test_contraction_solver test_regression test_engine_parity \
          test_hierarchy_headless test_std_cells test_soa_bridge test_convergence_engine \
-         test_physics_kernels test_veriloga_parser test_sparse_lu test_schur_solver test_graph_partitioner; do
+         test_physics_kernels test_headless_orchestrator test_analysis_registry test_determinism_xclient \
+         test_veriloga_roundtrip test_parallel_monte_carlo test_driver_swap test_flow test_simulation; do
   cmake --build build --target $t -j10 && ./build/$t > /tmp/$t.log 2>&1; echo "$t exit=$?"; done
 # test_regression MUST run from the repo root (it reads ./regression_golden.db); it is the CI gate.
 TMPDIR=/private/tmp/claude-502 python3 tests/ngspice_diff/run_diff.py   # ~90 s; needs `brew install ngspice` (installed)
 ```
-Expected today: every suite passes; ngspice harness (34 netlists, each run in cpu and gpu mode) =
-27 of 28 compared netlists PASS in both modes; the only FAIL is `aac_10_bridge` (a published netlist
-with floating outputs, ill-posed; `x_bridge_loaded` is its well-posed twin and passes); 5 SKIPPED (.ac);
-1 ENGINE-UNSUPPORTED (`x_pwl_unsupported`, PWL rejected by design).
+Expected today: every suite passes; ngspice harness (42 netlists, op/dc/tran/ac/noise, cpu and gpu) =
+41 PASS in both modes; the only FAIL is `aac_10_bridge` (nodes 2/3 float between diodes: ngspice sets
+them with gmin ACROSS each junction, the engine with gmin node-to-ground — see §6);
+1 ENGINE-UNSUPPORTED (`x_pwl_unsupported`, PWL rejected by design). `test_virtuoso_parity` (postproc
+expressions) and `test_hierarchy_gui` (PowerPort pin) fail exactly as at baseline — GUI-side, untouched.
 
 - `tests/test_engine_fixes.cpp` = one regression check per fix (analytic/hand-derived references,
   CPU and GPU modes). Add a check there for every engine fix.
-- `build/acutesim_engine/acutesim_engine_dump <netlist> <cpu|gpu> <dc|tran> [step stop]` prints
+- `build/acutesim_engine/acutesim_engine_dump <netlist> <cpu|gpu> <dc|tran|ac|noise> [step stop]` prints
   machine-readable waveforms (node order = first appearance, subckt bodies excluded).
 - **Golden DB updates:** never accept `--update` wholesale. Run it in a scratch copy, splice only the
   entries whose change you have derived physically, and say why in the commit (see commits
@@ -136,6 +156,22 @@ with floating outputs, ill-posed; `x_bridge_loaded` is its well-posed twin and p
    `factor_graph`, the WebGPU hybrid NR loop. They have tests of their own; deletion is a scope call.
 - **Gate:** a 10⁴-node design runs DC end-to-end through the app path in < 1 s; batch sweeps do not
   re-run quadratic analysis per point.
+- **Done (measured, 100×100 / 316×316 resistor grids through `LocalWorkerDriver`):** the GUI path never
+  called `compile()`; the real cost was `TensorBlock::computeTopologyHash` (std::map BFS, run in the
+  parser AND in `solveDC`: ~1.5 s of a 2 s solve at 10⁵ nodes). `canonicalRelabel` is now linear and
+  bit-identical (20k random graphs + pinned value in `test_engine_fixes`). `compile()` no longer runs
+  partitioner / FactorGraph / Min-Fill / TN compile (no readers): minutes → 0.5 ms at 10⁴, 7 ms at 10⁵.
+  10⁴ DC job 419 → 213 ms; 10⁵ 4.95 → 2.1 s (generate 1.0 s + parse 1.4 s remain; `build/` is a **Debug**
+  build, so orchestration/compute code is -O0 — only the engine forces -O3). The Verilog-A preview dock
+  (highlighted, GUI thread, 0.6 s per 2.5 MB) now shows the first 256 KB only.
+  Found + fixed on the way: the CSR pattern cache was keyed on the canonical hash (ignores sources and
+  node numbering) and `assembleFast` silently dropped stamps outside the pattern — a reused `CircuitSim`
+  returned 0 V for a moved source. The pattern now self-validates.
+  Step 3 done (owner: "no tech debt"): deleted sparse_lu, Schur, MPO/TN compiler/executor, treewidth,
+  factor graph, partitioner, contraction tree/render graph, bond-dimension profiler, Metal/WebGPU
+  solvers + shaders, NetlistCompiler/CompiledTensorBlock/BatchRunner (GUI keeps `SweepParameter`),
+  SuperpositionSolver, StagedDispatcher, QuickAnalysis, the unused engine Verilog-A compiler, orphan
+  headers, stale generated protobuf copies, dead CircuitSim members, and their tests.
 
 ## 5. Task 2 — Roadmap Phase 2 (Analysis parity)
 
@@ -155,10 +191,38 @@ From `Roadmap.md` Phase 2, with pointers:
 5. **One transient loop** shared by `SessionImpl::dispatch_tran_internal` and
    `LocalWorkerDriver` (the latter has fixed step, stops at first failure, no UIC).
 - **Gate:** every analysis in the feature list ✅ against ngspice (extend `run_diff.py` to `.ac`).
+- **Done:** items 1, 2, 5. `CircuitSim::runTransient` is the one loop (session, `LocalWorkerDriver`, Fourier):
+  DC bias seeds C/L history (`seedReactiveHistory`) unless UIC; `.ic V(n)=v` is forced through 1e10 S
+  during the bias (SPICE3) or is the initial state with UIC; C/L `IC=` honoured with UIC (inductor junk
+  params are now an error); `TransientConfigDTO::uic`; GUI honours `stepHint`. Steps land on PULSE corners
+  and SIN delay (`nextBreakpoint()` beside `waveformValue()`). Removed the automatic TRAP→GEAR_2 "ringing"
+  switch: every GEAR_2 formula is constant-step BDF2 and the switch fired while h changed, injecting jumps
+  (`ponytail:` note at the old site). Harness: x_rc_pulse 51.7 → 0.36 mV, hier_rc_ladder_pulse 82.8 → 1.3 mV,
+  aac_17 square integrator 3.7 → 0.08 mV; new netlists x_rc_dcop_step, x_rl_dcop_step, x_elem_ic_uic,
+  x_dotic_bias. Item 4 note: `ACSolver` reuses the DC pattern via `assembleFast` — pass the `complete`
+  flag there too, or AC-only stamps are dropped silently. (Moot now: the old ACSolver was deleted.)
+- **Done:** items 3 and 4. `.dc` native (parser + `DCConfigDTO`, harness no longer emulates it).
+  AC/noise as in §2, `.ac`/`.noise` cards, `ACConfigDTO`, `NoiseResultDTO`; the GUI driver's AC (which
+  never excited the circuit and ignored the corner) and NOISE (an AC alias) now use the same solver.
+  The old ACSolver (its own device physics, hard-coded MOSFET params, Norton sources, no E/F/G/H/K or
+  subcircuits) and PZ (fabricated poles) were deleted; TF rebuilt on `solveAC`. Harness gained 5 AC +
+  4 noise comparisons (aac_05..09 had a SPICE2 stray `sin`, removed).
+- **Also fixed on the way:** fail-open response defaults; LocalWorkerDriver simulating an empty netlist
+  for non-Verilog-A sources; GUI Monte Carlo always running 10 samples (`numRuns` vs `sampleCount`);
+  UIC unreachable on batch runs; instance KCL audit using hard-coded MOSFET params / unclamped diodes;
+  three tests that passed vacuously (JSON netlists, overwritten payload, a race).
 
 ## 6. Known issues / backlog (not yet fixed)
 
-- Monte Carlo: `mcSeed` never applied (every run identical) 🚫.
+- **Junction gmin (next):** the engine puts gmin = 1e-12 S from every node to ground (DC/transient);
+  ngspice puts it across each junction and has no node gmin once converged. Floating nodes between
+  diodes (`aac_10_bridge`) therefore settle differently. Fix: add gmin to the diode/BJT junction stamps
+  (SoA kernels: generic/NEON/AVX2/AVX-512, AoS, both audits) and drop the node gmin at convergence.
+  AC already drops it (that fixed `aac_09`).
+- Temperature: devices use a fixed Vt = 25.85 mV (≈ 299.98 K) while `ambient_temp_K` defaults to
+  300.15 K (noise uses the latter: 0.03 % vs the harness's 26.83 °C). Derive Vt from the temperature.
+- Session Monte Carlo: `mcSeed` never applied (every run identical) 🚫; the driver path works. `test_headless_orchestrator` has 3
+  pre-existing failures (DTO default `success`, two MC result counts) — verified identical at baseline.
 - Hard nonlinear DC: plain-Newton-first costs extra iterations (Darlington 35 → ~115); consider a lower
   iteration cap on the direct attempt.
 - Instance KCL audit: diodes use the unclamped equation and MOSFETs hard-coded params (global audit uses

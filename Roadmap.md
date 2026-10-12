@@ -98,28 +98,29 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | GPU mode | default on machines with a GPU | ⚠️ currently runs the CPU path: the former WebGPU "hybrid" loop stamped and solved on the CPU with its own voltage-only device copy, so it was retired from `solveDC`. Phase 4 rebuilds GPU device evaluation + batched front contraction |
 | Legacy AoS path (`LEGACY_AOS`) | AI speculative runner (`ai_api/simulation/speculative_runner.cpp`) | 🚫 PMOS conducts at Vgs=0; BJT polarity decided from the model *name*; uses different device defaults from the default path |
 | Default linear solver | every DC/transient Newton step, CPU and GPU-hybrid paths | ✅ tensor-contraction solver: backward error ≤1e-15 on grids, hub-heavy and E-source networks (200 random networks fuzzed); 10⁴ nodes 0.02 s, 10⁵ 0.11 s, 10⁶ 3.0 s (fronts of a level run on `std::thread` workers; deterministic) |
-| Legacy TN / Schur / "sparse" LU routing | only callers passing a `CompiledTensorBlock` (batch runner, GUI driver) | ⚠️ `NetlistCompiler::compile` runs a ~quadratic Min-Fill treewidth pass (100+ s at 10⁴ nodes); `sparse_lu.cpp` is dense internally |
-| `ISimulationEngine` facade vs GUI driver | — | ⚠️ the GUI goes `ISimulationDriver → LocalWorkerDriver → CircuitSim`, not through `SessionImpl`; the two keep separate transient loops (GUI loop: fixed step, stops at first failed step, no UIC) |
+| `ISimulationEngine` facade vs GUI driver | — | ✅ the GUI goes `ISimulationDriver → LocalWorkerDriver → CircuitSim`; both use the same `CircuitSim::runTransient`, `solveAC`, `solveNoise`. The legacy TN/MPO/Schur/sparse-LU stack, `NetlistCompiler`/`CompiledTensorBlock` and the WebGPU hybrid loop were deleted |
+| GUI Verilog-A transport | GUI → driver | ⚠️ carries neither PULSE parameters nor AC magnitudes back into the netlist (GUI transients see DC sources; GUI AC/noise need AC on a source) |
 
 ### Analyses
 | Analysis | Status | Notes |
 |---|---|---|
 | DC operating point | ✅ | plain Newton first, GMIN ladder only on failure (SPICE order); NaN fails closed; scale-aware KCL test (`KCL_RELTOL`) |
-| `.dc` sweep | ❌ | directive ignored; sweeps must be driven by the caller |
-| Transient | ✅ | trapezoidal → Gear2 on ringing; LTE from real step sizes; failed steps retry smaller and end in an error, never hang |
-| Transient `uic` | ⚠️ | honoured by the SPICE/session path (skips DC op); no DTO field, GUI path cannot request it |
-| Transient initial state | ⚠️ | always starts from zero state, even without `uic` (DC op is only a gate) |
-| Transient breakpoints | ⚠️ | none: steps can straddle PULSE edges; only LTE reacts (accuracy first-order at corners) |
-| AC small-signal | ⚠️ / ❓ | `ISimulationEngine::runAC` returns a DC result labelled AC 🚫; GUI path calls a real `ACSolver::solveAC` ❓ |
-| Noise | 🚫 | aliased to AC on both paths |
-| Monte Carlo | 🚫 | `mcSeed` is never applied: every run is identical |
-| PZ / TF / Fourier / sensitivity / superposition | ❓ | solver code + analysis registry exist (GUI path); not verified |
+| `.dc` sweep | ✅ | one V or I source (`.dc` card or `DCConfigDTO`), continuation on one solver; nested sweeps are an error; matches ngspice (8 netlists) |
+| Transient | ✅ | one loop (`CircuitSim::runTransient`) for session, GUI and Fourier; trapezoidal (no automatic Gear2: its formulas are constant-step); LTE step control; failed steps retry smaller and end in an error, never hang |
+| Transient `uic` / initial state | ✅ | DC operating point seeds C/L history unless `uic`; `.ic` forced during the bias (SPICE3) or initial with `uic`; C/L `IC=` with `uic`; `TransientConfigDTO::uic`, GUI parameter `uic` |
+| Transient breakpoints | ✅ | steps land on PULSE corners and the SIN delay (`nextBreakpoint`) |
+| AC small-signal | ✅ | `CircuitSim::solveAC`: Y = G + jωC with G the DC Jacobian at the OP (every device/model card/subcircuit/branch row), solved as a real 2N system by the contraction solver; `.ac dec/oct/lin` or `ACConfigDTO`; matches ngspice (5 netlists incl. coupled transformer) |
+| Noise | ✅ | `CircuitSim::solveNoise`: resistor thermal, diode/BJT shot, MOSFET/JFET channel thermal (8kT·gm/3); adjoint solve per frequency; ngspice power-law integration for totals; matches ngspice spectra and totals (4 netlists). No flicker noise (no KF/AF) |
+| Monte Carlo | ⚠️ | driver path varies parameters per run (`sampleCount`); session path still never applies `mcSeed` 🚫 |
+| TF (Bode, margins) | ⚠️ | rebuilt on `solveAC` (V(out)/V(in) from the circuit's AC sources); not yet compared against a reference |
+| PZ | ❌ | removed: it returned fabricated poles (eigenvalues of Y(1 Hz)); needs a generalized eigen-solve of G + sC |
+| Fourier / sensitivity | ❓ | solver code + analysis registry exist (GUI path); not verified |
 
 ### Circuit elements
 | Element | Status | Supported parameters / known gaps |
 |---|---|---|
 | R | ✅ | value; `TC1`/`TC2` parsed but unused by any stamp |
-| C | ✅ | value; `IC=` accepted and ignored (zero initial state) |
+| C | ✅ | value; `IC=` initial voltage with `uic` |
 | L | ✅ | MNA branch current: exact DC short; Trapezoidal/BE/Gear2 branch equations in transient (RL step matches 1−e^(−t/τ) to 1e-6; RLC SIN matches ngspice) |
 | K (mutual inductance) | ✅ | off-diagonal L_ab terms between coupled branch rows (open-circuit v2/v1 = k verified) |
 | V / I sources: DC, PULSE, SIN | ✅ | exact (MNA branch current; was a 1 mΩ Norton model); SPICE defaults (TR/TF=TSTEP, PW=∞, DC = t=0 value); AC magnitude/phase parsed |

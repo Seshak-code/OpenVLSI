@@ -47,6 +47,15 @@ CMakeLists.txt.user
 *.vcxproj.user
 
 # ============================================
+# Local Project Exclusions
+# ============================================
+tests/
+**/CLAUDE.md
+CLAUDE.md
+ENGINE_HANDOFF.md
+.claude/
+
+# ============================================
 # OS Generated Files
 # ============================================
 .DS_Store
@@ -223,3 +232,6 @@ Untitled.sch
 
 # graphify code-graph output (local analysis artifact, regenerate with `graphify update .`)
 graphify-out/
+
+# Downloaded golden datasets (IBM power grid, Xyce regression) — never committed
+datasets/
