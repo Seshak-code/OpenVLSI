@@ -179,6 +179,13 @@ void test_expression_parser_waveform() {
     } else {
         TEST_ASSERT(false, "v(\"/out\") * 2 should be a Waveform");
     }
+
+    TEST_ASSERT(NEAR(engine.evaluate("1 + 2*3 - -(4)/2").scalarVal, 9.0, 1e-12),
+                "Scalar precedence and unary minus");
+    Operand diff = engine.evaluate("v(\"/out\") - v(\"/out\")/2");
+    TEST_ASSERT(diff.type == OperandType::Waveform &&
+                NEAR(diff.wave.values[N/4], 0.5 * vout.values[N/4], 1e-12),
+                "Waveform-waveform ops respect precedence");
 }
 
 // ===========================================================================

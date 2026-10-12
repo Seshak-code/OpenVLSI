@@ -1972,7 +1972,36 @@ void GridScene::generateNetlist() {
 
 TensorNetlist GridScene::toNetlist() {
     generateNetlist();
-    return designDb.toNetlist();
+    TensorNetlist netlist = designDb.toNetlist();
+
+    // Top-level interface pins (ComponentWizard, symbol generation, hierarchy).
+    // PowerPorts are not DesignDb instances, so this must come from the scene.
+    const auto netToNode = designDb.snapshotWithNodeMap().netToNode;
+    for (auto* item : items()) {
+        auto* c = dynamic_cast<VisualComponent*>(item);
+        if (!c || c->name.isEmpty() ||
+            (c->type != ComponentType::Pin && c->type != ComponentType::PowerPort)) continue;
+
+        TensorBlock::InterfacePin ipin;
+        ipin.name = c->name.toStdString();
+        ipin.isPower = (c->type == ComponentType::PowerPort);
+        ipin.direction = c->params.value("direction", ipin.isPower ? "Power" : "Input").toStdString();
+
+        QVector<QPointF> terms = c->getTerminals();
+        if (!terms.isEmpty()) {
+            int rootID = spatialFindSet(spatialGetNetID(c->mapToScene(terms[0])));
+            acutesim::components::NetUUID netId = m_spatialToDbNet.value(rootID, acutesim::components::NetUUID());
+            if (netId != acutesim::components::NetUUID()) {
+                auto it = netToNode.find(netId);
+                if (it != netToNode.end()) ipin.nodeIndex = it->second;
+                ipin.netUUIDStr = netId.toString();
+            }
+        }
+        netlist.globalBlock.pinNames.push_back(ipin.name);
+        netlist.globalBlock.portNodeIndices.push_back(ipin.nodeIndex);
+        netlist.globalBlock.interfacePins.push_back(ipin);
+    }
+    return netlist;
 }
 
 bool GridScene::isOccupied(const QRectF& rect, QGraphicsItem* exclude) {
