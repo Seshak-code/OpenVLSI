@@ -80,6 +80,89 @@ This roadmap evolves CuteApp from a standalone open-source simulator into an Age
 ---
 
 
+## ⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS (acutesim_engine / "Karam")
+
+*Verified 2026-10-11 by running the engine, not by reading checklists. Sources of truth:
+`tests/test_engine_fixes.cpp` (CPU + GPU modes), the CI `test_regression` suite, and the 17
+SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Netlists"
+(22 pass / 7 fail / 5 unsupported across CPU+GPU runs). Update this table whenever a feature changes.*
+
+**Legend:** ✅ verified against an analytic or SPICE reference · ⚠️ works with known gaps ·
+❌ not supported — rejected with an explicit error · 🚫 accepted but gives wrong results ·
+❓ code exists, not verified
+
+### Execution paths
+| Path | Who uses it | Status |
+|---|---|---|
+| Default CPU path (SoA tensors, `TENSOR_SOA_SIMD`) | `ISimulationEngine` sessions, GUI via `LocalWorkerDriver` | ✅ primary path; all ✅ rows below were verified here |
+| GPU path (WebGPU hybrid NR, DC only) | default on machines with a GPU | ⚠️ physics still stamped on CPU; models R, V, I, L (DC), D, M, Q only. Every result is checked against the full-netlist KCL audit; anything else falls back to CPU, so results are correct but unsupported devices cost a wasted GPU attempt |
+| Legacy AoS path (`LEGACY_AOS`) | AI speculative runner (`ai_api/simulation/speculative_runner.cpp`) | 🚫 PMOS conducts at Vgs=0; BJT polarity decided from the model *name*; uses different device defaults from the default path |
+| Tensor-network / Schur / sparse-LU routing | only callers passing a `CompiledTensorBlock` (e.g. batch runner) | ❓ unreachable from `ISimulationEngine` (always dense LU, O(N³)); GPU contraction now reports its real residual |
+| `ISimulationEngine` facade vs GUI driver | — | ⚠️ the GUI goes `ISimulationDriver → LocalWorkerDriver → CircuitSim`, not through `SessionImpl`; the two keep separate transient loops (GUI loop: fixed step, stops at first failed step, no UIC) |
+
+### Analyses
+| Analysis | Status | Notes |
+|---|---|---|
+| DC operating point | ✅ | GMIN stepping; NaN fails closed; KCL test is scale-aware (`KCL_RELTOL`) so ideal op-amps converge |
+| `.dc` sweep | ❌ | directive ignored; sweeps must be driven by the caller |
+| Transient | ✅ | trapezoidal → Gear2 on ringing; LTE from real step sizes; failed steps retry smaller and end in an error, never hang |
+| Transient `uic` | ⚠️ | honoured by the SPICE/session path (skips DC op); no DTO field, GUI path cannot request it |
+| Transient initial state | ⚠️ | always starts from zero state, even without `uic` (DC op is only a gate) |
+| Transient breakpoints | ⚠️ | none: steps can straddle PULSE edges; only LTE reacts (accuracy first-order at corners) |
+| AC small-signal | ⚠️ / ❓ | `ISimulationEngine::runAC` returns a DC result labelled AC 🚫; GUI path calls a real `ACSolver::solveAC` ❓ |
+| Noise | 🚫 | aliased to AC on both paths |
+| Monte Carlo | 🚫 | `mcSeed` is never applied: every run is identical |
+| PZ / TF / Fourier / sensitivity / superposition | ❓ | solver code + analysis registry exist (GUI path); not verified |
+
+### Circuit elements
+| Element | Status | Supported parameters / known gaps |
+|---|---|---|
+| R | ✅ | value; `TC1`/`TC2` parsed but unused by any stamp |
+| C | ✅ | value; `IC=` accepted and ignored (zero initial state) |
+| L | ⚠️ | DC = 1 mΩ short ✅; transient 🚫 inductor current history is never carried between steps |
+| K (mutual inductance) | 🚫 | DC fine (shorts); transient coupling ignored on the default path and mis-modelled on AoS |
+| V / I sources: DC, PULSE, SIN | ✅ | SPICE defaults (TR/TF=TSTEP, PW=∞, DC = t=0 value); AC magnitude/phase parsed |
+| V / I sources: EXP, PWL, SFFM, AM | ❌ | explicit "not supported yet" |
+| D (diode) | ✅ | `IS`, `N`; no `RS`, `CJO`/`TT` (no junction capacitance), no breakdown on `D` |
+| Q (BJT) | ✅ | Ebers–Moll: `IS`, `BF`, `BR`, polarity from `.model`; no `VAF`, `RB/RC/RE`, junction capacitances |
+| M (MOSFET) | ⚠️ | Level 1: `KP`, `VTO`, `LAMBDA`; no source/drain swap for Vds<0, no body effect, λ missing in linear region |
+| J (JFET) | ✅ | Shichman–Hodges: `BETA`, `VTO`, `LAMBDA`, N/P from `.model`; no gate diodes, no S/D swap |
+| E (VCVS) | ✅ | gain (100 µΩ Norton output) |
+| G (VCCS) | ✅ | transconductance |
+| F / H (CCCS / CCVS) | ❌ | explicit "not supported yet" (controlling-source current not modelled) |
+| T (transmission line) | ❌ | explicit "not supported yet" |
+| X (subcircuit instance) | 🚫 | parses, but instance circuits fail to converge; internal nodes share global numbering |
+| Zener / Schottky / power rail | ❓ | data model + AoS stamps only; not reachable from SPICE netlists |
+| `AREA` scaling (D/Q/J) | ❌ | explicit error |
+
+### Netlist language
+| Feature | Status | Notes |
+|---|---|---|
+| Title line, `*` comments, `+` continuation, `;` inline comments | ✅ | |
+| SI suffixes (`f p n u m k meg g t mil`) | ✅ | |
+| `.model` (anywhere in file) | ✅ | resolved after the whole file is read; SPICE defaults for missing parameters |
+| `.param` | ⚠️ | `{NAME}` / bare name substitution ✅; arithmetic expressions ❌ (explicit error) |
+| `.subckt` / `.ends` | 🚫 | see X above |
+| Unknown element / too few fields / non-numeric value | ✅ | hard parse error with line number (used to be silently dropped or read as 0) |
+| `.include`, `.lib`, `.options`, `.global`, `.ic`, `.print`, `.plot`, `.four` | ⚠️ | silently ignored |
+
+### Numerics & device-model invariants
+| Property | Status |
+|---|---|
+| No `-ffast-math`; NaN/Inf guards active | ✅ |
+| Junction exponent cap `JUNCTION_EXP_ARG_MAX = 50` shared by every diode/BJT kernel and `pnjlim` | ✅ |
+| Stamps and KCL audit share one waveform function and matching companion models (incl. Gear2) | ✅ |
+| Floating high-impedance nodes (pA currents) | ⚠️ the "KCL < 1e-9 A ⇒ converged" shortcut can accept stale voltages (bridge-rectifier output) |
+| Uninitialised device/source fields | ✅ diode and V/I source parameters now default to SPICE values |
+
+### Reference-suite gaps still open (allaboutcircuits.com)
+`#02` needs `.dc` sweeps · `#05–09` need verified AC analysis · `#10` floating bridge output
+holds stale voltages · `#16/#17` pass only at smaller steps (1 ms step gives 4–6 % error; SPICE also
+caps its step at tstop/50 here) — every other circuit matches SPICE 2g6.
+
+---
+
+
 ## COMPLETED DEBUGGING WORK (FOUNDATION STABILIZATION)
 These items are not cosmetic—they directly unblock Phases 0–3.
 
