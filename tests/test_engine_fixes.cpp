@@ -187,6 +187,18 @@ int main() {
         r = run(mode, "* exact source\nV1 1 0 DC 5\nR1 1 0 1\n.op\n");
         check(r.converged && near(V(r, 1), 5.0, 1e-12), "V source exact at 5 A load (was 1 mOhm Norton: 5 mV low)");
 
+        // MOSFET level 1, linear region: Ids = K(2*Vov*Vds - Vds^2)(1 + lambda*Vds)
+        // (lambda was only applied in saturation). Drain held near 0.3 V via 1 ohm.
+        r = run(mode, "* nmos linear\nVD 1 0 DC 0.3\nR1 1 2 1\nM1 2 3 0 0 NM W=10u L=1u\nVG 3 0 DC 2\n"
+                      ".model NM NMOS(VTO=0.7 KP=200u LAMBDA=0.02)\n.op\n");
+        {
+            double K = 0.5 * 200e-6 * 10.0, vov = 2.0 - 0.7, vd = 0.3;
+            for (int it = 0; it < 100; ++it)
+                vd = 0.3 - 1.0 * K * (2 * vov * vd - vd * vd) * (1 + 0.02 * vd);
+            check(r.converged && near(V(r, 2), vd, 1e-9),
+                  "NMOS linear region includes lambda (Vd=" + std::to_string(V(r, 2)) + ", hand " + std::to_string(vd) + ")");
+        }
+
         // Transient inductor (failed to converge before: history never written back)
         // RL step, tau = L/R = 1 us: v_R(5 us) = 1 - e^-5
         r = run(mode, "* rl step\nV1 1 0 DC 1\nL1 1 2 1m\nR1 2 0 1k\n.tran 1e-8 5e-6 uic\n", 1e-8, 5e-6);

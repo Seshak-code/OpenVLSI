@@ -126,7 +126,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | V / I sources: EXP, PWL, SFFM, AM | ❌ | explicit "not supported yet" |
 | D (diode) | ✅ | `IS`, `N`; no `RS`, `CJO`/`TT` (no junction capacitance), no breakdown on `D` |
 | Q (BJT) | ✅ | Ebers–Moll: `IS`, `BF`, `BR`, polarity from `.model`; no `VAF`, `RB/RC/RE`, junction capacitances |
-| M (MOSFET) | ⚠️ | Level 1: `KP`, `VTO`, `LAMBDA`; no source/drain swap for Vds<0, no body effect, λ missing in linear region |
+| M (MOSFET) | ⚠️ | Level 1: `KP`, `VTO`, `LAMBDA` (λ in both regions, matches ngspice inverters within 0.6 mV); no source/drain swap for Vds<0, no body effect |
 | J (JFET) | ✅ | Shichman–Hodges: `BETA`, `VTO`, `LAMBDA`, N/P from `.model`; no gate diodes, no S/D swap |
 | E (VCVS) | ✅ | gain; ideal (MNA branch current) |
 | G (VCCS) | ✅ | transconductance |
@@ -158,7 +158,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 
 ### Reference-suite gaps still open (allaboutcircuits.com)
 `#02` needs `.dc` sweeps · `#05–09` need verified AC analysis · `#10` floating bridge output
-holds stale voltages · `#16/#17` pass only at smaller steps (1 ms step gives 4–6 % error; SPICE also
+holds stale voltages (ill-posed: floating outputs; loaded variant matches ngspice) · `#16/#17` pass only at smaller steps (1 ms step gives 4–6 % error; SPICE also
 caps its step at tstop/50 here) — every other circuit matches SPICE 2g6.
 
 ---
