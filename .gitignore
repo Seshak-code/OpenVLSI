@@ -220,3 +220,6 @@ libs/Frameworks/
 .gemini/
 .claude/
 Untitled.sch
+
+# graphify code-graph output (local analysis artifact, regenerate with `graphify update .`)
+graphify-out/
