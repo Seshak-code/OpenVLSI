@@ -864,6 +864,13 @@ if(NOT EMSCRIPTEN)
     target_compile_features(test_engine_parity PUBLIC cxx_std_17)
     add_test(NAME EngineParityTest COMMAND test_engine_parity)
 
+    # Tensor-contraction direct solver vs dense LU (+ scale timings)
+    add_executable(test_contraction_solver tests/test_contraction_solver.cpp)
+    target_link_libraries(test_contraction_solver PRIVATE acutesim_engine)
+    target_include_directories(test_contraction_solver PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(test_contraction_solver PUBLIC cxx_std_17)
+    add_test(NAME ContractionSolverTest COMMAND test_contraction_solver)
+
     # Regression checks for engine review fixes (NaN, transient hang, diode, DC inductor)
     add_executable(test_engine_fixes tests/test_engine_fixes.cpp)
     target_link_libraries(test_engine_fixes PRIVATE acutesim_engine)

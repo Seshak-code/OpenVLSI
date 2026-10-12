@@ -97,13 +97,14 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | Default CPU path (SoA tensors, `TENSOR_SOA_SIMD`) | `ISimulationEngine` sessions, GUI via `LocalWorkerDriver` | ✅ primary path; all ✅ rows below were verified here |
 | GPU path (WebGPU hybrid NR, DC only) | default on machines with a GPU | ⚠️ physics still stamped on CPU; models R, V, I, L (DC), D, M, Q only. Every result is checked against the full-netlist KCL audit; anything else falls back to CPU, so results are correct but unsupported devices cost a wasted GPU attempt |
 | Legacy AoS path (`LEGACY_AOS`) | AI speculative runner (`ai_api/simulation/speculative_runner.cpp`) | 🚫 PMOS conducts at Vgs=0; BJT polarity decided from the model *name*; uses different device defaults from the default path |
-| Tensor-network / Schur / sparse-LU routing | only callers passing a `CompiledTensorBlock` (e.g. batch runner) | ❓ unreachable from `ISimulationEngine` (always dense LU, O(N³)); GPU contraction now reports its real residual |
+| Default linear solver | every DC/transient Newton step, CPU and GPU-hybrid paths | ✅ tensor-contraction solver: backward error ≤1e-15 on grids, hub-heavy and E-source networks (200 random networks fuzzed); 10⁴ nodes 0.02 s, 10⁶ nodes 7.6 s single-threaded |
+| Legacy TN / Schur / "sparse" LU routing | only callers passing a `CompiledTensorBlock` (batch runner, GUI driver) | ⚠️ `NetlistCompiler::compile` runs a ~quadratic Min-Fill treewidth pass (100+ s at 10⁴ nodes); `sparse_lu.cpp` is dense internally |
 | `ISimulationEngine` facade vs GUI driver | — | ⚠️ the GUI goes `ISimulationDriver → LocalWorkerDriver → CircuitSim`, not through `SessionImpl`; the two keep separate transient loops (GUI loop: fixed step, stops at first failed step, no UIC) |
 
 ### Analyses
 | Analysis | Status | Notes |
 |---|---|---|
-| DC operating point | ✅ | GMIN stepping; NaN fails closed; KCL test is scale-aware (`KCL_RELTOL`) so ideal op-amps converge |
+| DC operating point | ✅ | plain Newton first, GMIN ladder only on failure (SPICE order); NaN fails closed; scale-aware KCL test (`KCL_RELTOL`) |
 | `.dc` sweep | ❌ | directive ignored; sweeps must be driven by the caller |
 | Transient | ✅ | trapezoidal → Gear2 on ringing; LTE from real step sizes; failed steps retry smaller and end in an error, never hang |
 | Transient `uic` | ⚠️ | honoured by the SPICE/session path (skips DC op); no DTO field, GUI path cannot request it |
@@ -188,12 +189,12 @@ and see the program's output — covering every step from schematic/RTL to sign-
 
 ### Phases & exit gates (every gate checked against ngspice as reference oracle)
 **Phase 1 — Foundations** *(in progress)*
-- [ ] ngspice differential test harness in CI (generalises the allaboutcircuits suite)
+- [x] ngspice differential test harness (`tests/ngspice_diff/run_diff.py`, 34 netlists; ngspice 47 as oracle) — not yet wired into CI
 - [x] Subcircuits / hierarchy correct (`.subckt`, nesting, instances on every solver path) — verified hierarchical == flattened
-- [ ] Sparse LU (existing `sparse_lu.cpp`) as default solver; compiled-block routing reachable from the API
+- [x] Default linear solver is the tensor-contraction solver (`math/contraction_solver.*`): nested-dissection contraction tree, superposition of child Schur complements, MC64-style matching + threshold partial pivoting with delayed pivots, iterative refinement. (`sparse_lu.cpp` turned out to be dense internally.) Compiled-block routing still separate
 - [ ] MNA branch-current unknowns for V sources, inductors, E/H — replaces 1 mΩ/100 µΩ Norton models,
       unlocks F/H sources, transient inductor current, mutual inductance
-- **Gate:** hierarchical == flattened results; 10⁴-node circuit DC in < 1 s; all reference circuits within SPICE tolerance
+- **Gate:** hierarchical == flattened results ✅; 10⁴-node circuit DC in < 1 s ✅ (0.33 s end-to-end; 10⁵ nodes 1.44 s); all reference circuits within SPICE tolerance (open: MOSFET λ in linear region, transient inductors)
 
 **Phase 2 — Analysis parity**
 - [ ] DC operating point as transient initial state (not zero); `.ic` / `uic` via DTO
