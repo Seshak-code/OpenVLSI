@@ -42,6 +42,7 @@ SimulationWorkspace::SimulationWorkspace(QWidget* parent)
     profiles_["quick_dc"] = Simulation::SimulationProfile::quickDC();
     profiles_["transient_default"] = Simulation::SimulationProfile::transient();
     profiles_["ac_sweep_default"] = Simulation::SimulationProfile::acSweep();
+    profiles_["noise_sweep_default"] = Simulation::SimulationProfile::noiseSweep();
     currentProfileId_ = "quick_dc";
     
     // ── Orchestration Layer Setup ────────────────────────────────────────
@@ -263,13 +264,32 @@ void SimulationWorkspace::setupProfileEditor() {
         if (idx < 0) return;
         auto type = static_cast<Simulation::AnalysisType>(analysisCombo_->itemData(idx).toInt());
 
-        // Mode restrictions removed - all analysis types now available
-        updateParametersForAnalysis(type);
-        
         // Update help text for the selected analysis
         if (helpLabel_) {
             helpLabel_->setText(getAnalysisHelp(type));
         }
+
+        // DC / AC / Transient / Noise each run from their own profile: picking one
+        // here switches to it, so Run executes what the form shows.
+        using AT = Simulation::AnalysisType;
+        auto* cur = currentProfile();
+        if ((type == AT::DC || type == AT::AC || type == AT::TRANSIENT || type == AT::NOISE) &&
+            (!cur || cur->analysis != type)) {
+            QString id;
+            for (auto it = profiles_.cbegin(); it != profiles_.cend(); ++it)
+                if (it->analysis == type) { id = it.key(); break; }
+            if (id.isEmpty()) {
+                auto p = type == AT::AC        ? Simulation::SimulationProfile::acSweep()
+                       : type == AT::NOISE     ? Simulation::SimulationProfile::noiseSweep()
+                       : type == AT::TRANSIENT ? Simulation::SimulationProfile::transient()
+                                               : Simulation::SimulationProfile::quickDC();
+                id = p.profileId;
+                profiles_[id] = p;
+            }
+            selectProfile(id);
+            return;
+        }
+        updateParametersForAnalysis(type);
     });
     
     analysisLayout->addWidget(analysisCombo_);
@@ -394,6 +414,7 @@ void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
         profiles_["quick_dc"] = Simulation::SimulationProfile::quickDC();
         profiles_["transient_default"] = Simulation::SimulationProfile::transient();
         profiles_["ac_sweep_default"] = Simulation::SimulationProfile::acSweep();
+        profiles_["noise_sweep_default"] = Simulation::SimulationProfile::noiseSweep();
         currentProfileId_ = "quick_dc";
     }
     
@@ -457,55 +478,61 @@ void SimulationWorkspace::updateParametersForAnalysis(Simulation::AnalysisType t
         delete item;
     }
     
-    auto* profile = currentProfile();
-    
     // Add analysis-specific parameters
     bool showAdvanced = advancedParamsCheck_ && advancedParamsCheck_->isChecked();
-    
+
+    // Frequency sweep rows shared by AC and Noise (Cadence ADE: start, stop, sweep type, points)
+    auto addFrequencySweep = [&](const QString& stopDefault) {
+        form->addRow("Start frequency:", createLineParam("fStart", "1Hz"));
+        form->addRow("Stop frequency:", createLineParam("fStop", stopDefault));
+        form->addRow("Sweep type:", createComboParam("sweepType", {"dec", "log", "lin"}, "log",
+                     {"Points per decade", "Logarithmic, total points", "Linear, total points"}));
+        form->addRow("Points:", createLineParam("points", "200"));
+    };
+
     // Add analysis-specific parameters
     switch (type) {
         case Simulation::AnalysisType::DC:
             // DC is usually parameter-free unless iterating options
             if (showAdvanced) {
-                form->addRow("Accuracy:", createComboParam({"liberal", "moderate", "conservative"}, 
-                             profile ? profile->parameters.value("accuracy", "moderate").toString() : "moderate"));
-                form->addRow("Max Iterations:", createLineParam(
-                             profile ? profile->parameters.value("maxIter", "50").toString() : "50"));
+                form->addRow("Accuracy:", createComboParam("accuracy", {"liberal", "moderate", "conservative"}, "moderate"));
+                form->addRow("Max Iterations:", createLineParam("maxIter", "50"));
             } else {
                  form->addRow(new QLabel("Standard DC Analysis (Default)", parametersWidget_));
             }
             break;
             
         case Simulation::AnalysisType::TRANSIENT:
-            form->addRow("Stop Time:", createLineParam(
-                         profile ? profile->parameters.value("stopTime", "1ms").toString() : "1ms"));
+            form->addRow("Stop Time:", createLineParam("stopTime", "1ms"));
             if (showAdvanced) {
-                form->addRow("Step Hint:", createLineParam(
-                             profile ? profile->parameters.value("stepHint", "100ns").toString() : "100ns"));
-                form->addRow("Accuracy:", createComboParam({"liberal", "moderate", "conservative"}, "moderate"));
+                form->addRow("Step Hint:", createLineParam("stepHint", "100ns"));
+                form->addRow("Accuracy:", createComboParam("accuracy", {"liberal", "moderate", "conservative"}, "moderate"));
             }
             break;
             
         case Simulation::AnalysisType::AC:
-            form->addRow("Start Freq:", createLineParam(
-                         profile ? profile->parameters.value("fStart", "1Hz").toString() : "1Hz"));
-            form->addRow("Stop Freq:", createLineParam(
-                         profile ? profile->parameters.value("fStop", "1GHz").toString() : "1GHz"));
-            if (showAdvanced) {
-                form->addRow("Points:", createLineParam(
-                             profile ? profile->parameters.value("points", "200").toString() : "200"));
-                form->addRow("Sweep Type:", createComboParam({"log", "linear"}, "log"));
-            }
+            addFrequencySweep("1GHz");
             break;
             
-        case Simulation::AnalysisType::NOISE:
-            form->addRow("Input Source:", createLineParam("Vin"));
-            form->addRow("Output Node:", createLineParam("Vout"));
-            if (showAdvanced) {
-                form->addRow("Start Freq:", createLineParam("1Hz"));
-                form->addRow("Stop Freq:", createLineParam("1MHz"));
+        case Simulation::AnalysisType::NOISE: {
+            // Pick nodes and source from the live schematic; editable in case it changed since
+            QStringList nets{"gnd"}, sources;
+            if (schematicEditor_) {
+                const auto hier = schematicEditor_->toSchematicGraph();
+                for (const auto& n : hier.topGraph.nets)
+                    if (VerilogAGenerator::netIndex(hier, n.name) > 0) nets << QString::fromStdString(n.name);
+                for (const auto& inst : hier.topGraph.instances)
+                    if (inst.type == "VoltageSource" || inst.type == "CurrentSource")
+                        sources << QString::fromStdString(inst.instanceName);
             }
+            addFrequencySweep("100MHz");
+            form->addRow("Positive output node:", createComboParam("outputNet", nets.mid(1),
+                         nets.size() > 1 ? nets[1] : "", {}, true));
+            form->addRow("Negative output node:", createComboParam("refNet", nets, "gnd", {}, true));
+            form->addRow("Input source:", createComboParam("inputSource", sources,
+                         sources.isEmpty() ? "" : sources[0], {}, true));
             break;
+        }
 
         case Simulation::AnalysisType::MONTE_CARLO:
             // Handled via modal dialog, but we place a "Configure" button placeholder
@@ -529,18 +556,44 @@ void SimulationWorkspace::updateParametersForAnalysis(Simulation::AnalysisType t
     }
 }
 
-// Helper: create line edit parameter
-QWidget* SimulationWorkspace::createLineParam(const QString& defaultVal) {
-    QLineEdit* edit = new QLineEdit(defaultVal, parametersWidget_);
+// Helper: line edit bound to the current profile's parameter `key`
+QWidget* SimulationWorkspace::createLineParam(const QString& key, const QString& defaultVal) {
+    const QString id = currentProfileId_;
+    auto write = [this, id, key](const QString& v) {
+        if (profiles_.contains(id)) profiles_[id].parameters[key] = v;
+    };
+    auto* profile = currentProfile();
+    QString cur = profile ? profile->parameters.value(key).toString() : QString();
+    if (cur.isEmpty()) cur = defaultVal;
+    write(cur);
+    QLineEdit* edit = new QLineEdit(cur, parametersWidget_);
     edit->setStyleSheet("background: #3c3c3c; color: #ccc; padding: 4px;");
+    connect(edit, &QLineEdit::textChanged, this, write);
     return edit;
 }
 
-// Helper: create combo parameter
-QWidget* SimulationWorkspace::createComboParam(const QStringList& options, const QString& defaultVal) {
+// Helper: combo bound to the current profile's parameter `key`
+QWidget* SimulationWorkspace::createComboParam(const QString& key, const QStringList& options,
+                                               const QString& defaultVal, const QStringList& labels,
+                                               bool editable) {
+    const QString id = currentProfileId_;
+    auto write = [this, id, key](const QString& v) {
+        if (profiles_.contains(id)) profiles_[id].parameters[key] = v;
+    };
+    auto* profile = currentProfile();
+    QString cur = profile ? profile->parameters.value(key).toString() : QString();
+    if (cur.isEmpty()) cur = defaultVal;
     QComboBox* combo = new QComboBox(parametersWidget_);
-    combo->addItems(options);
-    combo->setCurrentText(defaultVal);
+    combo->setEditable(editable);
+    for (int i = 0; i < options.size(); ++i)
+        combo->addItem(i < labels.size() ? labels[i] : options[i], options[i]);
+    const int idx = combo->findData(cur);
+    if (idx >= 0) combo->setCurrentIndex(idx);
+    else if (editable) combo->setEditText(cur);
+    write(editable ? combo->currentText() : combo->currentData().toString());  // what is shown
+    connect(combo, &QComboBox::currentTextChanged, this, [combo, write](const QString& text) {
+        write(combo->isEditable() ? text : combo->currentData().toString());
+    });
     return combo;
 }
 
@@ -631,7 +684,8 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     using namespace acutesim::compute::orchestration;
     SimulationRequestDTO req;
     // Generate Verilog-A source (preferred transport, covers all 9 component types)
-    req.source      = generateSimulationSource();
+    HierarchicalSchematicDTO hier;
+    req.source      = generateSimulationSource(&hier);
     // req.netlistJson = serializeSchematicToJson();  // [REMOVED] PURGED Phase D1
     req.topologyHash = currentTopologyHash_;
     // Show the exact source being sent to the driver
@@ -655,6 +709,50 @@ void SimulationWorkspace::onRunRequested(const QString& profileId) {
     // Marshal parameters from the profile into the DTO
     for (auto it = profCopy.parameters.begin(); it != profCopy.parameters.end(); ++it) {
         req.parameters[it.key().toStdString()] = it.value().toString().toStdString();
+    }
+
+    // Noise names its nodes and input source; the driver wants node indices from
+    // the same snapshot the netlist came from. Check the setup before submitting.
+    if (req.analysis == AnalysisTypeDTO::NOISE) {
+        const QString src = profCopy.parameters.value("inputSource").toString().trimmed();
+        const QString pos = profCopy.parameters.value("outputNet").toString().trimmed();
+        const QString neg = profCopy.parameters.value("refNet", "gnd").toString().trimmed();
+        const int posIdx = VerilogAGenerator::netIndex(hier, pos.toStdString());
+        const int negIdx = neg.isEmpty() ? 0 : VerilogAGenerator::netIndex(hier, neg.toStdString());
+        QString srcType;
+        for (const auto& inst : hier.topGraph.instances)
+            if (inst.instanceName == src.toStdString() &&
+                (inst.type == "VoltageSource" || inst.type == "CurrentSource"))
+                srcType = QString::fromStdString(inst.type);
+
+        QString problem;
+        if (src.isEmpty()) problem = "Noise needs an input source. Choose one in the Noise settings.";
+        else if (srcType.isEmpty()) problem = QString("Input source \"%1\" isn't a voltage or current source in this schematic.").arg(src);
+        else if (pos.isEmpty()) problem = "Noise needs a positive output node. Choose one in the Noise settings.";
+        else if (posIdx <= 0) problem = QString("Positive output node \"%1\" isn't a net in this schematic.").arg(pos);
+        else if (negIdx < 0) problem = QString("Negative output node \"%1\" isn't a net in this schematic.").arg(neg);
+        if (!problem.isEmpty()) {
+            appendLog("[ERROR] " + problem);
+            if (auto* label = findChild<QLabel*>("statusLabel")) {
+                label->setText("Failed: Noise setup");
+                label->setStyleSheet("color: #f44747;");
+            }
+            return;
+        }
+        req.parameters["outputNode"] = std::to_string(posIdx);
+        req.parameters["refNode"] = std::to_string(negIdx);
+        noiseInputUnit_ = srcType == "CurrentSource" ? "A" : "V";
+    }
+    // AC excitation comes only from sources' AC magnitude; say so before a run of zeros
+    if (req.analysis == AnalysisTypeDTO::AC) {
+        bool anyAc = false;
+        for (const auto& inst : hier.topGraph.instances) {
+            auto it = inst.parameters.find("acmag");
+            if (it != inst.parameters.end() && std::atof(it->second.c_str()) != 0.0) anyAc = true;
+        }
+        if (!anyAc)
+            appendLog("[WARN] No source has an AC magnitude, so every AC result will be 0. "
+                      "Set AC magnitude on your input source's properties.");
     }
 
     // Create run object logic (UI State)
@@ -769,6 +867,26 @@ void SimulationWorkspace::onDriverJobCompleted(
             latestResults_[name] = std::move(w);
         }
 
+        // Noise: output and input-referred spectral densities vs frequency
+        if (response.extended.hasNoise) {
+            const auto& nz = response.extended.noise;
+            auto addNoise = [&](const std::string& name, const std::string& unit,
+                                const std::vector<double>& values) {
+                acutesim::compute::postproc::Waveform w;
+                w.name = name;
+                w.unit = unit;
+                w.time = nz.frequencies;
+                w.values = values;
+                latestResults_[name] = std::move(w);
+            };
+            const std::string inUnit = noiseInputUnit_.toStdString();
+            addNoise("onoise", "V/sqrt(Hz)", nz.onoise);
+            addNoise("inoise", inUnit + "/sqrt(Hz)", nz.inoise);
+            appendLog(QString("[Noise] Total output noise %1 V rms; input-referred %2 %3 rms")
+                      .arg(nz.onoiseTotal, 0, 'g', 4).arg(nz.inoiseTotal, 0, 'g', 4)
+                      .arg(noiseInputUnit_));
+        }
+
         // Build a JSON summary for downstream consumers (waveform widget, etc.)
         QJsonObject jsonSummary;
         jsonSummary["type"] = "DriverResult";
@@ -821,7 +939,8 @@ void SimulationWorkspace::onDriverJobCompleted(
 
     } else {
         currentRun_.status = Simulation::SimulationRun::Status::FAILED;
-        QString errorMsg = QString::fromStdString(response.errorMessage);
+        QString errorMsg = QString::fromStdString(
+            response.errorMessage.empty() ? response.errorDetail : response.errorMessage);
         appendLog("[Orchestrator] Solver failed: " + errorMsg);
 
         // Phase 2.9: Use specific violation type based on convergence telemetry
@@ -1157,7 +1276,8 @@ std::string SimulationWorkspace::serializeSchematicToJson() {
 // ============================================================================
 
 acutesim::compute::orchestration::SimulationSourceDTO
-SimulationWorkspace::generateSimulationSource() {
+SimulationWorkspace::generateSimulationSource(
+    acutesim::compute::orchestration::HierarchicalSchematicDTO* hierOut) {
     using namespace acutesim::compute::orchestration;
     SimulationSourceDTO src;
 
@@ -1174,6 +1294,7 @@ SimulationWorkspace::generateSimulationSource() {
     opts.includeProbes = true;
     src.format  = NetlistFormatDTO::VERILOG_A;
     src.payload = VerilogAGenerator::generate(hierDto, opts);
+    if (hierOut) *hierOut = std::move(hierDto);
     return src;
 }
 

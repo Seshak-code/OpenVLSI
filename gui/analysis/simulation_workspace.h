@@ -160,6 +160,7 @@ private:
     acutesim::orchestration::SimulationContext currentContext_;
     acutesim::orchestration::SimulationContext simParams_; // Design variables / simulation parameters
     QMap<QString, Simulation::SimulationProfile> profiles_;
+    QString noiseInputUnit_ = "V";  // "V" or "A": unit of input-referred noise for the running job
     QString currentProfileId_;
     size_t currentTopologyHash_ = 0;
     // currentMode_ removed - unified component library
@@ -189,8 +190,13 @@ private:
     QString getAnalysisHelp(Simulation::AnalysisType type) const;
     
     // Parameter widget helpers
-    QWidget* createLineParam(const QString& defaultVal);
-    QWidget* createComboParam(const QStringList& options, const QString& defaultVal);
+    // Editors bound to the current profile's parameter `key`: they show its value
+    // (writing defaultVal if unset, so what is shown is what runs) and write edits back.
+    QWidget* createLineParam(const QString& key, const QString& defaultVal);
+    // options are the stored values; labels (optional) are what the list shows.
+    // editable lets the user type a value that is not in the list.
+    QWidget* createComboParam(const QString& key, const QStringList& options, const QString& defaultVal,
+                              const QStringList& labels = {}, bool editable = false);
 
     // Statistical Analysis
     void setupStatisticalDashboard();
@@ -204,7 +210,9 @@ private:
     std::string serializeSchematicToJson();
 
     // [NEW] Verilog-A transport — preferred over JSON; populates both fields.
-    acutesim::compute::orchestration::SimulationSourceDTO generateSimulationSource();
+    // hierOut (optional) receives the schematic snapshot the source was generated from
+    acutesim::compute::orchestration::SimulationSourceDTO generateSimulationSource(
+        acutesim::compute::orchestration::HierarchicalSchematicDTO* hierOut = nullptr);
 
     // [NEW] Read-only Verilog-A dock showing the exact source sent to driver
     acutesim::gui::editors::CodeEditor* verilogADock_ = nullptr;

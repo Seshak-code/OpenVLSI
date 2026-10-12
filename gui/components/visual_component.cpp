@@ -202,6 +202,84 @@ void VisualComponent::updateCachedPens() {
     m_selectionPen = QPen(selColor, 2, Qt::DashLine);
 }
 
+// Independent V/I source fields, named and grouped as in Cadence analogLib
+// vsource/isource. `q` is "Voltage"/"Current"; `u` scales level defaults (1 V, 1 mA).
+static void initSourceParams(QMap<QString, QString>& p, QMap<QString, QStringList>& opts,
+                             const QString& q, const QString& u) {
+    p["Source type"] = "dc";
+    opts["Source type"] = {"dc", "sine", "pulse"};
+    p["AC magnitude"] = "0";
+    p["AC phase"] = "0";
+    p[q + " 1"] = "0";
+    p[q + " 2"] = "1" + u;
+    p["Delay time"] = "0";
+    p["Rise time"] = "1n";
+    p["Fall time"] = "1n";
+    p["Pulse width"] = "5n";
+    p["Period"] = "10n";
+    p["Offset " + q.toLower()] = "0";
+    p["Amplitude"] = "1" + u;
+    p["Frequency"] = "1k";
+    p["Damping factor"] = "0";
+    p["Initial phase"] = "0";
+}
+
+QStringList VisualComponent::propertyKeys() const {
+    const bool isV = type == ComponentType::VoltageSource;
+    if (!isV && type != ComponentType::CurrentSource) return params.keys();
+    const QString q = isV ? "Voltage" : "Current";
+    QStringList keys{"Source type", "AC magnitude", "AC phase"};
+    const QString t = params.value("Source type");
+    if (t == "pulse")
+        keys << q + " 1" << q + " 2" << "Delay time" << "Rise time" << "Fall time" << "Pulse width" << "Period";
+    else if (t == "sine")
+        keys << "Offset " + q.toLower() << "Amplitude" << "Frequency" << "Delay time" << "Damping factor" << "Initial phase";
+    return keys;
+}
+
+QString VisualComponent::paramUnit(const QString& key) const {
+    if (type != ComponentType::VoltageSource && type != ComponentType::CurrentSource) return "";
+    if (key == "Source type") return "";
+    if (key.endsWith(" time") || key == "Pulse width" || key == "Period") return "s";
+    if (key == "Frequency") return "Hz";
+    if (key.endsWith(" phase")) return "deg";
+    if (key == "Damping factor") return "1/s";
+    return type == ComponentType::VoltageSource ? "V" : "A";
+}
+
+double parseSiValue(const QString& str, bool* ok) {
+    if (ok) *ok = true;
+    const QString s = str.trimmed();
+    if (s.isEmpty()) return 0.0;
+
+    // Split into numeric part and suffix
+    QString numStr, suffix;
+    bool suffixFound = false;
+    for (QChar c : s) {
+        if (!suffixFound && (c.isDigit() || c == '.' || c == '-' || c == '+' || c.toLower() == 'e')) {
+            numStr.append(c);
+        } else {
+            suffixFound = true;
+            suffix.append(c);
+        }
+    }
+    bool numOk = false;
+    double val = numStr.toDouble(&numOk);
+    if (ok) *ok = numOk;
+    suffix = suffix.trimmed();
+
+    if (suffix.startsWith("meg", Qt::CaseInsensitive) || suffix.startsWith('M')) val *= 1e6;
+    else if (suffix.startsWith('T')) val *= 1e12;
+    else if (suffix.startsWith('G')) val *= 1e9;
+    else if (suffix.startsWith('k') || suffix.startsWith('K')) val *= 1e3;
+    else if (suffix.startsWith('m')) val *= 1e-3;
+    else if (suffix.startsWith('u')) val *= 1e-6;
+    else if (suffix.startsWith('n')) val *= 1e-9;
+    else if (suffix.startsWith('p')) val *= 1e-12;
+    else if (suffix.startsWith('f')) val *= 1e-15;
+    return val;
+}
+
 VisualComponent::VisualComponent(ComponentType t) : type(t) {
     setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
     setTransformOriginPoint(0, 0); 
@@ -242,8 +320,7 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
         case ComponentType::VoltageSource: 
             name = "V?"; 
             value = "5V"; 
-            params["AC Mag"] = "0"; 
-            params["AC Phase"] = "0";
+            initSourceParams(params, paramOptions, "Voltage", "");
             break;
         case ComponentType::Mosfet:
             name = "M?";
@@ -294,6 +371,7 @@ VisualComponent::VisualComponent(ComponentType t) : type(t) {
         case ComponentType::CurrentSource:
             name = "I?";
             value = "1mA";
+            initSourceParams(params, paramOptions, "Current", "m");
             break;
         case ComponentType::VCVS:
             name = "E?";

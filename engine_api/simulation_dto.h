@@ -107,6 +107,13 @@ struct TransientConfigDTO {
     bool   uic       = false;   // start from .ic / IC= values, skip the DC bias
 };
 
+struct ACConfigDTO {
+    std::string sweep = "dec";   // dec | oct | lin
+    int    points = 0;           // per decade/octave, or total (lin); 0 = use the netlist's .ac
+    double fStart = 0.0;
+    double fStop  = 0.0;
+};
+
 struct DCConfigDTO {
     std::string sweepVariable;
     double start = 0.0;
@@ -124,8 +131,7 @@ struct MonteCarloVariationDTO {
 };
 
 struct MonteCarloConfigDTO {
-    uint32_t numRuns     = 10;
-    uint32_t sampleCount = 10; 
+    uint32_t sampleCount = 10;   // number of Monte Carlo runs
     uint32_t seed        = 0;
     std::vector<MonteCarloVariationDTO> variations;
 };
@@ -140,6 +146,7 @@ struct SimulationRequestDTO {
 
     TransientConfigDTO transient;
     DCConfigDTO        dc;
+    ACConfigDTO        ac;
     MonteCarloConfigDTO mc;
     
     uint32_t mcSeed = 0; 
@@ -159,15 +166,6 @@ struct TFResultDTO {
     double phaseCrossoverHz  = 0.0;
 };
 
-struct PZResultDTO {
-    struct Complex { double real, imag; };
-    std::vector<Complex> poles;
-    std::vector<Complex> zeros;
-    std::vector<double> poleReal;
-    std::vector<double> poleImag;
-    double dcGain = 1.0;
-};
-
 struct FourierResultDTO {
     double fundamentalFrequencyHz = 0.0;
     std::vector<double> harmonicAmplitudes;
@@ -176,18 +174,27 @@ struct FourierResultDTO {
     double thdPercent             = 0.0;
 };
 
+struct NoiseResultDTO {
+    std::vector<double> frequencies;
+    std::vector<double> onoise;        // output noise density [V/sqrt(Hz)]
+    std::vector<double> inoise;        // input-referred density [V/sqrt(Hz)] (or A/sqrt(Hz))
+    double onoiseTotal = 0.0;          // integrated over the sweep [V rms]
+    double inoiseTotal = 0.0;
+};
+
 struct ExtendedAnalysisResultsDTO {
     bool hasTF = false;
     TFResultDTO tf;
-    bool hasPZ = false;
-    PZResultDTO pz;
+    bool hasNoise = false;
+    NoiseResultDTO noise;
     bool hasFourier = false;
     FourierResultDTO fourier;
 };
 
 struct WaveformDataPoint {
-    double              timeS;
-    std::vector<double> nodeVoltages;
+    double              timeS;            // time (tran), swept value (.dc), frequency (.ac)
+    std::vector<double> nodeVoltages;     // real part for .ac
+    std::vector<double> nodeVoltagesImag; // .ac only
     std::vector<double> branchCurrents;
 };
 
@@ -214,8 +221,8 @@ struct ConvergenceTelemetryDTO {
 struct SimulationResponseDTO {
     JobID       jobId;
     int32_t     runIndex = -1;  
-    bool        success = true;
-    bool        converged = true;
+    bool        success = false;   // fail-closed: a response must be marked good explicitly
+    bool        converged = false;
     int         iterations = 0;
     double      residual = 0.0;
     uint64_t    topologyHash = 0;

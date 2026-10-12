@@ -35,4 +35,9 @@ std::string generate(const TensorNetlist& netlist,
 std::string generate(const acutesim::compute::orchestration::HierarchicalSchematicDTO& hierDto,
                      const GeneratorOptions& opts = {});
 
+// Node index the DTO path gives `netName` (0 = ground), or -1 if the top
+// graph has no such net. Analyses that name a node (noise output) resolve it here.
+int netIndex(const acutesim::compute::orchestration::HierarchicalSchematicDTO& hierDto,
+             const std::string& netName);
+
 } // namespace VerilogAGenerator

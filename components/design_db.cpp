@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <cstdio>
 
 namespace acutesim {
 namespace components {
@@ -199,7 +200,9 @@ DesignDb::GraphSnapshotResult DesignDb::snapshotWithNodeMap() const {
         instDto.instanceName = inst.name;
 
         for (const auto& p : inst.parameters) {
-            instDto.parameters[p.first] = std::to_string(p.second);
+            char buf[32];  // %.17g round-trips; std::to_string would turn 1e-12 into "0.000000"
+            std::snprintf(buf, sizeof(buf), "%.17g", p.second);
+            instDto.parameters[p.first] = buf;
         }
         for (const auto& p : inst.stringParameters) {
             instDto.parameters[p.first] = p.second;

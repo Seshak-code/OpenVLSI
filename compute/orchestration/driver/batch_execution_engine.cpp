@@ -162,8 +162,8 @@ SimulationBatchResponseDTO BatchExecutionEngine::executeMonteCarlo(
     batchReq.corner       = baseRequest.corner;
     batchReq.sessionToken = baseRequest.sessionToken;
 
-    batchReq.runs.reserve(config.numRuns);
-    for (uint32_t i = 0; i < config.numRuns; ++i) {
+    batchReq.runs.reserve(config.sampleCount);
+    for (uint32_t i = 0; i < config.sampleCount; ++i) {
         // Per-sample seed: XOR with index makes each sample independent and
         // reproducible no matter whether threads execute in which order.
         acutesim::math::PortableRNG sampleRng(config.seed ^ static_cast<uint64_t>(i));

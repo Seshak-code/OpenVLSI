@@ -5,8 +5,12 @@
 //   1. testGeneratorAllComponents — all 9 types produce expected VA patterns
 //   2. testRoundTrip              — generate + parse gives back same component
 //                                   counts and parameter values (%.17g precision)
+//  2b. testSourceWaveformRoundTrip — V/I PULSE, SINE and AC mag/phase fields
+//  2c. testDesignDbSourcePath     — the GUI's DesignDb → DTO path for sources
 //   3. testDriverVerilogAPath     — DC simulation via VERILOG_A source matches
 //                                   the JSON path for a simple resistive circuit
+//   4. testDriverAcNoiseFromDesignDb — GUI-path AC and noise runs give the
+//                                   analytic RC answers
 // ============================================================================
 
 #include <iostream>
@@ -19,6 +23,7 @@
 
 // Generator (components layer)
 #include "components/veriloga_generator.h"
+#include "components/design_db.h"
 
 // Parser (orchestration layer)
 #include "compute/orchestration/driver/veriloga_parser.h"
@@ -253,6 +258,163 @@ static bool testRoundTrip() {
     return true;
 }
 
+// ── Test 2b: Source waveform + AC fields survive generate → parse ───────────
+// Every field gets a distinct non-zero value, so a dropped field parses back
+// as 0 and fails its own check.
+
+template <class Src>
+static bool sameSourceFields(const Src& got, const Src& want) {
+#define CHECK_FIELD(f) \
+    if (got.f != want.f) { \
+        std::cerr << "FAIL: " #f " = " << got.f << ", expected " << want.f << "\n"; \
+        return false; \
+    }
+    CHECK_FIELD(name) CHECK_FIELD(nodePositive) CHECK_FIELD(nodeNegative) CHECK_FIELD(type)
+    CHECK_FIELD(ac_mag) CHECK_FIELD(ac_phase)
+    CHECK_FIELD(pulse_v1) CHECK_FIELD(pulse_v2) CHECK_FIELD(pulse_td) CHECK_FIELD(pulse_tr)
+    CHECK_FIELD(pulse_tf) CHECK_FIELD(pulse_pw) CHECK_FIELD(pulse_per)
+    CHECK_FIELD(sine_vo) CHECK_FIELD(sine_va) CHECK_FIELD(sine_freq) CHECK_FIELD(sine_td)
+    CHECK_FIELD(sine_theta) CHECK_FIELD(sine_phase)
+#undef CHECK_FIELD
+    return true;
+}
+
+template <class Src>
+static Src makePulse(int np, double ac) {
+    Src s{};
+    s.nodePositive = np; s.nodeNegative = 0; s.type = "PULSE";
+    s.pulse_v1 = 0.1; s.pulse_v2 = 1.7; s.pulse_td = 1e-9; s.pulse_tr = 2e-10;
+    s.pulse_tf = 3e-10; s.pulse_pw = 5e-9; s.pulse_per = 1.1e-8;
+    s.ac_mag = ac; s.ac_phase = 45.0;
+    return s;
+}
+
+template <class Src>
+static Src makeSine(int np, double ac) {
+    Src s{};
+    s.nodePositive = np; s.nodeNegative = 0; s.type = "SINE";
+    s.sine_vo = 0.9; s.sine_va = 0.3; s.sine_freq = 1e6; s.sine_td = 2e-6;
+    s.sine_theta = 1e3; s.sine_phase = 30.0;
+    s.ac_mag = ac; s.ac_phase = -90.0;
+    return s;
+}
+
+static bool testSourceWaveformRoundTrip() {
+    std::cout << "[Test 2b] testSourceWaveformRoundTrip ... ";
+
+    TensorNetlist nl;
+    auto& b = nl.globalBlock;
+    auto vp = makePulse<VoltageSource>(1, 1.0);
+    vp.name = "Vclk";  // named source: params and contribution must agree
+    vp.voltage_V  = 0.1;
+    auto vs = makeSine<VoltageSource>(2, 0.5);
+    vs.name = "Vsin";
+    vs.voltage_V  = 0.9;
+    auto ip = makePulse<CurrentSource>(3, 1e-3);
+    ip.name       = "Ia";
+    ip.current_A  = 0.1;
+    auto is = makeSine<CurrentSource>(4, 2e-3);
+    is.name       = "Ib";
+    is.current_A  = 0.9;
+    b.voltageSources = {vp, vs};
+    b.currentSources = {ip, is};
+    nl.numGlobalNodes = 4;
+
+    auto res = acutesim::compute::orchestration::parseVerilogA(VerilogAGenerator::generate(nl));
+    ASSERT_TRUE(res.success);
+    const auto& p = res.netlist.globalBlock;
+    ASSERT_TRUE(p.voltageSources.size() == 2);
+    ASSERT_TRUE(p.currentSources.size() == 2);
+
+    ASSERT_TRUE(p.voltageSources[0].voltage_V == vp.voltage_V);
+    ASSERT_TRUE(p.voltageSources[1].voltage_V == vs.voltage_V);
+    ASSERT_TRUE(p.currentSources[0].current_A == ip.current_A);
+    ASSERT_TRUE(p.currentSources[1].current_A == is.current_A);
+    ASSERT_TRUE(sameSourceFields(p.voltageSources[0], vp));
+    ASSERT_TRUE(sameSourceFields(p.voltageSources[1], vs));
+    ASSERT_TRUE(sameSourceFields(p.currentSources[0], ip));
+    ASSERT_TRUE(sameSourceFields(p.currentSources[1], is));
+
+    std::cout << "PASS\n";
+    return true;
+}
+
+// ── Test 2c: GUI path — DesignDb → DTO → generate → parse ───────────────────
+// The schematic fills a DesignDb exactly like this. Catches: sub-1e-6 values
+// lost to 6-decimal formatting, dropped current sources, source names (noise
+// finds its input source by name), VSS not grounded, netIndex disagreeing
+// with the nodes the netlist actually uses.
+
+static bool testDesignDbSourcePath() {
+    std::cout << "[Test 2c] testDesignDbSourcePath ... ";
+    using acutesim::components::DesignDb;
+
+    DesignDb db;
+    auto in = db.createNet("in"), out = db.createNet("out"), vss = db.createNet("VSS");
+    auto two = [&](const char* master, const char* name, decltype(in) a, decltype(in) b) {
+        auto id = db.createInstance(master, name);
+        db.connectPin(id, 0, a);
+        db.connectPin(id, 1, b);
+        return id;
+    };
+    auto v = two("VoltageSource", "Vin", in, vss);
+    db.setParam(v, "V", 0.25);
+    db.setStringParam(v, "type", "PULSE");
+    const double pv[] = {0.1, 1.7, 1e-9, 2e-11, 3e-11, 5e-9, 1.1e-8};
+    const char* pk[]  = {"v1", "v2", "td", "tr", "tf", "pw", "per"};
+    for (int k = 0; k < 7; ++k) db.setParam(v, pk[k], pv[k]);
+    db.setParam(v, "acmag", 1.0);
+    db.setParam(v, "acphase", 45.0);
+
+    auto i = two("CurrentSource", "Ibias", out, vss);
+    db.setParam(i, "I", 1e-7);
+    db.setStringParam(i, "type", "SINE");
+    const double sv[] = {1e-7, 2e-8, 1e6, 2e-6, 1e3, 30.0};
+    const char* sk[]  = {"vo", "va", "freq", "td", "theta", "phase"};
+    for (int k = 0; k < 6; ++k) db.setParam(i, sk[k], sv[k]);
+    db.setParam(i, "acmag", 3e-9);
+    db.setParam(i, "acphase", -90.0);
+
+    auto c = two("Capacitor", "C1", out, vss);
+    db.setParam(c, "C", 1e-12);
+
+    auto hier = db.recursiveBuild([](const std::string&, const std::map<std::string, double>&) {
+        return std::optional<acutesim::compute::orchestration::HierarchicalSchematicDTO>{};
+    });
+    auto res = acutesim::compute::orchestration::parseVerilogA(VerilogAGenerator::generate(hier));
+    ASSERT_TRUE(res.success);
+    const auto& p = res.netlist.globalBlock;
+
+    const int nIn = VerilogAGenerator::netIndex(hier, "in"), nOut = VerilogAGenerator::netIndex(hier, "out");
+    ASSERT_TRUE(nIn > 0 && nOut > 0 && nIn != nOut);
+    ASSERT_TRUE(VerilogAGenerator::netIndex(hier, "VSS") == 0);
+    ASSERT_TRUE(VerilogAGenerator::netIndex(hier, "nope") == -1);
+
+    VoltageSource ev{};
+    ev.name = "Vin"; ev.nodePositive = nIn; ev.nodeNegative = 0; ev.type = "PULSE";
+    ev.pulse_v1 = pv[0]; ev.pulse_v2 = pv[1]; ev.pulse_td = pv[2]; ev.pulse_tr = pv[3];
+    ev.pulse_tf = pv[4]; ev.pulse_pw = pv[5]; ev.pulse_per = pv[6];
+    ev.ac_mag = 1.0; ev.ac_phase = 45.0;
+    CurrentSource ei{};
+    ei.name = "Ibias"; ei.nodePositive = nOut; ei.nodeNegative = 0; ei.type = "SINE";
+    ei.sine_vo = sv[0]; ei.sine_va = sv[1]; ei.sine_freq = sv[2]; ei.sine_td = sv[3];
+    ei.sine_theta = sv[4]; ei.sine_phase = sv[5];
+    ei.ac_mag = 3e-9; ei.ac_phase = -90.0;
+
+    ASSERT_TRUE(p.voltageSources.size() == 1);
+    ASSERT_TRUE(p.currentSources.size() == 1);
+    ASSERT_TRUE(p.capacitors.size() == 1);
+    ASSERT_TRUE(p.voltageSources[0].voltage_V == 0.25);
+    ASSERT_TRUE(p.currentSources[0].current_A == 1e-7);
+    ASSERT_TRUE(p.capacitors[0].capacitance_farads == 1e-12);
+    ASSERT_TRUE(p.capacitors[0].nodePlate1 == nOut);
+    ASSERT_TRUE(sameSourceFields(p.voltageSources[0], ev));
+    ASSERT_TRUE(sameSourceFields(p.currentSources[0], ei));
+
+    std::cout << "PASS\n";
+    return true;
+}
+
 // ── Test 3: Driver integration — VA source vs JSON source for DC ─────────────
 
 static bool testDriverVerilogAPath() {
@@ -283,7 +445,6 @@ static bool testDriverVerilogAPath() {
     req.analysis               = AnalysisTypeDTO::DC;
     req.source.format          = NetlistFormatDTO::VERILOG_A;
     req.source.payload         = vaSrc;
-    req.source.payload         = "{}";  // empty — driver must use VA path
     req.topologyHash           = 0;
     req.sessionToken           = "test_va_path";
 
@@ -297,11 +458,11 @@ static bool testDriverVerilogAPath() {
     driver.onJobCompleted = [&](uint64_t /*id*/,
                                 const SimulationResponseDTO& resp) {
         success   = resp.success;
-        completed = true;  // set last so success is visible before completed
         auto it = resp.probeValues.find("Vmid");
         if (it != resp.probeValues.end() && !it->second.empty()) {
             vmidValue = it->second[0];
         }
+        completed = true;  // set last so every result is visible before completed
     };
 
 #ifdef __EMSCRIPTEN__
@@ -331,6 +492,76 @@ static bool testDriverVerilogAPath() {
     return true;
 }
 
+// ── Test 4: GUI AC + noise through the driver ──────────────────────────────
+// RC low-pass built the way the schematic fills DesignDb (Vin AC 1 → R1 1k →
+// out, C1 1µF → VSS). AC at fc must give |V(out)| = 1/√2 (zero if the AC
+// magnitude is dropped); noise must find "Vin" by name and give the resistor's
+// thermal floor √(4kTR) at low frequency.
+
+static acutesim::compute::orchestration::SimulationResponseDTO
+runJob(const acutesim::compute::orchestration::SimulationRequestDTO& req) {
+    acutesim::compute::orchestration::LocalWorkerDriver driver;
+    acutesim::compute::orchestration::SimulationResponseDTO out;
+    std::atomic<bool> done{false};
+    driver.onJobCompleted = [&](uint64_t, const acutesim::compute::orchestration::SimulationResponseDTO& r) {
+        out = r;
+        done = true;
+    };
+    driver.submitJob(req);
+    for (int i = 0; i < 500 && !done; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    return out;
+}
+
+static bool testDriverAcNoiseFromDesignDb() {
+    std::cout << "[Test 4] testDriverAcNoiseFromDesignDb ... ";
+    using namespace acutesim::compute::orchestration;
+    acutesim::components::DesignDb db;
+    auto in = db.createNet("in"), out = db.createNet("out"), vss = db.createNet("VSS");
+    auto two = [&](const char* master, const char* name, decltype(in) a, decltype(in) b) {
+        auto id = db.createInstance(master, name);
+        db.connectPin(id, 0, a);
+        db.connectPin(id, 1, b);
+        return id;
+    };
+    auto v = two("VoltageSource", "Vin", in, vss);
+    db.setParam(v, "V", 0.0);
+    db.setStringParam(v, "type", "DC");
+    db.setParam(v, "acmag", 1.0);
+    db.setParam(two("Resistor", "R1", in, out), "R", 1e3);
+    db.setParam(two("Capacitor", "C1", out, vss), "C", 1e-6);
+    auto hier = db.recursiveBuild([](const std::string&, const std::map<std::string, double>&) {
+        return std::optional<HierarchicalSchematicDTO>{};
+    });
+    const int nOut = VerilogAGenerator::netIndex(hier, "out");
+    ASSERT_TRUE(nOut > 0);
+
+    SimulationRequestDTO req;
+    req.source.format  = NetlistFormatDTO::VERILOG_A;
+    req.source.payload = VerilogAGenerator::generate(hier);
+    req.analysis = AnalysisTypeDTO::AC;
+    const double fc = 1.0 / (2.0 * M_PI * 1e3 * 1e-6);
+    req.parameters = {{"fStart", std::to_string(fc)}, {"fStop", std::to_string(fc)},
+                      {"points", "1"}, {"sweepType", "lin"}};
+    auto ac = runJob(req);
+    ASSERT_TRUE(ac.success);
+    ASSERT_TRUE(ac.nodeVoltages.count(nOut - 1) && ac.nodeVoltages.at(nOut - 1).size() == 1);
+    ASSERT_NEAR(ac.nodeVoltages.at(nOut - 1)[0], 1.0 / std::sqrt(2.0), 1e-4);
+
+    req.analysis = AnalysisTypeDTO::NOISE;
+    req.parameters = {{"fStart", "1"}, {"fStop", "10"}, {"points", "2"}, {"sweepType", "log"},
+                      {"inputSource", "Vin"}, {"outputNode", std::to_string(nOut)}, {"refNode", "0"}};
+    auto nz = runJob(req);
+    if (!nz.success) std::cerr << "noise error: " << nz.errorDetail << "\n";
+    ASSERT_TRUE(nz.success && nz.extended.hasNoise);
+    ASSERT_TRUE(nz.extended.noise.onoise.size() == 2);
+    const double floor = std::sqrt(4.0 * 1.380649e-23 * 300.0 * 1e3);  // ≈ 4.07 nV/√Hz
+    ASSERT_NEAR(nz.extended.noise.onoise[0], floor, 0.05 * floor);
+
+    std::cout << "PASS (|H(fc)| = " << ac.nodeVoltages.at(nOut - 1)[0]
+              << ", onoise(1 Hz) = " << nz.extended.noise.onoise[0] << " V/rtHz)\n";
+    return true;
+}
+
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 int main() {
@@ -339,7 +570,10 @@ int main() {
     int failed = 0;
     if (!testGeneratorAllComponents()) ++failed;
     if (!testRoundTrip())              ++failed;
+    if (!testSourceWaveformRoundTrip()) ++failed;
+    if (!testDesignDbSourcePath())     ++failed;
     if (!testDriverVerilogAPath())     ++failed;
+    if (!testDriverAcNoiseFromDesignDb()) ++failed;
 
     if (failed == 0) {
         std::cout << "All tests PASSED.\n";

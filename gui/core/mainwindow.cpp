@@ -1,3 +1,6 @@
+#include <QTimer>
+#include <QToolTip>
+#include <QCursor>
 #include "mainwindow.h"
 #include "welcome_widget.h"
 #include "layout_manager.h"
@@ -755,8 +758,8 @@ void MainWindow::updateProperties(VisualComponent* item) {
     }
     
     // Dynamic fields count: Name + Value + Type + Params
-    int paramCount = item->params.size();
-    propertiesTable->setRowCount(3 + paramCount);
+    const QStringList keys = item->propertyKeys();
+    propertiesTable->setRowCount(3 + keys.size());
     
     // 0: Name
     propertiesTable->setItem(0, 0, new QTableWidgetItem("Name"));
@@ -768,7 +771,8 @@ void MainWindow::updateProperties(VisualComponent* item) {
         case ComponentType::Resistor: valueLabel = "Resistance"; break;
         case ComponentType::Capacitor: valueLabel = "Capacitance"; break;
         case ComponentType::Inductor: valueLabel = "Inductance"; break;
-        case ComponentType::VoltageSource: valueLabel = "DC Voltage"; break;
+        case ComponentType::VoltageSource: valueLabel = "DC voltage (V)"; break;
+        case ComponentType::CurrentSource: valueLabel = "DC current (A)"; break;
         default: break;
     }
     
@@ -777,19 +781,19 @@ void MainWindow::updateProperties(VisualComponent* item) {
     
     // 2: Type (Read only)
     propertiesTable->setItem(2, 0, new QTableWidgetItem("Type"));
-    QTableWidgetItem* typeItem = new QTableWidgetItem(QString::number((int)item->type)); 
+    QTableWidgetItem* typeItem = new QTableWidgetItem(componentTypeToString(item->type));
     typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
     propertiesTable->setItem(2, 1, typeItem);
     
     // 3+: Dynamic Params
     int row = 3;
-    QMapIterator<QString, QString> i(item->params);
-    while (i.hasNext()) {
-        i.next();
-        QString key = i.key();
-        QString val = i.value();
+    for (const QString& key : keys) {
+        QString val = item->params.value(key);
         
-        QTableWidgetItem* keyItem = new QTableWidgetItem(key);
+        // Label shows the unit; the param key rides along for onPropertyEdited
+        const QString unit = item->paramUnit(key);
+        QTableWidgetItem* keyItem = new QTableWidgetItem(unit.isEmpty() ? key : key + " (" + unit + ")");
+        keyItem->setData(Qt::UserRole, key);
         keyItem->setFlags(keyItem->flags() & ~Qt::ItemIsEditable); // Keys distinct
         propertiesTable->setItem(row, 0, keyItem);
         
@@ -809,7 +813,13 @@ void MainWindow::updateProperties(VisualComponent* item) {
                 // Safety check: ensure item is still valid
                 if (safeItem && activeComponent == safeItem) {
                    safeItem->params[key] = text;
-                   // Trigger re-draw or logic update if needed?
+                   // The source type decides which fields exist: rebuild the form
+                   // once this combo's signal has returned (rebuilding deletes it).
+                   if (key == "Source type") {
+                       QTimer::singleShot(0, this, [this, safeItem]() {
+                           if (safeItem && activeComponent == safeItem) updateProperties(safeItem);
+                       });
+                   }
                 }
             });
             
@@ -849,6 +859,25 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
     
     // Phase 3 Hardening: QPointer checks
     if (!activeComponent.isNull()) {
+        // Source fields must be numbers: reject anything else and keep the old value
+        const bool isSource = activeComponent->type == ComponentType::VoltageSource ||
+                              activeComponent->type == ComponentType::CurrentSource;
+        if (col == 1 && isSource && (row == 1 || row > 2)) {
+            bool ok = true;
+            parseSiValue(item->text(), &ok);
+            if (!ok) {
+                const QString keyCell = propertiesTable->item(row, 0)->text();
+                const QString old = row == 1 ? activeComponent->value
+                    : activeComponent->params.value(propertiesTable->item(row, 0)->data(Qt::UserRole).toString());
+                isUpdating = true;
+                item->setText(old);
+                isUpdating = false;
+                QToolTip::showText(QCursor::pos(),
+                    QString("%1 needs a number, like 1.5, 10n or 2.2k. Kept %2.").arg(keyCell, old),
+                    propertiesTable);
+                return;
+            }
+        }
         if (col == 1) { // Value column
             if (row == 0) {
                 activeComponent->name = item->text();
@@ -856,7 +885,7 @@ void MainWindow::onPropertyEdited(QTableWidgetItem* item) {
                 activeComponent->value = item->text();
             } else if (row > 2) {
                 // Dynamic Param
-                QString key = propertiesTable->item(row, 0)->text();
+                QString key = propertiesTable->item(row, 0)->data(Qt::UserRole).toString();
                 // Ensure accessing map is safe? Yes, QPointer<T>-> works.
                 activeComponent->params[key] = item->text();
             }

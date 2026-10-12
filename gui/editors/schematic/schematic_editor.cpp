@@ -225,6 +225,9 @@ QString GridScene::placeComponent(const QString& typeStr, QPointF pos, double ro
              comp->params[it.key()] = it.value().toString();
         }
     }
+    // Schematics saved before the Cadence-style source form used these keys
+    if (comp->params.contains("AC Mag")) comp->params["AC magnitude"] = comp->params.take("AC Mag");
+    if (comp->params.contains("AC Phase")) comp->params["AC phase"] = comp->params.take("AC Phase");
     
     comp->setPos(pos);
     comp->setRotation(rotation);
@@ -1183,38 +1186,6 @@ void GridScene::placeWirePath(const QVector<QPointF>& points) {
 // ============================================================================
 
 // Helper: Parse Value Strings (e.g. 10k, 1.2u)
-static double parseValue(const QString& str) {
-    if (str.isEmpty()) return 0.0;
-    
-    // Extract numeric part
-    QString numStr;
-    QString suffix;
-    bool suffixFound = false;
-    
-    for (QChar c : str) {
-        if (!suffixFound && (c.isDigit() || c == '.' || c == '-' || c == '+' || c.toLower() == 'e')) {
-            numStr.append(c);
-        } else {
-            suffixFound = true;
-            suffix.append(c);
-        }
-    }
-    
-    double val = numStr.toDouble();
-    suffix = suffix.trimmed();
-    
-    if (suffix.startsWith("k") || suffix.startsWith("K")) val *= 1e3;
-    else if (suffix.startsWith("M") && suffix.length() == 1) val *= 1e6; // Mega
-    else if (suffix.startsWith("Meg")) val *= 1e6;
-    else if (suffix.startsWith("G")) val *= 1e9;
-    else if (suffix.startsWith("m")) val *= 1e-3;
-    else if (suffix.startsWith("u")) val *= 1e-6;
-    else if (suffix.startsWith("n")) val *= 1e-9;
-    else if (suffix.startsWith("p")) val *= 1e-12;
-    else if (suffix.startsWith("f")) val *= 1e-15;
-    
-    return val;
-}
 
 // ============================================================================
 // SPATIAL NET HELPERS (member implementations for const-safe access)
@@ -1412,7 +1383,7 @@ acutesim::compute::orchestration::HierarchicalSchematicDTO GridScene::generateSc
              }
              
              // Sync Parameters
-             double val = parseValue(c->value);
+             double val = parseSiValue(c->value);
              
              std::string mainKey = "val";
              if (c->type == ComponentType::Resistor) { mainKey = "R"; designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "poly_res").toStdString()); }
@@ -1420,8 +1391,8 @@ acutesim::compute::orchestration::HierarchicalSchematicDTO GridScene::generateSc
              else if (c->type == ComponentType::Inductor) {
                  mainKey = "L";
                  designDb.setStringParam(c->dbId, "Model", c->params.value("Model", "spiral_ind").toStdString());
-                 if (c->params.contains("W")) designDb.setParam(c->dbId, "W", parseValue(c->params.value("W", "0")));
-                 if (c->params.contains("Area")) designDb.setParam(c->dbId, "Area", parseValue(c->params.value("Area", "0")));
+                 if (c->params.contains("W")) designDb.setParam(c->dbId, "W", parseSiValue(c->params.value("W", "0")));
+                 if (c->params.contains("Area")) designDb.setParam(c->dbId, "Area", parseSiValue(c->params.value("Area", "0")));
              }
              else if (c->type == ComponentType::VoltageSource) mainKey = "V";
              else if (c->type == ComponentType::CurrentSource) mainKey = "I";
@@ -1430,11 +1401,26 @@ acutesim::compute::orchestration::HierarchicalSchematicDTO GridScene::generateSc
              if (!mainKey.empty()) {
                  designDb.setParam(c->dbId, mainKey, val);
              }
+
+             // Independent sources: source type, waveform and AC keys (read by flattenDto)
+             if (c->type == ComponentType::VoltageSource || c->type == ComponentType::CurrentSource) {
+                 const QString q = c->type == ComponentType::VoltageSource ? "Voltage" : "Current";
+                 const QString t = c->params.value("Source type", "dc");
+                 designDb.setStringParam(c->dbId, "type", t == "pulse" ? "PULSE" : t == "sine" ? "SINE" : "DC");
+                 const std::pair<const char*, QString> fields[] = {
+                     {"acmag", "AC magnitude"}, {"acphase", "AC phase"},
+                     {"v1", q + " 1"}, {"v2", q + " 2"}, {"td", "Delay time"}, {"tr", "Rise time"},
+                     {"tf", "Fall time"}, {"pw", "Pulse width"}, {"per", "Period"},
+                     {"vo", "Offset " + q.toLower()}, {"va", "Amplitude"}, {"freq", "Frequency"},
+                     {"theta", "Damping factor"}, {"phase", "Initial phase"}};
+                 for (const auto& [dtoKey, field] : fields)
+                     designDb.setParam(c->dbId, dtoKey, parseSiValue(c->params.value(field)));
+             }
              
              // MOSFET Specifics
              if (c->type == ComponentType::Mosfet || c->type == ComponentType::PDK_NFET || c->type == ComponentType::PDK_PFET) {
-                 designDb.setParam(c->dbId, "W", parseValue(c->params.value("W", "1u")));
-                 designDb.setParam(c->dbId, "L", parseValue(c->params.value("L", "180n")));
+                 designDb.setParam(c->dbId, "W", parseSiValue(c->params.value("W", "1u")));
+                 designDb.setParam(c->dbId, "L", parseSiValue(c->params.value("L", "180n")));
                  designDb.setStringParam(c->dbId, "Model", c->params.value("Model", (c->type==ComponentType::PDK_PFET ? "pfet" : "nfet")).toStdString());
              }
              

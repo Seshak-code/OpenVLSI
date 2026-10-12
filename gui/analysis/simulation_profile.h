@@ -132,8 +132,10 @@ struct SimulationProfile {
         p.parameters["fStart"] = "1Hz";
         p.parameters["fStop"] = "100MHz";
         p.parameters["points"] = 200;
-        p.parameters["outputNode"] = 1;
-        p.parameters["inputNode"] = 0;
+        p.parameters["sweepType"] = "log";
+        p.parameters["outputNet"] = "";   // positive output node (net name)
+        p.parameters["refNet"] = "gnd";   // negative output node
+        p.parameters["inputSource"] = ""; // V/I source instance the noise is referred to
         p.parameters["temperature_K"] = 300.15;
         return p;
     }

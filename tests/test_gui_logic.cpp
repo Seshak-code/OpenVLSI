@@ -119,6 +119,36 @@ private slots:
         QCOMPARE(comp.value, "4.7k");
     }
 
+    // 4b. Independent source form (Cadence vsource/isource parity) + SI parsing
+    void testSourceForm() {
+        VisualComponent v(ComponentType::VoltageSource);
+        QCOMPARE(v.propertyKeys(), QStringList({"Source type", "AC magnitude", "AC phase"}));
+        v.params["Source type"] = "pulse";
+        QCOMPARE(v.propertyKeys(), QStringList({"Source type", "AC magnitude", "AC phase", "Voltage 1",
+                 "Voltage 2", "Delay time", "Rise time", "Fall time", "Pulse width", "Period"}));
+        for (const QString& k : v.propertyKeys()) QVERIFY2(v.params.contains(k), qPrintable(k));
+        QCOMPARE(v.paramUnit("Rise time"), QString("s"));
+        QCOMPARE(v.paramUnit("AC phase"), QString("deg"));
+        QCOMPARE(v.paramUnit("Voltage 2"), QString("V"));
+
+        VisualComponent i(ComponentType::CurrentSource);
+        i.params["Source type"] = "sine";
+        QCOMPARE(i.propertyKeys(), QStringList({"Source type", "AC magnitude", "AC phase", "Offset current",
+                 "Amplitude", "Frequency", "Delay time", "Damping factor", "Initial phase"}));
+        for (const QString& k : i.propertyKeys()) QVERIFY2(i.params.contains(k), qPrintable(k));
+        QCOMPARE(i.paramUnit("Amplitude"), QString("A"));
+        QCOMPARE(i.paramUnit("Frequency"), QString("Hz"));
+
+        bool ok = false;
+        QCOMPARE(parseSiValue("1MHz", &ok), 1e6);  QVERIFY(ok);
+        QCOMPARE(parseSiValue("2meg"), 2e6);
+        QCOMPARE(parseSiValue("1.5m"), 1.5e-3);
+        QCOMPARE(parseSiValue("10n"), 10e-9);
+        QCOMPARE(parseSiValue("2.2k"), 2.2e3);
+        parseSiValue("fast", &ok);                  QVERIFY(!ok);
+        QCOMPARE(parseSiValue("", &ok), 0.0);       QVERIFY(ok);
+    }
+
     // 5. Verify Component Categories (Analog, Digital, Mixed)
     void testComponentCategories() {
         // --- Analog ---

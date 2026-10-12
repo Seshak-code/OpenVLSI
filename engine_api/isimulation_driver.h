@@ -106,7 +106,6 @@ public:
             AnalysisTypeDTO::MONTE_CARLO,
             AnalysisTypeDTO::SENSITIVITY,
             AnalysisTypeDTO::TRANSFER_FUNCTION,
-            AnalysisTypeDTO::POLE_ZERO,
             AnalysisTypeDTO::FOURIER
         };
     }

@@ -53,6 +53,9 @@ enum class ComponentType {
 
 
 QString componentTypeToString(ComponentType t);
+// "10k", "1.5n", "1MHz", "2meg" -> double (M = mega, m = milli). *ok = false if
+// there is no leading number; empty is 0 and ok.
+double parseSiValue(const QString& str, bool* ok = nullptr);
 ComponentType stringToComponentType(const QString& s);
 
 // ============================================================================
@@ -161,6 +164,11 @@ public:
     PinDirection pinDirection = PinDirection::Input;
     QMap<QString, QString> params; // Dynamic parameters
     QMap<QString, QStringList> paramOptions; // Options for parameters (Key -> List of Choices)
+    // Params the Properties panel shows, in order. V/I sources show only the
+    // fields of their "Source type", like Cadence's vsource/isource form.
+    QStringList propertyKeys() const;
+    // Unit of a V/I source field ("V", "A", "s", "Hz", "deg", "1/s"); "" otherwise.
+    QString paramUnit(const QString& key) const;
     
     // Paradigm Bridge: Link to Unified DesignDb
     acutesim::components::InstUUID dbId;
