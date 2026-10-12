@@ -1190,7 +1190,18 @@ void SimulationWorkspace::updateVerilogADock(const std::string& verilogASource) 
         // InternalCodeEditor (the widget accepts setReadOnly on the textEdit_
         // child); we achieve this by not providing an edit path from outside.
     }
-    verilogADock_->setContent(QString::fromStdString(verilogASource));
+    // ponytail: the highlighted editor loads on the GUI thread (~0.6 s per 2.5 MB),
+    // so large designs preview only the head; an on-demand full view is the upgrade.
+    constexpr size_t kPreviewBytes = 256 * 1024;
+    if (verilogASource.size() <= kPreviewBytes) {
+        verilogADock_->setContent(QString::fromStdString(verilogASource));
+    } else {
+        const size_t cut = verilogASource.rfind('\n', kPreviewBytes);
+        verilogADock_->setContent(
+            QString::fromStdString(verilogASource.substr(0, cut == std::string::npos ? kPreviewBytes : cut))
+            + QString("\n// ... preview truncated: %1 MB sent to the simulator ...\n")
+                  .arg(verilogASource.size() / 1048576.0, 0, 'f', 1));
+    }
     verilogADock_->show();
     verilogADock_->raise();
 }

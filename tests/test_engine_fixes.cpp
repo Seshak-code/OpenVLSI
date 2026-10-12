@@ -10,7 +10,9 @@
 #include "engine_api/simulation_session.h"
 #include "engine_api/simulation_dto.h"
 #include "engine_api/engine_callbacks.h"
+#include "acutesim_engine/physics/circuitsim.h"
 
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -147,12 +149,40 @@ int main() {
         }
 
         // Fix 2: RC transient at dt = tau/100 terminates and is accurate
-        r = run(mode, "* rc\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n.tran 1e-5 1e-3\n", 1e-5, 1e-3);
+        r = run(mode, "* rc\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n.tran 1e-5 1e-3 uic\n", 1e-5, 1e-3);
         double expect = 5.0 * (1.0 - std::exp(-1.0));
         check(r.converged && near(V(r, 2), expect, 1e-3) &&
               near(r.waveformPoints.back().timeS, 1e-3, 1e-12),
-              "RC transient reaches t=1ms with V(2)=" + std::to_string(V(r, 2)) +
+              "RC transient (uic) reaches t=1ms with V(2)=" + std::to_string(V(r, 2)) +
               " (analytic " + std::to_string(expect) + ")");
+
+        // Phase 2.1: without UIC the transient starts at the DC operating point
+        // (it used to start from zero state: the RC above charged from 0 V)
+        r = run(mode, "* rc op\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n.tran 1e-5 1e-3\n", 1e-5, 1e-3);
+        check(r.converged && near(r.waveformPoints.front().nodeVoltages[1], 5.0, 1e-6) && near(V(r, 2), 5.0, 1e-6),
+              "RC without uic stays at its DC operating point 5 V (V(2)=" + std::to_string(V(r, 2)) + ")");
+        r = run(mode, "* rl op\nV1 1 0 DC 1\nR1 1 2 1k\nL1 2 0 1m\n.tran 1e-8 1e-6\n", 1e-8, 1e-6);
+        check(r.converged && std::abs(r.waveformPoints.front().nodeVoltages[1]) < 1e-5,
+              "RL without uic starts with I_L = 1 mA (V(2)(0+)=" +
+              std::to_string(r.waveformPoints.front().nodeVoltages[1]) + ", zero start gives 0.99)");
+        // IC= with UIC, and .ic (forced during the DC bias, or initial with UIC):
+        // all four give v(t) = 5 - 3 exp(-t/RC)
+        const double expectIC = 5.0 - 3.0 * std::exp(-1.0);
+        for (const char* nl : {"* c ic\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u IC=2\n.tran 1e-5 1e-3 uic\n",
+                               "* .ic\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n.ic v(2)=2\n.tran 1e-5 1e-3\n",
+                               "* .ic uic\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n.ic v(2)=2\n.tran 1e-5 1e-3 uic\n"}) {
+            r = run(mode, nl, 1e-5, 1e-3);
+            check(r.converged && near(V(r, 2), expectIC, 1e-3),
+                  std::string(nl).substr(2, std::string(nl).find('\n') - 2) + ": V(2)(1ms)=" +
+                  std::to_string(V(r, 2)) + " (analytic " + std::to_string(expectIC) + ")");
+        }
+        r = run(mode, "* l ic\nV1 1 0 DC 1\nR1 1 2 1k\nL1 2 0 1m IC=1m\n.tran 1e-8 1e-6 uic\n", 1e-8, 1e-6);
+        check(r.converged && std::abs(r.waveformPoints.front().nodeVoltages[1]) < 1e-5,
+              "L IC=1m with uic starts in steady state (V(2)(0+)=" +
+              std::to_string(r.waveformPoints.front().nodeVoltages[1]) + ")");
+        r = run(mode, "* bad ic\nV1 1 0 5\nR1 1 0 1k\n.ic v(nope)=1\n.tran 1u 1m\n", 1e-6, 1e-3);
+        check(!r.converged && r.errorDetail.find("unknown node") != std::string::npos,
+              ".ic on an unknown node is a parse error");
 
         // Waveform sources on the default path (were stuck at 0 V / DC)
         r = run(mode, "* sin\nV1 1 0 SIN(0 1 1k)\nR1 1 0 1k\n", 1e-5, 2.5e-4);
@@ -213,6 +243,34 @@ int main() {
         // Fix 2: invalid timestep is an error, not an infinite loop
         r = run(mode, "* rc\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n", 0.0, 1e-3);
         check(!r.converged && !r.errorDetail.empty(), "zero timestep returns an error");
+    }
+
+    // The CSR pattern cache must not trust the canonical topology hash: it ignores
+    // sources and node numbering, so a reused CircuitSim kept a stale pattern and
+    // silently dropped the moved source's stamps.
+    {
+        CircuitSim sim;
+        TensorNetlist a, b;
+        a.numGlobalNodes = b.numGlobalNodes = 2;
+        a.addVoltageSource(1, 0, 1.0); a.addResistor("R1", 1, 2, 1e3); a.addResistor("R2", 2, 0, 1e3);
+        b.addVoltageSource(2, 0, 1.0); b.addResistor("R1", 1, 2, 1e3); b.addResistor("R2", 2, 0, 1e3);
+        sim.solveDC(a);
+        SolverStep s = sim.solveDC(b);
+        check(s.stats.converged && s.nodeVoltages.size() == 2 && near(s.nodeVoltages[0], 1.0, 1e-9) &&
+              near(s.nodeVoltages[1], 1.0, 1e-9),
+              "reused CircuitSim: moved source gives V1 = V2 = 1 (got " +
+              (s.nodeVoltages.size() == 2 ? std::to_string(s.nodeVoltages[0]) + ", " + std::to_string(s.nodeVoltages[1]) : "none") + ")");
+    }
+
+    // Linear-time canonicalRelabel must reproduce the original (std::map, O(n^2)
+    // BFS) hash: golden DB entries and cached traces store it. Value from the old code.
+    {
+        std::vector<GraphCanonical::CanonicalEdge> e;
+        for (auto x : {std::array<int, 3>{0, 3, 0}, {3, 7, 1}, {3, 7, 0}, {7, 7, 2}, {7, 0, 3},
+                       {5, 9, 0}, {9, 5, 4}, {2, 0, 5}})
+            e.emplace_back(x[0], x[1], x[2]);
+        check(GraphCanonical::computeTopologyHash(e, 0) == 3977363823923051078ULL,
+              "topology hash unchanged by the linear-time relabel");
     }
 
     std::printf("\n%s (%d failure%s)\n", g_fail ? "FAILED" : "ALL PASSED", g_fail, g_fail == 1 ? "" : "s");

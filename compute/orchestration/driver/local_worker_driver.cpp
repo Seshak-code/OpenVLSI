@@ -434,65 +434,44 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runTransient(
         stopTime = parseUnitValue(it->second, 1e-3);
     }
 
-    double currentTime = 0.0;
-    double timeStep = 1e-5;
-    int stepCount = 0;
-    int totalIterations = 0;
+    double timeStep = stopTime / 100.0;
+    if (auto h = req.parameters.find("stepHint"); h != req.parameters.end())
+        timeStep = parseUnitValue(h->second, timeStep);
+
+    int stepCount = 0, totalIterations = 0;
     double maxResidual = 0.0;
-    bool failed = false;
+    const std::string err = sim.runTransient(
+        runNetlist, timeStep, stopTime, req.transient.uic, [&](const SolverStep& result) {
+            if (cancelRequested_.load()) return false;
+            ++stepCount;
+            totalIterations += result.stats.iterations;
+            maxResidual = std::max(maxResidual, result.stats.residual);
+            resp.timeVector.push_back(result.time);
+            for (int i = 0; i < (int)result.nodeVoltages.size(); ++i)
+                resp.nodeVoltages[i].push_back(result.nodeVoltages[i]);
+            for (const auto& probe : runNetlist.globalBlock.probes) {
+                double v_pos = (probe.nodePositive > 0 &&
+                               probe.nodePositive <= (int)result.nodeVoltages.size())
+                              ? result.nodeVoltages[probe.nodePositive - 1] : 0.0;
+                double v_neg = (probe.nodeNegative > 0 &&
+                               probe.nodeNegative <= (int)result.nodeVoltages.size())
+                              ? result.nodeVoltages[probe.nodeNegative - 1] : 0.0;
+                resp.probeValues[probe.name].push_back(v_pos - v_neg);
+            }
+            if (q_ptr->onJobProgress && stepCount % 50 == 0) {
+                float pct = static_cast<float>(result.time / stopTime);
+                q_ptr->onJobProgress(0, pct, "t = " + std::to_string(result.time * 1e6) + " us");
+            }
+            return true;
+        });
 
-    while (currentTime < stopTime && !cancelRequested_.load()) {
-        SolverStep result = sim.stepTransient(runNetlist, timeStep, currentTime);
-        currentTime = result.time;
-        stepCount++;
-        totalIterations += result.stats.iterations;
-        if (result.stats.residual > maxResidual) {
-            maxResidual = result.stats.residual;
-        }
-
-        if (!result.stats.converged) {
-            resp.success = false;
-            resp.errorDetail = "Transient failed at t=" + std::to_string(currentTime) +
-                "s: " + result.stats.error_detail;
-            failed = true;
-            break;
-        }
-
-        // Accumulate time vector
-        resp.timeVector.push_back(currentTime);
-
-        // Accumulate node voltages
-        for (int i = 0; i < (int)result.nodeVoltages.size(); ++i) {
-            resp.nodeVoltages[i].push_back(result.nodeVoltages[i]);
-        }
-
-        // Accumulate probe values
-        for (const auto& probe : runNetlist.globalBlock.probes) {
-            double v_pos = (probe.nodePositive > 0 &&
-                           probe.nodePositive <= (int)result.nodeVoltages.size())
-                          ? result.nodeVoltages[probe.nodePositive - 1] : 0.0;
-            double v_neg = (probe.nodeNegative > 0 &&
-                           probe.nodeNegative <= (int)result.nodeVoltages.size())
-                          ? result.nodeVoltages[probe.nodeNegative - 1] : 0.0;
-            resp.probeValues[probe.name].push_back(v_pos - v_neg);
-        }
-
-        // Progress callback
-        if (q_ptr->onJobProgress && stepCount % 50 == 0) {
-            float pct = static_cast<float>(currentTime / stopTime);
-            q_ptr->onJobProgress(0, pct, "t = " + std::to_string(currentTime * 1e6) + " us");
-        }
+    resp.success = err.empty();
+    resp.errorDetail = err;
+    if (resp.success) {
+        resp.convergence.iterations  = totalIterations;
+        resp.convergence.maxResidual = maxResidual;
+        resp.convergence.method      = "Newton-Raphson";
     }
-
-    if (!failed) {
-        resp.success = true;
-        resp.convergence.iterations       = totalIterations;
-        resp.convergence.maxResidual      = maxResidual;
-        resp.convergence.method           = "Newton-Raphson";
-        resp.convergence.gminSteppingUsed = false;
-        resp.convergence.sourceSteppingUsed = false;
-    }
-
     return resp;
 }
 

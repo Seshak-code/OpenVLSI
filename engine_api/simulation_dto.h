@@ -104,6 +104,7 @@ struct TransientConfigDTO {
     double stopTimeS = 1e-6;
     double stepSizeS = 1e-9;
     double maxStepS  = 1e-8;
+    bool   uic       = false;   // start from .ic / IC= values, skip the DC bias
 };
 
 struct DCConfigDTO {
