@@ -41,7 +41,7 @@ cmake --build out/build/windows-msvc --config Release --target AcuteSim
 ```bash
 emcmake cmake -S . -B out/build/wasm -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build out/build/wasm --target AcuteSim
-python3 scripts/serve.py   # serves at http://localhost:8000
+python3 scripts/serve.py   # serves at http://localhost:8080
 ```
 
 ## Testing
@@ -195,3 +195,29 @@ The compat header `gui/editors/schematic_editor.h` exists because the real heade
 ### AI Layer Tests
 
 Use `tests/stubs/ai_api_test_stubs.cpp` to avoid pulling in GUI dependencies for AI-layer tests.
+
+## Cross-Agent Collaboration (Claude Code ⇄ Cline)
+
+This repo is worked by **both** Claude Code and Cline. They hand off to each
+other through git, the handoff docs, and the memory bank:
+
+- **Session start:** read `ENGINE_HANDOFF.md` §0, then run the sweep:
+  `git status --short` (if dirty and you didn't make it dirty, another agent may
+  be mid-flight — stop and check), `git worktree list --porcelain`, and
+  `git log --no-merges origin/engine/spice-correctness..HEAD`. Background tasks
+  are **not** reliably worktree-isolated (a 2026-10-12 background task edited this
+  very checkout).
+- **Session end:** update `ENGINE_HANDOFF.md` §0 and
+  `memory-bank/activeContext.md` (what was done, commits, what's next) with an
+  agent stamp — e.g. "Last session: Claude Code, 2026-10-12" — then commit
+  (conventional prefix, explain why) and push. Uncommitted work is invisible to
+  the other agent.
+- **Merges:** record every branch/worktree merge in `ENGINE_HANDOFF.md` §0 with
+  the commit hash and which agent did it.
+- **Delegation:** focused tasks can be delegated to Cline headlessly via the
+  `/cline` command (`.claude/commands/cline.md`).
+- `.clinerules/` (00–05) carries the collaboration protocol, gotchas, workflow
+  and memory-bank instructions for Cline; the same rules apply to Claude Code by
+  symmetry.
+
+@memory-bank/activeContext.md

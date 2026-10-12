@@ -1,0 +1,2 @@
+- [AcuteSim engine direction](acutesim-engine-direction.md) — tensor-contraction 1e9-transistor goal; start from CuteApp/ENGINE_HANDOFF.md
+- [CuteApp grep skips tests](cuteapp-grep-gitignore.md) — shell grep honours .gitignore; use `command grep`
