@@ -131,7 +131,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | G (VCCS) | ✅ | transconductance |
 | F / H (CCCS / CCVS) | ❌ | explicit "not supported yet" (controlling-source current not modelled) |
 | T (transmission line) | ❌ | explicit "not supported yet" |
-| X (subcircuit instance) | 🚫 | parses, but instance circuits fail to converge; internal nodes share global numbering |
+| X (subcircuit instance) | ✅ | local node scoping, defined-after-use, nesting (depth guard), pin-count/unknown-name errors; hierarchical results bit-identical to flattened (DC + transient). Subcircuit parameters (`params:`) not supported |
 | Zener / Schottky / power rail | ❓ | data model + AoS stamps only; not reachable from SPICE netlists |
 | `AREA` scaling (D/Q/J) | ❌ | explicit error |
 
@@ -142,7 +142,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | SI suffixes (`f p n u m k meg g t mil`) | ✅ | |
 | `.model` (anywhere in file) | ✅ | resolved after the whole file is read; SPICE defaults for missing parameters |
 | `.param` | ⚠️ | `{NAME}` / bare name substitution ✅; arithmetic expressions ❌ (explicit error) |
-| `.subckt` / `.ends` | 🚫 | see X above |
+| `.subckt` / `.ends` | ✅ | see X above |
 | Unknown element / too few fields / non-numeric value | ✅ | hard parse error with line number (used to be silently dropped or read as 0) |
 | `.include`, `.lib`, `.options`, `.global`, `.ic`, `.print`, `.plot`, `.four` | ⚠️ | silently ignored |
 
@@ -159,6 +159,66 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 `#02` needs `.dc` sweeps · `#05–09` need verified AC analysis · `#10` floating bridge output
 holds stale voltages · `#16/#17` pass only at smaller steps (1 ms step gives 4–6 % error; SPICE also
 caps its step at tstop/50 here) — every other circuit matches SPICE 2g6.
+
+---
+
+
+## 🎯 END-TO-END GOAL & ENGINE SCALE PLAN (SPICE parity → billion-device GPU simulation)
+
+**Product goal:** in one application, design an SoC, connect RAM, simulate firmware running on it,
+and see the program's output — covering every step from schematic/RTL to sign-off.
+
+**Physics reality that shapes the plan (measured 2026-10-11 on an M4 Pro, 26 GB unified memory):**
+- Executing code needs billions of clock cycles. At transistor level even 1 ms of CPU execution
+  would take years, so **firmware runs on RTL / gate-level models**; SPICE is reserved for the
+  blocks that need it (PLL, SRAM bit-cells/sense amps, IO, power), co-simulated with the digital side.
+- A flat, SPICE-accurate billion-transistor run does not fit: ~70 B/device of state plus a ~10¹⁰-entry
+  matrix is >150 GB. Billion-device runs are only reachable FastSPICE-style: **store each unique
+  cell once, simulate only active regions, partition into GPU-batched blocks**.
+- Today's API path uses dense LU: 200 nodes 0.32 s, 800 nodes 3.0 s, 1,600 nodes 21.6 s (O(N³)).
+
+### Abstraction ladder (what runs where)
+| Level | Engine | Used for |
+|---|---|---|
+| Firmware on CPU model | instruction-set / RTL simulation (Verilator-class) | running code, program output, boot, drivers |
+| RTL / gate level | event-driven digital engine (`digital_event_engine.h`) + Yosys/OpenROAD flow | functional + timing sign-off |
+| FastSPICE (10⁶–10⁹ devices) | this engine: hierarchy reuse, activity bypass, GPU partitions | SRAM arrays, power grids, full-chip analog effects (~1–5 % timing accuracy) |
+| Full SPICE (≤10⁶ devices) | this engine, default path | analog blocks, cells, characterisation (SPICE accuracy) |
+| Mixed-signal co-simulation | A2D/D2A boundary (`DigitalEventEngine`) | analog blocks inside a running digital system |
+
+### Phases & exit gates (every gate checked against ngspice as reference oracle)
+**Phase 1 — Foundations** *(in progress)*
+- [ ] ngspice differential test harness in CI (generalises the allaboutcircuits suite)
+- [x] Subcircuits / hierarchy correct (`.subckt`, nesting, instances on every solver path) — verified hierarchical == flattened
+- [ ] Sparse LU (existing `sparse_lu.cpp`) as default solver; compiled-block routing reachable from the API
+- [ ] MNA branch-current unknowns for V sources, inductors, E/H — replaces 1 mΩ/100 µΩ Norton models,
+      unlocks F/H sources, transient inductor current, mutual inductance
+- **Gate:** hierarchical == flattened results; 10⁴-node circuit DC in < 1 s; all reference circuits within SPICE tolerance
+
+**Phase 2 — Analysis parity**
+- [ ] DC operating point as transient initial state (not zero); `.ic` / `uic` via DTO
+- [ ] Breakpoints at waveform edges; `.dc` sweeps; AC + noise through `ISimulationEngine` (reuse GUI-path `ACSolver`)
+- [ ] One transient loop shared by `SessionImpl` and `LocalWorkerDriver`
+- **Gate:** every analysis in the feature list ✅ against ngspice
+
+**Phase 3 — Device-model parity**
+- [ ] BSIM4 and BSIM-CMG (modern PDKs) via the existing Verilog-A front end / physics compiler
+- [ ] Junction capacitances (diode CJO/TT, BJT, MOS charge models), Gummel–Poon BJT, MOSFET S/D swap + body effect
+- [ ] PDK model-card ingestion (`.lib` sections, corners)
+- **Gate:** standard-cell characterisation (delay/power) within 1 % of ngspice on a real PDK
+
+**Phase 4 — Single-GPU scale**
+- [ ] Device evaluation on GPU (today the GPU computes nothing that is used; CPU stamps everything)
+- [ ] Partitioning + batched small-block LU on GPU (Schur/BBD; existing `schur_solver`, `graph_partitioner`)
+- [ ] Isomorphism reuse: identical cell instances share tensors/evaluations (`graph_canonical.h`)
+- [ ] Activity/latency bypass and multirate integration for quiescent partitions
+- **Gate:** scale ladder 10³ → 10⁵ → 10⁷ → 10⁹ devices, each rung with accuracy + runtime targets
+
+**Phase 5 — SoC flow in the app**
+- [ ] Mixed-signal co-simulation: RTL/firmware engine ↔ SPICE blocks through A2D/D2A ports
+- [ ] SoC + RAM reference design: CPU RTL + SRAM macro (SPICE-characterised) + firmware → visible program output
+- [ ] Unified design flow UI: schematic/RTL → synthesis (Yosys) → P&R (OpenROAD) → extraction → simulation → sign-off
+- **Gate:** "hello world" firmware runs on the reference SoC inside the app, with SRAM timing taken from SPICE characterisation
 
 ---
 
