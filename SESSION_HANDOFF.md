@@ -1,5 +1,7 @@
 # AcuteSim Virtuoso Cloud Studio — Session Handoff
 
+> **Engine work (Karam solver, SPICE parity, scale plan):** see [`ENGINE_HANDOFF.md`](ENGINE_HANDOFF.md).
+
 **Timestamp**: 2026-08-16  
 **Repository**: `CuteApp`  
 **Target Platform**: Browser / WebAssembly / WebGPU (Vercel Deployable)  
