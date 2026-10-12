@@ -20,6 +20,13 @@ then the two Roadmap sections it points to. Everything below was verified by run
   fail **identically at the committed baseline** (pre-existing, not from this stretch).
   Trap: `tests/` is in `.gitignore` ("Local Project Exclusions") — **new** test files are silently
   untracked; `git add -f` them. Cross-agent protocol: `.clinerules/01-collab-handoff.md`.
+- **Update 2026-10-12 (fifth session, Cline):** **junction gmin DONE** — the engine now puts
+  the 1e-12 S gmin across each PN junction (diode/BJT/zener models + SoA kernels, both audits)
+  instead of node-to-ground, matching ngspice; the node gmin is dropped at convergence.
+  **`aac_10_bridge` passes** — ngspice harness 84 PASS / 0 FAIL (cpu+gpu). Full ctest 28/32,
+  the 4 pre-existing failures unchanged. **Next:** (a) wire the golden datasets
+  (`tests/ibmpg_diff.py`, `tests/xyce_diff.py`) into regular verification, (b) the two queued
+  GUI issues, (c) Roadmap Phase 3.
 - **Status of the plan:** Roadmap Phase 1 (Foundations) is done. See `Roadmap.md` →
   "⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS" (what works, by device/analysis, with ✅/⚠️/❌/🚫/❓)
   and "🎯 END-TO-END GOAL & ENGINE SCALE PLAN" (phases and gates).
@@ -214,11 +221,9 @@ From `Roadmap.md` Phase 2, with pointers:
 
 ## 6. Known issues / backlog (not yet fixed)
 
-- **Junction gmin (next):** the engine puts gmin = 1e-12 S from every node to ground (DC/transient);
-  ngspice puts it across each junction and has no node gmin once converged. Floating nodes between
-  diodes (`aac_10_bridge`) therefore settle differently. Fix: add gmin to the diode/BJT junction stamps
-  (SoA kernels: generic/NEON/AVX2/AVX-512, AoS, both audits) and drop the node gmin at convergence.
-  AC already drops it (that fixed `aac_09`).
+- ~~Junction gmin~~ **FIXED 2026-10-12 (Cline):** gmin now sits across each junction
+  (device models + SoA kernels, both audits) instead of node-to-ground; the node gmin
+  is dropped at convergence. `aac_10_bridge` passes. Details: `ENGINE_HANDOFF.md` §0.
 - Temperature: devices use a fixed Vt = 25.85 mV (≈ 299.98 K) while `ambient_temp_K` defaults to
   300.15 K (noise uses the latter: 0.03 % vs the harness's 26.83 °C). Derive Vt from the temperature.
 - Session Monte Carlo: `mcSeed` never applied (every run identical) 🚫; the driver path works. `test_headless_orchestrator` has 3

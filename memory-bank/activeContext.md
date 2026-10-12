@@ -1,8 +1,12 @@
 # Active Context
 
-**Last session: Cline, 2026-10-12** (migration/handoff session; the code work
-below was authored by the Claude Code sessions of the same day and verified,
-committed and pushed by Cline — `b85e404`…`f98f835`).
+**Last session: Cline, 2026-10-12 (junction gmin)** — the engine's gmin now sits across
+each PN junction (diode/BJT/zener device models + SoA kernels, both audits) instead of
+node-to-ground, matching ngspice; node gmin dropped at convergence. `aac_10_bridge`
+passes — ngspice harness **84 PASS / 0 FAIL** (cpu+gpu). Full ctest 28/32 (the 4
+pre-existing failures unchanged); test_regression 4/4, test_engine_fixes,
+test_ad_integration 19/19, test_std_cells all pass. **Awaiting Claude Code review**
+after its rate limit resets (7:10pm): the gmin commits and this record.
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at
@@ -22,21 +26,17 @@ every session end and stamp your agent.**
 
 ## Next, in order (from `ENGINE_HANDOFF.md` §0)
 
-1. **Junction gmin** — add gmin to diode/BJT junction stamps (SoA kernels:
-   generic/NEON/AVX2/AVX-512, AoS, both audits), drop node gmin at convergence.
-   Fixes `aac_10_bridge`. AC already drops it.
-2. **Golden datasets into the harness** — wire `tests/ibmpg_diff.py` /
+1. **Golden datasets into the harness** — wire `tests/ibmpg_diff.py` /
    `tests/xyce_diff.py` into regular verification; IBM power-grid for solver
    scale, Xyce regression subset for devices.
-3. **GUI issues queued as separate tasks** (from session 75afa6b2).
-4. **Roadmap Phase 3.**
+2. **GUI issues queued as separate tasks** (from session 75afa6b2).
+3. **Roadmap Phase 3.**
 
 ## Work around (known, do not chase)
 
-- `aac_10_bridge` ngspice FAIL — the junction-gmin task above.
 - ctest pre-existing failures: `test_gpu_parity`, `test_kernel_dispatch`,
   `test_numerical_intelligence`, `test_grpc_orchestrator` (identical at
-  baseline).
+  baseline; `test_kernel_dispatch` = stale diode-clamp expectation).
 - `mcSeed` never applied (every Monte Carlo run identical); temperature: Vt
   fixed at 25.85 mV vs `ambient_temp_K` default 300.15 K; MOSFET level-1 gaps
   (no Vds<0 swap, no body effect); `.include/.lib/.options/.ic/.print` silently
