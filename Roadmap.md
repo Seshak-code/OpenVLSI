@@ -95,7 +95,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | Path | Who uses it | Status |
 |---|---|---|
 | Default CPU path (SoA tensors, `TENSOR_SOA_SIMD`) | `ISimulationEngine` sessions, GUI via `LocalWorkerDriver` | ✅ primary path; all ✅ rows below were verified here |
-| GPU path (WebGPU hybrid NR, DC only) | default on machines with a GPU | ⚠️ physics still stamped on CPU; models R, V, I, L (DC), D, M, Q only. Every result is checked against the full-netlist KCL audit; anything else falls back to CPU, so results are correct but unsupported devices cost a wasted GPU attempt |
+| GPU mode | default on machines with a GPU | ⚠️ currently runs the CPU path: the former WebGPU "hybrid" loop stamped and solved on the CPU with its own voltage-only device copy, so it was retired from `solveDC`. Phase 4 rebuilds GPU device evaluation + batched front contraction |
 | Legacy AoS path (`LEGACY_AOS`) | AI speculative runner (`ai_api/simulation/speculative_runner.cpp`) | 🚫 PMOS conducts at Vgs=0; BJT polarity decided from the model *name*; uses different device defaults from the default path |
 | Default linear solver | every DC/transient Newton step, CPU and GPU-hybrid paths | ✅ tensor-contraction solver: backward error ≤1e-15 on grids, hub-heavy and E-source networks (200 random networks fuzzed); 10⁴ nodes 0.02 s, 10⁶ nodes 7.6 s single-threaded |
 | Legacy TN / Schur / "sparse" LU routing | only callers passing a `CompiledTensorBlock` (batch runner, GUI driver) | ⚠️ `NetlistCompiler::compile` runs a ~quadratic Min-Fill treewidth pass (100+ s at 10⁴ nodes); `sparse_lu.cpp` is dense internally |
@@ -120,17 +120,17 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 |---|---|---|
 | R | ✅ | value; `TC1`/`TC2` parsed but unused by any stamp |
 | C | ✅ | value; `IC=` accepted and ignored (zero initial state) |
-| L | ⚠️ | DC = 1 mΩ short ✅; transient 🚫 inductor current history is never carried between steps |
-| K (mutual inductance) | 🚫 | DC fine (shorts); transient coupling ignored on the default path and mis-modelled on AoS |
-| V / I sources: DC, PULSE, SIN | ✅ | SPICE defaults (TR/TF=TSTEP, PW=∞, DC = t=0 value); AC magnitude/phase parsed |
+| L | ✅ | MNA branch current: exact DC short; Trapezoidal/BE/Gear2 branch equations in transient (RL step matches 1−e^(−t/τ) to 1e-6; RLC SIN matches ngspice) |
+| K (mutual inductance) | ✅ | off-diagonal L_ab terms between coupled branch rows (open-circuit v2/v1 = k verified) |
+| V / I sources: DC, PULSE, SIN | ✅ | exact (MNA branch current; was a 1 mΩ Norton model); SPICE defaults (TR/TF=TSTEP, PW=∞, DC = t=0 value); AC magnitude/phase parsed |
 | V / I sources: EXP, PWL, SFFM, AM | ❌ | explicit "not supported yet" |
 | D (diode) | ✅ | `IS`, `N`; no `RS`, `CJO`/`TT` (no junction capacitance), no breakdown on `D` |
 | Q (BJT) | ✅ | Ebers–Moll: `IS`, `BF`, `BR`, polarity from `.model`; no `VAF`, `RB/RC/RE`, junction capacitances |
 | M (MOSFET) | ⚠️ | Level 1: `KP`, `VTO`, `LAMBDA`; no source/drain swap for Vds<0, no body effect, λ missing in linear region |
 | J (JFET) | ✅ | Shichman–Hodges: `BETA`, `VTO`, `LAMBDA`, N/P from `.model`; no gate diodes, no S/D swap |
-| E (VCVS) | ✅ | gain (100 µΩ Norton output) |
+| E (VCVS) | ✅ | gain; ideal (MNA branch current) |
 | G (VCCS) | ✅ | transconductance |
-| F / H (CCCS / CCVS) | ❌ | explicit "not supported yet" (controlling-source current not modelled) |
+| F / H (CCCS / CCVS) | ✅ | read the controlling V source's branch current (same block; resolved after parsing); matches ngspice exactly |
 | T (transmission line) | ❌ | explicit "not supported yet" |
 | X (subcircuit instance) | ✅ | local node scoping, defined-after-use, nesting (depth guard), pin-count/unknown-name errors; hierarchical results bit-identical to flattened (DC + transient). Subcircuit parameters (`params:`) not supported |
 | Zener / Schottky / power rail | ❓ | data model + AoS stamps only; not reachable from SPICE netlists |
@@ -192,8 +192,8 @@ and see the program's output — covering every step from schematic/RTL to sign-
 - [x] ngspice differential test harness (`tests/ngspice_diff/run_diff.py`, 34 netlists; ngspice 47 as oracle) — not yet wired into CI
 - [x] Subcircuits / hierarchy correct (`.subckt`, nesting, instances on every solver path) — verified hierarchical == flattened
 - [x] Default linear solver is the tensor-contraction solver (`math/contraction_solver.*`): nested-dissection contraction tree, superposition of child Schur complements, MC64-style matching + threshold partial pivoting with delayed pivots, iterative refinement. (`sparse_lu.cpp` turned out to be dense internally.) Compiled-block routing still separate
-- [ ] MNA branch-current unknowns for V sources, inductors, E/H — replaces 1 mΩ/100 µΩ Norton models,
-      unlocks F/H sources, transient inductor current, mutual inductance
+- [x] MNA branch-current unknowns for V sources, inductors, E/H — replaced the 1 mΩ/100 µΩ Norton models;
+      F/H sources, transient inductor current and mutual inductance now work (DC error vs ngspice 1.4e-6 → 2e-8 V)
 - **Gate:** hierarchical == flattened results ✅; 10⁴-node circuit DC in < 1 s ✅ (0.33 s end-to-end; 10⁵ nodes 1.44 s); all reference circuits within SPICE tolerance (open: MOSFET λ in linear region, transient inductors)
 
 **Phase 2 — Analysis parity**

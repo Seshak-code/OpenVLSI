@@ -177,9 +177,26 @@ int main() {
         r = run(mode, "* unknown\nV1 1 0 5\nZ1 1 0 5\n.op\n");
         check(!r.converged && r.errorDetail.find("unknown element") != std::string::npos,
               "unknown element is a parse error: " + r.errorDetail);
+        // MNA branch currents: F/H read V1's branch current (1e-6 tolerance: every
+        // node carries a 1e-12 S GMIN, a 1e-9 relative effect here). SPICE convention:
+        // I(V1) flows + -> source -> -, so V1 driving 1k gives I(V1) = -1 mA.
         r = run(mode, "* cccs\nV1 1 0 1\nR1 1 0 1k\nF1 0 2 V1 10\nR2 2 0 1k\n.op\n");
-        check(!r.converged && r.errorDetail.find("not supported") != std::string::npos,
-              "unsupported F source is an error, not a silent no-op");
+        check(r.converged && near(V(r, 2), -10.0, 1e-6), "F source: 10 * I(V1) into 1k = -10 V (V=" + std::to_string(V(r, 2)) + ")");
+        r = run(mode, "* ccvs\nV1 1 0 1\nR1 1 0 1k\nH1 2 0 V1 1k\nR2 2 0 1k\n.op\n");
+        check(r.converged && near(V(r, 2), -1.0, 1e-6), "H source: 1k * I(V1) = -1 V (V=" + std::to_string(V(r, 2)) + ")");
+        r = run(mode, "* exact source\nV1 1 0 DC 5\nR1 1 0 1\n.op\n");
+        check(r.converged && near(V(r, 1), 5.0, 1e-12), "V source exact at 5 A load (was 1 mOhm Norton: 5 mV low)");
+
+        // Transient inductor (failed to converge before: history never written back)
+        // RL step, tau = L/R = 1 us: v_R(5 us) = 1 - e^-5
+        r = run(mode, "* rl step\nV1 1 0 DC 1\nL1 1 2 1m\nR1 2 0 1k\n.tran 1e-8 5e-6 uic\n", 1e-8, 5e-6);
+        check(r.converged && near(V(r, 2), 1.0 - std::exp(-5.0), 1e-4),
+              "RL step transient matches 1 - e^-t/tau (V=" + std::to_string(V(r, 2)) + ")");
+        // Mutual inductance, open secondary: v2/v1 = M/L1 = k = 0.99
+        r = run(mode, "* xfmr\nV1 1 0 SIN(0 1 1k)\nR1 1 2 1\nL1 2 0 1m\nL2 3 0 1m\nK1 L1 L2 0.99\n"
+                      "R2 3 0 1MEG\n.tran 1e-6 2.5e-4\n", 1e-6, 2.5e-4);
+        check(r.converged && std::abs(V(r, 2)) > 0.1 && near(V(r, 3) / V(r, 2), 0.99, 1e-3),
+              "K coupling: open-circuit v2/v1 = 0.99 (ratio=" + std::to_string(V(r, 3) / V(r, 2)) + ")");
 
         // Fix 2: invalid timestep is an error, not an infinite loop
         r = run(mode, "* rc\nV1 1 0 DC 5\nR1 1 2 1k\nC1 2 0 1u\n", 0.0, 1e-3);
