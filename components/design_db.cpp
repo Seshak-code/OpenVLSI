@@ -222,29 +222,92 @@ DesignDb::GraphSnapshotResult DesignDb::snapshotWithNodeMap() const {
 }
 
 TensorNetlist DesignDb::toNetlist() const {
-    auto snapshot = snapshotWithNodeMap();
+    // Node indices come from the same mapping the DTO snapshot uses; parameters are
+    // read straight from instances_ to skip the DTO's double->string->double round trip.
+    const auto netToNode = snapshotWithNodeMap().netToNode;
     TensorNetlist netlist;
-    netlist.numGlobalNodes = snapshot.netToNode.size();
-    netlist.globalBlock.name = snapshot.graph.name;
+    TensorBlock& block = netlist.globalBlock;
 
-    for (const auto& instDto : snapshot.graph.instances) {
-        // Simple mapping based on type name matching the primitive loaders
-        // In a real system, this would be more exhaustive or use a lookup table
-        if (instDto.type == "Resistor" || instDto.type == "R") {
-            Resistor r;
-            r.name = instDto.instanceName;
-            if (instDto.connectedNets.size() >= 2) {
-                // Placeholder mapping for nodal connectivity
-                r.nodeTerminal1 = 0; 
-                r.nodeTerminal2 = 0;
-            }
-        }
-        // ... (The exhaustive mapping is complex, let's use a simpler approach if possible)
+    std::map<InstUUID, std::map<int, int>> instConn;
+    for (const auto& kv : pins_) {
+        auto it = netToNode.find(kv.second.netId);
+        instConn[kv.second.instanceId][kv.second.terminalIndex] = (it != netToNode.end()) ? it->second : 0;
     }
-    
-    // Actually, snapshotWithNodeMap already does the heavy lifting for nodes.
-    // Let's implement a robust version that matches what Circuit expects.
-    return netlist; 
+
+    auto getParam = [](const Instance& inst, const std::string& key, double def) {
+        auto it = inst.parameters.find(key);
+        return (it != inst.parameters.end()) ? it->second : def;
+    };
+    auto getStrParam = [](const Instance& inst, const std::string& key, const std::string& def) {
+        auto it = inst.stringParameters.find(key);
+        return (it != inst.stringParameters.end()) ? it->second : def;
+    };
+
+    std::vector<const Instance*> sortedInsts;
+    for (const auto& kv : instances_) sortedInsts.push_back(&kv.second);
+    std::sort(sortedInsts.begin(), sortedInsts.end(), [](const Instance* a, const Instance* b){
+        return a->name < b->name;
+    });
+
+    for (const Instance* instPtr : sortedInsts) {
+        const Instance& inst = *instPtr;
+        const auto& nodes = instConn[inst.id];
+        auto getN = [&](int t) {
+            auto it = nodes.find(t);
+            return (it != nodes.end()) ? it->second : 0;
+        };
+        const std::string& m = inst.masterName;
+
+        if (m == "R" || m == "res_generic" || m == "Resistor" || m == "PDK_Resistor") {
+            block.addResistor(inst.name, getN(0), getN(1), getParam(inst, "R", 1000.0));
+            auto& r = block.resistors.back();
+            r.model_name = getStrParam(inst, "Model", "poly_res");
+            r.width_m = getParam(inst, "W", 0.0);
+        }
+        else if (m == "C" || m == "cap_generic" || m == "Capacitor" || m == "PDK_Capacitor") {
+            block.addCapacitor(inst.name, getN(0), getN(1), getParam(inst, "C", 1e-12));
+            block.capacitors.back().model_name = getStrParam(inst, "Model", "mim_cap");
+        }
+        else if (m == "L" || m == "ind_generic" || m == "Inductor") {
+            block.addInductor(inst.name, getN(0), getN(1), getParam(inst, "L", 1e-9));
+            auto& l = block.inductors.back();
+            l.model_name = getStrParam(inst, "Model", "ind_generic");
+            l.width_m = getParam(inst, "W", 0.0);
+            l.area_m2 = getParam(inst, "Area", 0.0);
+        }
+        else if (m == "V" || m == "vsource" || m == "vdc" || m == "VoltageSource") {
+            block.addVoltageSource(getN(0), getN(1), getParam(inst, "V", 0.0), "DC");
+        }
+        else if (m == "I" || m == "isource" || m == "idc" || m == "CurrentSource") {
+            block.addCurrentSource(getN(0), getN(1), getParam(inst, "I", 0.0));
+        }
+        else if (m == "D" || m == "diode" || m == "diode_generic" || m == "Diode") {
+            block.addDiode(inst.name, getN(0), getN(1), getParam(inst, "Is", 1e-14));
+        }
+        else if (m == "nfet" || m == "nfet_01v8" || m == "Mosfet" || m == "PDK_NFET") {
+            block.addMosfet(inst.name, getN(0), getN(1), getN(2), getN(3),
+                            getStrParam(inst, "Model", "nfet"), getParam(inst, "W", 1e-6), getParam(inst, "L", 1e-6));
+        }
+        else if (m == "pfet" || m == "pfet_01v8" || m == "PDK_PFET") {
+            block.addMosfet(inst.name, getN(0), getN(1), getN(2), getN(3),
+                            getStrParam(inst, "Model", "pfet"), getParam(inst, "W", 1e-6), getParam(inst, "L", 1e-6));
+        }
+        else if (m == "Bjt") {
+            block.addBJT(inst.name, getN(0), getN(1), getN(2), getStrParam(inst, "Model", "2N2222"), true);
+        }
+        // Controlled sources: terminals 0,1 = control, 2,3 = output
+        else if (m == "VCVS") block.addVCVS(getN(2), getN(3), getN(0), getN(1), getParam(inst, "Gain", 1.0));
+        else if (m == "VCCS") block.addVCCS(getN(2), getN(3), getN(0), getN(1), getParam(inst, "Gain", 1.0));
+        else if (m == "CCVS") block.addCCVS(getN(2), getN(3), getN(0), getN(1), getParam(inst, "Gain", 1.0));
+        else if (m == "CCCS") block.addCCCS(getN(2), getN(3), getN(0), getN(1), getParam(inst, "Gain", 1.0));
+    }
+
+    int maxNode = 0;
+    for (const auto& kv : netToNode) maxNode = std::max(maxNode, kv.second);
+    block.numInternalNodes = std::max(block.numInternalNodes, maxNode);
+    netlist.numGlobalNodes = block.numInternalNodes;
+    netlist.globalState.initialize(block);
+    return netlist;
 }
 
 acutesim::compute::orchestration::SchematicGraphDTO DesignDb::buildGraphDTO() const {

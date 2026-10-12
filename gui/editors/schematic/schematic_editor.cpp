@@ -1977,6 +1977,39 @@ TensorNetlist GridScene::toNetlist() {
     // Top-level interface pins (ComponentWizard, symbol generation, hierarchy).
     // PowerPorts are not DesignDb instances, so this must come from the scene.
     const auto netToNode = designDb.snapshotWithNodeMap().netToNode;
+    auto netAt = [&](QPointF scenePos) {
+        int rootID = spatialFindSet(spatialGetNetID(scenePos));
+        return m_spatialToDbNet.value(rootID, acutesim::components::NetUUID());
+    };
+    auto nodeOf = [&](acutesim::components::NetUUID netId) {
+        auto it = netToNode.find(netId);
+        return (it != netToNode.end()) ? it->second : 0;
+    };
+
+    // Wire segments for parasitic extraction; long wires get an R_WIRE resistor.
+    constexpr double PIXEL_TO_UM = 0.1;
+    constexpr double PARASITIC_R_PER_UM = 0.1;
+    constexpr double PARASITIC_LENGTH_THRESHOLD = 15.0; // um
+    int wireSegIdx = 0;
+    for (auto* item : items()) {
+        auto* w = dynamic_cast<VisualWire*>(item);
+        if (!w || !w->isVisible()) continue;
+        QLineF line = w->line();
+        TensorBlock::WireSegment seg;
+        seg.layer = w->layer.toStdString();
+        seg.node1 = nodeOf(netAt(w->mapToScene(line.p1())));
+        seg.node2 = nodeOf(netAt(w->mapToScene(line.p2())));
+        seg.width_um = w->width_um;
+        seg.length_um = line.length() * PIXEL_TO_UM;
+        seg.r_per_um = PARASITIC_R_PER_UM;
+        netlist.globalBlock.wireSegments.push_back(seg);
+        if (seg.length_um > PARASITIC_LENGTH_THRESHOLD) {
+            netlist.globalBlock.parasiticResistors.push_back(
+                {"R_WIRE_" + std::to_string(wireSegIdx), seg.node1, seg.node2, seg.length_um * PARASITIC_R_PER_UM});
+        }
+        ++wireSegIdx;
+    }
+
     for (auto* item : items()) {
         auto* c = dynamic_cast<VisualComponent*>(item);
         if (!c || c->name.isEmpty() ||
@@ -1989,11 +2022,9 @@ TensorNetlist GridScene::toNetlist() {
 
         QVector<QPointF> terms = c->getTerminals();
         if (!terms.isEmpty()) {
-            int rootID = spatialFindSet(spatialGetNetID(c->mapToScene(terms[0])));
-            acutesim::components::NetUUID netId = m_spatialToDbNet.value(rootID, acutesim::components::NetUUID());
+            acutesim::components::NetUUID netId = netAt(c->mapToScene(terms[0]));
             if (netId != acutesim::components::NetUUID()) {
-                auto it = netToNode.find(netId);
-                if (it != netToNode.end()) ipin.nodeIndex = it->second;
+                ipin.nodeIndex = nodeOf(netId);
                 ipin.netUUIDStr = netId.toString();
             }
         }
