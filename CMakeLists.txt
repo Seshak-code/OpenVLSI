@@ -93,7 +93,7 @@ endif()
 
 # Global include directory (Project Root)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-# Karam (submodule acutesim_engine/) owns the public engine API: "engine_api/simulation_dto.h"
+# TreeSPICE (submodule acutesim_engine/) owns the public engine API: "engine_api/simulation_dto.h"
 # resolves there when this repo's app-side engine_api/ does not have the header.
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/engine_api)
 
@@ -455,7 +455,7 @@ endif()
 add_library(acutesim_engine_api INTERFACE)
 target_include_directories(acutesim_engine_api INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine_api                   # app-side: drivers, job manager, results DB
-    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/engine_api   # Karam: bare "simulation_dto.h"
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/engine_api   # TreeSPICE: bare "simulation_dto.h"
 )
 
 # ============================================================================

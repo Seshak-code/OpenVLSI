@@ -1,20 +1,20 @@
 # Active Context
 
-**Last session: Claude Code (dev), 2026-10-13 — took over Cline's unfinished `fix/qa-bugs`**
+**Last session: Claude Code (dev), 2026-10-13 — QA bugs, repo split, headless crash fix, renames**
 
 Owner's rule: **Claude Code develops, Cline does QA** (`.clinerules/06-dev-qa-split.md`; hand-off channel
 `memory-bank/qa-queue.md`).
 
-- BUG-1/2/3 → **FIXED – RETEST**. All three were harness artifacts: the ngspice reference was too sparse.
-  The engine was right. Fixed in `acutesim_engine/tests/ngspice_diff/run_diff.py`.
-- ≥50-stage `.op` → fixed in the engine with ngspice's dynamic gmin stepping (`circuitsim_solver.cpp`).
-- Branch `fix/qa-bugs`, entry "READY FOR QA — QA bugs 1–3 + ≥50-stage `.op`" in the queue.
-- **Repo split (2026-10-13):** the engine is now its own repo, **Seshak-code/Karam**, mounted here as the git
-  submodule `acutesim_engine/` (same path, so app includes did not change). Engine changes are committed in
-  Karam first; then the submodule pointer is bumped here. Karam owns `engine_api/` (the public API), the engine
-  tests, the ngspice/Xyce/IBM harnesses (`acutesim_engine/tests/`) and `acutesim_engine/ENGINE_HANDOFF.md`.
-  `sync-karam.yml` is deleted. PRs merge in this order: CuteApp #6 → Karam #2 → CuteApp `refactor/karam-submodule`.
-  New worktrees need `git submodule update --init`.
+- **Renamed (2026-10-13):** this app is **OpenVLSI** (repo Seshak-code/OpenVLSI, formerly CuteApp), and the
+  engine is **TreeSPICE** (Seshak-code/TreeSPICE, formerly Karam; TREE = Tensor Recursive Elimination Engine).
+  GitHub redirects the old URLs. Code identifiers (`acutesim::`, `ACUTESIM_`, `acutesim_engine`, the `AcuteSim`
+  binary) keep their old names for now. The local folders are still `CuteApp*/` and `Karam/`.
+- **Merged:** #6 (QA bugs 1–3 were harness artifacts; ngspice dynamic gmin stepping), TreeSPICE #2 (engine is its
+  own repo), #7 (`acutesim_engine/` is the TreeSPICE submodule), TreeSPICE #3 (Dawn procs before the GPU probe).
+- **Open for review:** #8 headless segfault fix (bumps the submodule + `test_capabilities_probe`), TreeSPICE #4
+  and the OpenVLSI rename PR (branding).
+- Engine changes are committed in TreeSPICE first; then the submodule pointer is bumped here. New worktrees
+  need `git submodule update --init`.
 
 Next dev increment: diode RS/CJO/TT/BV, then Gummel–Poon BJT.
 

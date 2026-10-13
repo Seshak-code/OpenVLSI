@@ -4,9 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**AcuteSim / CuteApp** — "Cognitive Foundry": an AI-agent ASIC design IDE.
-- **AcuteSim**: physics simulation kernel (MNA, NR solver, SIMD tensors, GPU via Dawn/WebGPU)
-- **CuteApp**: AI cognitive stack (6-layer architecture) + Qt6 GUI IDE
+**OpenVLSI** (formerly CuteApp / AcuteSim; repo Seshak-code/OpenVLSI) — "Cognitive Foundry": an
+AI-agent ASIC design IDE covering schematic/RTL → synthesis → P&R → simulation → sign-off.
+- **TreeSPICE** (`acutesim_engine/`, git submodule, formerly Karam): the SPICE-equivalent simulation
+  engine (MNA, Newton, contraction-tree solver; TREE = Tensor Recursive Elimination Engine)
+- **App**: AI cognitive stack (6-layer architecture) + Qt6 GUI IDE
+- Code identifiers keep the old names for now (`acutesim::` namespaces, `ACUTESIM_` macros,
+  `acutesim_engine` target, `AcuteSim` binary/CMake project, Qt settings names)
 
 ## Build Commands
 
@@ -196,12 +200,12 @@ The compat header `gui/editors/schematic_editor.h` exists because the real heade
 
 Use `tests/stubs/ai_api_test_stubs.cpp` to avoid pulling in GUI dependencies for AI-layer tests.
 
-## Engine = Karam submodule
+## Engine = TreeSPICE submodule
 
-`acutesim_engine/` is the git submodule **Seshak-code/Karam** (the standalone engine repo, since 2026-10-13).
+`acutesim_engine/` is the git submodule **Seshak-code/TreeSPICE** (the standalone engine repo since 2026-10-13; formerly Karam).
 - Fresh clone or new worktree: `git submodule update --init` (worktrees do not share submodule checkouts).
-- Engine change: commit + push **inside `acutesim_engine/`** (Karam branch → PR on Karam), then commit the
-  new submodule pointer here. Engine-only checks live in Karam (`acutesim_engine/tests/`: C++ suites +
+- Engine change: commit + push **inside `acutesim_engine/`** (TreeSPICE branch → PR on TreeSPICE), then commit the
+  new submodule pointer here. Engine-only checks live in TreeSPICE (`acutesim_engine/tests/`: C++ suites +
   ngspice/Xyce/IBM harnesses, `acutesim_engine/ENGINE_HANDOFF.md` §3); integration suites stay here.
 - Public engine API: `acutesim_engine/engine_api/` + the netlist data model (`netlist/circuit.h`,
   `netlist/spice_parser.h`). App-side orchestration headers stay in this repo's `engine_api/`

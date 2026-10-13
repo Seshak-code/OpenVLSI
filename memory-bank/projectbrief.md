@@ -2,7 +2,7 @@
 
 **AcuteSim / CuteApp — "Cognitive Foundry"**: an AI-agent ASIC design IDE.
 
-- **AcuteSim** (`acutesim_engine/`, aka Karam): the physics simulation kernel —
+- **AcuteSim** (`acutesim_engine/`, aka TreeSPICE, formerly Karam): the physics simulation kernel —
   SPICE parsing → MNA stamping → Newton loop → **tensor-contraction direct
   solver** (the owner's core bet, targeting ~10⁹ transistors on a local GPU via
   superposition parallelism: child fronts' Schur complements add into the
