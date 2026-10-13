@@ -1,11 +1,18 @@
 # Active Context
 
-**Last session: Claude Code, 2026-10-12 (Phase 3 start; dev/QA split)** — owner's rule: **Claude
-Code develops, Cline does QA** (`.clinerules/06-dev-qa-split.md`; hand-off channel
-`memory-bank/qa-queue.md`). Claude develops in its own worktree (`../CuteApp-dev`) on feature branches
-and opens PRs. Phase 3.1 (complete SPICE level-1 MOSFET DC, one model definition) is **PR #2**
-(`phase3/mos1`), READY FOR QA. Next dev increment: MOS1 capacitances (Meyer gate + overlap + bulk
-junction caps), so that an inverter has delay to characterise against ngspice.
+**Last session: Claude Code, 2026-10-12 (Phase 3.2 MOS1 charges; dev/QA split)**
+
+Owner's rule: **Claude Code develops, Cline does QA** (`.clinerules/06-dev-qa-split.md`; the hand-off channel
+is `memory-bank/qa-queue.md`). Claude develops in its own worktree (`../CuteApp-dev`) on feature branches and
+opens PRs.
+
+Ready for QA:
+- **PR #2** (`phase3/mos1`): MOS1 DC.
+- **PR #3** (`phase3/mos1-caps`, stacked on #2): MOS1 Meyer, overlap and junction charges, matching ngspice in
+  tran/ac.
+
+Next dev increment: DC convergence of 100+ stage inverter chains (fails with "Singular matrix" on main too;
+ngspice uses dynamic gmin stepping), then diode RS/CJO/TT/BV.
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at

@@ -52,6 +52,17 @@ then the two Roadmap sections it points to. Everything below was verified by run
   SIMD MOSFET kernels deleted; awaiting Cline QA. Next increments: MOS1 capacitances → diode RS/CJO/TT/BV
   → Gummel–Poon BJT + caps → `.lib`/`.include` + corners → BSIM4 (the Verilog-A compiler the Roadmap
   planned to use was deleted as unused; BSIM4 needs its own route, decide at that increment).
+- **Update 2026-10-12 (eighth session, Claude Code):** PR #3 is on `phase3/mos1-caps` (`70318fd`, stacked on
+  PR #2). MOS1 charges follow ngspice:
+  - Meyer gate (TOX), overlap, and bulk-junction depletion caps.
+  - One `mos1_charges()` feeds the stamp, audit, history, LTE and AC.
+  - Each card is resolved once by the parser (`Mosfet::card`); `MosfetTensor` is deleted.
+
+  Verified: 19 suites; ngspice 104/104 (AC caps rel 3e-9, ring oscillator 1.4 %); Xyce 0 FAIL; ibmpg2 PASS.
+  READY FOR QA. **Found (pre-existing on main):** `.op` on an inverter chain of 100 or more stages fails with
+  "Singular matrix"; ngspice converges with dynamic gmin stepping.
+
+  **Next:** DC homotopy for long digital chains, then diode RS/CJO/TT/BV.
 - **Status of the plan:** Roadmap Phase 1 (Foundations) is done. See `Roadmap.md` →
   "⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS" (what works, by device/analysis, with ✅/⚠️/❌/🚫/❓)
   and "🎯 END-TO-END GOAL & ENGINE SCALE PLAN" (phases and gates).

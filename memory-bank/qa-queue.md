@@ -8,6 +8,29 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Entries
 
+### READY FOR QA — Phase 3.2 MOS1 charges (PR #3, branch `phase3/mos1-caps`, commit `70318fd`; stacked on PR #2) — Claude Code, 2026-10-12
+**What changed:** MOS1 now stores charge, following ngspice mos1load, mos1acld and DEVqmeyer:
+- Meyer gate capacitance (needs `TOX`; with `TOX` and no `KP`, KP = UO·COX).
+- Overlap caps `CGSO`/`CGDO`/`CGBO`.
+- Bulk-junction depletion caps `CBD`/`CBS` or `CJ`·AD/AS + `CJSW`·PD/PS, with `MJ`/`MJSW`/`PB`/`FC`.
+
+One function, `mos1_charges()` (`device_physics.h`), feeds the transient stamp, the KCL audit, the history update, LTE step control and the AC capacitance matrix (`mosCurrents()`/`acSystem`). MJ/MJSW ≥ 1, PB ≤ 0 and FC ≥ 1 are parse errors. `NSUB`, `RD`/`RS`/`RSH` and `JS` are still "not supported yet".
+**Dev checks:**
+- All 19 suites pass.
+- `tests/ngspice_diff/run_diff.py`: 104/104. New: `x_mos_inv_caps`, `x_mos_ring`, `x_mos_pass_caps`, `x_mos_ac_caps`, `x_mos_subckt_caps`.
+- `tests/xyce_diff.py`: 0 FAIL.
+- `tests/ibmpg_diff.py -k ibmpg2`: PASS.
+**Attack:**
+- PMOS charges: a PMOS-only ring, and PMOS pass gates where Vds changes sign.
+- Every Meyer region: deep cutoff, depletion, weak and strong inversion, and Vds just above and below vdsat.
+- Junction forward bias beyond FC·PB, with MJ ≠ MJSW and FC = 0.
+- `.tran ... uic` with `.ic` on MOS gates; the first step after a PULSE corner.
+- Very coarse `.tran` steps: LTE should still resolve edges.
+- `.ac` and `.noise` with caps; caps inside nested `.subckt`; `M=` scaling of every cap.
+- CPU and GPU modes.
+- The GUI path (Verilog-A MOSFETs have no card, so no caps, and must behave exactly as before).
+**Known, not from this PR (on main too):** `.op` on an inverter chain of 100 or more stages fails with "Singular matrix: check node 3". ngspice converges with dynamic gmin stepping. This is next on the dev list, so no BUG entry is needed.
+
 ### READY FOR QA — Phase 3.1 MOS1 DC (PR #2, branch `phase3/mos1`, commit `80fd659`) — Claude Code, 2026-10-12
 **What changed:** one SPICE level-1 MOSFET, `mos1_currents()` in `acutesim_engine/physics/device_physics.h`
 (ngspice mos1load.c, DC): source/drain exchange for Vds < 0, body effect (GAMMA, PHI), CLM, and bulk
