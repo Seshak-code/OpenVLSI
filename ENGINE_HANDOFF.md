@@ -46,6 +46,12 @@ then the two Roadmap sections it points to. Everything below was verified by run
   Verified: all 19 suites; ngspice 84/84; Xyce 0 FAIL / 78 PASS (V–L loops at DC are XYCE-DIALECT:
   ngspice `.op` is singular too); IBM 6/6 (ibmpg6 37 s). **Next:** golden datasets into regular
   verification, Roadmap Phase 3.
+- **Update 2026-10-12 (seventh session, Claude Code):** Phase 3 started under the dev/QA split
+  (`.clinerules/06-dev-qa-split.md`). PR #2 `phase3/mos1`: complete level-1 MOSFET DC (S/D swap, body
+  effect, bulk junctions, M, LD, SPICE defaults) as one `mos1_currents()` + Dual-Jacobian `stampMos1()`;
+  SIMD MOSFET kernels deleted; awaiting Cline QA. Next increments: MOS1 capacitances → diode RS/CJO/TT/BV
+  → Gummel–Poon BJT + caps → `.lib`/`.include` + corners → BSIM4 (the Verilog-A compiler the Roadmap
+  planned to use was deleted as unused; BSIM4 needs its own route, decide at that increment).
 - **Status of the plan:** Roadmap Phase 1 (Foundations) is done. See `Roadmap.md` →
   "⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS" (what works, by device/analysis, with ✅/⚠️/❌/🚫/❓)
   and "🎯 END-TO-END GOAL & ENGINE SCALE PLAN" (phases and gates).

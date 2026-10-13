@@ -1,12 +1,11 @@
 # Active Context
 
-**Last session: Claude Code, 2026-10-12 (review of the junction-gmin commit `7332f62`)** —
-kept the design, fixed what review found: BJT SoA kernels double-counted GMIN (+ stale floors);
-the contraction solver silently "solved" singular systems (floating nodes reported converged with
-garbage) — now DC fails with "Singular matrix: check node N" like ngspice, and element-free nodes
-(dangling subckt ports) are pinned to 0 V; ladder end/gminSteppingUsed/sensitivity gmin fixed;
-vacuous Darlington test fixed. Verified: 19 suites, ngspice 84/84, Xyce 0 FAIL/78 PASS, IBM 6/6.
-Details: `ENGINE_HANDOFF.md` §0 (sixth session).
+**Last session: Claude Code, 2026-10-12 (Phase 3 start; dev/QA split)** — owner's rule: **Claude
+Code develops, Cline does QA** (`.clinerules/06-dev-qa-split.md`; hand-off channel
+`memory-bank/qa-queue.md`). Claude develops in its own worktree (`../CuteApp-dev`) on feature branches
+and opens PRs. Phase 3.1 (complete SPICE level-1 MOSFET DC, one model definition) is **PR #2**
+(`phase3/mos1`), READY FOR QA. Next dev increment: MOS1 capacitances (Meyer gate + overlap + bulk
+junction caps), so that an inverter has delay to characterise against ngspice.
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at

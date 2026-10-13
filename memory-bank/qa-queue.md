@@ -24,7 +24,7 @@ The SIMD MOSFET kernels were deleted.
 - Stacked NAND/NOR with body effect.
 - Subthreshold edge (vgst → 0) and Vds exactly 0.
 - Large `M=` and fractional `M=`.
-- `LD` close to L/2 (Leff → 0): this should error, not divide by ~0.
+- `LD` close to L/2. Fixed by dev in `b10ba77`: L − 2·LD ≤ 0 is a parse error. Try values just above and below.
 - MOSFETs inside `.subckt`, and in `.dc`, `.tran`, `.ac` and `.noise` on cpu and gpu.
 - The GUI path, where Verilog-A MOSFETs have no cards and use the engine defaults.
 - Performance of a 10k-MOSFET inverter chain compared with the previous main (the SIMD kernels are gone).
