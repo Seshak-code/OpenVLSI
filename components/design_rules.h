@@ -1,7 +1,7 @@
 #pragma once
 
 #include "acutesim_engine/netlist/circuit.h"
-#include "../components/component_library.h"
+#include "component_library.h"
 #include <vector>
 #include <string>
 #include <set>

@@ -93,6 +93,9 @@ endif()
 
 # Global include directory (Project Root)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+# Karam (submodule acutesim_engine/) owns the public engine API: "engine_api/simulation_dto.h"
+# resolves there when this repo's app-side engine_api/ does not have the header.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/engine_api)
 
 if(APPLE AND NOT EMSCRIPTEN)
     # Pre-define WrapOpenGL::WrapOpenGL to force TBD linking.
@@ -228,7 +231,7 @@ set(ACUTESIM_SOURCES
     resources/icons.qrc
     gui/editors/schematic/schematic_editor.cpp
     gui/editors/schematic/schematic_editor_sync.cpp
-    acutesim_engine/netlist/netlist_export.cpp
+    components/netlist_export.cpp
     gui/editors/schematic/schematic_editor.h
     gui/editors/code_editor.cpp
     gui/editors/code_editor.h
@@ -451,7 +454,8 @@ endif()
 # ============================================================================
 add_library(acutesim_engine_api INTERFACE)
 target_include_directories(acutesim_engine_api INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/engine_api
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine_api                   # app-side: drivers, job manager, results DB
+    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/engine_api   # Karam: bare "simulation_dto.h"
 )
 
 # ============================================================================
@@ -787,12 +791,6 @@ if(EMSCRIPTEN)
 endif()
 
 
-# Convergence Engine Test (NR failure classification)
-add_executable(test_convergence_engine tests/test_convergence_engine.cpp)
-target_link_libraries(test_convergence_engine PRIVATE acutesim_engine)
-target_include_directories(test_convergence_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_features(test_convergence_engine PUBLIC cxx_std_17)
-
 # AD Integration Test (Dual<T> vs Finite-Difference for all devices)
 add_executable(test_ad_integration tests/test_ad_integration.cpp)
 target_link_libraries(test_ad_integration PRIVATE acutesim_engine)
@@ -850,22 +848,6 @@ if(NOT EMSCRIPTEN)
     target_compile_features(test_engine_parity PUBLIC cxx_std_17)
     add_test(NAME EngineParityTest COMMAND test_engine_parity)
 
-    # Tensor-contraction direct solver vs dense LU (+ scale timings)
-    add_executable(test_contraction_solver tests/test_contraction_solver.cpp)
-    target_link_libraries(test_contraction_solver PRIVATE acutesim_engine)
-    target_include_directories(test_contraction_solver PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    target_compile_features(test_contraction_solver PUBLIC cxx_std_17)
-    add_test(NAME ContractionSolverTest COMMAND test_contraction_solver)
-
-    # Regression checks for engine review fixes (NaN, transient hang, diode, DC inductor)
-    add_executable(test_engine_fixes tests/test_engine_fixes.cpp)
-    target_link_libraries(test_engine_fixes PRIVATE acutesim_engine)
-    target_include_directories(test_engine_fixes PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/engine_api
-    )
-    target_compile_features(test_engine_fixes PUBLIC cxx_std_17)
-    add_test(NAME EngineFixesTest COMMAND test_engine_fixes)
 endif()
 
 # Solver Tier Benchmarking Suite
@@ -960,7 +942,7 @@ if(NOT EMSCRIPTEN)
     gui/scripting/tcl_bridge.cpp
     gui/analysis/pdk_compliance.cpp
     gui/widgets/compliance_report_widget.cpp
-        acutesim_engine/netlist/netlist_export.cpp
+        components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -1106,7 +1088,7 @@ if(NOT EMSCRIPTEN)
         gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
         gui/orchestration/pdk_browser_panel.cpp
-        acutesim_engine/netlist/netlist_export.cpp
+        components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -1414,7 +1396,7 @@ add_executable(test_pdk_swap
     tests/test_pdk_swap.cpp
     gui/analysis/pdk_manager.cpp
     gui/analysis/pdk_compliance.cpp
-    acutesim_engine/netlist/netlist_export.cpp
+    components/netlist_export.cpp
 
     gui/components/visual_component.cpp
 
@@ -1512,7 +1494,7 @@ if(NOT EMSCRIPTEN)
         gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
         gui/orchestration/pdk_browser_panel.cpp
-        acutesim_engine/netlist/netlist_export.cpp
+        components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
@@ -1718,7 +1700,7 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/library_index.h
         components/design_db.cpp
         gui/analysis/pdk_manager.cpp
-        acutesim_engine/netlist/netlist_export.cpp
+        components/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
         gui/editors/json_viewer.cpp
         gui/editors/image_viewer.cpp
@@ -1815,7 +1797,7 @@ if(NOT EMSCRIPTEN)
         components/design_db.cpp
         gui/analysis/pdk_manager.cpp
         gui/orchestration/library_index.cpp
-        acutesim_engine/netlist/netlist_export.cpp
+        components/netlist_export.cpp
         gui/analysis/pdk_compliance.cpp
         gui/scripting/tcl_bridge.cpp
         gui/orchestration/worker_manager.cpp
@@ -1905,19 +1887,19 @@ target_include_directories(test_docking_interaction PRIVATE
 )
 
 # Netlist Export Tests
-add_executable(test_verilog_export tests/test_verilog_export.cpp acutesim_engine/netlist/netlist_export.cpp)
+add_executable(test_verilog_export tests/test_verilog_export.cpp components/netlist_export.cpp)
 target_link_libraries(test_verilog_export PRIVATE Qt6::Core) # Utils only
 target_include_directories(test_verilog_export PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(test_spef_export tests/test_spef_export.cpp acutesim_engine/netlist/netlist_export.cpp)
+add_executable(test_spef_export tests/test_spef_export.cpp components/netlist_export.cpp)
 target_link_libraries(test_spef_export PRIVATE Qt6::Core)
 target_include_directories(test_spef_export PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(test_export_consistency tests/test_export_consistency.cpp acutesim_engine/netlist/netlist_export.cpp)
+add_executable(test_export_consistency tests/test_export_consistency.cpp components/netlist_export.cpp)
 target_link_libraries(test_export_consistency PRIVATE Qt6::Core)
 target_include_directories(test_export_consistency PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(test_multi_domain_power tests/test_multi_domain_power.cpp acutesim_engine/netlist/netlist_export.cpp)
+add_executable(test_multi_domain_power tests/test_multi_domain_power.cpp components/netlist_export.cpp)
 target_link_libraries(test_multi_domain_power PRIVATE Qt6::Core)
 target_include_directories(test_multi_domain_power PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(test_docking_interaction PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
@@ -2147,7 +2129,7 @@ if(NOT EMSCRIPTEN)
         gui/orchestration/library_index.h
         components/design_db.cpp
         gui/analysis/pdk_manager.cpp
-        acutesim_engine/netlist/netlist_export.cpp
+        components/netlist_export.cpp
         gui/scripting/tcl_bridge.cpp
         gui/editors/json_viewer.cpp
         gui/editors/image_viewer.cpp

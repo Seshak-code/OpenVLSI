@@ -6,11 +6,15 @@ Owner's rule: **Claude Code develops, Cline does QA** (`.clinerules/06-dev-qa-sp
 `memory-bank/qa-queue.md`).
 
 - BUG-1/2/3 → **FIXED – RETEST**. All three were harness artifacts: the ngspice reference was too sparse.
-  The engine was right. Fixed in `tests/ngspice_diff/run_diff.py`.
+  The engine was right. Fixed in `acutesim_engine/tests/ngspice_diff/run_diff.py`.
 - ≥50-stage `.op` → fixed in the engine with ngspice's dynamic gmin stepping (`circuitsim_solver.cpp`).
 - Branch `fix/qa-bugs`, entry "READY FOR QA — QA bugs 1–3 + ≥50-stage `.op`" in the queue.
-- Karam README now lives at `acutesim_engine/README.md` (PR #5). The weekly `sync-karam` subtree push
-  publishes it. Never commit on Karam directly: the sync push is non-force.
+- **Repo split (2026-10-13):** the engine is now its own repo, **Seshak-code/Karam**, mounted here as the git
+  submodule `acutesim_engine/` (same path, so app includes did not change). Engine changes are committed in
+  Karam first; then the submodule pointer is bumped here. Karam owns `engine_api/` (the public API), the engine
+  tests, the ngspice/Xyce/IBM harnesses (`acutesim_engine/tests/`) and `acutesim_engine/ENGINE_HANDOFF.md`.
+  `sync-karam.yml` is deleted. PRs merge in this order: CuteApp #6 → Karam #2 → CuteApp `refactor/karam-submodule`.
+  New worktrees need `git submodule update --init`.
 
 Next dev increment: diode RS/CJO/TT/BV, then Gummel–Poon BJT.
 
@@ -28,12 +32,12 @@ every session end and stamp your agent.**
   analysis parity (real AC/noise, `.dc` sweeps, transient ICs/uic, PULSE/SIN
   corner stepping); fail-closed parser; GUI Verilog-A transport round-trips
   PULSE/SIN/AC; IBM power-grid datasets in `datasets/` + harnesses
-  `tests/ibmpg_diff.py`, `tests/xyce_diff.py`.
+  `acutesim_engine/tests/ibmpg_diff.py`, `acutesim_engine/tests/xyce_diff.py`.
 
-## Next, in order (from `ENGINE_HANDOFF.md` §0)
+## Next, in order (from `acutesim_engine/ENGINE_HANDOFF.md` §0)
 
-1. **Golden datasets into the harness** — wire `tests/ibmpg_diff.py` and
-   `tests/xyce_diff.py` into regular verification; IBM power-grid for solver
+1. **Golden datasets into the harness** — wire `acutesim_engine/tests/ibmpg_diff.py` and
+   `acutesim_engine/tests/xyce_diff.py` into regular verification; IBM power-grid for solver
    scale, Xyce regression subset for devices.
 2. **Roadmap Phase 3.**
 
@@ -49,12 +53,12 @@ the two GUI tests in `b1d9fd2`; both verified passing 2026-10-12, offscreen Qt e
   fixed at 25.85 mV vs `ambient_temp_K` default 300.15 K; MOSFET level-1 gaps
   (no Vds<0 swap, no body effect); `.include/.lib` are explicit "not supported yet"
   errors (only output cards `.options/.print/.plot/.save/.probe/.meas/.four` are ignored).
-  Full backlog: `ENGINE_HANDOFF.md` §6.
+  Full backlog: `acutesim_engine/ENGINE_HANDOFF.md` §6.
 
 ## Agent coordination
 
 Both Claude Code and Cline work this repo. Session start: sweep
 (`.clinerules/00-authoritative-source.md`). Session end: update this file +
-`ENGINE_HANDOFF.md` §0, stamp, commit, push (`.clinerules/01-collab-handoff.md`).
+`acutesim_engine/ENGINE_HANDOFF.md` §0, stamp, commit, push (`.clinerules/01-collab-handoff.md`).
 Never assume another agent's "isolated" background task was actually isolated —
 check `git status` first.

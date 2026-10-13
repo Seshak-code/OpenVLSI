@@ -1,7 +1,7 @@
 # Progress
 
 **Snapshot: 2026-10-12 (evening), by Cline** (see `docs/claude-archive/session-log.md`
-for the full session history and `ENGINE_HANDOFF.md` §0–§5 for engine detail).
+for the full session history and `acutesim_engine/ENGINE_HANDOFF.md` §0–§5 for engine detail).
 
 ## What works (verified by running it)
 
@@ -15,10 +15,10 @@ for the full session history and `ENGINE_HANDOFF.md` §0–§5 for engine detail
   stepping, real AC + noise, shared `CircuitSim` entry for session and GUI.
 - GUI Verilog-A transport: PULSE/SIN/AC round-trip with per-field regression
   checks.
-- Harnesses ready: `tests/ibmpg_diff.py` (IBM power grids, data in `datasets/`),
-  `tests/xyce_diff.py`.
+- Harnesses ready: `acutesim_engine/tests/ibmpg_diff.py` (IBM power grids, data in `datasets/`),
+  `acutesim_engine/tests/xyce_diff.py`.
 
-## Junction gmin (2026-10-12, Cline — see `ENGINE_HANDOFF.md` §0)
+## Junction gmin (2026-10-12, Cline — see `acutesim_engine/ENGINE_HANDOFF.md` §0)
 
 gmin moved from node-to-ground to across-each-junction (diode/BJT/zener models
 in `device_physics.h` — one edit feeds AoS stamps and both audits — plus the

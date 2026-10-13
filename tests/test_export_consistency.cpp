@@ -3,7 +3,7 @@
 #include <sstream>
 #include <set>
 #include "acutesim_engine/netlist/circuit.h"
-#include "acutesim_engine/netlist/netlist_export.h"
+#include "components/netlist_export.h"
 
 // Helper to extract port names from Verilog header
 std::set<std::string> extractVerilogPorts(const std::string& vlog) {

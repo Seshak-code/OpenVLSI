@@ -26,7 +26,7 @@ claude -p "<task>" --allowed-tools "Read,Write,Edit,Bash(git *),Grep,Glob" -c ..
 
 1. The prompt must be **self-contained**: absolute file paths, the exact
    symptom/expected behavior, how to verify (build + `ctest` +
-   `tests/ngspice_diff/run_diff.py` — see `.clinerules/03-development-workflow.md`).
+   `acutesim_engine/tests/ngspice_diff/run_diff.py` — see `.clinerules/03-development-workflow.md`).
    There is no shared context window.
 2. Read the printed result and report it to the user as a subagent report.
 3. **Never let the delegated Claude delegate further** (no recursion, no it

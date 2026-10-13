@@ -23,6 +23,6 @@ layers. Verify with `python3 scripts/check_layering.py` and
 - gRPC/orchestration code guarded by `#ifdef ACUTESIM_ENABLE_ORCHESTRATION`.
 - FP determinism mandatory (`-fno-fast-math`, `/fp:strict`, `FE_TONEAREST`).
 - Solver tier routing and the fail-closed convergence/parser behavior:
-  `ENGINE_HANDOFF.md` §2 (architecture as of now).
+  `acutesim_engine/ENGINE_HANDOFF.md` §2 (architecture as of now).
 
 **Do not duplicate `context.md`'s maps here — it drifts. Read the source.**

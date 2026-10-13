@@ -4,7 +4,7 @@
 #include "schematic_editor.h"
 #include <QRegularExpression>
 #include <QJsonObject>
-#include "acutesim_engine/netlist/netlist_export.h"
+#include "components/netlist_export.h"
 
 /**
  * Generates a Verilog-AMS representation of the current schematic.
