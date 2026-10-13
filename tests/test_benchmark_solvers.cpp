@@ -225,12 +225,10 @@ static void benchmarkSIMDKernels(int deviceCount) {
     std::cout << "\n\n";
 
     DiodeTensor diodes;
-    MosfetTensor mosfets;
     BJTTensor bjts;
 
     for (int i = 0; i < deviceCount; ++i) {
         diodes.push(i + 1, 0, 1e-14, 1.0, 0.02585, 0.0, 300.0);
-        mosfets.push(i + 1, i + 2, 0, 0, 10e-6, 0.18e-6, 200e-6, 0.7, 0.02, false, 300.0);
         bjts.push(i + 1, i + 2, 0, 1e-14, 100.0, 1.0, 0.02585, true, 300.0);
     }
 
@@ -261,7 +259,6 @@ static void benchmarkSIMDKernels(int deviceCount) {
     };
 
     benchKernel("Diode", diodes, batchDiodePhysics);
-    benchKernel("MOSFET", mosfets, batchMosfetPhysics);
     benchKernel("BJT", bjts, batchBJTPhysics);
 }
 
