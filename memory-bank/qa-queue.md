@@ -23,7 +23,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 ## Entries
 
 ### READY FOR QA — repo split: engine → Karam submodule (CuteApp `refactor/karam-submodule`, Karam PR #2) — Claude Code, 2026-10-13
-**What changed:** `acutesim_engine/` is now the git submodule Seshak-code/Karam, pinned to Karam `standalone`.
+**What changed:** `acutesim_engine/` is now the git submodule Seshak-code/TreeSPICE, pinned to TreeSPICE (then Karam) `standalone`.
 - Karam owns the public `engine_api/` headers (`simulation_dto`, `job_status`, `engine_callbacks`,
   `isimulation_engine`, `simulation_session`).
 - The app-side `engine_api/` headers (drivers, job manager, results DB) stay in this repo.

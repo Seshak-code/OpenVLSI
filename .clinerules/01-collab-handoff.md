@@ -27,7 +27,7 @@ because of real collisions (see `docs/claude-archive/session-log.md`).
 
 ## File ownership
 
-- `acutesim_engine/ENGINE_HANDOFF.md` — engine workstream (Karam / `acutesim_engine`). §0 is the
+- `acutesim_engine/ENGINE_HANDOFF.md` — engine workstream (TreeSPICE / `acutesim_engine`). §0 is the
   living state; append updates, do not rewrite history.
 - `SESSION_HANDOFF.md` — web-UI workstream. Never overwrite it.
 - `CLAUDE.md` — shared instructions; edit **additively** (both agents read it).

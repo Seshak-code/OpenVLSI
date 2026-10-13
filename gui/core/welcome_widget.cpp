@@ -10,7 +10,7 @@ WelcomeWidget::WelcomeWidget(QWidget* parent) : QWidget(parent) {
     mainLayout->setSpacing(20);
 
     // Logo / Title
-    QLabel* logo = new QLabel("AcuteSim");
+    QLabel* logo = new QLabel("OpenVLSI");
     logo->setStyleSheet("color: #007ACC; font-size: 48px; font-weight: bold;");
     logo->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(logo);

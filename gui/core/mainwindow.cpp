@@ -48,7 +48,7 @@ MainWindow::MainWindow(QWidget* parent)
       editorManager(nullptr),
       welcomeWidget(nullptr)
 {
-    setWindowTitle("AcuteSim - ASIC Design Suite");
+    setWindowTitle("OpenVLSI - ASIC Design Suite");
     resize(1280, 720);
     
     // NASA Principle: Enable dock nesting for flexible workspace layout
