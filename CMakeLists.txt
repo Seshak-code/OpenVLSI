@@ -848,6 +848,11 @@ if(NOT EMSCRIPTEN)
     target_compile_features(test_engine_parity PUBLIC cxx_std_17)
     add_test(NAME EngineParityTest COMMAND test_engine_parity)
 
+    # Capability probe as the first GPU-touching call (AcuteSim main() order)
+    add_executable(test_capabilities_probe tests/test_capabilities_probe.cpp)
+    target_link_libraries(test_capabilities_probe PRIVATE acutesim_engine)
+    add_test(NAME CapabilitiesProbeTest COMMAND test_capabilities_probe)
+
 endif()
 
 # Solver Tier Benchmarking Suite

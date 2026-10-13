@@ -59,11 +59,6 @@ ctest -L heavy    # GUI/integration tests
 ./build/test_hierarchy_headless
 ./build/test_regression
 
-# CLI modes (no GUI)
-./build/AcuteSim --stress 100
-./build/AcuteSim --monte-carlo
-./build/AcuteSim --benchmark
-
 # Python gRPC parity validator
 python3 tests/parity_harness.py
 ```
