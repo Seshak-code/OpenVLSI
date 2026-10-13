@@ -1,0 +1,17 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/icons">
+        <file>icons/explorer.svg</file>
+        <file>icons/components.svg</file>
+        <file>icons/search.svg</file>
+        <file>icons/settings.svg</file>
+        <file>icons/schematic.svg</file>
+        <file>icons/hdl.svg</file>
+        <file>icons/synthesis.svg</file>
+        <file>icons/physical.svg</file>
+        <file>icons/verification.svg</file>
+        <file>icons/folder.svg</file>
+        <file>icons/file.svg</file>
+        <file>icons/close.svg</file>
+    </qresource>
+</RCC>
