@@ -14,10 +14,10 @@ every session end and stamp your agent.**
 
 ## Where things stand
 
-- **Branch:** `engine/spice-correctness` — pushed after the sixth session. The third
-  session's uncommitted stretch is committed and verified (clean build; ngspice
-  82/83, only `aac_10_bridge`; full ctest 28/32 with 4 pre-existing failures —
-  identical at baseline `3453182`).
+- **Branch:** `main` — **PR #1 merged 2026-10-12 by Cline** (merge commit `43003d5`;
+  `engine/spice-correctness` deleted after merge, local + remote). New work starts
+  on `main` or a fresh branch off it. Stale leftover: `engine/tensor-mna`
+  (8 months old, superseded). Tree clean.
 - Done today: legacy TN/MPO/Schur/sparse-LU stack deleted (~40k lines); Phase 2
   analysis parity (real AC/noise, `.dc` sweeps, transient ICs/uic, PULSE/SIN
   corner stepping); fail-closed parser; GUI Verilog-A transport round-trips

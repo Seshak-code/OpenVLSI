@@ -5,7 +5,9 @@ then the two Roadmap sections it points to. Everything below was verified by run
 
 ## 0. Where things stand
 
-- **Branch:** `engine/spice-correctness` (pushed up to `928910a`; later commits local).
+- **Branch:** `main` (PR #1 merged 2026-10-12 by Cline: `engine/spice-correctness` → `main`,
+  merge commit `43003d5`; the branch was deleted after merge). New engine work starts on
+  `main` or a fresh branch off it. Stale leftover: `engine/tensor-mna` (8 months old, superseded).
 - **Update 2026-10-12 (third session):** Task 1 and **all of Phase 2** are done; the legacy
   solver stack is deleted (~40k lines). **Next:** (a) junction gmin (see §6, fixes `aac_10_bridge`),
   (b) golden datasets: IBM power-grid benchmarks (solver scale) + Xyce regression subset (devices),
