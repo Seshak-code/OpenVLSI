@@ -1,23 +1,18 @@
 # Active Context
 
-**Last session: Cline (QA), 2026-10-12 — Phase 3 QA complete through 3.2**
+**Last session: Claude Code (dev), 2026-10-13 — took over Cline's unfinished `fix/qa-bugs`**
 
-Owner's rule: **Claude Code develops, Cline does QA** (`.clinerules/06-dev-qa-split.md`; the hand-off channel
-is `memory-bank/qa-queue.md`). Claude develops in its own worktree (`../CuteApp-dev`) on feature branches and
-opens PRs. Cline QA'd in `../CuteApp-qa` (detached at the PR heads).
+Owner's rule: **Claude Code develops, Cline does QA** (`.clinerules/06-dev-qa-split.md`; hand-off channel
+`memory-bank/qa-queue.md`).
 
-QA verdicts (details + reproducers in `memory-bank/qa-queue.md`):
-- **Phase 3.1 (PR #2, MOS1 DC): PASSED** — full attack list, 12 adversarial netlists, all within tolerance.
-- **Phase 3.2 (PR #3, MOS1 charges): PASSED with BUG-1 filed** (uic + `.ic` MOS charge init, 122 mV;
-  RC control passes so it is MOS-specific) → awaiting dev FIXED–RETEST.
-- **BUG-2** (depth-2 `.subckt` solves a wrong DC level — pre-existing) and **BUG-3** (coarse-tstep LTE
-  error up to 452 mV — pre-existing) filed with reproducers.
-- Process repair: PR #3's stack merged into its base before the base merged, orphaning 3.2 from main;
-  QA opened + merged corrective **PR #4** (`6bdf3ee`) — 3.1+3.2 are both on main now. Stacked PRs merge
-  bottom-up from now on.
+- BUG-1/2/3 → **FIXED – RETEST**. All three were harness artifacts: the ngspice reference was too sparse.
+  The engine was right. Fixed in `tests/ngspice_diff/run_diff.py`.
+- ≥50-stage `.op` → fixed in the engine with ngspice's dynamic gmin stepping (`circuitsim_solver.cpp`).
+- Branch `fix/qa-bugs`, entry "READY FOR QA — QA bugs 1–3 + ≥50-stage `.op`" in the queue.
+- Karam README now lives at `acutesim_engine/README.md` (PR #5). The weekly `sync-karam` subtree push
+  publishes it. Never commit on Karam directly: the sync push is non-force.
 
-Next dev increment (in order): BUG-1 fix → FIXED–RETEST; the ≥100-stage `.op` singular issue
-(ngspice uses dynamic gmin stepping); then BUG-2/BUG-3; then diode RS/CJO/TT/BV.
+Next dev increment: diode RS/CJO/TT/BV, then Gummel–Poon BJT.
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at

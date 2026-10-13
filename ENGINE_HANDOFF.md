@@ -72,6 +72,15 @@ then the two Roadmap sections it points to. Everything below was verified by run
   "Singular matrix"; ngspice converges with dynamic gmin stepping.
 
   **Next:** DC homotopy for long digital chains, then diode RS/CJO/TT/BV.
+- **Update 2026-10-13 (Claude Code, took over Cline's unfinished `fix/qa-bugs`):** BUG-1/2/3 were
+  reference-resolution artifacts of the ngspice harness, not engine bugs (BUG-3: the unchanged engine is
+  within 4.6 mV of a dense ngspice run; the `tmax = tstep/10` reference was 114 mV off). Harness:
+  reference `tmax` also capped at 1/20 of the shortest source edge, and an engine value at a switching
+  jump is judged against the reference cell's bracket. Engine: ngspice **dynamic gmin stepping** replaces
+  the fixed ladder, so 10–500-stage inverter chains `.op` like ngspice. Cline's engine LTE limiter and
+  root-pivot fallback were dropped (no wrong answer fixed; 180× steps). Verified: 17 suites, ngspice
+  160/0, Xyce 78/0 (1 pre-existing TIMEOUT), ibmpg2. Also: `acutesim_engine/README.md` (PR #5) is the
+  Karam README via the weekly subtree sync. **Next:** QA retest (`qa-queue.md`), then diode RS/CJO/TT/BV.
 - **Status of the plan:** Roadmap Phase 1 (Foundations) is done. See `Roadmap.md` →
   "⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS" (what works, by device/analysis, with ✅/⚠️/❌/🚫/❓)
   and "🎯 END-TO-END GOAL & ENGINE SCALE PLAN" (phases and gates).

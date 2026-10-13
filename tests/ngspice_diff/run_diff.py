@@ -93,10 +93,27 @@ def run_engine(args, text, mode, kind, step=0.0, stop=0.0):
     return dict(conv=conv, err=err, pts=pts, total=total)
 
 # ---------------------------------------------------------------- ngspice side
+def tran_tmax(text, an):
+    """Reference max step: tstep/10, and 1/20 of the shortest PULSE edge/width or SIN period.
+    With only tstep/10, ngspice crossed a 5 us gate ramp in one 2.5 us step and carried the error
+    for the rest of the run (qa_mos_coarse: 114 mV off a dense reference that the engine matched)."""
+    spans = []
+    for line in cards(text):
+        t = toks(line)
+        if t[0][0].upper() not in "VI": continue
+        u = [x.upper() for x in t]
+        try:
+            if "PULSE" in u: spans += [num(x) for x in t[u.index("PULSE") + 4:u.index("PULSE") + 7]]  # tr tf pw
+            if "SIN" in u and len(t) > u.index("SIN") + 3: spans.append(1 / num(t[u.index("SIN") + 3]))
+        except (ValueError, ZeroDivisionError): pass
+    edge = min([s for s in spans if s > 0], default=math.inf) / 20
+    # ponytail: floor at tstop/1e5 so a ns edge in a ms run stays ~1e5 steps; such a run is checked at that density only.
+    return max(min(an[1] / 10, edge), an[2] / 1e5)
+
 def run_ngspice(args, text, an, names):
     """Return (xs, {name: [values]}) for the analysis, or raise RuntimeError. xs = [] for .op.
     Analysis/print cards are removed and replaced by a .control block (batch mode, ngspice defaults);
-    the only option set is tmax=tstep/10 on .tran so the reference is dense (see tolerance comment)."""
+    the only option set is tmax on .tran so the reference is dense (see tran_tmax)."""
     drop = re.compile(r"\.(op|dc|tran|ac|noise|print|plot|four|end)\b", re.I)
     kept, skip = [], False
     for i, ln in enumerate(text.splitlines()):
@@ -106,7 +123,7 @@ def run_ngspice(args, text, an, names):
         skip = i > 0 and bool(drop.match(ln.strip()))
         if not skip: kept.append(ln)
     cmd = {"op": "op", "dc": "dc {1} {2!r} {3!r} {4!r}".format(*an) if an[0] == "dc" else "",
-           "tran": "tran {0!r} {1!r} 0 {2!r}{3}".format(an[1], an[2], an[1] / 10, " uic" if an[3] else "") if an[0] == "tran" else "",
+           "tran": "tran {0!r} {1!r} 0 {2!r}{3}".format(an[1], an[2], tran_tmax(text, an), " uic" if an[3] else "") if an[0] == "tran" else "",
            "ac": "ac {1} {2} {3!r} {4!r}".format(*an) if an[0] == "ac" else "", "noise": ""}[an[0]]
     vecs = " ".join(f"v({n.lower()})" for n in names)
     out = os.path.join(args.tmp, "ng.dat")
@@ -214,8 +231,13 @@ def compare(args, text, an, mode, nm, ref):
             tol = max(args.tran_atol, args.tran_rtol * swing)
             eng = col(r, nm[n])
             for i in sel:
-                k = bisect.bisect_left(xs, ts[i])  # a sparse reference cannot be interpolated across a jump
-                if getattr(args, "skip_unresolved", False) and 0 < k < len(xs) and abs(ref_n[k] - ref_n[k - 1]) > tol:
+                k = bisect.bisect_left(xs, ts[i])
+                if 0 < k < len(xs) and abs(ref_n[k] - ref_n[k - 1]) > tol:
+                    # The reference jumps more than tol inside one cell (a switching edge): interpolation
+                    # would invent a value, so the engine must lie within the cell's bracket +- tol.
+                    lo, hi = sorted((ref_n[k - 1], ref_n[k]))
+                    got = min(max(eng[i], lo), hi)
+                    judge(f"t={ts[i]:g} v({n})", eng[i], got, tol, max(swing, 1e-3))
                     continue
                 judge(f"t={ts[i]:g} v({n})", eng[i], interp(xs, ref_n, ts[i]), tol, max(swing, 1e-3))
         if not r["conv"] and not bad: bad.append(f"engine reports not converged: {r['err']}")
