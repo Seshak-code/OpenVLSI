@@ -1,18 +1,23 @@
 # Active Context
 
-**Last session: Claude Code, 2026-10-12 (Phase 3.2 MOS1 charges; dev/QA split)**
+**Last session: Cline (QA), 2026-10-12 — Phase 3 QA complete through 3.2**
 
 Owner's rule: **Claude Code develops, Cline does QA** (`.clinerules/06-dev-qa-split.md`; the hand-off channel
 is `memory-bank/qa-queue.md`). Claude develops in its own worktree (`../CuteApp-dev`) on feature branches and
-opens PRs.
+opens PRs. Cline QA'd in `../CuteApp-qa` (detached at the PR heads).
 
-Ready for QA:
-- **PR #2** (`phase3/mos1`): MOS1 DC.
-- **PR #3** (`phase3/mos1-caps`, stacked on #2): MOS1 Meyer, overlap and junction charges, matching ngspice in
-  tran/ac.
+QA verdicts (details + reproducers in `memory-bank/qa-queue.md`):
+- **Phase 3.1 (PR #2, MOS1 DC): PASSED** — full attack list, 12 adversarial netlists, all within tolerance.
+- **Phase 3.2 (PR #3, MOS1 charges): PASSED with BUG-1 filed** (uic + `.ic` MOS charge init, 122 mV;
+  RC control passes so it is MOS-specific) → awaiting dev FIXED–RETEST.
+- **BUG-2** (depth-2 `.subckt` solves a wrong DC level — pre-existing) and **BUG-3** (coarse-tstep LTE
+  error up to 452 mV — pre-existing) filed with reproducers.
+- Process repair: PR #3's stack merged into its base before the base merged, orphaning 3.2 from main;
+  QA opened + merged corrective **PR #4** (`6bdf3ee`) — 3.1+3.2 are both on main now. Stacked PRs merge
+  bottom-up from now on.
 
-Next dev increment: DC convergence of 100+ stage inverter chains (fails with "Singular matrix" on main too;
-ngspice uses dynamic gmin stepping), then diode RS/CJO/TT/BV.
+Next dev increment (in order): BUG-1 fix → FIXED–RETEST; the ≥100-stage `.op` singular issue
+(ngspice uses dynamic gmin stepping); then BUG-2/BUG-3; then diode RS/CJO/TT/BV.
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at

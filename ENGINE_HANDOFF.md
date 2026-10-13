@@ -57,6 +57,15 @@ then the two Roadmap sections it points to. Everything below was verified by run
   - Meyer gate (TOX), overlap, and bulk-junction depletion caps.
   - One `mos1_charges()` feeds the stamp, audit, history, LTE and AC.
   - Each card is resolved once by the parser (`Mosfet::card`); `MosfetTensor` is deleted.
+- **Update 2026-10-12 (QA session, Cline):** Phase 3.1 **PASSED** and Phase 3.2 **PASSED with BUG-1
+  filed** — full verdicts, the three BUG entries (BUG-1 uic/MOS-charge init from 3.2; BUG-2 depth-2
+  `.subckt` wrong DC, pre-existing; BUG-3 coarse-tstep LTE, pre-existing) and the 25 committed
+  adversarial/reproducer netlists are in `memory-bank/qa-queue.md`. Process repair: PR #3's stack was
+  merged into its base before the base merged, orphaning 3.2 from main — corrective PR #4 opened by QA
+  and merged (`6bdf3ee`); stacked PRs must merge bottom-up from now on. Full matrix on `70318fd`:
+  ngspice 144 PASS (only the 5 expected-to-fail reproducers fail), Xyce 78/0, IBM 6/6, ctest 28/32
+  (pre-existing only), GUI path unchanged. **Next (dev):** BUG-1 fix → FIXED–RETEST; the ≥100-stage
+  `.op` singular issue; then BUG-2/BUG-3 (both pre-existing, in the queue).
 
   Verified: 19 suites; ngspice 104/104 (AC caps rel 3e-9, ring oscillator 1.4 %); Xyce 0 FAIL; ibmpg2 PASS.
   READY FOR QA. **Found (pre-existing on main):** `.op` on an inverter chain of 100 or more stages fails with
