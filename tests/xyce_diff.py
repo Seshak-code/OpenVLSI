@@ -29,6 +29,7 @@ DIALECT = {
     "PARSER/scalingFactors.cir": "Xyce reads 1X as 1e6",
     "GLOBALNODE/global3.cir": "Xyce reads 1a as 1 (ngspice: atto)",
     "Output/TRAN/tran-prn-timescalefactor.cir": "output time scaling",
+    "MINDUCTORS/mutIndPrint": "V source across an inductor: singular at DC (ngspice .op: check l1#branch)",
 }
 
 def gold(prn):

@@ -38,5 +38,5 @@ because of real collisions (see `docs/claude-archive/session-log.md`).
 
 ## Coordination with the ngspice harness
 
-Verify by RUNNING things (`tests/ngspice_diff/run_diff.py` — expect 82/83, only
-`aac_10_bridge` fails), not by reading checklists (owner's standing rule).
+Verify by RUNNING things (`tests/ngspice_diff/run_diff.py` — expect 84/84 since the
+junction-gmin fix; also `tests/ibmpg_diff.py` 6/6 and `tests/xyce_diff.py` 0 FAIL), not by reading checklists (owner's standing rule).

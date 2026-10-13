@@ -296,6 +296,24 @@ int main() {
               "noise: 1k/1k divider gives sqrt(4kT*500) out, x2 input-referred, white total");
     }
 
+    // No node gmin: a node with no DC path must fail closed and be named (the
+    // contraction solver left a root front's pivot-less rows at x = 0 and the
+    // solve "converged" — series caps gave V(2)=0, an undriven gate -5 V), and a
+    // linear circuit converging on the direct attempt must not report GMIN stepping
+    for (PrecisionMode mode : {PrecisionMode::Native_F64, PrecisionMode::Mixed}) {
+        auto r = run(mode, "* series caps\nV1 1 0 DC 5\nC1 1 2 1u\nC2 2 0 1u\nR1 1 0 1k\n.op\n");
+        check(!r.converged && r.errorDetail.find("check node 2") != std::string::npos,
+              "floating node fails closed: " + r.errorDetail.substr(0, 40));
+    }
+    {
+        CircuitSim sim;
+        TensorNetlist d;
+        d.numGlobalNodes = 2;
+        d.addVoltageSource(1, 0, 1.0); d.addResistor("R1", 1, 2, 1e3); d.addResistor("R2", 2, 0, 1e3);
+        SolverStep s = sim.solveDC(d);
+        check(s.stats.converged && !s.stats.gminSteppingUsed, "linear divider: no GMIN stepping reported");
+    }
+
     // The CSR pattern cache must not trust the canonical topology hash: it ignores
     // sources and node numbering, so a reused CircuitSim kept a stale pattern and
     // silently dropped the moved source's stamps.

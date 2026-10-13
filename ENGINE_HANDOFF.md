@@ -29,6 +29,21 @@ then the two Roadmap sections it points to. Everything below was verified by run
   (The "two queued GUI issues" turned out to be already fixed: the Verilog-A transport gap by
   `c7faeb0`, the two failing GUI tests by `b1d9fd2` — `test_hierarchy_gui` and
   `test_virtuoso_parity` both verified passing 2026-10-12, offscreen Qt env; Roadmap row updated.)
+- **Update 2026-10-12 (sixth session, Claude Code — review of `7332f62`):** junction gmin kept;
+  review fixes: (1) BJT SoA kernels (generic + NEON vector/tail) counted GMIN twice in the
+  linear-continuation region and kept `max(g, GMIN)` floors — now exactly `diode_model_pair`
+  (slope g_base, + GMIN·v; no floors); one `PhysicsConstants::JUNCTION_GMIN`. (2) The contraction
+  solver left a root front's pivot-less rows at x = 0 and reported success, so floating nodes
+  "converged" (series caps → V=0, undriven gate → −5 V): now singular, and DC fails with
+  "Singular matrix: check node N" exactly like ngspice. A node no element touches (X pin to an
+  unused port) is not a circuit node and is pinned to 0 V (ngspice drops it). (3) Ladder end by
+  step index (no float compare); `gminSteppingUsed` true only if the ladder ran; sensitivity Jacobian
+  without node gmin; `addDiagonalConditioning` has no default gmin. (4) `test_std_cells` Darlington
+  check was vacuous (read the internal node; VCC on node 10 left nodes 3–9 floating) — now β = 10 200.
+  Noise shot current keeps the junction-gmin term (ngspice's DIOcurrent includes it).
+  Verified: all 19 suites; ngspice 84/84; Xyce 0 FAIL / 78 PASS (V–L loops at DC are XYCE-DIALECT:
+  ngspice `.op` is singular too); IBM 6/6 (ibmpg6 37 s). **Next:** golden datasets into regular
+  verification, Roadmap Phase 3.
 - **Status of the plan:** Roadmap Phase 1 (Foundations) is done. See `Roadmap.md` →
   "⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS" (what works, by device/analysis, with ✅/⚠️/❌/🚫/❓)
   and "🎯 END-TO-END GOAL & ENGINE SCALE PLAN" (phases and gates).

@@ -134,10 +134,12 @@ void test_generic_darlington() {
     nl.addInstance("Darlington Pair", {1, 2, 0});
 
     // Measurement Topology:
-    // VCC at node 10, Load resistor 100Ω from VCC to collector (node 2)
-    // This allows measuring Ic = (VCC - Vc) / R_load
-    nl.addVoltageSource(10, 0, 10.0);
-    nl.addResistor(10, 2, 100.0);
+    // VCC on the next free node after the instance's internal node (indices must be
+    // contiguous: an unused index is a floating node and fails DC, as in ngspice);
+    // load 100Ω from VCC to the collector (node 2), so Ic = (VCC - Vc) / R_load
+    const int vcc = nl.numGlobalNodes + 1;
+    nl.addVoltageSource(vcc, 0, 10.0);
+    nl.addResistor(vcc, 2, 100.0);
 
     // Input Current = 1uA into Node 1 (Base)
     nl.addCurrentSource(0, 1, 1e-6);
@@ -157,7 +159,8 @@ void test_generic_darlington() {
     }
 
     // Verify Gain
-    double V_c = step.nodeVoltages[2]; // Node 2 is Collector
+    double V_c = step.nodeVoltages[1]; // node 2 = collector (0-based; [2] read the
+                                       // internal node, which made the check vacuous)
     double I_c = (10.0 - V_c) / 100.0;
     double I_b = 1e-6;
     double Beta = I_c / I_b;

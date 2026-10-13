@@ -1,16 +1,12 @@
 # Active Context
 
-**Last session: Cline, 2026-10-12 (junction gmin)** — the engine's gmin now sits across
-each PN junction (diode/BJT/zener device models + SoA kernels, both audits) instead of
-node-to-ground, matching ngspice; node gmin dropped at convergence. `aac_10_bridge`
-passes — ngspice harness **84 PASS / 0 FAIL** (cpu+gpu). Full ctest 28/32 (the 4
-pre-existing failures unchanged); test_regression 4/4, test_engine_fixes,
-test_ad_integration 19/19, test_std_cells all pass. Also verified (same session):
-the "two queued GUI issues" were already fixed earlier — `test_hierarchy_gui`
-(PowerPort→interfacePins, `b1d9fd2`) and `test_virtuoso_parity` (52/52,
-variable cycles/dB20/postproc, `b1d9fd2`); Roadmap's stale ⚠ Verilog-A transport
-row updated to ✅. **Awaiting Claude Code review** after its rate limit resets
-(7:10pm): the gmin commit `7332f62` and this record.
+**Last session: Claude Code, 2026-10-12 (review of the junction-gmin commit `7332f62`)** —
+kept the design, fixed what review found: BJT SoA kernels double-counted GMIN (+ stale floors);
+the contraction solver silently "solved" singular systems (floating nodes reported converged with
+garbage) — now DC fails with "Singular matrix: check node N" like ngspice, and element-free nodes
+(dangling subckt ports) are pinned to 0 V; ladder end/gminSteppingUsed/sensitivity gmin fixed;
+vacuous Darlington test fixed. Verified: 19 suites, ngspice 84/84, Xyce 0 FAIL/78 PASS, IBM 6/6.
+Details: `ENGINE_HANDOFF.md` §0 (sixth session).
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at
@@ -18,7 +14,7 @@ every session end and stamp your agent.**
 
 ## Where things stand
 
-- **Branch:** `engine/spice-correctness` — pushed, tree clean. The third
+- **Branch:** `engine/spice-correctness` — pushed after the sixth session. The third
   session's uncommitted stretch is committed and verified (clean build; ngspice
   82/83, only `aac_10_bridge`; full ctest 28/32 with 4 pre-existing failures —
   identical at baseline `3453182`).
@@ -45,8 +41,9 @@ the two GUI tests in `b1d9fd2`; both verified passing 2026-10-12, offscreen Qt e
   baseline; `test_kernel_dispatch` = stale diode-clamp expectation).
 - `mcSeed` never applied (every Monte Carlo run identical); temperature: Vt
   fixed at 25.85 mV vs `ambient_temp_K` default 300.15 K; MOSFET level-1 gaps
-  (no Vds<0 swap, no body effect); `.include/.lib/.options/.ic/.print` silently
-  ignored. Full backlog: `ENGINE_HANDOFF.md` §6.
+  (no Vds<0 swap, no body effect); `.include/.lib` are explicit "not supported yet"
+  errors (only output cards `.options/.print/.plot/.save/.probe/.meas/.four` are ignored).
+  Full backlog: `ENGINE_HANDOFF.md` §6.
 
 ## Agent coordination
 
