@@ -327,6 +327,13 @@ int main() {
         check(!r.converged && r.errorDetail.find("NF") != std::string::npos, "MOS1 NF=2 is an explicit error");
         r = run(mode, "* mos LD\nVDD 1 0 DC 5\nM1 1 1 0 0 NM L=1u\n.model NM NMOS LD=0.5u\n.op\n");
         check(!r.converged && r.errorDetail.find("LD") != std::string::npos, "MOS1 Leff <= 0 is an explicit error");
+        // TOX without KP: KP = UO * 1e-4 * 3.9 eps0 / TOX (ngspice), here 500 cm^2/Vs and 20 nm
+        const double kp = 500e-4 * 3.9 * 8.854214871e-12 / 20e-9;
+        r = run(mode, "* mos tox\nVDD 1 0 DC 5\nVG 2 0 DC 1\nRD 1 3 1k\nM1 3 2 0 0 NM\n.model NM NMOS TOX=20n UO=500\n.op\n");
+        check(r.converged && near(V(r, 3), 5.0 - 1e3 * 0.5 * kp, 1e-6),
+              "MOS1 KP from UO and TOX: V(drain) = " + std::to_string(5.0 - 0.5e3 * kp) + " (" + std::to_string(V(r, 3)) + ")");
+        r = run(mode, "* mos mj\nVDD 1 0 DC 5\nM1 1 1 0 0 NM\n.model NM NMOS CJ=1e-4 MJ=1\n.op\n");
+        check(!r.converged && r.errorDetail.find("MJ") != std::string::npos, "MOS1 MJ >= 1 is an explicit error");
     }
 
     // The CSR pattern cache must not trust the canonical topology hash: it ignores
