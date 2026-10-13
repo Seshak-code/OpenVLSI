@@ -29,5 +29,7 @@ ladder's final step and removed from transient. **Awaiting Claude Code review.**
 ## What's left (order per §0)
 
 1. Wire the golden-dataset harnesses into regular verification.
-2. The two queued GUI issues.
-3. Roadmap Phase 3 — see `Roadmap.md` → "🎯 END-TO-END GOAL & ENGINE SCALE PLAN".
+2. Roadmap Phase 3 — see `Roadmap.md` → "🎯 END-TO-END GOAL & ENGINE SCALE PLAN".
+
+(The two queued GUI issues were already fixed — Verilog-A transport in `c7faeb0`,
+the two GUI tests in `b1d9fd2`; both verified passing 2026-10-12, offscreen Qt env.)

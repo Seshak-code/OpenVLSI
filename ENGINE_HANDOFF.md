@@ -25,8 +25,10 @@ then the two Roadmap sections it points to. Everything below was verified by run
   instead of node-to-ground, matching ngspice; the node gmin is dropped at convergence.
   **`aac_10_bridge` passes** — ngspice harness 84 PASS / 0 FAIL (cpu+gpu). Full ctest 28/32,
   the 4 pre-existing failures unchanged. **Next:** (a) wire the golden datasets
-  (`tests/ibmpg_diff.py`, `tests/xyce_diff.py`) into regular verification, (b) the two queued
-  GUI issues, (c) Roadmap Phase 3.
+  (`tests/ibmpg_diff.py`, `tests/xyce_diff.py`) into regular verification, (b) Roadmap Phase 3.
+  (The "two queued GUI issues" turned out to be already fixed: the Verilog-A transport gap by
+  `c7faeb0`, the two failing GUI tests by `b1d9fd2` — `test_hierarchy_gui` and
+  `test_virtuoso_parity` both verified passing 2026-10-12, offscreen Qt env; Roadmap row updated.)
 - **Status of the plan:** Roadmap Phase 1 (Foundations) is done. See `Roadmap.md` →
   "⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS" (what works, by device/analysis, with ✅/⚠️/❌/🚫/❓)
   and "🎯 END-TO-END GOAL & ENGINE SCALE PLAN" (phases and gates).

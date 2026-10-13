@@ -99,7 +99,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | Legacy AoS path (`LEGACY_AOS`) | AI speculative runner (`ai_api/simulation/speculative_runner.cpp`) | 🚫 PMOS conducts at Vgs=0; BJT polarity decided from the model *name*; uses different device defaults from the default path |
 | Default linear solver | every DC/transient Newton step, CPU and GPU-hybrid paths | ✅ tensor-contraction solver: backward error ≤1e-15 on grids, hub-heavy and E-source networks (200 random networks fuzzed); 10⁴ nodes 0.02 s, 10⁵ 0.11 s, 10⁶ 3.0 s (fronts of a level run on `std::thread` workers; deterministic) |
 | `ISimulationEngine` facade vs GUI driver | — | ✅ the GUI goes `ISimulationDriver → LocalWorkerDriver → CircuitSim`; both use the same `CircuitSim::runTransient`, `solveAC`, `solveNoise`. The legacy TN/MPO/Schur/sparse-LU stack, `NetlistCompiler`/`CompiledTensorBlock` and the WebGPU hybrid loop were deleted |
-| GUI Verilog-A transport | GUI → driver | ⚠️ carries neither PULSE parameters nor AC magnitudes back into the netlist (GUI transients see DC sources; GUI AC/noise need AC on a source) |
+| GUI Verilog-A transport | GUI → driver | ✅ round-trips PULSE/SIN parameters and AC magnitude/phase for V and I sources (`c7faeb0`, per-field regression checks in `test_veriloga_roundtrip`); the two GUI tests that failed on the old path (`test_hierarchy_gui` interface pins, `test_virtuoso_parity` variable cycles/dB20/postproc) were fixed in `b1d9fd2` — all verified passing 2026-10-12 |
 
 ### Analyses
 | Analysis | Status | Notes |

@@ -5,8 +5,12 @@ each PN junction (diode/BJT/zener device models + SoA kernels, both audits) inst
 node-to-ground, matching ngspice; node gmin dropped at convergence. `aac_10_bridge`
 passes — ngspice harness **84 PASS / 0 FAIL** (cpu+gpu). Full ctest 28/32 (the 4
 pre-existing failures unchanged); test_regression 4/4, test_engine_fixes,
-test_ad_integration 19/19, test_std_cells all pass. **Awaiting Claude Code review**
-after its rate limit resets (7:10pm): the gmin commits and this record.
+test_ad_integration 19/19, test_std_cells all pass. Also verified (same session):
+the "two queued GUI issues" were already fixed earlier — `test_hierarchy_gui`
+(PowerPort→interfacePins, `b1d9fd2`) and `test_virtuoso_parity` (52/52,
+variable cycles/dB20/postproc, `b1d9fd2`); Roadmap's stale ⚠ Verilog-A transport
+row updated to ✅. **Awaiting Claude Code review** after its rate limit resets
+(7:10pm): the gmin commit `7332f62` and this record.
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at
@@ -26,11 +30,13 @@ every session end and stamp your agent.**
 
 ## Next, in order (from `ENGINE_HANDOFF.md` §0)
 
-1. **Golden datasets into the harness** — wire `tests/ibmpg_diff.py` /
+1. **Golden datasets into the harness** — wire `tests/ibmpg_diff.py` and
    `tests/xyce_diff.py` into regular verification; IBM power-grid for solver
    scale, Xyce regression subset for devices.
-2. **GUI issues queued as separate tasks** (from session 75afa6b2).
-3. **Roadmap Phase 3.**
+2. **Roadmap Phase 3.**
+
+(The two queued GUI issues were already fixed — Verilog-A transport in `c7faeb0`,
+the two GUI tests in `b1d9fd2`; both verified passing 2026-10-12, offscreen Qt env.)
 
 ## Work around (known, do not chase)
 
