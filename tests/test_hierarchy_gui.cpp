@@ -5,8 +5,6 @@
 #include "gui/editors/schematic/schematic_editor.h"
 #include "gui/components/visual_component.h"
 #include "acutesim_engine/netlist/circuit.h"
-#include "acutesim_engine/infrastructure/netlist_compiler.h"
-#include "acutesim_engine/infrastructure/compiled_block.h"
 
 // Helper to check assertion
 #define TEST_ASSERT(cond) \
@@ -70,20 +68,14 @@ int main(int argc, char *argv[]) {
     scene.generateNetlist();
     TensorNetlist netlist = scene.toNetlist();
 
-    // 6. Compile Netlist
-    qDebug() << "Test: Compiling Netlist...";
-    // NetlistCompiler is global
-    auto compiled = NetlistCompiler::compile(netlist);
-    TEST_ASSERT(compiled != nullptr);
-
-    // 7. Verify Interface Pins
-    qDebug() << "Test: Verifying Compiled Block...";
+    // 6. Verify Interface Pins
+    qDebug() << "Test: Verifying interface pins...";
     bool foundPowerPort = false;
-    for (const auto& pin : compiled->interfacePins) {
+    for (const auto& pin : netlist.globalBlock.interfacePins) {
         if (pin.isPower) {
             foundPowerPort = true;
             qDebug() << "Found PowerPort pin:" << QString::fromStdString(pin.name) 
-                     << " NetID:" << QString::fromStdString(pin.netId.toString())
+                     << " NetID:" << QString::fromStdString(pin.netUUIDStr)
                      << " NodeIndex:" << pin.nodeIndex;
         }
     }
@@ -91,7 +83,7 @@ int main(int argc, char *argv[]) {
     if (!foundPowerPort) {
         qCritical() << "FAILED: PowerPort was not identified as an interface pin!";
         // Print all interface pins for debug
-        for (const auto& pin : compiled->interfacePins) {
+        for (const auto& pin : netlist.globalBlock.interfacePins) {
             qDebug() << "Pin:" << QString::fromStdString(pin.name) << " Power:" << pin.isPower;
         }
     }

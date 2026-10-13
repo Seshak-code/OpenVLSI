@@ -20,7 +20,7 @@
 
 #include "engine_api/simulation_context.h"
 #include "acutesim_engine/infrastructure/postproc_engine.h"
-#include "compute/orchestration/batch_runner.h"
+#include "compute/orchestration/sweep_parameter.h"
 
 using namespace acutesim::orchestration;
 using namespace acutesim::compute::postproc;
@@ -179,6 +179,13 @@ void test_expression_parser_waveform() {
     } else {
         TEST_ASSERT(false, "v(\"/out\") * 2 should be a Waveform");
     }
+
+    TEST_ASSERT(NEAR(engine.evaluate("1 + 2*3 - -(4)/2").scalarVal, 9.0, 1e-12),
+                "Scalar precedence and unary minus");
+    Operand diff = engine.evaluate("v(\"/out\") - v(\"/out\")/2");
+    TEST_ASSERT(diff.type == OperandType::Waveform &&
+                NEAR(diff.wave.values[N/4], 0.5 * vout.values[N/4], 1e-12),
+                "Waveform-waveform ops respect precedence");
 }
 
 // ===========================================================================
@@ -201,34 +208,6 @@ void test_sweep_calculator_combined() {
         TEST_ASSERT(NEAR(points[0], 1000, 1e-9), "First sweep point = 1000");
         TEST_ASSERT(NEAR(points[4], 5000, 1e-9), "Last sweep point = 5000");
     }
-
-    SimulationContext ctx;
-    ctx.type = SimulationType::Analog;
-    ctx.sources.push_back(FileRef{"test.sch", true, true});
-    ctx.variableExprs["Rload"] = "1000";
-    ctx.variableEnabled["Rload"] = true;
-    ctx.resolveVariables();
-
-    BatchRunner runner;
-    runner.setContext(ctx);
-
-    TensorNetlist netlist;
-    netlist.numGlobalNodes = 2;
-    runner.setBaseNetlist(netlist);
-    runner.setSweep(sweep);
-
-    int solverCallCount = 0;
-    auto mockSolver = [&](std::shared_ptr<const CompiledTensorBlock>) -> SolverStepResult {
-        solverCallCount++;
-        return SolverStepResult{};
-    };
-
-    BatchResult batchResult = runner.run(mockSolver);
-
-    TEST_ASSERT(solverCallCount == 5,
-                "Solver should be called 5 times");
-    TEST_ASSERT(batchResult.sweepParam == "Rload", "Sweep param should be Rload");
-    TEST_ASSERT((int)batchResult.sweepValues.size() == 5, "Sweep values count should be 5");
 }
 
 // ===========================================================================

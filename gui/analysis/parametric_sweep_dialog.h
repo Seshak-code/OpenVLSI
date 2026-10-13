@@ -3,7 +3,7 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QCheckBox>
-#include "../../../compute/orchestration/batch_runner.h"
+#include "compute/orchestration/sweep_parameter.h"
 
 namespace acutesim::gui::analysis {
 

@@ -4,7 +4,7 @@
  * test_simulation_suite.h
  * 
  * Automated tests for Phase 1.7 Simulation Suite
- * Tests: Profiles, Explorer, QuickAnalysis, Workspace flows
+ * Tests: Profiles, Explorer, Workspace flows
  */
 
 #include <iostream>
@@ -12,8 +12,8 @@
 #include <string>
 #include <unordered_map>
 #include "../gui/analysis/simulation_profile.h"
-#include "../physics/quick_analysis.h"
 #include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/physics/corner_config.h"
 
 namespace SimulationTests {
 
@@ -139,94 +139,6 @@ inline bool test_corner_config() {
 // QUICK ANALYSIS TESTS
 // ============================================================================
 
-inline bool test_quick_analysis_empty_netlist() {
-    std::cout << "  [QuickAnalysis Empty Netlist] ";
-
-    TensorNetlist emptyNet;
-    emptyNet.numGlobalNodes = 0;
-
-    auto result = QuickAnalysis::estimateDC(emptyNet);
-    assert(result.empty());
-
-    std::cout << "PASS\n";
-    return true;
-}
-
-inline bool test_quick_analysis_simple_circuit() {
-    std::cout << "  [QuickAnalysis Simple Circuit] ";
-
-    TensorNetlist net;
-    net.numGlobalNodes = 3;
-
-    // Add a 5V source to node 1
-    net.addVoltageSource(1, 0, 5.0);
-
-    auto result = QuickAnalysis::estimateDC(net);
-
-    // Should have estimate for node 1
-    assert(result.count(1) > 0);
-    assert(std::abs(result.at(1) - 5.0) < 0.001);  // V(1) ≈ 5V
-
-    assert(QuickAnalysis::isValid(result));
-
-    std::cout << "PASS\n";
-    return true;
-}
-
-inline bool test_quick_analysis_caching() {
-    std::cout << "  [QuickAnalysis Caching] ";
-
-    // Clear cache first
-    QuickAnalysis::invalidate();
-
-    TensorNetlist net;
-    net.numGlobalNodes = 2;
-    net.addVoltageSource(1, 0, 3.3);
-
-    // First call - computes
-    auto result1 = QuickAnalysis::estimateDC(net);
-    size_t hash = net.globalBlock.topologyHash;
-
-    // Get cached - should match
-    auto cached = QuickAnalysis::getCached(hash);
-    assert(!cached.empty());
-    assert(cached == result1);
-
-    // After invalidate, cache should be empty
-    QuickAnalysis::invalidate();
-    cached = QuickAnalysis::getCached(hash);
-    assert(cached.empty());
-
-    std::cout << "PASS\n";
-    return true;
-}
-
-inline bool test_quick_analysis_validation() {
-    std::cout << "  [QuickAnalysis Validation] ";
-
-    // Valid result
-    std::unordered_map<int, double> valid;
-    valid[1] = 3.3;
-    valid[2] = 1.8;
-    assert(QuickAnalysis::isValid(valid));
-
-    // Empty is invalid
-    std::unordered_map<int, double> empty;
-    assert(!QuickAnalysis::isValid(empty));
-
-    // Extreme value is invalid
-    std::unordered_map<int, double> extreme;
-    extreme[1] = 2000.0;  // > 1000V
-    assert(!QuickAnalysis::isValid(extreme));
-
-    std::cout << "PASS\n";
-    return true;
-}
-
-// ============================================================================
-// ANALYSIS TYPE STRING CONVERSION
-// ============================================================================
-
 inline bool test_analysis_type_string() {
     std::cout << "  [Analysis Type Strings] ";
     
@@ -262,13 +174,6 @@ inline int run_all_simulation_tests() {
     // Corner tests
     std::cout << "\n[Corner Config Tests]\n";
     if (test_corner_config()) passed++; else failed++;
-    
-    // QuickAnalysis tests
-    std::cout << "\n[Quick Analysis Tests]\n";
-    if (test_quick_analysis_empty_netlist()) passed++; else failed++;
-    if (test_quick_analysis_simple_circuit()) passed++; else failed++;
-    if (test_quick_analysis_caching()) passed++; else failed++;
-    if (test_quick_analysis_validation()) passed++; else failed++;
     
     // Utility tests
     std::cout << "\n[Utility Tests]\n";

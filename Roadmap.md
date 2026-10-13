@@ -80,6 +80,151 @@ This roadmap evolves CuteApp from a standalone open-source simulator into an Age
 ---
 
 
+## ⚙️ ENGINE FEATURE LIST & VERIFIED SUPPORT STATUS (acutesim_engine / "Karam")
+
+*Verified 2026-10-11 by running the engine, not by reading checklists. Sources of truth:
+`tests/test_engine_fixes.cpp` (CPU + GPU modes), the CI `test_regression` suite, and the 17
+SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Netlists"
+(22 pass / 7 fail / 5 unsupported across CPU+GPU runs). Update this table whenever a feature changes.*
+
+**Legend:** ✅ verified against an analytic or SPICE reference · ⚠️ works with known gaps ·
+❌ not supported — rejected with an explicit error · 🚫 accepted but gives wrong results ·
+❓ code exists, not verified
+
+### Execution paths
+| Path | Who uses it | Status |
+|---|---|---|
+| Default CPU path (SoA tensors, `TENSOR_SOA_SIMD`) | `ISimulationEngine` sessions, GUI via `LocalWorkerDriver` | ✅ primary path; all ✅ rows below were verified here |
+| GPU mode | default on machines with a GPU | ⚠️ currently runs the CPU path: the former WebGPU "hybrid" loop stamped and solved on the CPU with its own voltage-only device copy, so it was retired from `solveDC`. Phase 4 rebuilds GPU device evaluation + batched front contraction |
+| Legacy AoS path (`LEGACY_AOS`) | AI speculative runner (`ai_api/simulation/speculative_runner.cpp`) | 🚫 PMOS conducts at Vgs=0; BJT polarity decided from the model *name*; uses different device defaults from the default path |
+| Default linear solver | every DC/transient Newton step, CPU and GPU-hybrid paths | ✅ tensor-contraction solver: backward error ≤1e-15 on grids, hub-heavy and E-source networks (200 random networks fuzzed); 10⁴ nodes 0.02 s, 10⁵ 0.11 s, 10⁶ 3.0 s (fronts of a level run on `std::thread` workers; deterministic) |
+| `ISimulationEngine` facade vs GUI driver | — | ✅ the GUI goes `ISimulationDriver → LocalWorkerDriver → CircuitSim`; both use the same `CircuitSim::runTransient`, `solveAC`, `solveNoise`. The legacy TN/MPO/Schur/sparse-LU stack, `NetlistCompiler`/`CompiledTensorBlock` and the WebGPU hybrid loop were deleted |
+| GUI Verilog-A transport | GUI → driver | ✅ round-trips PULSE/SIN parameters and AC magnitude/phase for V and I sources (`c7faeb0`, per-field regression checks in `test_veriloga_roundtrip`); the two GUI tests that failed on the old path (`test_hierarchy_gui` interface pins, `test_virtuoso_parity` variable cycles/dB20/postproc) were fixed in `b1d9fd2` — all verified passing 2026-10-12 |
+
+### Analyses
+| Analysis | Status | Notes |
+|---|---|---|
+| DC operating point | ✅ | plain Newton first, GMIN ladder only on failure (SPICE order); NaN fails closed; scale-aware KCL test (`KCL_RELTOL`) |
+| `.dc` sweep | ✅ | one V or I source (`.dc` card or `DCConfigDTO`), continuation on one solver; nested sweeps are an error; matches ngspice (8 netlists) |
+| Transient | ✅ | one loop (`CircuitSim::runTransient`) for session, GUI and Fourier; trapezoidal (no automatic Gear2: its formulas are constant-step); LTE step control; failed steps retry smaller and end in an error, never hang |
+| Transient `uic` / initial state | ✅ | DC operating point seeds C/L history unless `uic`; `.ic` forced during the bias (SPICE3) or initial with `uic`; C/L `IC=` with `uic`; `TransientConfigDTO::uic`, GUI parameter `uic` |
+| Transient breakpoints | ✅ | steps land on PULSE corners and the SIN delay (`nextBreakpoint`) |
+| AC small-signal | ✅ | `CircuitSim::solveAC`: Y = G + jωC with G the DC Jacobian at the OP (every device/model card/subcircuit/branch row), solved as a real 2N system by the contraction solver; `.ac dec/oct/lin` or `ACConfigDTO`; matches ngspice (5 netlists incl. coupled transformer) |
+| Noise | ✅ | `CircuitSim::solveNoise`: resistor thermal, diode/BJT shot, MOSFET/JFET channel thermal (8kT·gm/3); adjoint solve per frequency; ngspice power-law integration for totals; matches ngspice spectra and totals (4 netlists). No flicker noise (no KF/AF) |
+| Monte Carlo | ⚠️ | driver path varies parameters per run (`sampleCount`); session path still never applies `mcSeed` 🚫 |
+| TF (Bode, margins) | ⚠️ | rebuilt on `solveAC` (V(out)/V(in) from the circuit's AC sources); not yet compared against a reference |
+| PZ | ❌ | removed: it returned fabricated poles (eigenvalues of Y(1 Hz)); needs a generalized eigen-solve of G + sC |
+| Fourier / sensitivity | ❓ | solver code + analysis registry exist (GUI path); not verified |
+
+### Circuit elements
+| Element | Status | Supported parameters / known gaps |
+|---|---|---|
+| R | ✅ | value; `TC1`/`TC2` parsed but unused by any stamp |
+| C | ✅ | value; `IC=` initial voltage with `uic` |
+| L | ✅ | MNA branch current: exact DC short; Trapezoidal/BE/Gear2 branch equations in transient (RL step matches 1−e^(−t/τ) to 1e-6; RLC SIN matches ngspice) |
+| K (mutual inductance) | ✅ | off-diagonal L_ab terms between coupled branch rows (open-circuit v2/v1 = k verified) |
+| V / I sources: DC, PULSE, SIN | ✅ | exact (MNA branch current; was a 1 mΩ Norton model); SPICE defaults (TR/TF=TSTEP, PW=∞, DC = t=0 value); AC magnitude/phase parsed |
+| V / I sources: EXP, PWL, SFFM, AM | ❌ | explicit "not supported yet" |
+| D (diode) | ✅ | `IS`, `N`; no `RS`, `CJO`/`TT` (no junction capacitance), no breakdown on `D` |
+| Q (BJT) | ✅ | Ebers–Moll: `IS`, `BF`, `BR`, polarity from `.model`; no `VAF`, `RB/RC/RE`, junction capacitances |
+| M (MOSFET) | ⚠️ | Level 1: `KP`, `VTO`, `LAMBDA` (λ in both regions, matches ngspice inverters within 0.6 mV); no source/drain swap for Vds<0, no body effect |
+| J (JFET) | ✅ | Shichman–Hodges: `BETA`, `VTO`, `LAMBDA`, N/P from `.model`; no gate diodes, no S/D swap |
+| E (VCVS) | ✅ | gain; ideal (MNA branch current) |
+| G (VCCS) | ✅ | transconductance |
+| F / H (CCCS / CCVS) | ✅ | read the controlling V source's branch current (same block; resolved after parsing); matches ngspice exactly |
+| T (transmission line) | ❌ | explicit "not supported yet" |
+| X (subcircuit instance) | ✅ | local node scoping, defined-after-use, nesting (depth guard), pin-count/unknown-name errors; hierarchical results bit-identical to flattened (DC + transient). Subcircuit parameters (`params:`) not supported |
+| Zener / Schottky / power rail | ❓ | data model + AoS stamps only; not reachable from SPICE netlists |
+| `AREA` scaling (D/Q/J) | ❌ | explicit error |
+
+### Netlist language
+| Feature | Status | Notes |
+|---|---|---|
+| Title line, `*` comments, `+` continuation, `;` inline comments | ✅ | |
+| SI suffixes (`f p n u m k meg g t mil`) | ✅ | |
+| `.model` (anywhere in file) | ✅ | resolved after the whole file is read; SPICE defaults for missing parameters |
+| `.param` | ⚠️ | `{NAME}` / bare name substitution ✅; arithmetic expressions ❌ (explicit error) |
+| `.subckt` / `.ends` | ✅ | see X above |
+| Unknown element / too few fields / non-numeric value | ✅ | hard parse error with line number (used to be silently dropped or read as 0) |
+| `.include`, `.lib`, `.options`, `.global`, `.ic`, `.print`, `.plot`, `.four` | ⚠️ | silently ignored |
+
+### Numerics & device-model invariants
+| Property | Status |
+|---|---|
+| No `-ffast-math`; NaN/Inf guards active | ✅ |
+| Junction exponent cap `JUNCTION_EXP_ARG_MAX = 50` shared by every diode/BJT kernel and `pnjlim` | ✅ |
+| Stamps and KCL audit share one waveform function and matching companion models (incl. Gear2) | ✅ |
+| Floating high-impedance nodes (pA currents) | ⚠️ the "KCL < 1e-9 A ⇒ converged" shortcut can accept stale voltages (bridge-rectifier output) |
+| Uninitialised device/source fields | ✅ diode and V/I source parameters now default to SPICE values |
+
+### Reference-suite gaps still open (allaboutcircuits.com)
+`#02` needs `.dc` sweeps · `#05–09` need verified AC analysis · `#10` floating bridge output
+holds stale voltages (ill-posed: floating outputs; loaded variant matches ngspice) · `#16/#17` pass only at smaller steps (1 ms step gives 4–6 % error; SPICE also
+caps its step at tstop/50 here) — every other circuit matches SPICE 2g6.
+
+---
+
+
+## 🎯 END-TO-END GOAL & ENGINE SCALE PLAN (SPICE parity → billion-device GPU simulation)
+
+**Product goal:** in one application, design an SoC, connect RAM, simulate firmware running on it,
+and see the program's output — covering every step from schematic/RTL to sign-off.
+
+**Physics reality that shapes the plan (measured 2026-10-11 on an M4 Pro, 26 GB unified memory):**
+- Executing code needs billions of clock cycles. At transistor level even 1 ms of CPU execution
+  would take years, so **firmware runs on RTL / gate-level models**; SPICE is reserved for the
+  blocks that need it (PLL, SRAM bit-cells/sense amps, IO, power), co-simulated with the digital side.
+- A flat, SPICE-accurate billion-transistor run does not fit: ~70 B/device of state plus a ~10¹⁰-entry
+  matrix is >150 GB. Billion-device runs are only reachable FastSPICE-style: **store each unique
+  cell once, simulate only active regions, partition into GPU-batched blocks**.
+- Today's API path uses dense LU: 200 nodes 0.32 s, 800 nodes 3.0 s, 1,600 nodes 21.6 s (O(N³)).
+
+### Abstraction ladder (what runs where)
+| Level | Engine | Used for |
+|---|---|---|
+| Firmware on CPU model | instruction-set / RTL simulation (Verilator-class) | running code, program output, boot, drivers |
+| RTL / gate level | event-driven digital engine (`digital_event_engine.h`) + Yosys/OpenROAD flow | functional + timing sign-off |
+| FastSPICE (10⁶–10⁹ devices) | this engine: hierarchy reuse, activity bypass, GPU partitions | SRAM arrays, power grids, full-chip analog effects (~1–5 % timing accuracy) |
+| Full SPICE (≤10⁶ devices) | this engine, default path | analog blocks, cells, characterisation (SPICE accuracy) |
+| Mixed-signal co-simulation | A2D/D2A boundary (`DigitalEventEngine`) | analog blocks inside a running digital system |
+
+### Phases & exit gates (every gate checked against ngspice as reference oracle)
+**Phase 1 — Foundations** *(in progress)*
+- [x] ngspice differential test harness (`tests/ngspice_diff/run_diff.py`, 34 netlists; ngspice 47 as oracle) — not yet wired into CI
+- [x] Subcircuits / hierarchy correct (`.subckt`, nesting, instances on every solver path) — verified hierarchical == flattened
+- [x] Default linear solver is the tensor-contraction solver (`math/contraction_solver.*`): nested-dissection contraction tree, superposition of child Schur complements, MC64-style matching + threshold partial pivoting with delayed pivots, iterative refinement. (`sparse_lu.cpp` turned out to be dense internally.) Compiled-block routing still separate
+- [x] MNA branch-current unknowns for V sources, inductors, E/H — replaced the 1 mΩ/100 µΩ Norton models;
+      F/H sources, transient inductor current and mutual inductance now work (DC error vs ngspice 1.4e-6 → 2e-8 V)
+- **Gate:** hierarchical == flattened results ✅; 10⁴-node circuit DC in < 1 s ✅ (0.33 s end-to-end; 10⁵ nodes 1.44 s); all reference circuits within SPICE tolerance (open: MOSFET λ in linear region, transient inductors)
+
+**Phase 2 — Analysis parity**
+- [ ] DC operating point as transient initial state (not zero); `.ic` / `uic` via DTO
+- [ ] Breakpoints at waveform edges; `.dc` sweeps; AC + noise through `ISimulationEngine` (reuse GUI-path `ACSolver`)
+- [ ] One transient loop shared by `SessionImpl` and `LocalWorkerDriver`
+- **Gate:** every analysis in the feature list ✅ against ngspice
+
+**Phase 3 — Device-model parity**
+- [ ] BSIM4 and BSIM-CMG (modern PDKs) via the existing Verilog-A front end / physics compiler
+- [ ] Junction capacitances (diode CJO/TT, BJT, MOS charge models), Gummel–Poon BJT, MOSFET S/D swap + body effect
+- [ ] PDK model-card ingestion (`.lib` sections, corners)
+- **Gate:** standard-cell characterisation (delay/power) within 1 % of ngspice on a real PDK
+
+**Phase 4 — Single-GPU scale**
+- [ ] Device evaluation on GPU (today the GPU computes nothing that is used; CPU stamps everything)
+- [ ] Partitioning + batched small-block LU on GPU (Schur/BBD; existing `schur_solver`, `graph_partitioner`)
+- [ ] Isomorphism reuse: identical cell instances share tensors/evaluations (`graph_canonical.h`)
+- [ ] Activity/latency bypass and multirate integration for quiescent partitions
+- **Gate:** scale ladder 10³ → 10⁵ → 10⁷ → 10⁹ devices, each rung with accuracy + runtime targets
+
+**Phase 5 — SoC flow in the app**
+- [ ] Mixed-signal co-simulation: RTL/firmware engine ↔ SPICE blocks through A2D/D2A ports
+- [ ] SoC + RAM reference design: CPU RTL + SRAM macro (SPICE-characterised) + firmware → visible program output
+- [ ] Unified design flow UI: schematic/RTL → synthesis (Yosys) → P&R (OpenROAD) → extraction → simulation → sign-off
+- **Gate:** "hello world" firmware runs on the reference SoC inside the app, with SRAM timing taken from SPICE characterisation
+
+---
+
+
 ## COMPLETED DEBUGGING WORK (FOUNDATION STABILIZATION)
 These items are not cosmetic—they directly unblock Phases 0–3.
 

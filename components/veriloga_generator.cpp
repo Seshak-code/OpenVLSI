@@ -1,6 +1,7 @@
 #include "veriloga_generator.h"
 #include <sstream>
 #include <set>
+#include <algorithm>
 #include <cstdio>  // snprintf
 
 namespace VerilogAGenerator {
@@ -19,6 +20,34 @@ static std::string fp(double v) {
 static std::string netName(int nodeIdx) {
     if (nodeIdx == 0) return "gnd";
     return "n" + std::to_string(nodeIdx);
+}
+
+// Parameter prefix of a V/I source: its instance name (noise analysis finds its
+// input source by it), else V<n>/I<n>. The parser keys every parameter off the
+// "// <name>" comment, so params and contribution must use this one name.
+template <class Src>
+static std::string srcName(const Src& s, const char* prefix, size_t idx) {
+    return s.name.empty() ? prefix + std::to_string(idx + 1) : s.name;
+}
+
+// Waveform + small-signal parameters shared by V and I sources. The parser
+// infers the type from which keys exist (_per => PULSE, _freq => SINE).
+template <class Src>
+static void sourceParams(std::ostringstream& ss, const std::string& nm, const Src& s) {
+    auto p = [&](const char* key, double val) {
+        ss << "    parameter real " << nm << key << " = " << fp(val) << ";\n";
+    };
+    if (s.type == "PULSE") {
+        p("_v1", s.pulse_v1); p("_v2", s.pulse_v2); p("_td", s.pulse_td);
+        p("_tr", s.pulse_tr); p("_tf", s.pulse_tf); p("_pw", s.pulse_pw);
+        p("_per", s.pulse_per);
+    } else if (s.type == "SINE") {
+        p("_vo", s.sine_vo); p("_va", s.sine_va); p("_freq", s.sine_freq);
+        p("_td", s.sine_td); p("_theta", s.sine_theta); p("_phase", s.sine_phase);
+    }
+    if (s.ac_mag != 0.0 || s.ac_phase != 0.0) {
+        p("_acmag", s.ac_mag); p("_acphase", s.ac_phase);
+    }
 }
 
 // ── Port/Net collection ──────────────────────────────────────────────────────
@@ -55,13 +84,30 @@ static void flattenDto(const acutesim::compute::orchestration::HierarchicalSchem
         try { return std::stod(it->second); } catch(...) { return def; }
     };
     
-    auto getNetIdx = [&](const std::string& name) -> int {
-        if (name == "0" || name == "GND" || name == "gnd") return 0;
-        // Simple linear search or map for net names -> indices
-        for (size_t i = 0; i < top.nets.size(); ++i) {
-            if (top.nets[i].name == name) return (int)i + 1;
+    auto getNetIdx = [&](const std::string& name) { return std::max(0, netIndex(hier, name)); };
+
+    // Waveform + AC keys the schematic writes for V and I sources
+    auto readSource = [&](auto& s, const std::map<std::string, std::string>& params) {
+        auto itType = params.find("type");
+        if (itType != params.end()) s.type = itType->second;
+        if (s.type == "PULSE") {
+            s.pulse_v1  = getVal(params, "v1", 0.0);
+            s.pulse_v2  = getVal(params, "v2", 1.8);
+            s.pulse_td  = getVal(params, "td", 0.0);
+            s.pulse_tr  = getVal(params, "tr", 0.0);
+            s.pulse_tf  = getVal(params, "tf", 0.0);
+            s.pulse_pw  = getVal(params, "pw", 10e-9);
+            s.pulse_per = getVal(params, "per", 20e-9);
+        } else if (s.type == "SINE") {
+            s.sine_vo    = getVal(params, "vo", 0.0);
+            s.sine_va    = getVal(params, "va", 0.0);
+            s.sine_freq  = getVal(params, "freq", 0.0);
+            s.sine_td    = getVal(params, "td", 0.0);
+            s.sine_theta = getVal(params, "theta", 0.0);
+            s.sine_phase = getVal(params, "phase", 0.0);
         }
-        return 0; // fallback to ground
+        s.ac_mag   = getVal(params, "acmag", 0.0);
+        s.ac_phase = getVal(params, "acphase", 0.0);
     };
 
     for (const auto& inst : top.instances) {
@@ -88,21 +134,20 @@ static void flattenDto(const acutesim::compute::orchestration::HierarchicalSchem
             outNetlist.globalBlock.inductors.push_back(l);
         } else if (inst.type == "VoltageSource") {
             VoltageSource v;
+            v.name = inst.instanceName;
             v.nodePositive = inst.connectedNets.size() > 0 ? getNetIdx(inst.connectedNets[0]) : 0;
             v.nodeNegative = inst.connectedNets.size() > 1 ? getNetIdx(inst.connectedNets[1]) : 0;
-            v.expression = inst.instanceName;
             v.voltage_V = getVal(inst.parameters, "V", getVal(inst.parameters, "val", 1.0));
-            // Handle waveforms if present
-            auto itType = inst.parameters.find("type");
-            if (itType != inst.parameters.end()) v.type = itType->second;
-            if (v.type == "PULSE") {
-                v.pulse_v1 = getVal(inst.parameters, "v1", 0.0);
-                v.pulse_v2 = getVal(inst.parameters, "v2", 1.8);
-                v.pulse_td = getVal(inst.parameters, "td", 0.0);
-                v.pulse_pw = getVal(inst.parameters, "pw", 10e-9);
-                v.pulse_per = getVal(inst.parameters, "per", 20e-9);
-            }
+            readSource(v, inst.parameters);
             outNetlist.globalBlock.voltageSources.push_back(v);
+        } else if (inst.type == "CurrentSource") {
+            CurrentSource i;
+            i.name = inst.instanceName;
+            i.nodePositive = inst.connectedNets.size() > 0 ? getNetIdx(inst.connectedNets[0]) : 0;
+            i.nodeNegative = inst.connectedNets.size() > 1 ? getNetIdx(inst.connectedNets[1]) : 0;
+            i.current_A = getVal(inst.parameters, "I", getVal(inst.parameters, "val", 1e-3));
+            readSource(i, inst.parameters);
+            outNetlist.globalBlock.currentSources.push_back(i);
         } else if (inst.type == "Probe") {
             Probe p;
             p.name = inst.instanceName;
@@ -112,6 +157,15 @@ static void flattenDto(const acutesim::compute::orchestration::HierarchicalSchem
         }
         // TODO: Add more primitive types as needed
     }
+}
+
+int netIndex(const acutesim::compute::orchestration::HierarchicalSchematicDTO& hier,
+             const std::string& name) {
+    if (name == "0" || name == "GND" || name == "gnd") return 0;
+    const auto& nets = hier.topGraph.nets;
+    for (size_t i = 0; i < nets.size(); ++i)  // DesignDb assigns index (VSS -> 0); else position
+        if (nets[i].name == name) return nets[i].index >= 0 ? nets[i].index : (int)i + 1;
+    return -1;
 }
 
 std::string generate(const acutesim::compute::orchestration::HierarchicalSchematicDTO& hierDto, const GeneratorOptions& opts) {
@@ -145,13 +199,13 @@ std::string generate(const TensorNetlist& netlist, const GeneratorOptions& opts)
     });
 
     std::sort(blk.voltageSources.begin(), blk.voltageSources.end(), [](const auto& a, const auto& b) {
-        if (a.expression != b.expression) return a.expression < b.expression;
+        if (a.name != b.name) return a.name < b.name;
         if (a.nodePositive != b.nodePositive) return a.nodePositive < b.nodePositive;
         return a.nodeNegative < b.nodeNegative;
     });
 
     std::sort(blk.currentSources.begin(), blk.currentSources.end(), [](const auto& a, const auto& b) {
-        if (a.expression != b.expression) return a.expression < b.expression;
+        if (a.name != b.name) return a.name < b.name;
         if (a.nodePositive != b.nodePositive) return a.nodePositive < b.nodePositive;
         return a.nodeNegative < b.nodeNegative;
     });
@@ -232,35 +286,18 @@ std::string generate(const TensorNetlist& netlist, const GeneratorOptions& opts)
         ss << "    parameter real " << nm << "_val = " << fp(l.inductance_henries) << ";\n";
     }
     // Voltage Sources — DC value + waveform parameters
-    {
-        int idx = 0;
-        for (const auto& v : blk.voltageSources) {
-            std::string nm = v.expression.empty()
-                ? ("V" + std::to_string(idx + 1))
-                : v.expression;
-            if (nm.empty()) nm = "V" + std::to_string(idx + 1);
-            ss << "    parameter real " << nm << "_val = " << fp(v.voltage_V) << ";\n";
-            if (v.type == "PULSE") {
-                ss << "    parameter real " << nm << "_pw  = " << fp(v.pulse_pw)  << ";\n";
-                ss << "    parameter real " << nm << "_per = " << fp(v.pulse_per) << ";\n";
-                ss << "    parameter real " << nm << "_td  = " << fp(v.pulse_td)  << ";\n";
-                ss << "    parameter real " << nm << "_v1  = " << fp(v.pulse_v1)  << ";\n";
-                ss << "    parameter real " << nm << "_v2  = " << fp(v.pulse_v2)  << ";\n";
-            } else if (v.type == "SINE") {
-                ss << "    parameter real " << nm << "_va   = " << fp(v.sine_va)   << ";\n";
-                ss << "    parameter real " << nm << "_freq = " << fp(v.sine_freq) << ";\n";
-            }
-            ++idx;
-        }
+    for (size_t idx = 0; idx < blk.voltageSources.size(); ++idx) {
+        const auto& v = blk.voltageSources[idx];
+        std::string nm = srcName(v, "V", idx);
+        ss << "    parameter real " << nm << "_val = " << fp(v.voltage_V) << ";\n";
+        sourceParams(ss, nm, v);
     }
     // Current Sources
-    {
-        int idx = 0;
-        for (const auto& i : blk.currentSources) {
-            std::string nm = "I" + std::to_string(idx + 1);
-            ss << "    parameter real " << nm << "_val = " << fp(i.current_A) << ";\n";
-            ++idx;
-        }
+    for (size_t idx = 0; idx < blk.currentSources.size(); ++idx) {
+        const auto& i = blk.currentSources[idx];
+        std::string nm = srcName(i, "I", idx);
+        ss << "    parameter real " << nm << "_val = " << fp(i.current_A) << ";\n";
+        sourceParams(ss, nm, i);
     }
     // Diodes
     for (const auto& d : blk.diodes) {
@@ -326,7 +363,7 @@ std::string generate(const TensorNetlist& netlist, const GeneratorOptions& opts)
     {
         int idx = 0;
         for (const auto& v : blk.voltageSources) {
-            std::string nm = "V" + std::to_string(idx + 1);
+            std::string nm = srcName(v, "V", idx);
             ss << "        // " << nm << "\n";
             ss << "        V(" << netName(v.nodePositive) << "," << netName(v.nodeNegative) << ")"
                << " <+ " << nm << "_val;\n\n";
@@ -338,7 +375,7 @@ std::string generate(const TensorNetlist& netlist, const GeneratorOptions& opts)
     {
         int idx = 0;
         for (const auto& i : blk.currentSources) {
-            std::string nm = "I" + std::to_string(idx + 1);
+            std::string nm = srcName(i, "I", idx);
             ss << "        // " << nm << "\n";
             ss << "        I(" << netName(i.nodePositive) << "," << netName(i.nodeNegative) << ")"
                << " <+ " << nm << "_val;\n\n";

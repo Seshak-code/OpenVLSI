@@ -11,7 +11,6 @@
 #include "acutesim_engine/physics/circuitsim.h"
 #include "acutesim_engine/tensors/physics_tensors.h"
 #include "acutesim_engine/tensors/kernel_dispatch.h"
-#include "acutesim_engine/infrastructure/netlist_compiler.h"
 #include "acutesim_engine/infrastructure/hardware_capabilities.h"
 #include "acutesim_engine/netlist/circuit.h"
 

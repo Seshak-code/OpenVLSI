@@ -165,12 +165,13 @@ double SimulationContext::evaluate(const std::string& expr) const {
 }
 
 bool SimulationContext::resolveVariables(std::string* errorMsg) {
-    // Build dependency graph: var -> set of variables it depends on
+    // Build dependency graph: var -> set of variables it depends on.
+    // Disabled vars keep their edges: they are not resolution roots, but an
+    // enabled var referencing one still pulls it in, and it must then be
+    // ordered after its own inputs.
     std::unordered_map<std::string, std::unordered_set<std::string>> dependencies;
 
     for (const auto& [var, expr] : variableExprs) {
-        auto enabledIt = variableEnabled.find(var);
-        if (enabledIt != variableEnabled.end() && !enabledIt->second) continue;
         for (const auto& [key, _] : variableExprs) {
             if (key == var) continue;
             if (containsWordBoundary(expr, key)) {

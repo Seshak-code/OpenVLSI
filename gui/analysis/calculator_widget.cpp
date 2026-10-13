@@ -79,9 +79,8 @@ void CalculatorWidget::onBtnClicked() {
 void CalculatorWidget::onWaveSelected() {
     auto items = waveList_->selectedItems();
     if (!items.isEmpty()) {
-        QString name = items[0]->text();
-        // Quote if needed
-        exprInput_->insert(QString("v(\"%1\")").arg(name));
+        // List entries are waveform keys, which are already v(...) expressions
+        exprInput_->insert(items[0]->text());
         exprInput_->setFocus();
     }
 }

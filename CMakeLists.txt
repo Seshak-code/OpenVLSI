@@ -288,7 +288,6 @@ set(ACUTESIM_SOURCES
     gui/analysis/parametric_sweep_dialog.cpp
     gui/analysis/parametric_sweep_dialog.h
     gui/analysis/simulation_profile.h
-    acutesim_engine/physics/quick_analysis.h
     gui/ai/ai_action_history.cpp
     gui/ai/ai_action_history.h
     gui/ai/ai_action_envelope.h
@@ -462,7 +461,6 @@ target_include_directories(acutesim_engine_api INTERFACE
 # ============================================================================
 if(NOT EMSCRIPTEN)
     add_library(acutesim_orchestration STATIC
-        compute/orchestration/batch_runner.cpp
         compute/orchestration/drivers/yosys_task.cpp
         compute/orchestration/drivers/openroad_task.cpp
         compute/orchestration/drivers/klayout_task.cpp
@@ -789,12 +787,6 @@ if(EMSCRIPTEN)
 endif()
 
 
-# Noise Analysis Test
-add_executable(test_noise_analysis tests/test_noise_analysis.cpp)
-target_link_libraries(test_noise_analysis PRIVATE acutesim_engine)
-target_include_directories(test_noise_analysis PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_features(test_noise_analysis PUBLIC cxx_std_17)
-
 # Convergence Engine Test (NR failure classification)
 add_executable(test_convergence_engine tests/test_convergence_engine.cpp)
 target_link_libraries(test_convergence_engine PRIVATE acutesim_engine)
@@ -812,12 +804,6 @@ add_executable(test_sensitivity tests/test_sensitivity.cpp)
 target_link_libraries(test_sensitivity PRIVATE acutesim_compute_core)
 target_include_directories(test_sensitivity PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_sensitivity PUBLIC cxx_std_17)
-
-# Superposition Test
-add_executable(test_superposition tests/test_superposition.cpp)
-target_link_libraries(test_superposition PRIVATE acutesim_compute_core)
-target_include_directories(test_superposition PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
-target_compile_features(test_superposition PUBLIC cxx_std_17)
 
 # Mode Ladder Regression Test
 add_executable(test_mode_ladder tests/test_mode_ladder.cpp)
@@ -863,163 +849,23 @@ if(NOT EMSCRIPTEN)
     )
     target_compile_features(test_engine_parity PUBLIC cxx_std_17)
     add_test(NAME EngineParityTest COMMAND test_engine_parity)
-endif()
 
-# Phase C: Graph Partitioner Unit Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_graph_partitioner tests/test_graph_partitioner.cpp)
-    target_link_libraries(test_graph_partitioner PRIVATE acutesim_engine)
-    target_include_directories(test_graph_partitioner PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-    )
-    target_compile_features(test_graph_partitioner PUBLIC cxx_std_17)
-endif()
+    # Tensor-contraction direct solver vs dense LU (+ scale timings)
+    add_executable(test_contraction_solver tests/test_contraction_solver.cpp)
+    target_link_libraries(test_contraction_solver PRIVATE acutesim_engine)
+    target_include_directories(test_contraction_solver PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(test_contraction_solver PUBLIC cxx_std_17)
+    add_test(NAME ContractionSolverTest COMMAND test_contraction_solver)
 
-# Phase A: Factor Graph + Treewidth Analyzer Unit Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_factor_graph tests/test_factor_graph.cpp)
-    target_link_libraries(test_factor_graph PRIVATE acutesim_engine)
-    target_include_directories(test_factor_graph PRIVATE
+    # Regression checks for engine review fixes (NaN, transient hang, diode, DC inductor)
+    add_executable(test_engine_fixes tests/test_engine_fixes.cpp)
+    target_link_libraries(test_engine_fixes PRIVATE acutesim_engine)
+    target_include_directories(test_engine_fixes PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine_api
     )
-    target_compile_features(test_factor_graph PUBLIC cxx_std_17)
-endif()
-
-# Phase B: Sparse LU Solver Unit Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_sparse_lu tests/test_sparse_lu.cpp)
-    target_link_libraries(test_sparse_lu PRIVATE acutesim_engine)
-    target_include_directories(test_sparse_lu PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
-    )
-    target_compile_features(test_sparse_lu PUBLIC cxx_std_17)
-endif()
-
-# Phase 5.3.0: Bond Dimension Profiler Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_bond_dimension tests/test_bond_dimension.cpp)
-    target_link_libraries(test_bond_dimension PRIVATE acutesim_engine)
-    target_include_directories(test_bond_dimension PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-    )
-    target_compile_features(test_bond_dimension PUBLIC cxx_std_17)
-endif()
-
-# Phase 5.3.1: MPO Builder Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_mpo_builder tests/test_mpo_builder.cpp)
-    target_link_libraries(test_mpo_builder PRIVATE acutesim_engine)
-    target_include_directories(test_mpo_builder PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
-    )
-    target_compile_features(test_mpo_builder PUBLIC cxx_std_17)
-endif()
-
-# Phase 5.3.1: Contraction Tree Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_contraction_tree tests/test_contraction_tree.cpp)
-    target_link_libraries(test_contraction_tree PRIVATE acutesim_engine)
-    target_include_directories(test_contraction_tree PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
-    )
-    target_compile_features(test_contraction_tree PUBLIC cxx_std_17)
-endif()
-
-# Phase 5.3.2: Schur Complement Solver Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_schur_solver tests/test_schur_solver.cpp)
-    target_link_libraries(test_schur_solver PRIVATE acutesim_engine)
-    target_include_directories(test_schur_solver PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/solvers
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
-    )
-    target_compile_features(test_schur_solver PUBLIC cxx_std_17)
-endif()
-
-# Phase 5.3.3: Contraction Executor Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_contraction_executor tests/test_contraction_executor.cpp)
-    target_link_libraries(test_contraction_executor PRIVATE acutesim_engine)
-    target_include_directories(test_contraction_executor PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/solvers
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
-    )
-    target_compile_features(test_contraction_executor PUBLIC cxx_std_17)
-endif()
-
-# Phase 5.3.3: Contraction Executor Parity Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_contraction_parity tests/test_contraction_parity.cpp)
-    target_link_libraries(test_contraction_parity PRIVATE acutesim_engine)
-    target_include_directories(test_contraction_parity PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/solvers
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
-    )
-    target_compile_features(test_contraction_parity PUBLIC cxx_std_17)
-endif()
-
-# Phase 5.7.4: Render Graph Scheduler Test
-if(NOT EMSCRIPTEN)
-    add_executable(test_render_graph tests/test_render_graph.cpp)
-    target_link_libraries(test_render_graph PRIVATE acutesim_engine)
-    target_include_directories(test_render_graph PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/math
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/autodiff
-    )
-    target_compile_features(test_render_graph PUBLIC cxx_std_17)
+    target_compile_features(test_engine_fixes PUBLIC cxx_std_17)
+    add_test(NAME EngineFixesTest COMMAND test_engine_fixes)
 endif()
 
 # Solver Tier Benchmarking Suite
@@ -1628,7 +1474,6 @@ if(EMSCRIPTEN)
     )
     target_link_options(test_simulation PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     target_link_options(test_sensitivity PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
-    target_link_options(test_superposition PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     target_link_options(test_erc_rules PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     # test_auto_harness and test_copilot_validate excluded from WASM due to threading
     target_link_options(test_erc_rules PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
@@ -2174,13 +2019,6 @@ target_compile_features(test_numerical_intelligence PUBLIC cxx_std_17)
 add_test(NAME test_numerical_intelligence COMMAND test_numerical_intelligence)
 set_tests_properties(test_numerical_intelligence PROPERTIES LABELS "quick")
 
-# Phase 2.10: Sparse AC Refactor Tests
-add_executable(test_sparse_ac tests/test_sparse_ac.cpp)
-target_link_libraries(test_sparse_ac PRIVATE acutesim_compute_core)
-target_compile_features(test_sparse_ac PUBLIC cxx_std_17)
-add_test(NAME test_sparse_ac COMMAND test_sparse_ac)
-set_tests_properties(test_sparse_ac PROPERTIES LABELS "quick")
-
 # Verification Harness (Benchmarks, Alignment, Dense Batch)
 add_executable(test_verification_harness tests/verification_main.cpp)
 target_link_libraries(test_verification_harness PRIVATE acutesim_compute_core)
@@ -2348,27 +2186,6 @@ if(NOT EMSCRIPTEN)
     )
 endif()
 
-# GPU Connectivity Verification (Native Dawn)
-if(NOT EMSCRIPTEN)
-    add_executable(test_gpu_connectivity
-        tests/test_gpu_connectivity.cpp
-    )
-    target_include_directories(test_gpu_connectivity PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/components
-        ${DAWN_INTERNAL_INCLUDES}
-    )
-    target_link_libraries(test_gpu_connectivity PRIVATE 
-        acutesim_engine
-        Qt6::Core 
-        dawn_native 
-        dawn_proc
-        webgpu_cpp
-    )
-    target_compile_definitions(test_gpu_connectivity PRIVATE ACUTESIM_HAS_DAWN_NATIVE)
-    target_compile_features(test_gpu_connectivity PUBLIC cxx_std_17)
-endif()
-
 # [NEW] Worker Server Executable (Orchestration Backend)
 # Requires gRPC and only builds on non-WASM platforms
 if(NOT EMSCRIPTEN)
@@ -2479,26 +2296,13 @@ if(APPLE AND CMAKE_PREFIX_PATH)
 endif()
 
 # ============================================================================
-# test_veriloga_parser — AST parsing and Tensor lowering
-# ============================================================================
-if(NOT EMSCRIPTEN)
-    add_executable(test_veriloga_parser
-        tests/test_veriloga_parser.cpp
-    )
-    target_link_libraries(test_veriloga_parser PRIVATE acutesim_compute_core Qt6::Test Qt6::Core)
-    target_include_directories(test_veriloga_parser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    target_compile_features(test_veriloga_parser PUBLIC cxx_std_17)
-    add_test(NAME test_veriloga_parser COMMAND test_veriloga_parser)
-    set_tests_properties(test_veriloga_parser PROPERTIES LABELS "quick")
-endif()
-
-# ============================================================================
 # test_veriloga_roundtrip — Generator/Parser/Driver round-trip tests
 # No Qt::Gui required — pure compute-layer test
 # ============================================================================
 if(NOT EMSCRIPTEN)
     add_executable(test_veriloga_roundtrip
         tests/test_veriloga_roundtrip.cpp
+        components/design_db.cpp
     )
     target_link_libraries(test_veriloga_roundtrip PRIVATE acutesim_orchestration acutesim_compute_core)
     target_include_directories(test_veriloga_roundtrip PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

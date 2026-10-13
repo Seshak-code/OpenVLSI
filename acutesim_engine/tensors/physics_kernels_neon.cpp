@@ -3,6 +3,7 @@
 // AArch64 NEON has native float64x2_t support.
 
 #include "../tensors/physics_tensors.h"
+#include "../physics/physics_constants.h"
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -34,7 +35,7 @@ void batchDiodePhysics_neon(DiodeTensor& tensor, const std::vector<double>& volt
     const size_t n = tensor.size();
 
     const float64x2_t vc_1  = vdupq_n_f64(1.0);
-    const float64x2_t vc_30 = vdupq_n_f64(30.0);
+    const float64x2_t vc_argmax = vdupq_n_f64(PhysicsConstants::JUNCTION_EXP_ARG_MAX);
     const float64x2_t vc_0  = vdupq_n_f64(0.0);
 
     const double* __restrict__ v_ptr = voltages.data();
@@ -75,8 +76,8 @@ void batchDiodePhysics_neon(DiodeTensor& tensor, const std::vector<double>& volt
         // arg = v_d / n_vt
         float64x2_t v_arg = vdivq_f64(v_v_d, v_n_vt);
 
-        // arg_clamped = min(arg, 30.0)
-        float64x2_t v_arg_clamped = vminq_f64(v_arg, vc_30);
+        // arg_clamped = min(arg, PhysicsConstants::JUNCTION_EXP_ARG_MAX)
+        float64x2_t v_arg_clamped = vminq_f64(v_arg, vc_argmax);
 
         // exp_val = exp(arg_clamped)
         float64x2_t v_exp_val = vexp_f64(v_arg_clamped);
@@ -87,16 +88,18 @@ void batchDiodePhysics_neon(DiodeTensor& tensor, const std::vector<double>& volt
         // g_base = (Is / n_vt) * exp_val
         float64x2_t v_g_base = vmulq_f64(vdivq_f64(v_Is, v_n_vt), v_exp_val);
 
-        // delta = max(0.0, v_d - 30.0 * n_vt)
-        float64x2_t v_vcrit = vmulq_f64(vc_30, v_n_vt);
+        // delta = max(0.0, v_d - PhysicsConstants::JUNCTION_EXP_ARG_MAX * n_vt)
+        float64x2_t v_vcrit = vmulq_f64(vc_argmax, v_n_vt);
         float64x2_t v_delta = vmaxq_f64(vc_0, vsubq_f64(v_v_d, v_vcrit));
 
-        // i_d = i_base + delta * g_base
+        // i_d = i_base + delta * g_base + GMIN * v_d
+        // (ngspice GMIN: parallel junction conductance — mirrors diode_model_pair())
         float64x2_t v_i_d = vaddq_f64(v_i_base, vmulq_f64(v_delta, v_g_base));
+        v_i_d = vaddq_f64(v_i_d, vmulq_f64(v_GMIN, v_v_d));
         vst1q_f64(&tensor.i_d[i], v_i_d);
 
-        // g_d = max(GMIN, g_base)
-        float64x2_t v_g_d = vmaxq_f64(v_GMIN, v_g_base);
+        // g_d = g_base + GMIN  (additive; replaces the max() floor)
+        float64x2_t v_g_d = vaddq_f64(v_g_base, v_GMIN);
         vst1q_f64(&tensor.g_d[i], v_g_d);
     }
 
@@ -110,13 +113,14 @@ void batchDiodePhysics_neon(DiodeTensor& tensor, const std::vector<double>& volt
         tensor.v_d[i] = v_a - v_c;
         double n_vt = tensor.N[i] * tensor.Vt[i];
         double arg = tensor.v_d[i] / n_vt;
-        double arg_clamped = std::min(arg, 30.0);
+        double arg_clamped = std::min(arg, PhysicsConstants::JUNCTION_EXP_ARG_MAX);
         double exp_val = std::exp(arg_clamped);
         double i_base = tensor.Is[i] * (exp_val - 1.0);
         double g_base = (tensor.Is[i] / n_vt) * exp_val;
-        double delta = std::max(0.0, tensor.v_d[i] - 30.0 * n_vt);
-        tensor.i_d[i] = i_base + delta * g_base;
-        tensor.g_d[i] = std::max(tensor.GMIN[i], g_base);
+        double delta = std::max(0.0, tensor.v_d[i] - PhysicsConstants::JUNCTION_EXP_ARG_MAX * n_vt);
+        // ngspice GMIN: parallel junction conductance — mirrors diode_model_pair()
+        tensor.i_d[i] = i_base + delta * g_base + tensor.GMIN[i] * tensor.v_d[i];
+        tensor.g_d[i] = g_base + tensor.GMIN[i];
     }
 }
 
@@ -193,10 +197,12 @@ void batchMosfetPhysics_neon(MosfetTensor& tensor, const std::vector<double>& vo
         float64x2_t v_gm_sat  = vmulq_f64(vmulq_f64(v_beta, v_vov), v_clm);
         float64x2_t v_gds_sat = vmulq_f64(vmulq_f64(v_half_beta, v_vov2), v_lambda);
 
-        // Linear branch: ids = beta*(vov*vds' - 0.5*vds'^2)
-        float64x2_t v_ids_lin = vmulq_f64(v_beta, vsubq_f64(vmulq_f64(v_vov, vds_eq), vmulq_f64(v_half, vmulq_f64(vds_eq, vds_eq))));
-        float64x2_t v_gm_lin  = vmulq_f64(v_beta, vds_eq);
-        float64x2_t v_gds_lin = vmulq_f64(v_beta, vsubq_f64(v_vov, vds_eq));
+        // Linear branch: ids = beta*(vov*vds' - 0.5*vds'^2)*(1 + lambda*vds') (SPICE level 1)
+        float64x2_t v_core    = vmulq_f64(v_beta, vsubq_f64(vmulq_f64(v_vov, vds_eq), vmulq_f64(v_half, vmulq_f64(vds_eq, vds_eq))));
+        float64x2_t v_ids_lin = vmulq_f64(v_core, v_clm);
+        float64x2_t v_gm_lin  = vmulq_f64(vmulq_f64(v_beta, vds_eq), v_clm);
+        float64x2_t v_gds_lin = vaddq_f64(vmulq_f64(vmulq_f64(v_beta, vsubq_f64(v_vov, vds_eq)), v_clm),
+                                          vmulq_f64(v_core, v_lambda));
 
         // Per-lane region select
         uint64x2_t m_lin = vcltq_f64(vds_eq, v_vov);   // linear if vds' < vov
@@ -245,9 +251,13 @@ void batchMosfetPhysics_neon(MosfetTensor& tensor, const std::vector<double>& vo
             tensor.gm[i] = 0.0;
             tensor.gds[i] = 1e-12;
         } else if (vds_eq < vov) {
-            tensor.ids[i] = sign * beta * (vov * vds_eq - 0.5 * vds_eq * vds_eq);
-            tensor.gm[i] = beta * vds_eq;
-            tensor.gds[i] = beta * (vov - vds_eq);
+            // SPICE level 1 applies (1 + lambda*Vds) in the linear region too; without it
+            // the current jumps at Vds = Vov (ngspice inverters were off by up to 14 mV)
+            double clm = 1.0 + tensor.lambda[i] * vds_eq;
+            double core = beta * (vov * vds_eq - 0.5 * vds_eq * vds_eq);
+            tensor.ids[i] = sign * core * clm;
+            tensor.gm[i] = beta * vds_eq * clm;
+            tensor.gds[i] = beta * (vov - vds_eq) * clm + core * tensor.lambda[i];
         } else {
             double lam = tensor.lambda[i];
             tensor.ids[i] = sign * 0.5 * beta * vov * vov * (1.0 + lam * vds_eq);
@@ -265,11 +275,11 @@ void batchMosfetPhysics_neon(MosfetTensor& tensor, const std::vector<double>& vo
 
 void batchBJTPhysics_neon(BJTTensor& tensor, const std::vector<double>& voltages) {
     const size_t n = tensor.size();
-    const double GMIN = 1e-12;
+    const double GMIN = PhysicsConstants::JUNCTION_GMIN;
     const float64x2_t v_GMIN = vdupq_n_f64(GMIN);
     const float64x2_t v_zero = vdupq_n_f64(0.0);
     const float64x2_t v_one  = vdupq_n_f64(1.0);
-    const float64x2_t v_30   = vdupq_n_f64(30.0);
+    const float64x2_t v_argmax   = vdupq_n_f64(PhysicsConstants::JUNCTION_EXP_ARG_MAX);
 
     const double* __restrict__ v_ptr = voltages.data();
     const int v_size = (int)voltages.size();
@@ -309,28 +319,31 @@ void batchBJTPhysics_neon(BJTTensor& tensor, const std::vector<double>& voltages
         float64x2_t v_BetaF = vld1q_f64(&tensor.BetaF[i]);
         float64x2_t v_BetaR = vld1q_f64(&tensor.BetaR[i]);
 
-        // Vcrit = 30.0 * Vt
-        float64x2_t v_vcrit = vmulq_f64(v_30, v_Vt);
+        // Vcrit = PhysicsConstants::JUNCTION_EXP_ARG_MAX * Vt
+        float64x2_t v_vcrit = vmulq_f64(v_argmax, v_Vt);
 
         // --- Forward junction (BE) ---
         float64x2_t v_arg_f = vdivq_f64(v_v_be, v_Vt);
-        float64x2_t v_arg_f_clamped = vminq_f64(v_arg_f, v_30);
+        float64x2_t v_arg_f_clamped = vminq_f64(v_arg_f, v_argmax);
         float64x2_t v_exp_f = vexp_f64(v_arg_f_clamped);
         float64x2_t v_if_base = vmulq_f64(v_Is, vsubq_f64(v_exp_f, v_one));
         float64x2_t v_gf_base = vmulq_f64(vdivq_f64(v_Is, v_Vt), v_exp_f);
-        float64x2_t v_gf = vmaxq_f64(v_GMIN, v_gf_base);
+        // continuation with the junction's own slope plus the parallel GMIN (diode_model_pair)
+        float64x2_t v_gf = vaddq_f64(v_gf_base, v_GMIN);
         float64x2_t v_delta_f = vmaxq_f64(v_zero, vsubq_f64(v_v_be, v_vcrit));
-        float64x2_t v_if = vaddq_f64(v_if_base, vmulq_f64(v_gf, v_delta_f));
+        float64x2_t v_if = vaddq_f64(v_if_base, vmulq_f64(v_gf_base, v_delta_f));
+        v_if = vaddq_f64(v_if, vmulq_f64(v_GMIN, v_v_be));
 
         // --- Reverse junction (BC) ---
         float64x2_t v_arg_r = vdivq_f64(v_v_bc, v_Vt);
-        float64x2_t v_arg_r_clamped = vminq_f64(v_arg_r, v_30);
+        float64x2_t v_arg_r_clamped = vminq_f64(v_arg_r, v_argmax);
         float64x2_t v_exp_r = vexp_f64(v_arg_r_clamped);
         float64x2_t v_ir_base = vmulq_f64(v_Is, vsubq_f64(v_exp_r, v_one));
         float64x2_t v_gr_base = vmulq_f64(vdivq_f64(v_Is, v_Vt), v_exp_r);
-        float64x2_t v_gr = vmaxq_f64(v_GMIN, v_gr_base);
+        float64x2_t v_gr = vaddq_f64(v_gr_base, v_GMIN);
         float64x2_t v_delta_r = vmaxq_f64(v_zero, vsubq_f64(v_v_bc, v_vcrit));
-        float64x2_t v_ir = vaddq_f64(v_ir_base, vmulq_f64(v_gr, v_delta_r));
+        float64x2_t v_ir = vaddq_f64(v_ir_base, vmulq_f64(v_gr_base, v_delta_r));
+        v_ir = vaddq_f64(v_ir, vmulq_f64(v_GMIN, v_v_bc));
 
         // Ebers-Moll currents
         float64x2_t v_invBF = vdivq_f64(v_one, v_BetaF);
@@ -356,15 +369,15 @@ void batchBJTPhysics_neon(BJTTensor& tensor, const std::vector<double>& voltages
         float64x2_t v_dIe_dVbc = vnegq_f64(vaddq_f64(v_dIc_dVbc, v_dIb_dVbc));
 
         // Terminal conductances: dI/dVc = -dI/dVbc, dI/dVe = -dI/dVbe, dI/dVb = dI/dVbe + dI/dVbc
-        vst1q_f64(&tensor.g_cc[i], vmaxq_f64(v_GMIN, vnegq_f64(v_dIc_dVbc)));
+        vst1q_f64(&tensor.g_cc[i], vnegq_f64(v_dIc_dVbc));
         vst1q_f64(&tensor.g_cb[i], vaddq_f64(v_dIc_dVbe, v_dIc_dVbc));
         vst1q_f64(&tensor.g_ce[i], vnegq_f64(v_dIc_dVbe));
         vst1q_f64(&tensor.g_bc[i], vnegq_f64(v_dIb_dVbc));
-        vst1q_f64(&tensor.g_bb[i], vmaxq_f64(v_GMIN, vaddq_f64(v_dIb_dVbe, v_dIb_dVbc)));
+        vst1q_f64(&tensor.g_bb[i], vaddq_f64(v_dIb_dVbe, v_dIb_dVbc));
         vst1q_f64(&tensor.g_be[i], vnegq_f64(v_dIb_dVbe));
         vst1q_f64(&tensor.g_ec[i], vnegq_f64(v_dIe_dVbc));
         vst1q_f64(&tensor.g_eb[i], vaddq_f64(v_dIe_dVbe, v_dIe_dVbc));
-        vst1q_f64(&tensor.g_ee[i], vmaxq_f64(v_GMIN, vnegq_f64(v_dIe_dVbe)));
+        vst1q_f64(&tensor.g_ee[i], vnegq_f64(v_dIe_dVbe));
     }
 
     // --- Scalar Tail ---
@@ -385,15 +398,15 @@ void batchBJTPhysics_neon(BJTTensor& tensor, const std::vector<double>& voltages
         double Vt = tensor.Vt[i];
         double BetaF = tensor.BetaF[i];
         double BetaR = tensor.BetaR[i];
-        double Vcrit = 30.0 * Vt;
+        double Vcrit = PhysicsConstants::JUNCTION_EXP_ARG_MAX * Vt;
 
         auto diode = [&](double vj) -> std::pair<double, double> {
-            double arg = std::min(vj / Vt, 30.0);
+            double arg = std::min(vj / Vt, PhysicsConstants::JUNCTION_EXP_ARG_MAX);
             double ev = std::exp(arg);
             double ib = Is * (ev - 1.0);
-            double gb = std::max(GMIN, (Is / Vt) * ev);
+            double g0 = (Is / Vt) * ev;  // continuation slope + parallel GMIN (diode_model_pair)
             double delta = std::max(0.0, vj - Vcrit);
-            return {ib + gb * delta, gb};
+            return {ib + g0 * delta + GMIN * vj, g0 + GMIN};
         };
 
         auto [i_f, g_f] = diode(v_be);
@@ -417,15 +430,15 @@ void batchBJTPhysics_neon(BJTTensor& tensor, const std::vector<double>& voltages
         double dIe_dVbe = -(dIc_dVbe + dIb_dVbe);
         double dIe_dVbc = -(dIc_dVbc + dIb_dVbc);
 
-        tensor.g_cc[i] = std::max(GMIN, -dIc_dVbc);
+        tensor.g_cc[i] = -dIc_dVbc;
         tensor.g_cb[i] = dIc_dVbe + dIc_dVbc;
         tensor.g_ce[i] = -dIc_dVbe;
         tensor.g_bc[i] = -dIb_dVbc;
-        tensor.g_bb[i] = std::max(GMIN, dIb_dVbe + dIb_dVbc);
+        tensor.g_bb[i] = dIb_dVbe + dIb_dVbc;
         tensor.g_be[i] = -dIb_dVbe;
         tensor.g_ec[i] = -dIe_dVbc;
         tensor.g_eb[i] = dIe_dVbe + dIe_dVbc;
-        tensor.g_ee[i] = std::max(GMIN, -dIe_dVbe);
+        tensor.g_ee[i] = -dIe_dVbe;
     }
 }
 

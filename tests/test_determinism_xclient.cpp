@@ -9,6 +9,8 @@
 // ============================================================================
 
 #include "compute/orchestration/driver/local_worker_driver.h"
+#include "components/veriloga_generator.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include <iostream>
 #include <iomanip>
 #include <cassert>
@@ -18,27 +20,18 @@
 
 using namespace acutesim::compute::orchestration;
 
-const std::string TEST_NETLIST = 
-    "{\n"
-    "    \"numGlobalNodes\": 4,\n"
-    "    \"globalBlock\": {\n"
-    "        \"voltageSources\": [\n"
-    "            {\"nodePositive\": 4, \"nodeNegative\": 0, \"dc_voltage\": 1.8},\n"
-    "            {\"nodePositive\": 1, \"nodeNegative\": 0, \"dc_voltage\": 0.0, \"transient_expr\": \"PULSE(0 1.8 0 10p 10p 1n 2n)\"}\n"
-    "        ],\n"
-    "        \"resistors\": [\n"
-    "            {\"name\": \"R1\", \"nodeA\": 1, \"nodeB\": 2, \"resistance\": 1e3},\n"
-    "            {\"name\": \"R2\", \"nodeA\": 2, \"nodeB\": 3, \"resistance\": 1e3}\n"
-    "        ],\n"
-    "        \"capacitors\": [\n"
-    "            {\"name\": \"C1\", \"nodeA\": 2, \"nodeB\": 0, \"capacitance\": 1e-12},\n"
-    "            {\"name\": \"C2\", \"nodeA\": 3, \"nodeB\": 0, \"capacitance\": 1e-12}\n"
-    "        ],\n"
-    "        \"probes\": [\n"
-    "            {\"name\": \"VOUT\", \"nodePositive\": 3, \"nodeNegative\": 0}\n"
-    "        ]\n"
-    "    }\n"
-    "}\n";
+// Two-stage RC charging from 0 V (UIC): a waveform that exercises every step.
+static std::string testSource() {
+    TensorNetlist nl;
+    nl.numGlobalNodes = 3;
+    nl.addVoltageSource(1, 0, 1.8);
+    nl.addResistor("R1", 1, 2, 1e3);
+    nl.addCapacitor("C1", 2, 0, 1e-12);
+    nl.addResistor("R2", 2, 3, 1e3);
+    nl.addCapacitor("C2", 3, 0, 1e-12);
+    nl.addProbe("VOUT", 3, 0);
+    return VerilogAGenerator::generate(nl);
+}
 
 std::atomic<bool> job1_done{false};
 std::atomic<bool> batch_done{false};
@@ -76,10 +69,12 @@ int main(int argc, char* argv[]) {
     // ── Run 1: Legacy submitJob() ──
     std::cout << "Running Path 1: submitJob()...\n";
     SimulationRequestDTO req1;
-    req1.source.payload = TEST_NETLIST;
+    req1.source.format = NetlistFormatDTO::VERILOG_A;
+    req1.source.payload = testSource();
     req1.analysis = AnalysisTypeDTO::TRANSIENT;
-    req1.parameters["tstop"] = "5e-9";
-    req1.parameters["tstep"] = "10e-12";
+    req1.parameters["stopTime"] = "5e-9";
+    req1.parameters["stepHint"] = "10e-12";
+    req1.parameters["uic"] = "1";
     
     driver.submitJob(req1);
 
@@ -88,10 +83,12 @@ int main(int argc, char* argv[]) {
     // ── Run 2: Orchestrated submitBatchJob() ──
     std::cout << "Running Path 2: submitBatchJob()...\n";
     SimulationBatchRequestDTO req2;
-    req2.source.payload = TEST_NETLIST;
+    req2.source.format = NetlistFormatDTO::VERILOG_A;
+    req2.source.payload = testSource();
     req2.analysis = AnalysisTypeDTO::TRANSIENT;
-    req2.parameters["tstop"] = "5e-9";
-    req2.parameters["tstep"] = "10e-12";
+    req2.parameters["stopTime"] = "5e-9";
+    req2.parameters["stepHint"] = "10e-12";
+    req2.parameters["uic"] = "1";
     
     BatchRunDTO run0;
     run0.runIndex = 0;
@@ -109,8 +106,8 @@ int main(int argc, char* argv[]) {
 
     if (!res1.success || !res2.success) {
         std::cerr << "FAIL: Simulation failed.\n";
-        if (!res1.success) std::cerr << " Run 1: " << res1.errorMessage << "\n";
-        if (!res2.success) std::cerr << " Run 2: " << res2.errorMessage << "\n";
+        if (!res1.success) std::cerr << " Run 1: " << res1.errorDetail << "\n";
+        if (!res2.success) std::cerr << " Run 2: " << res2.errorDetail << "\n";
         return 1;
     }
 

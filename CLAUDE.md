@@ -7,8 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **AcuteSim / CuteApp** — "Cognitive Foundry": an AI-agent ASIC design IDE.
 - **AcuteSim**: physics simulation kernel (MNA, NR solver, SIMD tensors, GPU via Dawn/WebGPU)
 - **CuteApp**: AI cognitive stack (6-layer architecture) + Qt6 GUI IDE
-- C++17, CMake ≥ 3.16, Qt 6.9.0, Google Dawn (WebGPU), gRPC orchestration
-- Platforms: macOS, Windows (MSVC), Linux, WebAssembly (Emscripten)
 
 ## Build Commands
 
@@ -43,7 +41,7 @@ cmake --build out/build/windows-msvc --config Release --target AcuteSim
 ```bash
 emcmake cmake -S . -B out/build/wasm -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build out/build/wasm --target AcuteSim
-python3 scripts/serve.py   # serves at http://localhost:8000
+python3 scripts/serve.py   # serves at http://localhost:8080
 ```
 
 ## Testing
@@ -111,12 +109,12 @@ Dependencies flow **downward only**. Lower layers must never import from higher 
 | Layer | Path | Role |
 |---|---|---|
 | Data | `tensors/` | SoA layout, SIMD kernels (AVX-512/AVX2/Neon/generic) |
-| Operations | `math/` | PCG, LU, CSR, `EmulatedF64` GPU precision, FPU control |
-| Reliability | `infrastructure/` | Netlist compiler, postproc engine, subprocess sandbox |
+| Operations | `math/` | CSR, tensor-contraction direct solver, `EmulatedF64` GPU precision, FPU control |
+| Reliability | `infrastructure/` | Postproc engine, hardware capabilities, subprocess sandbox |
 | Strategy | `solvers/` | NR loop, DC/transient/AC/noise, Dawn GPU backend |
 | Control | `orchestration/` | gRPC to Yosys/OpenROAD/KLayout, batch runner, WASM stubs |
 
-Simulation flow: AoS→SoA (`tensorizeBlock`) → NR loop with LU/PCG → SIMD kernel dispatch → KCL physical verification. GPU path (Dawn) uses EmulatedF64 hi-lo pairs for 15–17 digit precision on WGSL.
+Simulation flow: AoS→SoA (`tensorizeBlock`) → NR loop with the tensor-contraction solver → SIMD kernel dispatch → KCL physical verification. GPU mode currently solves on the CPU path (Phase 4: GPU device evaluation + batched fronts).
 
 SIMD compile flags are set **per-file**, not globally:
 ```cmake
@@ -140,14 +138,6 @@ set_source_files_properties(compute/tensors/physics_kernels_avx2.cpp
 - **AI actions MUST go through `AiActionEnvelope`** — never touch `QGraphicsScene` directly.
 
 ### gui/ — Qt6 IDE
-
-- `core/`: `MainWindow`, `DockingManager`, `EditorManager`, `EditorFactory`, `StorageManager`
-- `editors/`: `SchematicEditor` (canvas), `CodeEditor`, `JsonViewer`, `ImageViewer`, `HexViewer`
-- `analysis/`: `SimulationWorkspace`, `SimulationExplorer`, `VariablesPanel`, `CalculatorWidget`, `ERCEngine`, waveform widgets
-- `orchestration/`: `WorkerManager` (gRPC bridge), `PdkManager`, `RTLPipelinePanel`
-- `widgets/`: `CommandPalette`, `ProjectExplorer`, `WaveformWidget`, `ToastManager`, `GhostDiffViewer`
-- `styling/`: `ThemeManager` (JSON themes: `dark_modern.json`, `light_modern.json`, `high_contrast.json`)
-- `scripting/`: `TclBridge` for automation hooks
 
 AI action flow: JSON from worker → `AiActionEnvelope` → Ghost preview → user approval → `AiActionHistory` push → `QGraphicsScene` commit.
 
@@ -194,7 +184,7 @@ extern "C" int statx(int, const char*, int, unsigned int, struct statx*) { retur
 
 These `.cpp` files have transitive link dependencies and **must travel together** in any test target that includes them:
 
-- `simulation_workspace.cpp` requires: `variables_panel.cpp`, `calculator_widget.cpp`, `parametric_sweep_dialog.cpp`, `postproc_engine.cpp`, `simulation_context.cpp`, `batch_runner.cpp`, `netlist_compiler_ctx.cpp`
+- `simulation_workspace.cpp` requires: `variables_panel.cpp`, `calculator_widget.cpp`, `parametric_sweep_dialog.cpp`, `postproc_engine.cpp`, `simulation_context.cpp`
 - `editor_manager.cpp` requires: `editor_factory.cpp`, `storage_manager.cpp`, plus viewer `.cpp` files
 - `project_explorer.cpp` requires: `library_model.cpp`, `library_index.cpp`
 
@@ -205,3 +195,29 @@ The compat header `gui/editors/schematic_editor.h` exists because the real heade
 ### AI Layer Tests
 
 Use `tests/stubs/ai_api_test_stubs.cpp` to avoid pulling in GUI dependencies for AI-layer tests.
+
+## Cross-Agent Collaboration (Claude Code ⇄ Cline)
+
+This repo is worked by **both** Claude Code and Cline. They hand off to each
+other through git, the handoff docs, and the memory bank:
+
+- **Session start:** read `ENGINE_HANDOFF.md` §0, then run the sweep:
+  `git status --short` (if dirty and you didn't make it dirty, another agent may
+  be mid-flight — stop and check), `git worktree list --porcelain`, and
+  `git log --no-merges origin/engine/spice-correctness..HEAD`. Background tasks
+  are **not** reliably worktree-isolated (a 2026-10-12 background task edited this
+  very checkout).
+- **Session end:** update `ENGINE_HANDOFF.md` §0 and
+  `memory-bank/activeContext.md` (what was done, commits, what's next) with an
+  agent stamp — e.g. "Last session: Claude Code, 2026-10-12" — then commit
+  (conventional prefix, explain why) and push. Uncommitted work is invisible to
+  the other agent.
+- **Merges:** record every branch/worktree merge in `ENGINE_HANDOFF.md` §0 with
+  the commit hash and which agent did it.
+- **Delegation:** focused tasks can be delegated to Cline headlessly via the
+  `/cline` command (`.claude/commands/cline.md`).
+- `.clinerules/` (00–05) carries the collaboration protocol, gotchas, workflow
+  and memory-bank instructions for Cline; the same rules apply to Claude Code by
+  symmetry.
+
+@memory-bank/activeContext.md

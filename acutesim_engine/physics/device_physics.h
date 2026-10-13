@@ -1,5 +1,6 @@
 #pragma once
 #include "gui_boundary_guard.h"
+#include "physics_constants.h"
 #include <cmath>
 #include <algorithm>
 
@@ -70,12 +71,17 @@ inline T diode_current(T vd, const DiodeParams<P>& p)
  * Handles linear continuation for convergence.
  */
 template <typename T, typename P>
-inline std::pair<T, T> diode_model_pair(T vd, const DiodeParams<P>& p, double max_arg = 30.0) 
+inline std::pair<T, T> diode_model_pair(T vd, const DiodeParams<P>& p, double max_arg = PhysicsConstants::JUNCTION_EXP_ARG_MAX) 
 {
     // NASA Optimization: Keep params as scalars where possible
     auto n_vt = p.N * p.Vt;
     T arg = vd / n_vt;
-    T GMIN = T(1e-12); 
+    // ngspice GMIN: a 1e-12 S conductance in parallel with every PN junction —
+    // never a node-to-ground leak (the solver's node gmin is dropped at
+    // convergence; ngspice has none once converged). It lives here in the
+    // junction model so the SoA kernels, the AoS stamps and both KCL audits
+    // all carry it consistently.
+    T GMIN = T(PhysicsConstants::JUNCTION_GMIN);
 
     // Linear Continuation Region
     if (arg > T(max_arg)) {
@@ -87,16 +93,14 @@ inline std::pair<T, T> diode_model_pair(T vd, const DiodeParams<P>& p, double ma
         T g_max = (p.Is / n_vt) * exp_max;
         
         T delta = vd - (n_vt * T(max_arg));
-        return {i_max + delta * g_max, g_max};
+        return {i_max + delta * g_max + GMIN * vd, g_max + GMIN};
     }
     
     using std::exp;
     T exp_val = exp(arg);
-    T i_val = p.Is * (exp_val - T(1.0));
-    T g_val = (p.Is / n_vt) * exp_val;
-    
-    // Safety clamp for G
-    if (g_val < GMIN) g_val = GMIN;
+    T i_val = p.Is * (exp_val - T(1.0)) + GMIN * vd;
+    // Additive (g_base >= 0, so g >= GMIN without the old floor)
+    T g_val = (p.Is / n_vt) * exp_val + GMIN;
     
     return {i_val, g_val};
 }
@@ -106,7 +110,7 @@ inline std::pair<T, T> diode_model_pair(T vd, const DiodeParams<P>& p, double ma
  * Safe version for NR iteration. Clamps exponent to prevent inf/nan.
  */
 template <typename T, typename P>
-inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = 30.0) 
+inline T diode_current_clamped(T vd, const DiodeParams<P>& p, double max_arg = PhysicsConstants::JUNCTION_EXP_ARG_MAX) 
 {
     // Delegate to unified model
     return diode_model_pair(vd, p, max_arg).first;
@@ -133,8 +137,10 @@ template <typename T>
 inline T pnjlim(T vnew, T vold, T vt, T vcrit) {
     T vlim = vnew;
     
-    // Bypass limiting if we are in the linear continuation region (defined as > 30*Vt in physics)
-    if (vold > T(30.0) * vt && vnew > T(30.0) * vt) {
+    // Bypass limiting in the linear continuation region (above the model's
+    // exponent cap) — must track JUNCTION_EXP_ARG_MAX or junctions between
+    // the two thresholds go unlimited.
+    if (vold > T(PhysicsConstants::JUNCTION_EXP_ARG_MAX) * vt && vnew > T(PhysicsConstants::JUNCTION_EXP_ARG_MAX) * vt) {
         return vnew;
     }
     
@@ -234,8 +240,9 @@ inline T mosfet_ids(T vgs, T vds, const MosfetParams<P>& p)
     
     if (vds < vov) 
     {
-        // Linear Region: Ids = K * (2*Vov*Vds - Vds^2)
-        return K * (2.0 * vov * vds - vds * vds);
+        // Linear Region: Ids = K * (2*Vov*Vds - Vds^2) * (1 + lambda*Vds)
+        // (SPICE level 1 applies channel-length modulation in both regions)
+        return K * (2.0 * vov * vds - vds * vds) * (1.0 + p.lambda * vds);
     } 
     else 
     {
@@ -470,7 +477,7 @@ inline T zener_current(T vd, const ZenerParams<P>& p)
         }
     }
     
-    return i_fwd + i_rev;
+    return i_fwd + i_rev + T(PhysicsConstants::JUNCTION_GMIN) * vd;  // as diode_model_pair
 }
 
 // ============================================================================

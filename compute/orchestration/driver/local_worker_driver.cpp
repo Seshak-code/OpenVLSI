@@ -7,15 +7,10 @@
 
 #include "acutesim_engine/physics/circuitsim.h"
 #include "acutesim_engine/netlist/circuit.h"
-#include "acutesim_engine/solvers/ac_solver.h"
 #include "acutesim_engine/solvers/tf_analysis.h"
-#include "acutesim_engine/solvers/pz_analysis.h"
 #include "acutesim_engine/solvers/fourier_analysis.h"
 #include "acutesim_engine/solvers/register_analyses.h"
 #include "acutesim_engine/solvers/analysis_registry.h"
-#include "acutesim_engine/solvers/staged_dispatcher.h"
-#include "acutesim_engine/infrastructure/compiled_block.h"
-#include "acutesim_engine/infrastructure/netlist_compiler.h"
 
 #include <mutex>
 #include <atomic>
@@ -82,29 +77,17 @@ struct LocalWorkerDriver::Impl {
     std::atomic<JobID> nextJobId_{1};
     std::atomic<bool>  cancelRequested_{false};
 
-    // Phase 4.5: New analysis helpers (operate on pre-built TensorNetlist)
-    SimulationResponseDTO runTF(CircuitSim& sim,
-                                const TensorNetlist& netlist,
-                                const SimulationRequestDTO& req);
-    SimulationResponseDTO runPZ(CircuitSim& sim,
-                                const TensorNetlist& netlist,
-                                const SimulationRequestDTO& req);
-    SimulationResponseDTO runFourier(CircuitSim& sim,
-                                     const TensorNetlist& netlist,
-                                     const SimulationRequestDTO& req);
-
     // Build a TensorNetlist strictly from Verilog-A source.
-    TensorNetlist buildNetlist(const SimulationSourceDTO& source) {
-        if (source.format == NetlistFormatDTO::VERILOG_A && !source.payload.empty()) {
-            auto r = parseVerilogA(source.payload);
-            if (r.success) return r.netlist;
-            
-            std::cerr << "LocalWorkerDriver: Verilog-A Parse Error: " << r.errorDetail << std::endl;
+    // Fails closed: any other format, or a parse error, sets `error` (it used to
+    // return an empty netlist that then "simulated" successfully).
+    TensorNetlist buildNetlist(const SimulationSourceDTO& source, std::string& error) {
+        if (source.format != NetlistFormatDTO::VERILOG_A || source.payload.empty()) {
+            error = "Source must be non-empty Verilog-A (the JSON transport was removed).";
+            return {};
         }
-        
-        // Return empty netlist if no valid Verilog-A source provided.
-        // Legacy JSON path is now DISCONTINUED.
-        return TensorNetlist();
+        auto r = parseVerilogA(source.payload);
+        if (!r.success) error = "Verilog-A parse error: " + r.errorDetail;
+        return r.netlist;
     }
 
     std::unique_ptr<std::thread> workerThread_;
@@ -123,6 +106,7 @@ struct LocalWorkerDriver::Impl {
     SimulationResponseDTO runDC(CircuitSim& sim, const TensorNetlist& netlist, const SimulationRequestDTO& req);
     SimulationResponseDTO runTransient(CircuitSim& sim, const TensorNetlist& netlist, const SimulationRequestDTO& req);
     SimulationResponseDTO runAC(CircuitSim& sim, const TensorNetlist& netlist, const SimulationRequestDTO& req);
+    SimulationResponseDTO runNoise(CircuitSim& sim, const TensorNetlist& netlist, const SimulationRequestDTO& req);
 
 };
 
@@ -254,18 +238,24 @@ void LocalWorkerDriver::Impl::executeJob(const InternalJob& job) {
         : job.batchRequest.parameters;
 
     // Dispatch: strictly Verilog-A only.
-    TensorNetlist baseNetlist = buildNetlist(baseSource);
+    std::string sourceError;
+    TensorNetlist baseNetlist = buildNetlist(baseSource, sourceError);
 
     // Capture originating request metadata (topology hash + compute mode)
     const uint64_t baseTopologyHash = job.singleRequest.topologyHash;
     const std::string baseSolverMode = job.singleRequest.solverMode;
 
     // RunSolver: DTO → internal override application → solver dispatch
-    auto solverLambda = [this, &baseNetlist, &jobParams, baseTopologyHash, baseSolverMode](
+    auto solverLambda = [this, &baseNetlist, &sourceError, &jobParams, baseTopologyHash, baseSolverMode](
         AnalysisTypeDTO analysis,
         const std::vector<ParameterVariationDTO>& overrides,
         const CornerParametersDTO& corner) -> SimulationResponseDTO
     {
+        if (!sourceError.empty()) {
+            SimulationResponseDTO e;
+            e.errorDetail = sourceError;
+            return e;
+        }
         TensorNetlist runNetlist = baseNetlist;  // deep copy
 
         // Apply targeted property overrides
@@ -296,7 +286,7 @@ void LocalWorkerDriver::Impl::executeJob(const InternalJob& job) {
 
         try {
             // Pure registry dispatch — zero switch statement.
-            // All analysis types (DC, TRANSIENT, AC, TF, PZ, FOURIER, ...)
+            // All analysis types (DC, TRANSIENT, AC, TF, FOURIER, ...)
             // are handled by registered handlers.
             return acutesim::compute::AnalysisRegistry::instance()
                 .dispatch(analysis, runReq, runNetlist, sim);
@@ -434,69 +424,65 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runTransient(
         stopTime = parseUnitValue(it->second, 1e-3);
     }
 
-    double currentTime = 0.0;
-    double timeStep = 1e-5;
-    int stepCount = 0;
-    int totalIterations = 0;
+    double timeStep = stopTime / 100.0;
+    if (auto h = req.parameters.find("stepHint"); h != req.parameters.end())
+        timeStep = parseUnitValue(h->second, timeStep);
+    // Batch runs carry only string parameters, so UIC comes as "uic" ("1"/"true")
+    const auto u = req.parameters.find("uic");
+    const bool uic = u != req.parameters.end() && (u->second == "1" || u->second == "true");
+
+    int stepCount = 0, totalIterations = 0;
     double maxResidual = 0.0;
-    bool failed = false;
+    const std::string err = sim.runTransient(
+        runNetlist, timeStep, stopTime, uic, [&](const SolverStep& result) {
+            if (cancelRequested_.load()) return false;
+            ++stepCount;
+            totalIterations += result.stats.iterations;
+            maxResidual = std::max(maxResidual, result.stats.residual);
+            resp.timeVector.push_back(result.time);
+            for (int i = 0; i < (int)result.nodeVoltages.size(); ++i)
+                resp.nodeVoltages[i].push_back(result.nodeVoltages[i]);
+            for (const auto& probe : runNetlist.globalBlock.probes) {
+                double v_pos = (probe.nodePositive > 0 &&
+                               probe.nodePositive <= (int)result.nodeVoltages.size())
+                              ? result.nodeVoltages[probe.nodePositive - 1] : 0.0;
+                double v_neg = (probe.nodeNegative > 0 &&
+                               probe.nodeNegative <= (int)result.nodeVoltages.size())
+                              ? result.nodeVoltages[probe.nodeNegative - 1] : 0.0;
+                resp.probeValues[probe.name].push_back(v_pos - v_neg);
+            }
+            if (q_ptr->onJobProgress && stepCount % 50 == 0) {
+                float pct = static_cast<float>(result.time / stopTime);
+                q_ptr->onJobProgress(0, pct, "t = " + std::to_string(result.time * 1e6) + " us");
+            }
+            return true;
+        });
 
-    while (currentTime < stopTime && !cancelRequested_.load()) {
-        SolverStep result = sim.stepTransient(runNetlist, timeStep, currentTime);
-        currentTime = result.time;
-        stepCount++;
-        totalIterations += result.stats.iterations;
-        if (result.stats.residual > maxResidual) {
-            maxResidual = result.stats.residual;
-        }
-
-        if (!result.stats.converged) {
-            resp.success = false;
-            resp.errorDetail = "Transient failed at t=" + std::to_string(currentTime) +
-                "s: " + result.stats.error_detail;
-            failed = true;
-            break;
-        }
-
-        // Accumulate time vector
-        resp.timeVector.push_back(currentTime);
-
-        // Accumulate node voltages
-        for (int i = 0; i < (int)result.nodeVoltages.size(); ++i) {
-            resp.nodeVoltages[i].push_back(result.nodeVoltages[i]);
-        }
-
-        // Accumulate probe values
-        for (const auto& probe : runNetlist.globalBlock.probes) {
-            double v_pos = (probe.nodePositive > 0 &&
-                           probe.nodePositive <= (int)result.nodeVoltages.size())
-                          ? result.nodeVoltages[probe.nodePositive - 1] : 0.0;
-            double v_neg = (probe.nodeNegative > 0 &&
-                           probe.nodeNegative <= (int)result.nodeVoltages.size())
-                          ? result.nodeVoltages[probe.nodeNegative - 1] : 0.0;
-            resp.probeValues[probe.name].push_back(v_pos - v_neg);
-        }
-
-        // Progress callback
-        if (q_ptr->onJobProgress && stepCount % 50 == 0) {
-            float pct = static_cast<float>(currentTime / stopTime);
-            q_ptr->onJobProgress(0, pct, "t = " + std::to_string(currentTime * 1e6) + " us");
-        }
+    resp.success = err.empty();
+    resp.errorDetail = err;
+    if (resp.success) {
+        resp.convergence.iterations  = totalIterations;
+        resp.convergence.maxResidual = maxResidual;
+        resp.convergence.method      = "Newton-Raphson";
     }
-
-    if (!failed) {
-        resp.success = true;
-        resp.convergence.iterations       = totalIterations;
-        resp.convergence.maxResidual      = maxResidual;
-        resp.convergence.method           = "Newton-Raphson";
-        resp.convergence.gminSteppingUsed = false;
-        resp.convergence.sourceSteppingUsed = false;
-    }
-
     return resp;
 }
 
 // ── AC Analysis ─────────────────────────────────────────────────────────────
+
+// AC/noise sweep from fStart, fStop, points, sweepType (dec/oct: points per
+// decade/octave; lin/log: total points). Unknown sweep types fall back to log.
+static std::vector<double> sweepFrequencies(const SimulationRequestDTO& req) {
+    auto get = [&](const char* key, const char* def) {
+        auto it = req.parameters.find(key);
+        return it == req.parameters.end() ? std::string(def) : it->second;
+    };
+    std::string sweep = get("sweepType", "log");
+    if (sweep != "dec" && sweep != "oct" && sweep != "lin") sweep = "log";
+    return CircuitSim::acFrequencies(sweep, static_cast<int>(parseUnitValue(get("points", "200"), 200)),
+                                     parseUnitValue(get("fStart", "1"), 1.0),
+                                     parseUnitValue(get("fStop", "1e9"), 1e9));
+}
 
 SimulationResponseDTO LocalWorkerDriver::Impl::runAC(
     CircuitSim& sim, const TensorNetlist& netlist, const SimulationRequestDTO& req)
@@ -512,48 +498,19 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runAC(
     corner.voltageScale = req.corner.supplyVoltage / 1.8;
     sim.applyCorner(runNetlist, corner);
 
-    // 1. DC operating point first
     SolverStep dcResult = sim.solveDC(runNetlist);
     if (!dcResult.stats.converged) {
-        resp.success = false;
         resp.errorDetail = "AC: DC operating point failed: " + dcResult.stats.error_detail;
         return resp;
     }
+    const auto freqs = sweepFrequencies(req);
+    const auto X = sim.solveAC(runNetlist, freqs);  // excitation: the sources' AC magnitude/phase
 
-    // 2. Extract frequency parameters
-    double fStart = 1.0, fStop = 1e9;
-    int points = 200;
-
-    auto itS = req.parameters.find("fStart");
-    if (itS != req.parameters.end()) fStart = parseUnitValue(itS->second, 1.0);
-    auto itE = req.parameters.find("fStop");
-    if (itE != req.parameters.end()) fStop = parseUnitValue(itE->second, 1e9);
-    auto itP = req.parameters.find("points");
-    if (itP != req.parameters.end()) {
-        try { points = std::stoi(itP->second); } catch (...) {}
-    }
-
-    // 3. Run AC sweep
-    ACSolver::ACResult acResult = ACSolver::solveAC(
-        netlist, dcResult.nodeVoltages, fStart, fStop, points);
-
-    // 4. Pack into DTO
-    resp.success = true;
-    resp.timeVector = acResult.frequencies; // frequencies as the "x-axis"
-
-    int n = netlist.numGlobalNodes;
-    for (int node = 0; node < n; ++node) {
-        std::vector<double> magVec;
-        magVec.reserve(points);
-        for (int fi = 0; fi < points; ++fi) {
-            if (fi < (int)acResult.nodeVoltages.size() &&
-                node < (int)acResult.nodeVoltages[fi].size()) {
-                magVec.push_back(std::abs(acResult.nodeVoltages[fi][node]));
-            }
-        }
-        resp.nodeVoltages[node] = std::move(magVec);
-    }
-
+    resp.success = X.size() == freqs.size() && !freqs.empty();
+    if (!resp.success) resp.errorDetail = "AC: invalid frequency range";
+    resp.timeVector = freqs;  // frequencies as the "x-axis"
+    for (int node = 0; node < runNetlist.numGlobalNodes; ++node)
+        for (const auto& x : X) resp.nodeVoltages[node].push_back(std::abs(x[node]));
     resp.convergence.iterations = dcResult.stats.iterations;
     resp.convergence.maxResidual = dcResult.stats.residual;
     resp.convergence.method = "AC Small-Signal";
@@ -561,94 +518,44 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runAC(
     return resp;
 }
 
-// ── Phase 4.5: Transfer Function Analysis ───────────────────────────────────
-
-SimulationResponseDTO LocalWorkerDriver::Impl::runTF(
+// ── Noise Analysis ─────────────────────────────────────────────────────────
+// Parameters: outputNode (index), refNode (default 0), inputSource (V/I name),
+// fStart, fStop, points, sweepType (see sweepFrequencies).
+SimulationResponseDTO LocalWorkerDriver::Impl::runNoise(
     CircuitSim& sim, const TensorNetlist& netlist, const SimulationRequestDTO& req)
 {
-    // 1. DC operating point required for linearisation
+    SimulationResponseDTO resp;
+    resp.topologyHash = req.topologyHash;
     TensorNetlist runNetlist = netlist;
-    acutesim::physics::CornerConfig corner;
-    corner.name         = req.corner.processCorner;
-    corner.temperatureC = req.corner.temperature;
-    corner.voltageScale = req.corner.supplyVoltage / 1.8;
-    sim.applyCorner(runNetlist, corner);
-
-    SolverStep dcResult = sim.solveDC(runNetlist);
-    if (!dcResult.stats.converged) {
-        SimulationResponseDTO e;
-        e.success      = false;
-        e.errorDetail = "TF: DC operating point failed: " + dcResult.stats.error_detail;
-        return e;
+    auto num = [&](const char* key, double def) {
+        auto it = req.parameters.find(key);
+        return it == req.parameters.end() ? def : parseUnitValue(it->second, def);
+    };
+    auto src = req.parameters.find("inputSource");
+    const auto freqs = sweepFrequencies(req);
+    if (src == req.parameters.end() || freqs.empty()) {
+        resp.errorDetail = "Noise needs inputSource, outputNode and a frequency range.";
+        return resp;
     }
-
-    return acutesim::compute::solvers::runTFAnalysis(runNetlist, dcResult.nodeVoltages, req);
-}
-
-// ── Phase 4.5: Pole-Zero Analysis ───────────────────────────────────────────
-
-SimulationResponseDTO LocalWorkerDriver::Impl::runPZ(
-    CircuitSim& sim, const TensorNetlist& netlist, const SimulationRequestDTO& req)
-{
-    TensorNetlist runNetlist = netlist;
-    acutesim::physics::CornerConfig corner;
-    corner.name         = req.corner.processCorner;
-    corner.temperatureC = req.corner.temperature;
-    corner.voltageScale = req.corner.supplyVoltage / 1.8;
-    sim.applyCorner(runNetlist, corner);
-
-    SolverStep dcResult = sim.solveDC(runNetlist);
-    if (!dcResult.stats.converged) {
-        SimulationResponseDTO e;
-        e.success      = false;
-        e.errorDetail = "PZ: DC operating point failed: " + dcResult.stats.error_detail;
-        return e;
+    SolverStep dc = sim.solveDC(runNetlist);
+    if (!dc.stats.converged) {
+        resp.errorDetail = "Noise: DC operating point failed: " + dc.stats.error_detail;
+        return resp;
     }
-
-    return acutesim::compute::solvers::runPZAnalysis(runNetlist, dcResult.nodeVoltages, req);
-}
-
-// ── Phase 4.5: Fourier / THD Analysis ───────────────────────────────────────
-
-SimulationResponseDTO LocalWorkerDriver::Impl::runFourier(
-    CircuitSim& sim, const TensorNetlist& netlist, const SimulationRequestDTO& req)
-{
-    // Fourier post-processes a transient waveform.
-    // Run a transient first, then extract the probe node waveform.
-    SimulationResponseDTO tranResp = runTransient(sim, netlist, req);
-    if (!tranResp.success) {
-        tranResp.errorDetail = "FOURIER: transient failed: " + tranResp.errorDetail;
-        return tranResp;
-    }
-
-    // Pick output node (default = last node)
-    int outNode = netlist.numGlobalNodes;
-    auto it = req.parameters.find("outputNode");
-    if (it != req.parameters.end()) {
-        try { outNode = std::stoi(it->second); } catch (...) {}
-    }
-    outNode = std::max(1, std::min(outNode, netlist.numGlobalNodes));
-
-    std::vector<double> waveform;
-    auto vit = tranResp.nodeVoltages.find(outNode - 1);
-    if (vit != tranResp.nodeVoltages.end())
-        waveform = vit->second;
-
-    SimulationResponseDTO fResp = acutesim::compute::solvers::runFourierAnalysis(
-        netlist, tranResp.timeVector, waveform, req);
-
-    // Preserve transient data in response alongside Fourier result
-    fResp.timeVector    = tranResp.timeVector;
-    fResp.nodeVoltages  = tranResp.nodeVoltages;
-    fResp.probeValues   = tranResp.probeValues;
-    fResp.topologyHash  = req.topologyHash;
-    return fResp;
+    auto nz = sim.solveNoise(runNetlist, freqs, static_cast<int>(num("outputNode", 1)),
+                             static_cast<int>(num("refNode", 0)), src->second);
+    resp.errorDetail = nz.error;
+    resp.success = resp.converged = nz.error.empty();
+    resp.timeVector = freqs;
+    resp.extended.hasNoise = resp.success;
+    resp.extended.noise = {freqs, std::move(nz.onoise), std::move(nz.inoise), nz.onoiseTotal, nz.inoiseTotal};
+    return resp;
 }
 
 LocalWorkerDriver::LocalWorkerDriver() : impl_(std::make_unique<Impl>(this)) {
     // Phase 4 Reconcile: register all analysis handlers at construction time.
     // This is idempotent and safe to call multiple times.
-    // Ensures TF / PZ / FOURIER handlers are present regardless of linker
+    // Ensures TF / FOURIER handlers are present regardless of linker
     // dead-stripping of static-init registrations in static libs.
     acutesim::compute::solvers::registerAllAnalyses();
 
@@ -664,7 +571,7 @@ LocalWorkerDriver::LocalWorkerDriver() : impl_(std::make_unique<Impl>(this)) {
     reg.registerHandler(AnalysisTypeDTO::DC,        [p](const SimulationRequestDTO& req, const TensorNetlist& nl, CircuitSim& sim){ return p->runDC(sim, nl, req); });
     reg.registerHandler(AnalysisTypeDTO::TRANSIENT,  [p](const SimulationRequestDTO& req, const TensorNetlist& nl, CircuitSim& sim){ return p->runTransient(sim, nl, req); });
     reg.registerHandler(AnalysisTypeDTO::AC,         [p](const SimulationRequestDTO& req, const TensorNetlist& nl, CircuitSim& sim){ return p->runAC(sim, nl, req); });
-    reg.registerHandler(AnalysisTypeDTO::NOISE,      [p](const SimulationRequestDTO& req, const TensorNetlist& nl, CircuitSim& sim){ return p->runAC(sim, nl, req); }); // AC path for now
+    reg.registerHandler(AnalysisTypeDTO::NOISE,      [p](const SimulationRequestDTO& req, const TensorNetlist& nl, CircuitSim& sim){ return p->runNoise(sim, nl, req); });
     reg.registerHandler(AnalysisTypeDTO::SENSITIVITY,[p](const SimulationRequestDTO& req, const TensorNetlist& nl, CircuitSim& sim){ return p->runDC(sim, nl, req); }); // DC path for sensitivity
     reg.registerHandler(AnalysisTypeDTO::MONTE_CARLO,[p](const SimulationRequestDTO& req, const TensorNetlist& nl, CircuitSim& sim){ return p->runDC(sim, nl, req); }); // base run
 
@@ -841,7 +748,7 @@ TerminalResponseDTO LocalWorkerDriver::executeCommand(const TerminalCommandDTO& 
         baseReq.analysis = AnalysisTypeDTO::DC;
 
         MonteCarloConfigDTO mcConfig;
-        mcConfig.numRuns = static_cast<uint32_t>(std::stoi(tokens[1]));
+        mcConfig.sampleCount = static_cast<uint32_t>(std::stoi(tokens[1]));
         mcConfig.seed = 0; // random seed by default
 
         // Parse optional seed=N

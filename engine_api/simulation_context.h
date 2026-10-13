@@ -32,7 +32,7 @@ struct SimulationContext {
 
     // ─── Design Variables (Global Parameters) ─────────────────────────────
     // Core of the "Orchestration Layer": Variables are resolved HERE,
-    // before the NetlistCompiler sees them. The solver stays numeric-only.
+    // before the solver sees them. The solver stays numeric-only.
 
     std::unordered_map<std::string, double> variables;        // Resolved numeric values
     std::unordered_map<std::string, std::string> variableExprs;  // Expressions

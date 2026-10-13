@@ -35,7 +35,6 @@
 
 #include "acutesim_engine/physics/circuitsim.h"
 #include "acutesim_engine/netlist/circuit.h"
-#include "acutesim_engine/infrastructure/netlist_compiler.h"
 
 #include <cmath>
 #include <complex>

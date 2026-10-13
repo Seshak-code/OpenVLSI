@@ -50,6 +50,7 @@ void SimulationExplorer::setupTree() {
     addProfile(Simulation::SimulationProfile::quickDC());
     addProfile(Simulation::SimulationProfile::transient());
     addProfile(Simulation::SimulationProfile::acSweep());
+    addProfile(Simulation::SimulationProfile::noiseSweep());
 }
 
 QTreeWidgetItem* SimulationExplorer::getCategoryNode(Simulation::SimulationProfile::Category cat) {

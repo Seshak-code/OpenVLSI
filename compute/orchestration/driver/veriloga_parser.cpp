@@ -122,6 +122,30 @@ VerilogAParseResult parseVerilogA(const std::string& source) {
         return (it != params.end()) ? it->second : def;
     };
 
+    // ── Helper: waveform + AC fields of a V/I source (see sourceParams) ──────
+    auto readSource = [&](auto& s, const std::string& nm) {
+        if (params.count(nm + "_per")) {
+            s.type      = "PULSE";
+            s.pulse_v1  = param(nm + "_v1");
+            s.pulse_v2  = param(nm + "_v2");
+            s.pulse_td  = param(nm + "_td");
+            s.pulse_tr  = param(nm + "_tr");
+            s.pulse_tf  = param(nm + "_tf");
+            s.pulse_pw  = param(nm + "_pw");
+            s.pulse_per = param(nm + "_per");
+        } else if (params.count(nm + "_freq")) {
+            s.type       = "SINE";
+            s.sine_vo    = param(nm + "_vo");
+            s.sine_va    = param(nm + "_va");
+            s.sine_freq  = param(nm + "_freq");
+            s.sine_td    = param(nm + "_td");
+            s.sine_theta = param(nm + "_theta");
+            s.sine_phase = param(nm + "_phase");
+        }
+        s.ac_mag   = param(nm + "_acmag");
+        s.ac_phase = param(nm + "_acphase");
+    };
+
     // ── Determine max node index from parameter names ─────────────────────────
     // We'll update numGlobalNodes as we parse contribution statements.
     auto touchNode = [&](int n) {
@@ -377,6 +401,8 @@ VerilogAParseResult parseVerilogA(const std::string& source) {
                 cs.nodePositive = na;
                 cs.nodeNegative = nb2;
                 cs.current_A    = I;
+                cs.name         = cn;
+                readSource(cs, cn);
                 netlist.globalBlock.currentSources.push_back(cs);
                 touchNode(na); touchNode(nb2);
             }
@@ -432,6 +458,8 @@ VerilogAParseResult parseVerilogA(const std::string& source) {
                 vs.nodePositive = na;
                 vs.nodeNegative = nb2;
                 vs.voltage_V    = V;
+                vs.name         = cn;
+                readSource(vs, cn);
                 netlist.globalBlock.voltageSources.push_back(vs);
                 touchNode(na); touchNode(nb2);
             }
