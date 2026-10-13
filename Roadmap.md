@@ -127,7 +127,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | V / I sources: EXP, PWL, SFFM, AM | ❌ | explicit "not supported yet" |
 | D (diode) | ✅ | `IS`, `N`; no `RS`, `CJO`/`TT` (no junction capacitance), no breakdown on `D` |
 | Q (BJT) | ✅ | Ebers–Moll: `IS`, `BF`, `BR`, polarity from `.model`; no `VAF`, `RB/RC/RE`, junction capacitances |
-| M (MOSFET) | ⚠️ | Level 1 DC: `KP`, `VTO`, `LAMBDA`, `GAMMA`, `PHI`, `IS`, `LD`; `W`, `L` (default 100u), `M`; S/D swap, body effect, bulk junctions — matches ngspice (8 netlists). No capacitances yet (`TOX`, `CGSO`, `CJ`... are errors), no BSIM |
+| M (MOSFET) | ⚠️ | Level 1 complete: `KP`, `VTO`, `LAMBDA`, `GAMMA`, `PHI`, `IS`, `LD`, `TOX`/`UO`, `CGSO/CGDO/CGBO`, `CBD/CBS`, `CJ/MJ`, `CJSW/MJSW`, `PB`, `FC`; `W`, `L` (default 100u), `AD/AS/PD/PS`, `M`; S/D swap, body effect, bulk junctions, Meyer gate + overlap + junction charges in tran/ac/noise — matches ngspice (13 netlists incl. inverter, ring oscillator, pass gate, AC). No `NSUB`/`RD`/`RS`/`RSH`/`JS`, no BSIM |
 | J (JFET) | ✅ | Shichman–Hodges: `BETA`, `VTO`, `LAMBDA`, N/P from `.model`; no gate diodes, no S/D swap |
 | E (VCVS) | ✅ | gain; ideal (MNA branch current) |
 | G (VCCS) | ✅ | transconductance |
@@ -206,7 +206,8 @@ and see the program's output — covering every step from schematic/RTL to sign-
 **Phase 3 — Device-model parity**
 - [ ] BSIM4 and BSIM-CMG (modern PDKs) via the existing Verilog-A front end / physics compiler
 - [x] MOS1 DC complete (ngspice mos1load): S/D swap for Vds<0, body effect (GAMMA/PHI), bulk junctions (IS), LD, M=; one `mos1_currents()` for every stamp/audit/analysis, Jacobian by Dual; SPICE card defaults
-- [ ] Junction capacitances (diode CJO/TT, BJT, MOS charge models), Gummel–Poon BJT
+- [x] MOS1 charges (ngspice mos1load/mos1acld): Meyer gate (TOX) + overlap + bulk-junction depletion caps; TRAP/BE on the charges, MOS branches in LTE; AC C from the same charges (Dual)
+- [ ] Junction capacitances (diode CJO/TT, BJT), Gummel–Poon BJT
 - [ ] PDK model-card ingestion (`.lib` sections, corners)
 - **Gate:** standard-cell characterisation (delay/power) within 1 % of ngspice on a real PDK
 

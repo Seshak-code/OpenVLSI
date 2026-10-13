@@ -71,9 +71,6 @@ static TensorNetlist makeCMOSChain(int stages) {
     nl.addVoltageSource(1, 0, 3.3);
     nl.addVoltageSource(2, 0, 1.65);
 
-    nl.modelCards["NMOS1"] = ModelCard{"NMOS1", "NMOS", 1, {{"KP", 200e-6}, {"VTO", 0.7}, {"LAMBDA", 0.02}}};
-    nl.modelCards["PMOS1"] = ModelCard{"PMOS1", "PMOS", 1, {{"KP", 100e-6}, {"VTO", -0.7}, {"LAMBDA", 0.02}}};
-
     int prevOut = 2;
     int nextNode = 3;
     for (int i = 0; i < stages; ++i) {
