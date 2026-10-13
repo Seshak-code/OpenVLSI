@@ -43,36 +43,25 @@ private:
     // ------------------------------------------------------------------------
     template <typename T>
     void runMosfetChecks() {
-        MosfetParams<T> p;
-        p.Kp = T(200e-6);
-        p.W = T(10e-6);
-        p.L = T(1e-6);
-        p.Vth = T(0.7);
+        Mos1Params<T> p;
+        p.beta = T(200e-6 * 10.0);  // KP * W/L
+        p.vto = T(0.7);
         p.lambda = T(0.02);
-        
-        // Cutoff
-        T vgs = T(0.5);
-        T vds = T(5.0);
-        T ids = mosfet_ids(vgs, vds, p);
-        QCOMPARE(static_cast<double>(ids), 0.0);
-        
-        // Saturation
-        vgs = T(2.0); // Vov = 1.3
-        vds = T(5.0); // Vds > Vov
-        ids = mosfet_ids(vgs, vds, p);
-        
-        // I = 0.5 * Kp * (W/L) * Vov^2 * (1 + lambda*Vds)
-        // I = 0.5 * 200e-6 * 10 * 1.69 * (1 + 0.1)
-        // I = 1000e-6 * 1.69 * 1.1 = 1.859e-3 roughly
-        double val = static_cast<double>(ids);
-        QVERIFY(val > 1.8e-3 && val < 1.9e-3);
-        
-        // Linear
-        vds = T(0.1); // Small Vds
-        ids = mosfet_ids(vgs, vds, p);
-        QVERIFY(static_cast<double>(ids) > 0.0);
+        auto id = [&](double vd, double vg) {  // source and bulk at 0
+            return static_cast<double>(mos1_currents(T(vd), T(vg), T(0.0), T(0.0), p).d);
+        };
+
+        // Cutoff: only the reverse bulk-drain junction (IS + GMIN*Vd) remains
+        QVERIFY(std::abs(id(5.0, 0.5)) < 1e-11);
+
+        // Saturation: I = 0.5 * beta * Vov^2 * (1 + lambda*Vds) = 1.859e-3
+        QVERIFY(std::abs(id(5.0, 2.0) - 0.5 * 2e-3 * 1.69 * 1.1) < 1e-9);
+
+        // Linear, and the source/drain exchange: Vds < 0 mirrors the current
+        QVERIFY(id(0.1, 2.0) > 0.0);
+        QVERIFY(std::abs(id(-0.1, 1.9) + id(0.1, 2.0)) < 1e-9);
     }
-    
+
     // ------------------------------------------------------------------------
     // Helper: Run BJT Checks (Merged from test_bjt_stability)
     // ------------------------------------------------------------------------

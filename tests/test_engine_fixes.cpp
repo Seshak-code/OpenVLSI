@@ -314,6 +314,19 @@ int main() {
         check(s.stats.converged && !s.stats.gminSteppingUsed, "linear divider: no GMIN stepping reported");
     }
 
+    // Phase 3 MOS1: SPICE card defaults (KP 2e-5, VTO 0, W = L = 100u) give
+    // Id = 0.5*2e-5*1^2 = 10 uA at Vgs = 1 V (saturation); M=3 triples it
+    for (PrecisionMode mode : {PrecisionMode::Native_F64, PrecisionMode::Mixed}) {
+        auto r = run(mode, "* mos defaults\nVDD 1 0 DC 5\nVG 2 0 DC 1\nRD 1 3 1k\nM1 3 2 0 0 NM\n.model NM NMOS\n.op\n");
+        check(r.converged && near(V(r, 3), 5.0 - 1e3 * 1e-5, 1e-6),
+              "MOS1 card defaults: V(drain) = 4.99 (" + std::to_string(V(r, 3)) + ")");
+        r = run(mode, "* mos M\nVDD 1 0 DC 5\nVG 2 0 DC 1\nRD 1 3 1k\nM1 3 2 0 0 NM M=3\n.model NM NMOS\n.op\n");
+        check(r.converged && near(V(r, 3), 5.0 - 3e3 * 1e-5, 1e-6),
+              "MOS1 M=3 triples the current: V(drain) = 4.97 (" + std::to_string(V(r, 3)) + ")");
+        r = run(mode, "* mos NF\nVDD 1 0 DC 5\nM1 1 1 0 0 NM NF=2\n.model NM NMOS\n.op\n");
+        check(!r.converged && r.errorDetail.find("NF") != std::string::npos, "MOS1 NF=2 is an explicit error");
+    }
+
     // The CSR pattern cache must not trust the canonical topology hash: it ignores
     // sources and node numbering, so a reused CircuitSim kept a stale pattern and
     // silently dropped the moved source's stamps.

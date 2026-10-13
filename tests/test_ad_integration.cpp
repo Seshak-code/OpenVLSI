@@ -96,61 +96,29 @@ void test_diode() {
 void test_mosfet() {
     std::cout << "\n[MOSFET AD Test]\n";
 
-    MosfetParams<double> p;
-    p.Kp = 200e-6;
-    p.Vth = 0.7;
-    p.lambda = 0.02;
-    p.W = 10e-6;
-    p.L = 1e-6;
-
-    double delta = 1e-7;
-
-    // Saturation: vgs=1.5, vds=2.0
-    {
-        double vgs = 1.5, vds = 2.0;
-
-        // gm = dIds/dVgs
-        Dual<double> ids_vgs = mosfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
-        double gm_ad = ids_vgs.grad;
-
-        double i_p = mosfet_ids(vgs + delta, vds, p);
-        double i_m = mosfet_ids(vgs - delta, vds, p);
-        double gm_fd = (i_p - i_m) / (2.0 * delta);
-
-        check_derivative("MOSFET saturation gm (vgs=1.5, vds=2.0)", gm_ad, gm_fd);
-
-        // gds = dIds/dVds
-        Dual<double> ids_vds = mosfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p);
-        double gds_ad = ids_vds.grad;
-
-        i_p = mosfet_ids(vgs, vds + delta, p);
-        i_m = mosfet_ids(vgs, vds - delta, p);
-        double gds_fd = (i_p - i_m) / (2.0 * delta);
-
-        check_derivative("MOSFET saturation gds (vgs=1.5, vds=2.0)", gds_ad, gds_fd);
-    }
-
-    // Linear: vgs=1.5, vds=0.3
-    {
-        double vgs = 1.5, vds = 0.3;
-
-        Dual<double> ids_vgs = mosfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
-        double gm_ad = ids_vgs.grad;
-
-        double i_p = mosfet_ids(vgs + delta, vds, p);
-        double i_m = mosfet_ids(vgs - delta, vds, p);
-        double gm_fd = (i_p - i_m) / (2.0 * delta);
-
-        check_derivative("MOSFET linear gm (vgs=1.5, vds=0.3)", gm_ad, gm_fd);
-
-        Dual<double> ids_vds = mosfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p);
-        double gds_ad = ids_vds.grad;
-
-        i_p = mosfet_ids(vgs, vds + delta, p);
-        i_m = mosfet_ids(vgs, vds - delta, p);
-        double gds_fd = (i_p - i_m) / (2.0 * delta);
-
-        check_derivative("MOSFET linear gds (vgs=1.5, vds=0.3)", gds_ad, gds_fd);
+    // mos1_currents(): drain current's Dual derivatives vs central differences,
+    // in saturation, linear, reverse (Vds < 0: source/drain exchange) and with
+    // the body effect (Vbs < 0), for gate, drain and bulk.
+    Mos1Params<double> p;
+    p.beta = 200e-6 * 10.0;   // KP * W/L
+    p.vto = 0.7; p.lambda = 0.02; p.gamma = 0.5; p.phi = 0.7;
+    const double delta = 1e-7;
+    struct Point { const char* name; double vd, vg, vs, vb; };
+    const Point pts[] = {{"saturation", 2.0, 1.5, 0.0, 0.0}, {"linear", 0.3, 1.5, 0.0, 0.0},
+                         {"reverse Vds<0", -0.4, 1.5, 0.0, 0.0}, {"body Vbs=-1", 2.0, 1.8, 0.0, -1.0}};
+    for (const auto& q : pts) {
+        double v[4] = {q.vd, q.vg, q.vs, q.vb};
+        auto id = [&](const double* x) { return mos1_currents(x[0], x[1], x[2], x[3], p).d; };
+        for (int u : {1, 0, 3}) {  // d/dVg (gm), d/dVd (gds), d/dVb (gmbs)
+            Dual<double> x[4];
+            for (int k = 0; k < 4; ++k) x[k] = Dual<double>(v[k], k == u ? 1.0 : 0.0);
+            const double ad = mos1_currents(x[0], x[1], x[2], x[3], p).d.grad;
+            double hi[4], lo[4];
+            for (int k = 0; k < 4; ++k) { hi[k] = lo[k] = v[k]; }
+            hi[u] += delta; lo[u] -= delta;
+            const double fd = (id(hi) - id(lo)) / (2.0 * delta);
+            check_derivative(std::string("MOSFET ") + q.name + (u == 1 ? " gm" : u == 0 ? " gds" : " gmbs"), ad, fd);
+        }
     }
 }
 

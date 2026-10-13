@@ -8,7 +8,10 @@
 
 using namespace StandardCells;
 
-bool compare(const std::vector<double>& v1, const std::vector<double>& v2, double tol = 1e-9) {
+// Both modes stamp MOSFETs through the same stampMos1(); each solve stops once its
+// Newton update is below VNTOL (1 uV), and this inverter is biased at its
+// high-gain mid-point, so the two converged points may differ by up to VNTOL.
+bool compare(const std::vector<double>& v1, const std::vector<double>& v2, double tol = 1e-6) {
     if (v1.size() != v2.size()) return false;
     for (size_t i = 0; i < v1.size(); ++i) {
         if (std::abs(v1[i] - v2[i]) > tol) {

@@ -127,7 +127,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | V / I sources: EXP, PWL, SFFM, AM | ❌ | explicit "not supported yet" |
 | D (diode) | ✅ | `IS`, `N`; no `RS`, `CJO`/`TT` (no junction capacitance), no breakdown on `D` |
 | Q (BJT) | ✅ | Ebers–Moll: `IS`, `BF`, `BR`, polarity from `.model`; no `VAF`, `RB/RC/RE`, junction capacitances |
-| M (MOSFET) | ⚠️ | Level 1: `KP`, `VTO`, `LAMBDA` (λ in both regions, matches ngspice inverters within 0.6 mV); no source/drain swap for Vds<0, no body effect |
+| M (MOSFET) | ⚠️ | Level 1 DC: `KP`, `VTO`, `LAMBDA`, `GAMMA`, `PHI`, `IS`, `LD`; `W`, `L` (default 100u), `M`; S/D swap, body effect, bulk junctions — matches ngspice (8 netlists). No capacitances yet (`TOX`, `CGSO`, `CJ`... are errors), no BSIM |
 | J (JFET) | ✅ | Shichman–Hodges: `BETA`, `VTO`, `LAMBDA`, N/P from `.model`; no gate diodes, no S/D swap |
 | E (VCVS) | ✅ | gain; ideal (MNA branch current) |
 | G (VCCS) | ✅ | transconductance |
@@ -205,7 +205,8 @@ and see the program's output — covering every step from schematic/RTL to sign-
 
 **Phase 3 — Device-model parity**
 - [ ] BSIM4 and BSIM-CMG (modern PDKs) via the existing Verilog-A front end / physics compiler
-- [ ] Junction capacitances (diode CJO/TT, BJT, MOS charge models), Gummel–Poon BJT, MOSFET S/D swap + body effect
+- [x] MOS1 DC complete (ngspice mos1load): S/D swap for Vds<0, body effect (GAMMA/PHI), bulk junctions (IS), LD, M=; one `mos1_currents()` for every stamp/audit/analysis, Jacobian by Dual; SPICE card defaults
+- [ ] Junction capacitances (diode CJO/TT, BJT, MOS charge models), Gummel–Poon BJT
 - [ ] PDK model-card ingestion (`.lib` sections, corners)
 - **Gate:** standard-cell characterisation (delay/power) within 1 % of ngspice on a real PDK
 
