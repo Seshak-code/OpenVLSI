@@ -1,7 +1,7 @@
 # OpenVLSI
 
 **An open, AI-assisted chip-design environment covering schematic and RTL entry, synthesis,
-place-and-route, simulation and sign-off in one application.** (Formerly CuteApp / AcuteSim.)
+place-and-route, simulation and sign-off in one application.** 
 
 > **Status: in development.** The SPICE engine is verified against ngspice and Xyce. The full
 > flow (Yosys synthesis, OpenROAD P&R, KLayout sign-off) is wired through orchestration drivers,
