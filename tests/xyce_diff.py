@@ -63,7 +63,7 @@ def case(path, opts):
     xs = [] if an[0] == "op" else [r[1] for r in rows]
     vals = {n: [r[k] for r in rows] for n, k in cols.items()}
     with tempfile.TemporaryDirectory(prefix="xyce_") as tmp:
-        args = types.SimpleNamespace(**vars(opts), tmp=tmp, skip_unresolved=True)  # gold is sparse
+        args = types.SimpleNamespace(**vars(opts), tmp=tmp)
         st, wa, wr, note = rd.compare(args, text, an, "cpu", {n: nm[n] for n in cols}, (xs, vals))
     if st == "FAIL" and "SPICE parse error" in note: st = "PARSE-ERROR"  # syntax the engine lacks
     if st == "FAIL" and "TIMEOUT" in note: st = "TIMEOUT"  # run-time limit, not an accuracy verdict
