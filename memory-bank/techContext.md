@@ -15,7 +15,7 @@ python3 ../tests/ngspice_diff/run_diff.py   # expect 82/83; only aac_10_bridge f
 
 ## Traps
 
-- `.gitignore` ignores `tests/`, `CLAUDE.md`, `ENGINE_HANDOFF.md`, `.claude/`,
+- `.gitignore` ignores `tests/`, `CLAUDE.md`, `acutesim_engine/ENGINE_HANDOFF.md`, `.claude/`,
   `datasets/`: new files there need `git add -f` (tracked files commit fine).
 - The shell `grep` wrapper skips ignored test files — use `command grep`.
 - After source deletions, re-run cmake configure or MOC autogen fails.

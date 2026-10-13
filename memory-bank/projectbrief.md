@@ -11,6 +11,6 @@
 
 Deeper detail: `CLAUDE.md` (shared authoritative instructions — read it first),
 `Roadmap.md` (phases, gates, verified feature-status table),
-`ENGINE_HANDOFF.md` (engine state, architecture, known issues, gotchas).
+`acutesim_engine/ENGINE_HANDOFF.md` (engine state, architecture, known issues, gotchas).
 
 This brief is intentionally a pointer — do not duplicate content here.

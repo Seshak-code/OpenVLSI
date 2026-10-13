@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cassert>
 #include "acutesim_engine/netlist/circuit.h"
-#include "acutesim_engine/netlist/netlist_export.h"
+#include "components/netlist_export.h"
 
 void test_spef_wire() {
     std::cout << "[Test] SPEF Export (Parasitic Wire)... ";

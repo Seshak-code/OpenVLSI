@@ -5,7 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include "acutesim_engine/netlist/circuit.h"
-#include "acutesim_engine/netlist/netlist_export.h"
+#include "components/netlist_export.h"
 
 // Helper to normalize Verilog for comparison (ignore whitespace/comments for robustness)
 std::string normalizeVerilog(const std::string& input) {

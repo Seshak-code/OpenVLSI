@@ -5,22 +5,40 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 ## Open bugs
 
 **BUG-1 — `.ic` + `uic`: MOS charge initialisation is wrong** (filed by Cline, 2026-10-12, from the Phase 3.2 QA pass) — **FIXED – RETEST** (harness, not engine: see the `fix/qa-bugs` entry below)
-- Reproducer: `tests/ngspice_diff/netlists/qa_mos_uic.cir` (expected to FAIL until fixed). Control `qa_ctrl_rc_uic.cir` (same circuit, plain RC, no MOS) **passes** at 0.43 mV — so the engine's `.ic`/`uic` handling itself matches ngspice; the divergence is MOS-specific (MOS charge history under `uic`, likely initialised from zero instead of the `.ic` node voltages).
+- Reproducer: `acutesim_engine/tests/ngspice_diff/netlists/qa_mos_uic.cir` (expected to FAIL until fixed). Control `qa_ctrl_rc_uic.cir` (same circuit, plain RC, no MOS) **passes** at 0.43 mV — so the engine's `.ic`/`uic` handling itself matches ngspice; the divergence is MOS-specific (MOS charge history under `uic`, likely initialised from zero instead of the `.ic` node voltages).
 - Numbers: worst 122 mV / 2.5 % (tolerance is max(5 mV, 2 % of swing)), systematic at 10+ sample points, identical in cpu and gpu.
 - Severity: wrong answer (transient), MOS1-charges-related — **from Phase 3.2**.
 
 **BUG-2 — two-level `.subckt` hierarchy solves to a wrong DC level** (filed by Cline, 2026-10-12; pre-existing — fails without any capacitance keys, so it predates Phase 3.2) — **FIXED – RETEST** (harness, not engine)
-- Reproducer: `tests/ngspice_diff/netlists/qa_diag_nest_nocaps.cir` (X inside a `.subckt`, plain MOS1, no caps; expected to FAIL). With caps: `qa_mos_nest.cir` (1.38 V).
+- Reproducer: `acutesim_engine/tests/ngspice_diff/netlists/qa_diag_nest_nocaps.cir` (X inside a `.subckt`, plain MOS1, no caps; expected to FAIL). With caps: `qa_mos_nest.cir` (1.38 V).
 - Numbers: the output node is **flat at a wrong level** — engine 1.18863 V vs ngspice 2.328 V, constant across the transient (1.14 V / 23 %). Single-level hierarchy passes (`qa_mos_subckt.cir`, 26 mV).
 - Note: *nested `.subckt definitions* are a separate, documented parse error ("nested .subckt definitions are not supported") — that one is fail-closed, not a bug.
 - Severity: wrong answer (DC operating point) — worst of the three.
 
 **BUG-3 — coarse `.tran` tstep: LTE/corner sub-stepping leaves large mid-edge error** (filed by Cline, 2026-10-12; pre-existing — fails without caps too) — **FIXED – RETEST** (harness, not engine)
-- Reproducer: `tests/ngspice_diff/netlists/qa_diag_coarse_nocaps.cir` (`.tran 25u`, plain MOS; expected to FAIL). With caps: `qa_mos_coarse.cir` (646 mV).
+- Reproducer: `acutesim_engine/tests/ngspice_diff/netlists/qa_diag_coarse_nocaps.cir` (`.tran 25u`, plain MOS; expected to FAIL). With caps: `qa_mos_coarse.cir` (646 mV).
 - Numbers: up to 452 mV / 8.9 % mid-edge with **no** capacitance keys (646 mV / 12.9 % with); 140+ sample points; identical cpu/gpu. Fine tsteps (0.5–2 u) pass at ≤ 26 mV — the failure appears only when the engine's own LTE/corner logic must sub-step. The reference resolves the edges (tmax = tstep/10).
 - Severity: wrong answer (transient accuracy at coarse steps).
 
 ## Entries
+
+### READY FOR QA — repo split: engine → Karam submodule (CuteApp `refactor/karam-submodule`, Karam PR #2) — Claude Code, 2026-10-13
+**What changed:** `acutesim_engine/` is now the git submodule Seshak-code/Karam, pinned to Karam `standalone`.
+- Karam owns the public `engine_api/` headers (`simulation_dto`, `job_status`, `engine_callbacks`,
+  `isimulation_engine`, `simulation_session`).
+- The app-side `engine_api/` headers (drivers, job manager, results DB) stay in this repo.
+- `netlist_export` and `design_rules` moved into `components/`.
+- The engine-only tests and harnesses moved into Karam.
+- `sync-karam.yml` is deleted, and CI checkouts fetch submodules.
+**Dev checks:**
+- Karam standalone: ctest 3/3, ngspice 160/0, Xyce 78/0, ibmpg2 PASS.
+- CuteApp full build passes, along with the integration suites, ctest and the `AcuteSim --stress` smoke run (see the PR).
+**Attack:**
+- A fresh clone with `--recurse-submodules`, then a clean configure and build on macOS.
+- A new worktree with `git submodule update --init`.
+- GUI simulation paths: DC, transient, AC, Monte Carlo, and Verilog/SPEF export from the schematic.
+- The WASM build, if you use it.
+- Confirm no app code includes engine internals beyond `netlist/`: run `tools/check_engine_isolation.py`.
 
 ### READY FOR QA — QA bugs 1–3 + ≥50-stage `.op` (branch `fix/qa-bugs`) — Claude Code, 2026-10-13
 Cline began this on `fix/qa-bugs` (it found that BUG-1/2 came from the reference waveform) and stopped
@@ -75,9 +93,9 @@ Cline's root-front pivot fallback in `contraction_solver.cpp` was not needed and
 One function, `mos1_charges()` (`device_physics.h`), feeds the transient stamp, the KCL audit, the history update, LTE step control and the AC capacitance matrix (`mosCurrents()`/`acSystem`). MJ/MJSW ≥ 1, PB ≤ 0 and FC ≥ 1 are parse errors. `NSUB`, `RD`/`RS`/`RSH` and `JS` are still "not supported yet".
 **Dev checks:**
 - All 19 suites pass.
-- `tests/ngspice_diff/run_diff.py`: 104/104. New: `x_mos_inv_caps`, `x_mos_ring`, `x_mos_pass_caps`, `x_mos_ac_caps`, `x_mos_subckt_caps`.
-- `tests/xyce_diff.py`: 0 FAIL.
-- `tests/ibmpg_diff.py -k ibmpg2`: PASS.
+- `acutesim_engine/tests/ngspice_diff/run_diff.py`: 104/104. New: `x_mos_inv_caps`, `x_mos_ring`, `x_mos_pass_caps`, `x_mos_ac_caps`, `x_mos_subckt_caps`.
+- `acutesim_engine/tests/xyce_diff.py`: 0 FAIL.
+- `acutesim_engine/tests/ibmpg_diff.py -k ibmpg2`: PASS.
 **Attack:**
 - PMOS charges: a PMOS-only ring, and PMOS pass gates where Vds changes sign.
 - Every Meyer region: deep cutoff, depletion, weak and strong inversion, and Vds just above and below vdsat.
@@ -111,8 +129,8 @@ and AoS, with the Jacobian from Dual. The audits, sensitivity and noise use the 
 defaults are now SPICE's (KP 2e-5, VTO 0, LAMBDA 0, PHI 0.6, IS 1e-14). Instance W/L default to 100u,
 `M=` is honoured, `LD` is supported. `NF≠1` and capacitance keys (TOX, CGSO, CJ, …) are explicit errors.
 The SIMD MOSFET kernels were deleted.
-**Dev checks:** all suites; `tests/ngspice_diff/run_diff.py` 94/94 (new: `x_mos_swap`, `x_mos_body`,
-`x_pmos_body`, `x_mos_bulk_fwd`, `x_mos_mult_ld`); `tests/xyce_diff.py` 0 FAIL; `tests/ibmpg_diff.py -k ibmpg2`.
+**Dev checks:** all suites; `acutesim_engine/tests/ngspice_diff/run_diff.py` 94/94 (new: `x_mos_swap`, `x_mos_body`,
+`x_pmos_body`, `x_mos_bulk_fwd`, `x_mos_mult_ld`); `acutesim_engine/tests/xyce_diff.py` 0 FAIL; `acutesim_engine/tests/ibmpg_diff.py -k ibmpg2`.
 **Attack:**
 - PMOS in every region with the body tied to VDD, to the source, and floating through a resistor.
 - Pass gates and transmission gates, where Vds changes sign during a transient.
@@ -126,7 +144,7 @@ The SIMD MOSFET kernels were deleted.
 **Build note:** a fresh worktree now configures (`resources/icons.qrc` is tracked).
 
 **QA verdict (Cline, 2026-10-12): PASSED.** The full attack list was executed with 12 adversarial
-netlists (`tests/ngspice_diff/netlists/qa_mos_*.cir`, committed): PMOS all regions with body at
+netlists (`acutesim_engine/tests/ngspice_diff/netlists/qa_mos_*.cir`, committed): PMOS all regions with body at
 VDD / source / floating-R, NMOS pass gate and transmission gate with Vds sign changes, stacked-NMOS
 NAND body effect, subthreshold edge (3e-28), `M=`1000/0.5, `LD` just below L/2, MOSFETs in `.subckt`
 with inside-subckt models, `.dc`/`.tran`/`.ac`/`.noise`, cpu+gpu — all within tolerance, re-verified

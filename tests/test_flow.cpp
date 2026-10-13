@@ -1,7 +1,7 @@
 #include "acutesim_engine/netlist/circuit.h"
 #include "../components/component_library.h"
 #include "acutesim_engine/netlist/subcircuit_validator.h"
-#include "acutesim_engine/physics/design_rules.h"
+#include "components/design_rules.h"
 #include <iostream>
 #include <iomanip>
 #include <cassert>

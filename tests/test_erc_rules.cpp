@@ -1,5 +1,5 @@
 #include "acutesim_engine/netlist/circuit.h"
-#include "../physics/design_rules.h"
+#include "components/design_rules.h"
 #include <iostream>
 #include <cassert>
 #include <vector>

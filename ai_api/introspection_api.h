@@ -2,7 +2,7 @@
 
 #include "engine_api/simulation_dto.h"
 #include "components/component_library.h"
-#include "acutesim_engine/physics/design_rules.h"
+#include "components/design_rules.h"
 #include <string>
 #include <sstream>
 #include <vector>

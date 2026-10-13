@@ -5,7 +5,7 @@ Before ANY task in this repo:
 1. **Read `CLAUDE.md` (repo root)** — it is the authoritative project
    instruction file, shared by Claude Code and Cline. Its content is NOT
    duplicated in `.clinerules/`; do not assume you know it.
-2. **Read `ENGINE_HANDOFF.md` §0 "Where things stand"** — current engine state,
+2. **Read `acutesim_engine/ENGINE_HANDOFF.md` §0 "Where things stand"** — current engine state,
    branch, next steps, and the agent-stamped history.
 3. **Read `memory-bank/activeContext.md`** — the live cross-agent session state.
 
@@ -25,10 +25,10 @@ Before ANY task in this repo:
 ## Git traps in this repo
 
 - `.gitignore` "Local Project Exclusions" ignores `tests/`, `CLAUDE.md`,
-  `ENGINE_HANDOFF.md`, `.claude/`, `datasets/`. **Tracked** files in those paths
+  `acutesim_engine/ENGINE_HANDOFF.md`, `.claude/`, `datasets/`. **Tracked** files in those paths
   still commit fine, but **new** files there are silently untracked — `git add -f`
-  them or they are lost (this almost lost `tests/ibmpg_diff.py` and
-  `tests/xyce_diff.py`).
+  them or they are lost (this almost lost `acutesim_engine/tests/ibmpg_diff.py` and
+  `acutesim_engine/tests/xyce_diff.py`).
 - Never run multiple git write commands in parallel — `index.lock` races corrupt
   staging (happened 2026-10-12; had to be re-committed).
 - After deleting source files, re-run cmake configure

@@ -196,23 +196,34 @@ The compat header `gui/editors/schematic_editor.h` exists because the real heade
 
 Use `tests/stubs/ai_api_test_stubs.cpp` to avoid pulling in GUI dependencies for AI-layer tests.
 
+## Engine = Karam submodule
+
+`acutesim_engine/` is the git submodule **Seshak-code/Karam** (the standalone engine repo, since 2026-10-13).
+- Fresh clone or new worktree: `git submodule update --init` (worktrees do not share submodule checkouts).
+- Engine change: commit + push **inside `acutesim_engine/`** (Karam branch → PR on Karam), then commit the
+  new submodule pointer here. Engine-only checks live in Karam (`acutesim_engine/tests/`: C++ suites +
+  ngspice/Xyce/IBM harnesses, `acutesim_engine/ENGINE_HANDOFF.md` §3); integration suites stay here.
+- Public engine API: `acutesim_engine/engine_api/` + the netlist data model (`netlist/circuit.h`,
+  `netlist/spice_parser.h`). App-side orchestration headers stay in this repo's `engine_api/`
+  (drivers, job manager, results DB). Do not grow new app dependencies on other engine internals.
+
 ## Cross-Agent Collaboration (Claude Code ⇄ Cline)
 
 This repo is worked by **both** Claude Code and Cline. They hand off to each
 other through git, the handoff docs, and the memory bank:
 
-- **Session start:** read `ENGINE_HANDOFF.md` §0, then run the sweep:
+- **Session start:** read `acutesim_engine/ENGINE_HANDOFF.md` §0, then run the sweep:
   `git status --short` (if dirty and you didn't make it dirty, another agent may
   be mid-flight — stop and check), `git worktree list --porcelain`, and
   `git log --no-merges origin/engine/spice-correctness..HEAD`. Background tasks
   are **not** reliably worktree-isolated (a 2026-10-12 background task edited this
   very checkout).
-- **Session end:** update `ENGINE_HANDOFF.md` §0 and
+- **Session end:** update `acutesim_engine/ENGINE_HANDOFF.md` §0 and
   `memory-bank/activeContext.md` (what was done, commits, what's next) with an
   agent stamp — e.g. "Last session: Claude Code, 2026-10-12" — then commit
   (conventional prefix, explain why) and push. Uncommitted work is invisible to
   the other agent.
-- **Merges:** record every branch/worktree merge in `ENGINE_HANDOFF.md` §0 with
+- **Merges:** record every branch/worktree merge in `acutesim_engine/ENGINE_HANDOFF.md` §0 with
   the commit hash and which agent did it.
 - **Delegation:** focused tasks can be delegated to Cline headlessly via the
   `/cline` command (`.claude/commands/cline.md`).
