@@ -1422,7 +1422,7 @@ graph TD
 **Purpose**: Extract maximum throughput from each compute platform by exploiting vendor-specific memory and compute architectures, without compromising the tensor-network solver's mathematical correctness invariants.  
 **Gate**: Gaps 3 & 4 must be complete. Core TN solver must be verified bit-identical on CPU and GPU.
 
-> **Structural Invariant**: No hardware-specific path may bypass the KCL residual check or the Dense LU fallback mandated in `solvers/flow.md`. Every backend is a **performance path**, not a correctness path.
+> **Structural Invariant**: No hardware-specific path may bypass the KCL residual check (fail-closed convergence). Every backend is a **performance path**, not a correctness path.
 
 ---
 

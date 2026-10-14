@@ -18,8 +18,8 @@ Claude Code kept at `~/.claude/projects/` (that memory is preserved read-only in
 | `progress.md` | What works, what's being built, what's left |
 
 This repo already has excellent context docs, so the static files are mostly
-**pointers** into them (`Roadmap.md`, `context.md`, `CLAUDE.md`,
-`acutesim_engine/ENGINE_HANDOFF.md`, per-folder `flow.md`). Only `activeContext.md` and
+**pointers** into them (`Roadmap.md`, `CLAUDE.md`, `acutesim_engine/ENGINE_HANDOFF.md`;
+code structure comes from graphify, `graphify-out/`). Only `activeContext.md` and
 `progress.md` carry their own live content. **Never duplicate content the
 pointer files already hold — duplicates drift.**
 

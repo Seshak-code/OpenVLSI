@@ -1,7 +1,7 @@
 # System Patterns
 
-The master interconnection map is **`context.md`** — read it in full before
-multi-module work. This file only adds the rules that most often bite.
+Code structure comes from the code itself through graphify (`graphify query`,
+`path`, `explain`; see CLAUDE.md). This file only adds the rules that most often bite.
 
 ## Dependency direction (strict, never violate)
 
@@ -17,12 +17,10 @@ layers. Verify with `python3 scripts/check_layering.py` and
 
 ## Patterns that most often bite
 
-- Every folder has a `flow.md` (local logic + guardrails + SME checklists) —
-  read it before touching the folder.
 - AI actions go through `AiActionEnvelope`, never direct `QGraphicsScene`.
 - gRPC/orchestration code guarded by `#ifdef ACUTESIM_ENABLE_ORCHESTRATION`.
 - FP determinism mandatory (`-fno-fast-math`, `/fp:strict`, `FE_TONEAREST`).
 - Solver tier routing and the fail-closed convergence/parser behavior:
   `acutesim_engine/ENGINE_HANDOFF.md` §2 (architecture as of now).
 
-**Do not duplicate `context.md`'s maps here — it drifts. Read the source.**
+**Do not write code maps here — they drift. Query the graph or read the source.**
