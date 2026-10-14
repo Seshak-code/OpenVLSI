@@ -8,13 +8,12 @@ Code) so both agents follow the same plan-first workflow.
 1. **Read `Roadmap.md`** — identify the phase/roadmap item this work supports;
    classify the change (New Feature | Refactor | Bug Fix | Performance |
    Architecture | Documentation).
-2. **Read `context.md`** — the master interconnection map. The dependency
-   direction `gui/ → ai_api/ → compute/ → physics/ → autodiff/` is **DOWNWARD
-   ONLY**; lower layers never import from higher layers.
-3. **For every folder you touch, read its `flow.md`** (local logic, guardrails,
-   SME checklists — most directories have one).
-4. **Plan before code.** If a `flow.md` guardrail conflicts with the approach,
-   stop, document the conflict, do not proceed past it silently.
+2. **Build context from the code with graphify** (`graphify query "<question>"`,
+   `graphify path "<A>" "<B>"`, `graphify explain "<concept>"`; `graphify update .`
+   after edits). The hand-written maps (`context.md`, per-folder `flow.md`) were
+   deleted 2026-10-14: they had drifted from the code. The dependency direction
+   `gui/ → ai_api/ → compute/ → physics/ → autodiff/` is **DOWNWARD ONLY**.
+3. **Plan before code.**
 
 ## After implementing (verify by running, per the owner's standing rule)
 

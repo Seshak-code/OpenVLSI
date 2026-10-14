@@ -8,7 +8,6 @@
 #include <QDebug>
 #include <QMenu>
 #include <QAction>
-#include "gui/orchestration/worker_manager.h"
 #include "gui/core/storage_manager.h"
 #include "gui/styling/theme_manager.h"
 
@@ -155,17 +154,7 @@ CodeEditor::CodeEditor(const QString& filePath, QWidget *parent)
     textEdit_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(textEdit_, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
         QMenu* menu = textEdit_->createStandardContextMenu();
-        
-        QFileInfo fi(filePath_);
-        QString ext = fi.suffix().toLower();
-        if (ext == "yaml" || ext == "yml" || ext == "va") {
-            menu->addSeparator();
-            QAction* compileAction = menu->addAction("Compile Model (Physics)");
-            connect(compileAction, &QAction::triggered, this, [this]() {
-                acutesim::gui::orchestration::WorkerManager::instance()->submitPhysicsCompilation(filePath_);
-            });
-        }
-        
+
         menu->setAttribute(Qt::WA_DeleteOnClose);
         menu->popup(textEdit_->mapToGlobal(pos));
     });
