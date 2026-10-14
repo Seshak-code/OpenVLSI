@@ -127,7 +127,7 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | V / I sources: EXP, PWL, SFFM, AM | ❌ | explicit "not supported yet" |
 | D (diode) | ✅ | `IS`, `N`; no `RS`, `CJO`/`TT` (no junction capacitance), no breakdown on `D` |
 | Q (BJT) | ✅ | Ebers–Moll: `IS`, `BF`, `BR`, polarity from `.model`; no `VAF`, `RB/RC/RE`, junction capacitances |
-| M (MOSFET) | ⚠️ | Level 1 complete: `KP`, `VTO`, `LAMBDA`, `GAMMA`, `PHI`, `IS`, `LD`, `TOX`/`UO`, `CGSO/CGDO/CGBO`, `CBD/CBS`, `CJ/MJ`, `CJSW/MJSW`, `PB`, `FC`; `W`, `L` (default 100u), `AD/AS/PD/PS`, `M`; S/D swap, body effect, bulk junctions, Meyer gate + overlap + junction charges in tran/ac/noise — matches ngspice (13 netlists incl. inverter, ring oscillator, pass gate, AC). No `NSUB`/`RD`/`RS`/`RSH`/`JS`, no BSIM |
+| M (MOSFET) | ⚠️ | Level 1 complete: `KP`, `VTO`, `LAMBDA`, `GAMMA`, `PHI`, `IS`, `LD`, `TOX`/`UO`, `CGSO/CGDO/CGBO`, `CBD/CBS`, `CJ/MJ`, `CJSW/MJSW`, `PB`, `FC`; `W`, `L` (default 100u), `AD/AS/PD/PS`, `M`; S/D swap, body effect, bulk junctions, Meyer gate + overlap + junction charges in tran/ac/noise — matches ngspice (13 netlists incl. inverter, ring oscillator, pass gate, AC). No `NSUB`/`RD`/`RS`/`RSH`/`JS`. BSIM4 / BSIM-CMG: compiled Verilog-A through OSDI (`.osdi`, `N` element), matches ngspice in dc/tran/ac/noise |
 | J (JFET) | ✅ | Shichman–Hodges: `BETA`, `VTO`, `LAMBDA`, N/P from `.model`; no gate diodes, no S/D swap |
 | E (VCVS) | ✅ | gain; ideal (MNA branch current) |
 | G (VCCS) | ✅ | transconductance |
@@ -146,7 +146,8 @@ SPICE 2g6 reference circuits from allaboutcircuits.com "Example Circuits and Net
 | `.param` | ⚠️ | `{NAME}` / bare name substitution ✅; arithmetic expressions ❌ (explicit error) |
 | `.subckt` / `.ends` | ✅ | see X above |
 | Unknown element / too few fields / non-numeric value | ✅ | hard parse error with line number (used to be silently dropped or read as 0) |
-| `.include`, `.lib`, `.options`, `.global`, `.ic`, `.print`, `.plot`, `.four` | ⚠️ | silently ignored |
+| `.include`, `.lib <file> <corner>` | ✅ | recursive, relative to the including file; `.param` arithmetic expressions not yet |
+| `.options`, `.print`, `.plot`, `.four` | ⚠️ | output only / ignored, except `.options gminsteps` |
 
 ### Numerics & device-model invariants
 | Property | Status |
@@ -204,11 +205,11 @@ and see the program's output — covering every step from schematic/RTL to sign-
 - **Gate:** every analysis in the feature list ✅ against ngspice
 
 **Phase 3 — Device-model parity**
-- [ ] BSIM4 and BSIM-CMG (modern PDKs) via the existing Verilog-A front end / physics compiler
+- [x] BSIM4 and BSIM-CMG (modern PDKs) via OpenVAF / OSDI (ngspice's route): one `osdiCurrents()` for stamp, audits, history, AC, noise, LTE
 - [x] MOS1 DC complete (ngspice mos1load): S/D swap for Vds<0, body effect (GAMMA/PHI), bulk junctions (IS), LD, M=; one `mos1_currents()` for every stamp/audit/analysis, Jacobian by Dual; SPICE card defaults
 - [x] MOS1 charges (ngspice mos1load/mos1acld): Meyer gate (TOX) + overlap + bulk-junction depletion caps; TRAP/BE on the charges, MOS branches in LTE; AC C from the same charges (Dual)
-- [ ] Junction capacitances (diode CJO/TT, BJT), Gummel–Poon BJT
-- [ ] PDK model-card ingestion (`.lib` sections, corners)
+- [x] Junction capacitances (diode CJO/TT, BJT), Gummel–Poon BJT (incl. SUBS lateral/vertical substrate)
+- [x] PDK model-card ingestion (`.lib` sections, corners); DC source stepping (ngspice gillespie_src)
 - **Gate:** standard-cell characterisation (delay/power) within 1 % of ngspice on a real PDK
 
 **Phase 4 — Single-GPU scale**
@@ -1388,7 +1389,7 @@ graph TD
 **Purpose**: Enable user-defined devices without recompilation.
 
 ### Implementation & OpenVAF Adapter Layer
-- [ ] Utilize OpenVAF / OSDI (Open-Source Device Interface) compiler to ingest Verilog-A natively.
+- [x] Utilize OpenVAF / OSDI (Open-Source Device Interface) compiler to ingest Verilog-A natively.
 - [ ] **🔴 Tensorization Adapter Layer**: Because compiled OpenVAF models output traditional matrix stamps (reintroducing dynamic matrix assembly and destroying the Tensor architecture), an interception adapter is required.
     - Intercept standard stamp callbacks.
     - Translate matrix stamps directly into fixed-arity Tensor Generators.
