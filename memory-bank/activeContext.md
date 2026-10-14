@@ -1,22 +1,20 @@
 # Active Context
 
-**Last session: Claude Code (dev), 2026-10-13 — QA bugs, repo split, headless crash fix, renames**
+**Last session: Claude Code (dev), 2026-10-14 — Phase 3 devices (diode + Gummel–Poon BJT)**
 
-Owner's rule: **Claude Code develops, Cline does QA** (`.clinerules/06-dev-qa-split.md`; hand-off channel
-`memory-bank/qa-queue.md`).
+**Owner's rule (2026-10-13), overrides the dev/QA split for now:** Claude Code does ALL testing itself and
+does not hand QA to Cline; it tests once per phase, after implementing everything in that phase.
 
-- **Renamed (2026-10-13):** this app is **OpenVLSI** (repo Seshak-code/OpenVLSI, formerly CuteApp), and the
-  engine is **TreeSPICE** (Seshak-code/TreeSPICE, formerly Karam; TREE = Tensor Recursive Elimination Engine).
-  GitHub redirects the old URLs. Code identifiers (`acutesim::`, `ACUTESIM_`, `acutesim_engine`, the `AcuteSim`
-  binary) keep their old names for now. The local folders are still `CuteApp*/` and `Karam/`.
-- **Merged:** #6 (QA bugs 1–3 were harness artifacts; ngspice dynamic gmin stepping), TreeSPICE #2 (engine is its
-  own repo), #7 (`acutesim_engine/` is the TreeSPICE submodule), TreeSPICE #3 (Dawn procs before the GPU probe).
-- **Open for review:** #8 headless segfault fix (bumps the submodule + `test_capabilities_probe`), TreeSPICE #4
-  and the OpenVLSI rename PR (branding).
-- Engine changes are committed in TreeSPICE first; then the submodule pointer is bumped here. New worktrees
-  need `git submodule update --init`.
+- **Phase 3 devices done** (TreeSPICE PR #6, OpenVLSI companion PR): SPICE diode (RS, CJO, TT, BV, AREA)
+  and Gummel–Poon BJT (VAF/IKF/ISE/RB/RC/RE/CJE/CJC/XCJC/CJS/ISS/TF/TR, substrate node); one device path
+  (`junctionCurrents` → `stampJunction`); SIMD kernels and KernelDispatcher deleted; ngspice junction
+  limiting; convergence fixes. Verified: ngspice 190/0, Xyce 92/0, ibmpg2, OpenVLSI suites + ctest.
+- KLU baseline recorded (TreeSPICE PR #5): 3–1,900× slower than KLU on transistor-level matrices; owner
+  accepted the gap for now.
+- Repos: OpenVLSI (this app) and TreeSPICE (engine, submodule `acutesim_engine/`). Engine changes land in
+  TreeSPICE first; then bump the pointer here. New worktrees: `git submodule update --init`.
 
-Next dev increment: diode RS/CJO/TT/BV, then Gummel–Poon BJT.
+Next: Phase 3 remainder — BSIM4/BSIM-CMG via OpenVAF/OSDI, `.lib` sections and corners, source stepping.
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at

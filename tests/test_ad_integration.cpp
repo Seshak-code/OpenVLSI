@@ -242,62 +242,42 @@ void test_zener() {
 }
 
 // ===========================================================================
-// BJT Ebers-Moll Tests (verify manual derivatives match Dual<double>)
+// BJT Gummel-Poon: Dual derivatives of bjt_gp (what the engine stamps) vs FD
 // ===========================================================================
 void test_bjt() {
-    std::cout << "\n[BJT Ebers-Moll AD Test]\n";
-
-    BJTParams<double> p;
-    p.Is = 1e-14;
-    p.BetaF = 100.0;
-    p.BetaR = 1.0;
-    p.Vt = 0.02585;
-
-    double delta = 1e-7;
-
-    // NPN active: Vc=5.0, Vb=0.7, Ve=0.0
-    {
-        double vc = 5.0, vb = 0.7, ve = 0.0;
-
-        BJTCurrents<double> res = bjt_ebers_moll(vc, vb, ve, true, p);
-
-        // FD for Ic wrt Vb
-        auto res_p = bjt_ebers_moll(vc, vb + delta, ve, true, p);
-        auto res_m = bjt_ebers_moll(vc, vb - delta, ve, true, p);
-        double dIc_dVb_fd = (res_p.Ic - res_m.Ic) / (2.0 * delta);
-
-        // g_cb = dIc/dVb + dIc/dVc (combined), but from the code:
-        // g_cb = dIc_dVbe + dIc_dVbc  (where Vbe = Vb - Ve, Vbc = Vb - Vc)
-        // FD for Ic wrt Vc
-        res_p = bjt_ebers_moll(vc + delta, vb, ve, true, p);
-        res_m = bjt_ebers_moll(vc - delta, vb, ve, true, p);
-        double dIc_dVc_fd = (res_p.Ic - res_m.Ic) / (2.0 * delta);
-
-        // FD for Ic wrt Ve
-        res_p = bjt_ebers_moll(vc, vb, ve + delta, true, p);
-        res_m = bjt_ebers_moll(vc, vb, ve - delta, true, p);
-        double dIc_dVe_fd = (res_p.Ic - res_m.Ic) / (2.0 * delta);
-
-        check_derivative("BJT NPN g_cc (dIc/dVc)", res.g_cc, dIc_dVc_fd);
-        check_derivative("BJT NPN g_cb (dIc/dVb)", res.g_cb, dIc_dVb_fd);
-        check_derivative("BJT NPN g_ce (dIc/dVe)", res.g_ce, dIc_dVe_fd);
-
-        // FD for Ib
-        res_p = bjt_ebers_moll(vc, vb + delta, ve, true, p);
-        res_m = bjt_ebers_moll(vc, vb - delta, ve, true, p);
-        double dIb_dVb_fd = (res_p.Ib - res_m.Ib) / (2.0 * delta);
-
-        res_p = bjt_ebers_moll(vc + delta, vb, ve, true, p);
-        res_m = bjt_ebers_moll(vc - delta, vb, ve, true, p);
-        double dIb_dVc_fd = (res_p.Ib - res_m.Ib) / (2.0 * delta);
-
-        res_p = bjt_ebers_moll(vc, vb, ve + delta, true, p);
-        res_m = bjt_ebers_moll(vc, vb, ve - delta, true, p);
-        double dIb_dVe_fd = (res_p.Ib - res_m.Ib) / (2.0 * delta);
-
-        check_derivative("BJT NPN g_bc (dIb/dVc)", res.g_bc, dIb_dVc_fd);
-        check_derivative("BJT NPN g_bb (dIb/dVb)", res.g_bb, dIb_dVb_fd);
-        check_derivative("BJT NPN g_be (dIb/dVe)", res.g_be, dIb_dVe_fd);
+    std::cout << "\n[BJT Gummel-Poon AD Test]\n";
+    const double vt = 0.02585;
+    BjtModel<double> p;
+    p.is = 1e-15; p.bf = 150; p.br = 3; p.vtf = 1.02 * vt; p.vtr = 1.01 * vt;
+    p.invVaf = 1.0 / 40; p.invVar = 1.0 / 15; p.oikf = 1.0 / 20e-3; p.oikr = 1.0 / 5e-3;
+    p.ise = 5e-14; p.vte = 1.6 * vt; p.isc = 1e-13; p.vtc = 1.9 * vt;
+    p.cje = 2e-12; p.cjcInt = 1e-12; p.tf = 400e-12; p.xtf = 3; p.ovtf = 1.0 / (1.44 * 4); p.xjtf = 10e-3; p.tr = 20e-9;
+    const double delta = 1e-7;
+    const char* region[] = {"forward active", "saturation", "reverse"};
+    const double bias[3][2] = {{0.7, -4.3}, {0.75, 0.5}, {-0.3, 0.6}};
+    for (int r = 0; r < 3; ++r)
+        for (int w = 0; w < 2; ++w) {  // w = 0: d/dVbe, 1: d/dVbc
+            const double vbe = bias[r][0], vbc = bias[r][1];
+            const auto ad = bjt_gp(Dual<double>(vbe, w == 0 ? 1.0 : 0.0), Dual<double>(vbc, w == 1 ? 1.0 : 0.0),
+                                   Dual<double>(vbc, w == 1 ? 1.0 : 0.0), Dual<double>(0.0), p);
+            const double dp = w == 0 ? delta : 0.0, dc = w == 1 ? delta : 0.0;
+            const auto pl = bjt_gp(vbe + dp, vbc + dc, vbc + dc, 0.0, p);
+            const auto mi = bjt_gp(vbe - dp, vbc - dc, vbc - dc, 0.0, p);
+            const std::string at = std::string(region[r]) + (w == 0 ? " d/dVbe " : " d/dVbc ");
+            check_derivative("BJT GP " + at + "Ic", ad.cc.grad, (pl.cc - mi.cc) / (2 * delta));
+            check_derivative("BJT GP " + at + "Ib", ad.cb.grad, (pl.cb - mi.cb) / (2 * delta));
+            check_derivative("BJT GP " + at + "Qbe", ad.q[0].grad, (pl.q[0] - mi.q[0]) / (2 * delta));
+            check_derivative("BJT GP " + at + "Qbc", ad.q[1].grad, (pl.q[1] - mi.q[1]) / (2 * delta));
+        }
+    // SPICE diode (diode_iq): forward, cubic reverse tail, breakdown past -BV; current and charge
+    DiodeModel<double> d;
+    d.is = 1e-14; d.vte = 1.3 * vt; d.cjo = 5e-12; d.vj = 0.7; d.m = 0.45; d.tt = 20e-9;
+    d.breakdown = true; d.xbv = diode_breakdown_xbv(5.1, 5e-3, d.is, d.vte);
+    for (double vd : {0.65, -0.5, -5.2}) {
+        const auto ad = diode_iq(Dual<double>(vd, 1.0), d);
+        const auto pl = diode_iq(vd + delta, d), mi = diode_iq(vd - delta, d);
+        check_derivative("Diode vd=" + std::to_string(vd) + " I", ad.first.grad, (pl.first - mi.first) / (2 * delta));
+        check_derivative("Diode vd=" + std::to_string(vd) + " Q", ad.second.grad, (pl.second - mi.second) / (2 * delta));
     }
 }
 

@@ -10,7 +10,6 @@
 
 #include "acutesim_engine/physics/circuitsim.h"
 #include "acutesim_engine/tensors/physics_tensors.h"
-#include "acutesim_engine/tensors/kernel_dispatch.h"
 #include "acutesim_engine/infrastructure/hardware_capabilities.h"
 #include "acutesim_engine/netlist/circuit.h"
 
@@ -202,64 +201,6 @@ static void printResult(const BenchResult& r, bool csv) {
 }
 
 // ============================================================================
-// SIMD Kernel Microbenchmark
-// ============================================================================
-
-static void benchmarkSIMDKernels(int deviceCount) {
-    using namespace acutesim::compute;
-
-    std::cout << "\n=== SIMD Kernel Microbenchmark (" << deviceCount << " devices) ===\n";
-
-    auto& disp = KernelDispatcher::get();
-    std::cout << "Detected SIMD tier: ";
-    switch (disp.architecture) {
-        case SimdArch::Generic: std::cout << "Generic (scalar)"; break;
-        case SimdArch::Neon:    std::cout << "ARM NEON (f64x2)"; break;
-        case SimdArch::AVX2:    std::cout << "AVX2 (f64x4)"; break;
-        case SimdArch::AVX512:  std::cout << "AVX-512 (f64x8)"; break;
-        default:                std::cout << "Other"; break;
-    }
-    std::cout << "\n\n";
-
-    DiodeTensor diodes;
-    BJTTensor bjts;
-
-    for (int i = 0; i < deviceCount; ++i) {
-        diodes.push(i + 1, 0, 1e-14, 1.0, 0.02585, 0.0, 300.0);
-        bjts.push(i + 1, i + 2, 0, 1e-14, 100.0, 1.0, 0.02585, true, 300.0);
-    }
-
-    std::vector<double> voltages(static_cast<size_t>(deviceCount) * 3, 0.0);
-    for (size_t i = 0; i < voltages.size(); ++i)
-        voltages[i] = 0.6 + 0.01 * static_cast<double>(i % 100);
-
-    const int WARMUP = 5;
-    const int ITERS = 100;
-
-    auto benchKernel = [&](const char* name, auto& tensor,
-                           void(*fn)(decltype(tensor)&, const std::vector<double>&)) {
-        for (int w = 0; w < WARMUP; ++w) fn(tensor, voltages);
-
-        auto t0 = Clock::now();
-        for (int it = 0; it < ITERS; ++it) fn(tensor, voltages);
-        auto t1 = Clock::now();
-
-        double totalUs = static_cast<double>(
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count());
-        double perCallUs = totalUs / ITERS;
-        double devicesPerUs = static_cast<double>(deviceCount) / perCallUs;
-
-        std::cout << std::left << std::setw(16) << name
-                  << std::fixed << std::setprecision(1)
-                  << std::setw(12) << perCallUs << " us/call  "
-                  << std::setw(14) << std::setprecision(0) << devicesPerUs << " dev/us\n";
-    };
-
-    benchKernel("Diode", diodes, batchDiodePhysics);
-    benchKernel("BJT", bjts, batchBJTPhysics);
-}
-
-// ============================================================================
 // Main
 // ============================================================================
 
@@ -275,22 +216,10 @@ int main(int argc, char* argv[]) {
     }
 
     if (!csv) {
-        using namespace acutesim::compute;
-        auto& disp = KernelDispatcher::get();
-        std::cout << "=== AcuteSim Solver Benchmark ===\n";
-        std::cout << "SIMD tier: ";
-        switch (disp.architecture) {
-            case SimdArch::Generic: std::cout << "Generic (scalar)"; break;
-            case SimdArch::Neon:    std::cout << "ARM NEON (f64x2)"; break;
-            case SimdArch::AVX2:    std::cout << "AVX2 (f64x4)"; break;
-            case SimdArch::AVX512:  std::cout << "AVX-512 (f64x8)"; break;
-            default:                std::cout << "Other"; break;
-        }
-        std::cout << "\nGPU detected: "
-                  << (disp.hasIntegratedGPU ? "iGPU " : "")
-                  << (disp.hasDiscreteGPU ? "dGPU" : "")
-                  << ((!disp.hasIntegratedGPU && !disp.hasDiscreteGPU) ? "none" : "")
-                  << "\n\n";
+        const auto caps = acutesim::compute::detectCapabilities();
+        std::cout << "=== AcuteSim Solver Benchmark ===\n"
+                  << "CPU: " << acutesim::compute::simdTierName(caps.simdTier) << " | Cores: " << caps.physicalCpuCores
+                  << "\nGPU detected: " << (caps.hasGPU ? caps.gpuAdapterName : std::string("none")) << "\n\n";
     }
 
     if (!csv) std::cout << "=== DC Solver Tier Comparison ===\n";
@@ -323,11 +252,6 @@ int main(int argc, char* argv[]) {
             auto nl5 = makeResistorMesh(side, side);
             printResult(runSolve("Mesh-" + std::to_string(side) + "x" + std::to_string(side), nl5), csv);
         }
-    }
-
-    if (!csv) {
-        benchmarkSIMDKernels(1000);
-        benchmarkSIMDKernels(10000);
     }
 
     if (!csv) std::cout << "\nDone.\n";

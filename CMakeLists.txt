@@ -698,29 +698,6 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
-# Per-file SIMD compile flags (scoped, not global — x86 only)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i[3-6]86)")
-    if(NOT EMSCRIPTEN AND NOT MSVC)
-        set_source_files_properties(
-            acutesim_engine/tensors/physics_kernels_avx2.cpp
-            PROPERTIES COMPILE_FLAGS "-mavx2 -mfma"
-        )
-        set_source_files_properties(
-            acutesim_engine/tensors/physics_kernels_avx512.cpp
-            PROPERTIES COMPILE_FLAGS "-mavx512f"
-        )
-    elseif(MSVC)
-        set_source_files_properties(
-            acutesim_engine/tensors/physics_kernels_avx2.cpp
-            PROPERTIES COMPILE_FLAGS "/arch:AVX2"
-        )
-        set_source_files_properties(
-            acutesim_engine/tensors/physics_kernels_avx512.cpp
-            PROPERTIES COMPILE_FLAGS "/arch:AVX512"
-        )
-    endif()
-endif()
-
 # WebAssembly specific link flags
 if(EMSCRIPTEN)
     target_link_options(${PROJECT_NAME} PRIVATE 
@@ -857,7 +834,6 @@ endif()
 
 # Solver Tier Benchmarking Suite
 # Compares all 5 solver tiers on reference circuits with wall-clock timing.
-# Also benchmarks SIMD kernel throughput (Generic/NEON/AVX2/AVX-512).
 # Run: ./build/test_benchmark_solvers [--nodes 100] [--csv]
 if(NOT EMSCRIPTEN)
     add_executable(test_benchmark_solvers
@@ -1981,12 +1957,6 @@ target_include_directories(test_driver_swap PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(test_driver_swap PUBLIC cxx_std_17)
 add_test(NAME test_driver_swap COMMAND test_driver_swap)
 
-# Test Kernel Dispatch
-add_executable(test_kernel_dispatch tests/test_kernel_dispatch.cpp)
-target_link_libraries(test_kernel_dispatch PRIVATE acutesim_compute_core)
-target_compile_features(test_kernel_dispatch PUBLIC cxx_std_17)
-add_test(NAME test_kernel_dispatch COMMAND test_kernel_dispatch)
-
 # Hierarchy headless unit test (no Qt::Gui — avoids dual-Qt runtime crash)
 # Covers: Pin::Direction::Power, TensorBlock::InterfacePin, CompiledInterfacePin,
 #         NetUUID round-trip, DesignDb snapshot, NetlistCompiler propagation.
@@ -2421,7 +2391,7 @@ endif()
 #        ctest -L heavy   (full validation)
 set(_quick_tests
     test_physics_kernels test_safe_io test_emulated_f64 test_dual_emulated
-    test_fpu_determinism test_determinism test_kernel_dispatch
+    test_fpu_determinism test_determinism
     test_hierarchy_path test_context_budget test_adk_tool_registry
 )
 foreach(_t ${_quick_tests})

@@ -107,19 +107,13 @@ Dependencies flow **downward only**. Lower layers must never import from higher 
 
 | Layer | Path | Role |
 |---|---|---|
-| Data | `tensors/` | SoA layout, SIMD kernels (AVX-512/AVX2/Neon/generic) |
+| Data | `tensors/` | SoA layout of the linear elements; device-model resolvers (`mos1Params`, `diodeModel`, `bjtModel`) |
 | Operations | `math/` | CSR, tensor-contraction direct solver, `EmulatedF64` GPU precision, FPU control |
 | Reliability | `infrastructure/` | Postproc engine, hardware capabilities, subprocess sandbox |
 | Strategy | `solvers/` | NR loop, DC/transient/AC/noise, Dawn GPU backend |
 | Control | `orchestration/` | gRPC to Yosys/OpenROAD/KLayout, batch runner, WASM stubs |
 
-Simulation flow: AoS→SoA (`tensorizeBlock`) → NR loop with the tensor-contraction solver → SIMD kernel dispatch → KCL physical verification. GPU mode currently solves on the CPU path (Phase 4: GPU device evaluation + batched fronts).
-
-SIMD compile flags are set **per-file**, not globally:
-```cmake
-set_source_files_properties(compute/tensors/physics_kernels_avx2.cpp
-    PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
-```
+Simulation flow: AoS→SoA (`tensorizeBlock`, linear elements) → NR loop: devices (MOSFET, diode, BJT) evaluated per instance and stamped by `stampByDual` (exact Jacobian from Dual), tensor-contraction solver → KCL physical verification. GPU mode currently solves on the CPU path (Phase 4: GPU device evaluation + batched fronts).
 
 ### ai_api/ — 6-Layer Cognitive Stack
 
