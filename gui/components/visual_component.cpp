@@ -10,7 +10,6 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include "../../gui/styling/theme_manager.h"
-#include "../compute/model_registry.h"
 
 QString componentTypeToString(ComponentType t) {
     switch(t) {
@@ -654,39 +653,9 @@ QVector<QPointF> VisualComponent::getTerminals() const {
             }
             }
             break;
-        case ComponentType::Generic: {
-            const ModelInfo* info = ModelRegistry::instance().getModel(subCircuitName.toStdString(), subCircuitName.toStdString());
-            if (!info) {
-               // Try generic lookup if mismatch
-                auto types = ModelRegistry::instance().listDeviceTypes();
-                for(const auto& dt : types) {
-                    info = ModelRegistry::instance().getModel(dt, subCircuitName.toStdString());
-                    if (info) break;
-                }
-            }
-            
-            if (!info) {
-                t << QPointF(-40, 0) << QPointF(40, 0);
-            } else {
-                int count = info->terminalCount;
-                int left = (count + 1) / 2;
-                int right = count - left;
-                
-                int spacing = 20;
-                int h_offset = 40;
-                
-                int startY_left = -((left - 1) * spacing) / 2;
-                for (int i=0; i<left; ++i) {
-                    t << QPointF(-h_offset, startY_left + i*spacing);
-                }
-                
-                int startY_right = -((right - 1) * spacing) / 2;
-                for (int i=0; i<right; ++i) {
-                    t << QPointF(h_offset, startY_right + i*spacing);
-                }
-            }
+        case ComponentType::Generic:  // two pins until OSDI module terminals reach the GUI
+            t << QPointF(-40, 0) << QPointF(40, 0);
             break;
-        }
         case ComponentType::Probe:
              return {};
         case ComponentType::VCVS:
@@ -1042,25 +1011,13 @@ void VisualComponent::paint(QPainter* painter, const QStyleOptionGraphicsItem*, 
             painter->drawRect(b);
             painter->drawText(b, Qt::AlignCenter, subCircuitName);
             
-            const ModelInfo* info = ModelRegistry::instance().getModel(subCircuitName.toStdString(), subCircuitName.toStdString());
-            if(!info) {
-                auto types = ModelRegistry::instance().listDeviceTypes();
-                for(const auto& dt : types) {
-                    info = ModelRegistry::instance().getModel(dt, subCircuitName.toStdString());
-                    if (info) break;
-                }
-            }
-            
             auto terms = getTerminals();
             for(int i=0; i<terms.size(); ++i) {
                 QPointF p = terms[i];
                 if (p.x() < 0) painter->drawLine(p, QPointF(b.left(), p.y()));
                 else painter->drawLine(p, QPointF(b.right(), p.y()));
                 
-                QString label = QString::number(i+1);
-                if (info && info->terminalNames && info->terminalNames[i]) {
-                    label = QString(info->terminalNames[i]);
-                }
+                const QString label = QString::number(i+1);
                 
                 QPointF textPos = (p.x() < 0) ? QPointF(b.left()+5, p.y()+5) : QPointF(b.right()-15, p.y()+5);
                 painter->drawText(textPos, label);

@@ -416,7 +416,6 @@ target_include_directories(acutesim_compute_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine
     ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/netlist
-    ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/models
     ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/physics
     ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/tensors
     ${CMAKE_CURRENT_SOURCE_DIR}/acutesim_engine/solvers
