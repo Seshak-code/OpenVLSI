@@ -67,25 +67,20 @@ private:
     // ------------------------------------------------------------------------
     template <typename T>
     void runBJTChecks() {
-        BJTParams<T> p;
-        p.Is = T(1e-16);
-        p.BetaF = T(100.0);
-        p.BetaR = T(1.0);
-        p.Vt = T(0.02585);
-        
-        // Active Region
-        T vc = T(5.0);
-        T vb = T(0.7);
-        T ve = T(0.0);
-        
-        BJTCurrents<T> currents = bjt_ebers_moll(vc, vb, ve, true, p);
-        
-        double ic = static_cast<double>(currents.Ic);
-        double ib = static_cast<double>(currents.Ib);
+        BjtModel<T> p;
+        p.is = T(1e-16);
+        p.bf = T(100.0);
+        p.br = T(1.0);
+        p.vtf = p.vtr = T(0.02585);
+
+        // Forward active: Vbe = 0.7, Vbc = -4.3 (Vc = 5, Ve = 0), no substrate cap
+        const auto e = bjt_gp(T(0.7), T(-4.3), T(-4.3), T(0.0), p);
+        double ic = static_cast<double>(e.cc);
+        double ib = static_cast<double>(e.cb);
         double beta = ic / ib;
-        
+
         QVERIFY(ic > 0.0);
-        QVERIFY(beta > 90.0 && beta < 110.0); // Should be near BetaF
+        QVERIFY(beta > 90.0 && beta < 110.0); // Should be near BF
     }
 
 private slots:

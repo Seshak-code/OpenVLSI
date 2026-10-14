@@ -8,6 +8,7 @@
 
 #include "acutesim_engine/math/linalg.h"
 #include "acutesim_engine/tensors/physics_tensors.h"
+#include "acutesim_engine/autodiff/dual.h"
 
 // Define a dummy backend capability for the test
 enum class Backend {
@@ -16,6 +17,31 @@ enum class Backend {
     CUDA
 };
 Backend activeBackend = Backend::CPU;
+
+// The engine evaluates diodes per device (diode_iq) since its SoA diode tensor
+// was removed; this harness keeps a local SoA copy to exercise batch stamping.
+struct DiodeSoA {
+    std::vector<int> node_a, node_c;
+    std::vector<double> is, vte, v_d, i_d, g_d;
+    void reserve(size_t n) {
+        node_a.reserve(n); node_c.reserve(n); is.reserve(n); vte.reserve(n);
+        v_d.reserve(n); i_d.reserve(n); g_d.reserve(n);
+    }
+    void push(int a, int c, double Is, double N, double Vt) {
+        node_a.push_back(a); node_c.push_back(c); is.push_back(Is); vte.push_back(N * Vt);
+        v_d.push_back(0.0); i_d.push_back(0.0); g_d.push_back(0.0);
+    }
+};
+static void evalDiodes(DiodeSoA& d, const std::vector<double>& v) {
+    auto V = [&](int n) { return n > 0 && n <= (int)v.size() ? v[n - 1] : 0.0; };
+    for (size_t i = 0; i < d.node_a.size(); ++i) {
+        d.v_d[i] = V(d.node_a[i]) - V(d.node_c[i]);
+        DiodeModel<double> m;
+        m.is = d.is[i]; m.vte = d.vte[i];
+        const auto r = diode_iq(Dual<double>(d.v_d[i], 1.0), m).first;
+        d.i_d[i] = r.val; d.g_d[i] = r.grad;
+    }
+}
 
 // ============================================================================
 // 1. GPU Alignment Verification (std430 Compatibility Check)
@@ -36,9 +62,9 @@ void verify_gpu_alignment() {
     
     std::cout << "  PASS: std::vector<double> is contiguous." << std::endl;
     
-    // Check 2: DiodeTensor Alignment
+    // Check 2: DiodeSoA Alignment
     // We want to verify we can extract raw pointers from our tensors
-    DiodeTensor dTensor;
+    DiodeSoA dTensor;
     dTensor.reserve(100);
     for(int i=0; i<100; ++i) dTensor.push(0,0,0,0,0); // Populate dummy
     
@@ -119,10 +145,10 @@ void run_benchmark() {
     std::cout << "  Components: " << num_diodes << " Diodes" << std::endl;
     std::cout << "  Matrix Size: " << (GRID_W * GRID_H) << "^2" << std::endl;
     
-    DiodeTensor diodes;
+    DiodeSoA diodes;
     diodes.reserve(num_diodes);
     
-    // Use DiodeTensor directly
+    // Use DiodeSoA directly
     
     int idx = 0;
     // Horizontal
@@ -165,7 +191,7 @@ void run_benchmark() {
     auto start = std::chrono::high_resolution_clock::now();
     
     // A. Physics
-    batchDiodePhysics(diodes, v_guess);
+    evalDiodes(diodes, v_guess);
     
     auto physics_end = std::chrono::high_resolution_clock::now();
     
