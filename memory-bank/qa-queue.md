@@ -22,6 +22,77 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Entries
 
+### READY FOR QA — Phase 3 close-out + Phase 4 GPU fronts (TreeSPICE PR #8 `phase3/pdk` @ `e7561a3`, draft PR #9 `phase4/gpu` @ `5b79ad6`; OpenVLSI PR #12 `phase3/pdk-app` @ `f563462`) — Claude Code, 2026-10-15
+
+The engine work is in the TreeSPICE worktree `Karam`, and the app bump is in `CuteApp-dev`.
+
+**Setup**
+- Rebuild the OSDI libraries first: `OPENVAF_DIR=<tools/OpenVAF> tests/build_osdi.sh`. The script now patches `bsim4.va`.
+- PDK files are in the git-ignored `datasets/pdk/{ihp,sky130}`.
+
+**What changed (PR #8; details in `tests/QA_PHASE3_ROUND3_REPORT.md`, section "Resolution")**
+1. **Parameter front end** (`netlist/numparam`):
+   - `.param` expressions, using ngspice semantics: left-associative `**`, half-to-even `nint`, `pwr` = |x|^y, `mil` = milli, errors on non-finite results.
+   - Parameterized subcircuits, `.if/.elseif/.else`, local models.
+   - `.params`, `PARAMS:` between pairs, `temper`.
+2. **Real PDKs:**
+   - IHP SG13G2 through its PSP103 OSDI.
+   - sky130's level-54 BSIM4 cards run on the OSDI BSIM4. Binning follows ngspice: edges are inclusive within 1e-9 m, it uses total W, and the card defined last wins.
+3. **Thermal voltage** is kT/q at 300.15 K (25.865 mV). The ngspice harness now runs both simulators at 27 °C.
+4. **DC** starts from all zeros, as ngspice does. The seed heuristic was deleted.
+5. **Transient step control** follows ngspice:
+   - first step: min(tstep, tstop/100)/100;
+   - maximum step: min(tstep, tstop/50).
+6. **Parser additions:** `R a b r=..`, R TC1/TC2, model capacitors (`C a b model l= w=`), and `C … m=`, which is now applied.
+7. **OSDI:** internal nodes get no leak to ground.
+8. **Harness:** the transient comparison has a timing tolerance of tstep/10. Xyce `InductorICBug` is classified DIALECT.
+
+**What changed (PR #9, GPU, draft)**
+- `math/gpu_front_lu.cpp`: FP32 WGSL LU of fronts with dimension ≥ 256 (`TREESPICE_GPU_FRONT`, `0` = off).
+- The GPU eliminates until a pivot fails the threshold; then the CPU continues.
+- FP64 refinement follows. If refinement stalls, the solve is redone in FP64.
+- Build with `cmake -S . -B <dir> -DTREESPICE_GPU=ON`.
+
+**Dev checks (how to reproduce)**
+- `cmake -S . -B build && cmake --build build -j10 && ctest --test-dir build`: 3/3.
+- `python3 tests/ngspice_diff/run_diff.py`: 544 PASS, 0 FAIL.
+- `python3 tests/xyce_diff.py`: 109 PASS, 0 FAIL, 1 TIMEOUT. The timeout was already there before.
+- `python3 tests/ibmpg_diff.py -k ibmpg2`: PASS.
+- `python3 tests/char_cells.py`: worst 0.087 %.
+- `python3 tests/qa3_ihp_cells.py`: 74/77. The three left are:
+  - two flip-flops that power up in the other legal state;
+  - one setup-marginal edge that resolves 4.6 ps differently.
+- GPU build: `test_contraction_solver` passes.
+- OpenVLSI: `test_regression` 4/4. Four golden entries changed by the derived Vt shift; the commit message has the derivation. 14 more integration suites pass.
+
+**Attack**
+- **Parameters:**
+  - nested `.param` and `.if` inside `.lib` sections;
+  - parameters that drive model cards;
+  - `PARAMS:` in X cards;
+  - error line numbers for errors inside `.include`/`.lib` files. These are known to carry the card's own line, so file that as BUG only if it is worse than that.
+- **sky130:**
+  - every bin edge of nfet_01v8, pfet_01v8 and pfet_01v8_hvt, with nf = 1, 2 and 4;
+  - `.option scale`;
+  - devices inside subckts.
+- **Temperature-sensitive cases** (now that Vt changed): diodes, BJTs and current mirrors in op/dc/ac/noise; compare against ngspice at 27 °C.
+- **DC from zeros:**
+  - bistable circuits (latches, SR flip-flops, Schmitt triggers);
+  - hard-to-converge circuits that used to need the seed: diode/BJT stacks, op-amps in feedback, bandgaps.
+- **Transient step control:**
+  - sources much faster than tstep (SIN, PULSE);
+  - LC and RLC tanks;
+  - very long tstop/tstep ratios (runtime);
+  - `uic` and `.ic`.
+- **GPU path** (PR #9; run with `TREESPICE_GPU_FRONT=64` to force small fronts onto the GPU):
+  - accuracy of every netlist in the harness;
+  - E/G sources with 1e10 gains (pivot failures);
+  - singular circuits;
+  - `bench/klu_bench` on `datasets/suitesparse/*/*.mtx`. Call the binary directly; `klu_bench.py` downloads files.
+- **GUI** (OpenVLSI #12): DC/transient/AC/Monte Carlo from the schematic with an IHP or sky130 cell.
+
+**Not for QA yet:** the minimum-degree ordering that closes the KLU gap is in progress on `phase4/gpu`. It is not committed.
+
 ### READY FOR QA — repo split: engine → Karam submodule (CuteApp `refactor/karam-submodule`, Karam PR #2) — Claude Code, 2026-10-13
 **What changed:** `acutesim_engine/` is now the git submodule Seshak-code/TreeSPICE, pinned to TreeSPICE (then Karam) `standalone`.
 - Karam owns the public `engine_api/` headers (`simulation_dto`, `job_status`, `engine_callbacks`,
