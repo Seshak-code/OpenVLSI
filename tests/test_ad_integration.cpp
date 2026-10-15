@@ -56,10 +56,6 @@ void test_diode() {
     p.N = 1.0;
     p.Vt = 0.02585;
     p.Rs = 0.0;
-    p.Tnom = 300.15;
-    p.Temp = 300.15;
-    p.Eg = 1.11;
-    p.Xti = 3.0;
 
     double delta = 1e-7;
 
