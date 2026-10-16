@@ -227,9 +227,10 @@ and see the program's output — covering every step from schematic/RTL to sign-
 - [~] Bypass: done (ngspice's voltage criterion). Isomorphism reuse beyond bypass and multirate integration are still open.
 - **Gate:** scale ladder (`acutesim_engine/tests/scale_ladder.py`, BSIM4 inverter chains):
   - 2·10² devices: ngspice is faster (0.6×), timing agrees to 0.1 %.
-  - 2·10³ devices: 2.0× ngspice.
-  - 2·10⁴ devices: 25 s; ngspice fails ("timestep too small").
-  - 2·10⁵ devices: 318 s at 2.65 GB.
+  - 2·10³ devices: 1.9× ngspice.
+  - 2·10⁴ devices: 28 s; ngspice fails ("timestep too small").
+  - 6·10⁴ devices: 5.9× ngspice, 946 MB (Sonnet QA; memory linear in size).
+  - 2·10⁵ devices: 349 s at 2.65 GB vs ngspice 3024 s (8.7×); the 50 % crossing agrees to 1.1 ps.
   - 10⁷ and above: open (needs hierarchy and multirate).
 
 **Phase 5 — SoC flow in the app** *(OpenVLSI `compute/soc/`, 2026-10-16)*
@@ -240,8 +241,46 @@ and see the program's output — covering every step from schematic/RTL to sign-
   - An RV32I instruction-set model, with firmware built by in-repo encoders.
   - SRAM wait cycles come from a TreeSPICE read characterisation of an IHP SG13G2 6T cell.
   - Run it from Simulation → Run Reference SoC (Hello World); `tests/test_soc_hello` is the check.
-- [ ] Unified design flow UI. Open: needs Yosys and OpenROAD installed.
+- [ ] Unified design flow UI: moved to Phase 6 (tools now installed).
 - **Gate:** "hello world" firmware runs on the reference SoC inside the app, with SRAM timing taken from SPICE characterisation
+
+**Product direction (owner, 2026-10-16):** ASIC creation and simulation, with firmware tested on the chip
+being designed and an integrated OpenROAD RTL → GDS pipeline, in one application.
+- **The gap:** no product offers the closed loop on one machine: edit RTL, and minutes later the firmware
+  runs on that chip's post-layout netlist, with SPICE-accurate analog blocks.
+  - Cadence ships the pieces as separate products: Palladium/Protium emulation and Helium virtual
+    platforms for firmware, Spectre AMS for mixed signal, Genus/Innovus for RTL → GDS, and
+    Tempus/Voltus for sign-off.
+- **Target PDK: IHP SG13G2** (open PDK, free IHP shuttles). It is already used for the SRAM and UART models.
+- **Tools:** Yosys 0.70 and Verilator 5.052 (Homebrew), plus OpenROAD and KLayout 0.30.12, built from
+  source in `~/eda` because their build tools break on paths with spaces.
+  - The IHP platform (LEF, Liberty, GDS, DRC/LVS decks, PDN) comes from OpenROAD-flow-scripts
+    `flow/platforms/ihp-sg13g2`.
+
+**Phase 6 — RTL → GDS in the app**
+- [ ] Yosys → OpenROAD (floorplan, PDN, place, CTS, route) → KLayout (GDS merge, DRC, LVS), run
+      from the app. The existing drivers (`compute/orchestration/drivers/*_task.cpp`) are finished and
+      pointed at the IHP platform instead of FreePDK45 placeholders.
+- [ ] An RV32I RTL core to take through the flow, the RTL counterpart of `compute/soc/rv32i`.
+- **Gate:** the RV32I core is placed and routed on IHP SG13G2, DRC and LVS clean, from the app's flow UI.
+
+**Phase 7 — Firmware on your own silicon**
+- [ ] The firmware runs on that core's RTL (Verilator), then on its post-layout gate netlist with SDF
+      timing from OpenSTA.
+- [ ] Lockstep, bidirectional co-simulation: an engine API for D2A sources set during a transient.
+      SRAM and I/O stay in TreeSPICE.
+- **Gate:** the post-layout netlist prints "Hello, world!", with timing that agrees with STA.
+
+**Phase 8 — Real-time loop**
+- [ ] Incremental re-synthesis and re-place-and-route after an RTL edit.
+- [ ] A GDB remote stub on the CPU model: breakpoints and registers next to the waveforms.
+- **Gate:** an RTL edit reaches a re-run firmware result in minutes; GDB attaches to the running model.
+
+**Phase 9 — Sign-off differentiator**
+- [ ] IR drop and electromigration on the extracted power grid of the Phase 6 layout, driven by the
+      firmware's own switching activity. TreeSPICE solves 1.67 M-node IBM grids in 38 s.
+- [ ] Parasitic extraction (OpenRCX) back into transistor-level timing of critical paths.
+- **Gate:** IR drop per firmware phase on the Phase 6 layout, checked against a flat TreeSPICE solve.
 
 ---
 
