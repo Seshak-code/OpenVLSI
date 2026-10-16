@@ -4,10 +4,9 @@
 
 **QA is back with Cline/Gemini (owner, 2026-10-15).** This replaces the 2026-10-13 rule that Claude Code tests everything itself. Pick up the READY FOR QA entry at the top of `memory-bank/qa-queue.md`. QA does not edit engine source.
 
-Open PRs:
-- **TreeSPICE #8 (`phase3/pdk`):** Phase 3 close-out with real PDKs (IHP, sky130) and the QA round 3 fixes.
-- **OpenVLSI #12 (`phase3/pdk-app`):** the submodule bump plus golden-DB entries updated by derived amounts. Merge #8 first.
-- **TreeSPICE #9 (draft, `phase4/gpu`):** FP32 GPU fronts with FP64 refinement. The GPU is 2–7× faster on large fronts but did not close the KLU gap.
+PRs:
+- **TreeSPICE #8 and OpenVLSI #12: merged (owner, 2026-10-15).** Phase 3 close-out with real PDKs (IHP, sky130) and the QA round 3 fixes; the app's submodule now points at TreeSPICE `e7561a3`.
+- **TreeSPICE #9 (draft, `phase4/gpu`):** FP32 GPU fronts with FP64 refinement. The GPU is 2–7× faster on large fronts but did not close the KLU gap; the ordering work below does.
 
 **In progress** (Claude Code, `phase4/gpu`, not committed yet; the owner approved it):
 - A minimum-degree ordering (AMD) with relaxed supernodes, next to nested dissection. The planner keeps whichever plan is cheaper.
