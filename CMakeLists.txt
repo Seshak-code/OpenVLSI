@@ -2239,6 +2239,12 @@ add_executable(test_rtl_flow tests/test_rtl_flow.cpp)
 target_link_libraries(test_rtl_flow PRIVATE acutesim_orchestration)
 target_compile_features(test_rtl_flow PUBLIC cxx_std_17)
 
+# test_firmware_on_silicon — Phase 7 gate check: firmware on the core's RTL and routed netlist + SDF
+add_executable(test_firmware_on_silicon tests/test_firmware_on_silicon.cpp)
+target_link_libraries(test_firmware_on_silicon PRIVATE acutesim_orchestration acutesim_soc)
+target_compile_definitions(test_firmware_on_silicon PRIVATE SOC_DATASETS="${CMAKE_CURRENT_SOURCE_DIR}/datasets")
+target_compile_features(test_firmware_on_silicon PUBLIC cxx_std_17)
+
 if(APPLE AND CMAKE_PREFIX_PATH)
     set(_qt_plugin_dir "${CMAKE_PREFIX_PATH}/share/qt/plugins")
     if(EXISTS "${_qt_plugin_dir}")

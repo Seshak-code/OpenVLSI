@@ -115,35 +115,30 @@ private:
 const char *helloText() { return "Hello, world!\n"; }
 
 std::vector<uint32_t> helloFirmware() {
+    // Word accesses only, one character per word: the RTL core (ORFS riscv32i, Phase 7) has no
+    // byte enables (SB rewrites the whole word, LBU ignores the address's low bits)
     using namespace rv;
     std::vector<uint32_t> w = {
         addi(a0, zero, (int32_t)kStringAt),        // 0  src: the string in ROM
         lui(a1, kSramBase >> 12),                  // 1  SRAM base
         addi(a2, a1, 0),                           // 2  dst
-        lbu(t0, a0, 0),                            // 3  copy: t0 = *src
-        sb(t0, a2, 0),                             // 4  *dst = t0
-        addi(a0, a0, 1),                           // 5
-        addi(a2, a2, 1),                           // 6
+        lw(t0, a0, 0),                             // 3  copy: t0 = *src
+        sw(t0, a2, 0),                             // 4  *dst = t0
+        addi(a0, a0, 4),                           // 5
+        addi(a2, a2, 4),                           // 6
         bne(t0, zero, (3 - 7) * 4),                // 7  until the terminating 0 is copied
         lui(a3, kUartBase >> 12),                  // 8  UART
         addi(a2, a1, 0),                           // 9  from the SRAM copy
-        lbu(t0, a2, 0),                            // 10 print: t0 = *p
+        lw(t0, a2, 0),                             // 10 print: t0 = *p
         beq(t0, zero, (15 - 11) * 4),              // 11 0: done
-        sb(t0, a3, 0),                             // 12 transmit
-        addi(a2, a2, 1),                           // 13
+        sw(t0, a3, 0),                             // 12 transmit
+        addi(a2, a2, 4),                           // 13
         jal(zero, (10 - 14) * 4),                  // 14
-        ecall(),                                   // 15 done
+        ecall(),                                   // 15 done (the core raises `suspend`)
     };
     w.resize(kStringAt / 4, 0);
-    const std::string s = helloText();
-    std::vector<uint8_t> bytes(s.begin(), s.end());
-    bytes.push_back(0);
-    bytes.resize((bytes.size() + 3) & ~size_t(3), 0);
-    for (size_t i = 0; i < bytes.size(); i += 4) {
-        uint32_t v;
-        std::memcpy(&v, &bytes[i], 4);
-        w.push_back(v);
-    }
+    for (const char c : std::string(helloText())) w.push_back((uint8_t)c);
+    w.push_back(0);
     return w;
 }
 
