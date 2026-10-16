@@ -4,7 +4,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Open bugs
 
-**BUG-6 — floating, inconsistent DC network with ≥ 36 nodes returns `CONVERGED 1` with 1e14–1e15 V (singular matrix not detected)** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **OPEN**
+**BUG-6 — floating, inconsistent DC network with ≥ 36 nodes returns `CONVERGED 1` with 1e14–1e15 V (singular matrix not detected)** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **FIXED – RETEST** (TreeSPICE `9f38d07`: a pivot below 1e-13 x its own entry in A is singular; n = 3...10 000 all report "Singular matrix". `test_engine_fixes` checks a 100-resistor chain. Full matrix: ngspice 604/0, Xyce 118/0, ibmpg 6/6, ctest 3/3.)
 - Repro (generates the netlist, then runs the shipped dump binary; `TREESPICE_THREADS=1` gives the same):
   ```
   python3 -c "n=37;print('\n'.join(['floatI','.options gmin=0 gminsteps=0','V1 1 0 DC 1','R0 1 0 1k','I1 0 f0 DC 1m']+[f'RF{i} f{i} f{i+1} 1k' for i in range(n)]+['.op','.end']))" > /tmp/fI.cir && build/acutesim_engine_dump /tmp/fI.cir cpu dc
@@ -15,7 +15,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 - Likely cause (not confirmed; the engine has no counter for the cap, so I cannot see whether it fired): singularity is only flagged on an exact zero (`pc < 0` after the cap, `math/contraction_solver.cpp` ~L771; `!(std::abs(piv) > 0.0)` ~L784). Once the singular direction is spread over a multi-front tree, the last pivot is a rounding-level residue (~1e-19), not 0, so it is divided by. A relative test (|pivot| ≤ eps·max|entry of the front's original row/column| → singular) would also catch it.
 - Severity: silent wrong answer on a malformed circuit (only reachable with `gmin=0` / `gminsteps=0`, or a netlist whose gmin path is lost), no crash, no NaN, no memory growth.
 
-**BUG-7 — DC operating point of a capacitor-only node returns `CONVERGED 1` with a non-physical voltage; 6–20 s for tiny circuits** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **OPEN**
+**BUG-7 — DC operating point of a capacitor-only node returns `CONVERGED 1` with a non-physical voltage; 6–20 s for tiny circuits** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **FIXED – RETEST** (TreeSPICE `9f38d07`: the transient-OP result must satisfy DC KCL to ngspice reltol/abstol, so 1 uF and 1 pF both report "Singular matrix"; `x_dc_cap_only_node` (capacitive divider) still passes. Not fixed: the 1 pF case still takes 6.5 s, the 10 us transient. `test_engine_fixes` checks it. Full matrix: ngspice 604/0, Xyce 118/0, ibmpg 6/6, ctest 3/3.)
 - Repro:
   ```
   printf 'i into cap-only node\nI1 0 2 DC 1m\nC1 2 0 1u\nV1 1 0 DC 1\nR1 1 0 1k\n.op\n.end\n' > /tmp/cap.cir && build/acutesim_engine_dump /tmp/cap.cir cpu dc
