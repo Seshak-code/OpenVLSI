@@ -12,14 +12,9 @@
 #include <map>
 
 #include "compute/orchestration/grpc_worker_client.h"
-#include "compute/orchestration/drivers/yosys_task.h"
-#include "compute/orchestration/drivers/openroad_task.h"
-#include "compute/orchestration/drivers/klayout_task.h"
-#include "compute/orchestration/drivers/tool_driver.h"
+#include "compute/orchestration/drivers/rtl_flow.h"
 
 namespace acutesim::gui::orchestration {
-
-enum class ExecutionMode { LOCAL, REMOTE, AUTO };
 
 /** Detected local EDA tools and PDKs. Empty on WASM. */
 struct ToolInventory {
@@ -67,18 +62,12 @@ public:
     WorkerState currentState() const { return m_state; }
     bool isConnected() const { return m_state.isConnected; }
 
-    void setExecutionMode(ExecutionMode mode);
-    ExecutionMode executionMode() const { return m_executionMode; }
-    void setMockMode(bool enabled); // Proxy to ToolDriver
-    bool canRunLocally() const;
-
-    // Job submission - returns job ID (UUID string)
-    QString submitSynthesis(const acutesim::compute::orchestration::SynthesisConfig& config);
-    QString submitPlaceAndRoute(const acutesim::compute::orchestration::FloorplanConfig& fpConfig,
-                                const acutesim::compute::orchestration::PlacementConfig& placeConfig,
-                                const acutesim::compute::orchestration::CTSConfig& ctsConfig,
-                                const acutesim::compute::orchestration::RoutingConfig& routeConfig);
-    QString submitSignOff(const acutesim::compute::orchestration::DRCConfig& drcConfig);
+    // RTL -> GDS (Roadmap Phase 6) runs locally, on a background thread: OpenROAD-flow-scripts,
+    // then the PDK's DRC and LVS decks. Progress 0..1 arrives as jobProgress; the results as
+    // synthesis/pnr/drc/lvsResultReady, then jobCompleted with the GDS path.
+    bool canRunRtlFlow() const;
+    QString rtlFlowMissing() const;  // tools not found, empty when the flow can run
+    QString submitRtlToGds(const acutesim::compute::orchestration::RtlFlowConfig& config);
     void cancelJob(const QString& jobId);
 
 signals:
@@ -104,24 +93,13 @@ private:
     std::unique_ptr<acutesim::worker::WorkerClient> m_client;
     WorkerState m_state;
     ToolInventory m_inventory;
-    ExecutionMode m_executionMode = ExecutionMode::AUTO;
     std::atomic<bool> m_running { false };
 #ifndef EMSCRIPTEN
     std::thread m_pollThread;
 #endif
 
-    // Active jobs
-    std::map<std::string, std::atomic<bool>*> m_jobCancelFlags;
-
-    // Local execution helpers
-    bool shouldRunLocally() const;
-    void runLocalSynthesis(const QString& jobId, const acutesim::compute::orchestration::SynthesisConfig& config);
-    void runLocalPnR(const QString& jobId,
-                     const acutesim::compute::orchestration::FloorplanConfig& fpConfig,
-                     const acutesim::compute::orchestration::PlacementConfig& placeConfig,
-                     const acutesim::compute::orchestration::CTSConfig& ctsConfig,
-                     const acutesim::compute::orchestration::RoutingConfig& routeConfig);
-    void runLocalSignOff(const QString& jobId, const acutesim::compute::orchestration::DRCConfig& config);
+    // Cancel flags of running flows (shared with their threads)
+    std::map<std::string, std::shared_ptr<std::atomic<bool>>> m_jobCancelFlags;
 };
 
 } // namespace acutesim::gui::orchestration

@@ -227,9 +227,10 @@ and see the program's output — covering every step from schematic/RTL to sign-
 - [~] Bypass: done (ngspice's voltage criterion). Isomorphism reuse beyond bypass and multirate integration are still open.
 - **Gate:** scale ladder (`acutesim_engine/tests/scale_ladder.py`, BSIM4 inverter chains):
   - 2·10² devices: ngspice is faster (0.6×), timing agrees to 0.1 %.
-  - 2·10³ devices: 2.0× ngspice.
-  - 2·10⁴ devices: 25 s; ngspice fails ("timestep too small").
-  - 2·10⁵ devices: 318 s at 2.65 GB.
+  - 2·10³ devices: 1.9× ngspice.
+  - 2·10⁴ devices: 28 s; ngspice fails ("timestep too small").
+  - 6·10⁴ devices: 5.9× ngspice, 946 MB (Sonnet QA; memory linear in size).
+  - 2·10⁵ devices: 349 s at 2.65 GB vs ngspice 3024 s (8.7×); the 50 % crossing agrees to 1.1 ps.
   - 10⁷ and above: open (needs hierarchy and multirate).
 
 **Phase 5 — SoC flow in the app** *(OpenVLSI `compute/soc/`, 2026-10-16)*
@@ -240,8 +241,73 @@ and see the program's output — covering every step from schematic/RTL to sign-
   - An RV32I instruction-set model, with firmware built by in-repo encoders.
   - SRAM wait cycles come from a TreeSPICE read characterisation of an IHP SG13G2 6T cell.
   - Run it from Simulation → Run Reference SoC (Hello World); `tests/test_soc_hello` is the check.
-- [ ] Unified design flow UI. Open: needs Yosys and OpenROAD installed.
+- [ ] Unified design flow UI: moved to Phase 6 (tools now installed).
 - **Gate:** "hello world" firmware runs on the reference SoC inside the app, with SRAM timing taken from SPICE characterisation
+
+**Product direction (owner, 2026-10-16):** ASIC creation and simulation, with firmware tested on the chip
+being designed and an integrated OpenROAD RTL → GDS pipeline, in one application.
+- **The gap:** no product offers the closed loop on one machine: edit RTL, and minutes later the firmware
+  runs on that chip's post-layout netlist, with SPICE-accurate analog blocks.
+  - Cadence ships the pieces as separate products: Palladium/Protium emulation and Helium virtual
+    platforms for firmware, Spectre AMS for mixed signal, Genus/Innovus for RTL → GDS, and
+    Tempus/Voltus for sign-off.
+- **Target PDK: IHP SG13G2** (open PDK, free IHP shuttles). It is already used for the SRAM and UART models.
+- **Tools:** Yosys 0.70 and Verilator 5.052 (Homebrew), plus OpenROAD and KLayout 0.30.12, built from
+  source in `~/eda` because their build tools break on paths with spaces.
+  - The IHP platform (LEF, Liberty, GDS, DRC/LVS decks, PDN) comes from OpenROAD-flow-scripts
+    `flow/platforms/ihp-sg13g2`.
+
+**Phase 6 — RTL → GDS in the app** *(OpenVLSI `phase6/rtl2gds`, 2026-10-16)*
+- [x] The flow runner `compute/orchestration/drivers/rtl_flow.{h,cpp}`, behind WorkerManager::submitRtlToGds
+      and the RTL pipeline panel:
+  - **Implementation:** OpenROAD-flow-scripts (ORFS) for synthesis → floorplan → PDN → placement → CTS →
+    routing → fill → GDS, then IHP's maximal KLayout DRC deck and KLayout LVS.
+  - **Why ORFS:** its maintained recipe replaced the FreePDK45 TCL generators (`yosys_task`, `openroad_task`,
+    `klayout_task`, `tool_driver`, ~1,750 lines), which could not have run: the panel never passed
+    the Verilog sources.
+  - **Subprocess fixes** (`Subprocess`): the environment is now applied, tool output is no longer lost at
+    exit, and a timeout or cancel kills the whole process group.
+- [x] The RV32I core: ORFS's `riscv32i` (Apache-2.0, ~1,100 lines; single-cycle, memories outside
+      the block).
+- [x] Tool setup: `scripts/setup_eda_tools.sh`.
+- **Gate:** `tests/test_rtl_flow` (ORFS `gcd` by default; `RTL_FLOW_DESIGN/TOP/PERIOD` for others):
+  - **gcd:** 421 cells, timing met at 10 ns, 0 routing and antenna violations, 0 errors on IHP's maximal
+    DRC deck, LVS netlists match, 108 s.
+  - **RV32I** (`RTL_FLOW_DESIGN=~/eda/orfs/flow/designs/src/riscv32i RTL_FLOW_TOP=riscv RTL_FLOW_PERIOD=7`):
+    - 8,454 cells, 0.153 mm² placed at 45 % utilization.
+    - Timing met at 7 ns (143 MHz), 18.2 mW.
+    - 0 routing and antenna violations; DRC clean on IHP's maximal deck; LVS netlists match; 963 s.
+    - It misses 6 ns by 0.11 ns, and 4 ns by 1.2 ns, once its I/O is constrained: the single-cycle
+      ALU result leaves the block to data memory within the cycle. (ORFS's own template meets 4 ns
+      only because a Tcl bug, `lappend $non_clock_inputs`, leaves its input delays unapplied.)
+- **Block-level sign-off rules:**
+  - **Global metal density:** IHP's 35–60 % per-layer density is checked at chip level, where IHP's filler
+    fills inside the seal ring and keeps fill off transistors. OpenROAD's fill reaches 18–37 % inside a
+    standard-cell block.
+  - **DRC:** runs every other rule (495 rules: off-grid, filler and recommended included) with
+    `densityRules=false`.
+  - **LVS:** writes the netlist with fill and decap cells (decaps hold transistors). It flattens the antenna
+    cells before align: IHP's deck extracts their diodes in the parent, so the empty layout cell was
+    purged after align and the schematic's instances had no counterpart.
+- **Open:** chip assembly (pad ring, seal ring, IHP filler, global density); the flow on more PDKs.
+
+**Phase 7 — Firmware on your own silicon**
+- [ ] The firmware runs on that core's RTL (Verilator), then on its post-layout gate netlist with SDF
+      timing from OpenSTA.
+- [ ] Lockstep, bidirectional co-simulation: an engine API for D2A sources set during a transient.
+      SRAM and I/O stay in TreeSPICE.
+- **Gate:** the post-layout netlist prints "Hello, world!", with timing that agrees with STA.
+
+**Phase 8 — Real-time loop**
+- [ ] Incremental re-synthesis and re-place-and-route after an RTL edit.
+- [ ] A GDB remote stub on the CPU model: breakpoints and registers next to the waveforms.
+- **Gate:** an RTL edit reaches a re-run firmware result in minutes; GDB attaches to the running model.
+
+**Phase 9 — Sign-off differentiator**
+- [ ] IR drop and electromigration on the extracted power grid of the Phase 6 layout, driven by the
+      firmware's own switching activity. TreeSPICE solves 1.67 M-node IBM grids in 38 s.
+- [ ] Parasitic extraction (OpenRCX) back into transistor-level timing of critical paths.
+- **Gate:** IR drop per firmware phase on the Phase 6 layout, checked against a flat TreeSPICE solve.
 
 ---
 

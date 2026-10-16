@@ -1,6 +1,26 @@
 # Active Context
 
-**Last session: Claude Code (dev), 2026-10-16 — Phase 4 done (TreeSPICE PR #9), Phase 5 gate met (OpenVLSI `phase5/soc`)**
+**Last session: Claude Code (dev), 2026-10-16 — Phase 6 gate met (OpenVLSI `phase6/rtl2gds`), Phase 4 QA round 3 fixed (TreeSPICE PR #10)**
+
+**Phase 6 (RTL → GDS on IHP SG13G2):**
+- **Flow:** `compute/orchestration/drivers/rtl_flow.{h,cpp}` runs OpenROAD-flow-scripts, then IHP's KLayout DRC and LVS decks. It sits behind WorkerManager::submitRtlToGds and the RTL pipeline panel.
+- **Tools:** in `~/eda`, set up by `scripts/setup_eda_tools.sh`. Their build tools break on paths with spaces.
+- **Check:** `tests/test_rtl_flow`.
+  - gcd: 108 s, all checks pass.
+  - RV32I at 7 ns: 963 s, timing met, DRC clean (maximal deck), LVS match.
+- **Removed:** the FreePDK45 TCL generators and `ToolDriver`, about 1,750 lines.
+- **Pre-existing, not chased:** `test_eda_drivers` aborts in klayout_lvs_match on `main` too.
+- **Next:** Phase 7, firmware on the post-layout netlist: Verilator, SDF from OpenSTA, lockstep co-simulation.
+
+**Phase 4 QA round 3 (Gemini):**
+- BUG-5 VERIFIED.
+- BUG-6 fixed again in TreeSPICE PR #10: PIVTOL on the final DC factorization.
+- BUG-7 matches ngspice (its transient OP is unsettled too). Its real defect, the KCL audit missing the transient OP's gmin, is fixed.
+- Next: Gemini retests PR #10. Then a Sonnet 5.5 session takes the Phase 5 entry.
+
+---
+
+**Earlier: Claude Code (dev), 2026-10-16 — Phase 4 done (TreeSPICE PR #9), Phase 5 gate met (OpenVLSI `phase5/soc`)**
 
 **QA hand-off (owner, 2026-10-15/16):**
 - **Phase 4 task split (owner request 2026-10-16):**
