@@ -4,7 +4,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Open bugs
 
-**BUG-4 — Subcircuit body `.param` specialization causes duplicate `.model` definitions** (filed by Cline/Gemini as "BUG-1 (Phase 4)", 2026-10-16, from Phase 4 QA pass; renumbered by Claude Code, BUG-1 was taken) — **fix in progress (Claude Code)**
+**BUG-4 — Subcircuit body `.param` specialization causes duplicate `.model` definitions** (filed by Cline/Gemini as "BUG-1 (Phase 4)", 2026-10-16, from Phase 4 QA pass; renumbered by Claude Code, BUG-1 was taken) — **FIXED – RETEST** (TreeSPICE `4790b4d`, merged with `qa/phase4` into `phase4/gpu` @ `0e02f34`: only a parameterless key keeps the plain subckt name; all 18 `qa4_*`, 73 `qa3_*`, 74 `x_*`, sky130 and ihp diffs pass on cpu)
 - Reproducer: `acutesim_engine/tests/ngspice_diff/netlists/qa4_sky130_nfet_bins.cir` (fails on engine; ngspice passes).
 - Symptoms: `SPICE parse error: Parse error at line 2: model SKY130_FD_PR__NFET_01V8__MODEL.0 defined twice`.
 - Root Cause: in `netlist/numparam.cpp:507`:
