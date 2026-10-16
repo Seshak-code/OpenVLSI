@@ -31,6 +31,46 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Entries
 
+### READY FOR QA (Gemini) — Phase 4 round 2: PWL gaps, bypass on/off, BUG-4 retest (TreeSPICE `phase4/gpu` @ `0e02f34`) — Claude Code, 2026-10-16
+
+These cases were missed in round 1.
+
+**Setup:**
+- **Checkout:** work in `Karam/` (the TreeSPICE checkout). A Sonnet 5.5 session is running solver QA there, so:
+  - Do not check out any other branch. `git switch -c qa/phase4-r2` is fine: it is the same commit and changes no files.
+  - Do not rebuild `build/` or `build-gcc/`.
+  - Do not touch the main `CuteApp/` checkout.
+- **Engine with the BUG-4 fix:** `build-gcc/acutesim_engine_dump`. `build/` is still `6b40c10`, without the fix. Pass it with `python3 tests/ngspice_diff/run_diff.py --engine build-gcc/acutesim_engine_dump -k qa4_`. If gpu mode fails in that build, run `--modes cpu` and say so.
+- **New netlists:** `tests/ngspice_diff/netlists/qa4_*.cir`, added with `git add -f`.
+
+**1. BUG-4 retest.**
+- `qa4_sky130_nfet_bins.cir` must pass.
+- Add a pfet version and a version where the same size appears twice next to a different size; both must pass.
+- Mark BUG-4 VERIFIED or REOPENED.
+
+**2. PWL with time points that do not increase.** For example `PWL(0 0 2n 1 1n 0)` (decreasing) and `PWL(0 0 1n 1 1n 0)` (equal).
+- Find out first what ngspice does with each (`ngspice -b`).
+- If ngspice rejects one, the engine must reject it too, with a parse error that names the source (fail-closed, never a silent waveform).
+- If ngspice accepts one, as a step, the engine must match its waveform.
+- Cover both V and I sources, and a PWL inside a `.subckt`.
+
+**3. PWL in the small-signal analyses.**
+- `.ac`: a PWL source with `AC 1` biasing a MOS amplifier through its t=0 value, compared with ngspice. The bias must come from the t=0 point, not 0 V and not the last point.
+- `.ac` with an I-source PWL.
+- `.dc` sweeping a PWL source (the sweep value replaces the waveform).
+- `.noise` with the PWL source as the input.
+
+**4. Bypass on/off delta.** Round 1 compared each run with ngspice only, so the "bit-exact" claim was never measured. For each of the four `qa4_bypass_*.cir` and two more high-gain cases (a two-stage op-amp in open loop, and a latch or comparator held right at its trip point):
+- **Run:** call the dump binary twice, once plain and once with `TREESPICE_BYPASS=0`. Use a temp dir laid out like `run_diff.py`'s: copy `tests/ngspice_diff/netlists/lib` to `lib/`, symlink `datasets/pdk` to `pdk/`, and run `build-gcc/acutesim_engine_dump <file> cpu <dc|tran step stop|ac ...>`. The output is `%.9g` per node.
+- **Report:** the worst on/off difference per case (absolute and relative), plus each mode against ngspice.
+- **Expected:** bit-exact is not required, because bypass reuses device evaluations inside the Newton tolerance. The on/off difference must stay within ngspice's bypass bound (1e-3·|v| + 1 µV) at every point. Bypass on must not be further from ngspice than bypass off by more than that bound.
+- **Bug:** a difference outside the bound, or an oscillator whose frequency or phase drifts over many periods, is a BUG-n.
+
+**Report:**
+- **Verdict:** add one under this entry.
+- **Bugs:** number any new bug after the highest BUG-n in "Open bugs". Sonnet may file bugs at the same time, so re-read the file right before editing.
+- **Commit and push:** the netlists, with an update to `tests/QA_PHASE4_REPORT.md`, on `qa/phase4-r2`, to the `treespice` remote. Commit this file in `CuteApp-dev` only.
+
 ### READY FOR QA (Sonnet 5.5, after Gemini closes Phase 4) — Phase 5 reference SoC (OpenVLSI `phase5/soc` @ `39d7c3f`) — Claude Code, 2026-10-16
 
 **What changed:** `compute/soc/`:
