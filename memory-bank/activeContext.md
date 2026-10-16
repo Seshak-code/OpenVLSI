@@ -3,8 +3,10 @@
 **Last session: Claude Code (dev), 2026-10-16 — Phase 4 done (TreeSPICE PR #9), Phase 5 gate met (OpenVLSI `phase5/soc`)**
 
 **QA hand-off (owner, 2026-10-15/16):**
-- **Gemini/Cline** takes the Phase 4 entry in `memory-bank/qa-queue.md`.
-- **A Sonnet 5.5 session** takes the Phase 5 entry once Gemini closes Phase 4.
+- **Phase 4 task split (owner request 2026-10-16):**
+  - **Claude Code**: Benchmarks, solver scale ladder (`scale_ladder.py`), KLU ordering validation (`klu_bench`), numerical stability of delayed-pivot cap on stiff/near-singular circuits, and thread scaling/determinism.
+  - **Cline / Gemini**: Adversarial SPICE testing (device bypass sensitivity on high-gain blocks, PWL source matrix, dense corner stepping, Sky130 PDK bin edges).
+- **A Sonnet 5.5 session** takes the Phase 5 entry once Phase 4 is closed.
 - QA does not edit engine or GUI source.
 
 PRs:

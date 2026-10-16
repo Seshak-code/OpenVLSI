@@ -4,6 +4,15 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Open bugs
 
+**BUG-1 (Phase 4) — Subcircuit body `.param` specialization causes duplicate `.model` definitions** (filed by Cline/Gemini, 2026-10-16, from Phase 4 QA pass)
+- Reproducer: `acutesim_engine/tests/ngspice_diff/netlists/qa4_sky130_nfet_bins.cir` (fails on engine; ngspice passes).
+- Symptoms: `SPICE parse error: Parse error at line 2: model SKY130_FD_PR__NFET_01V8__MODEL.0 defined twice`.
+- Root Cause: in `netlist/numparam.cpp:507`:
+  `auto [spec, isNew] = specialized_.emplace(key, s.defaults.empty() ? s.name : s.name + "|" + std::to_string(specialized_.size() + 1));`
+  When subcircuit parameters are given in the body (`.param l=... w=...`) rather than the header, `s.defaults.empty()` is true. For multiple instances with different given parameters, `specialized_` names the specialization `s.name` instead of a unique name, causing re-emission and duplicate model hoisting.
+  Fix: use `s.defaults.empty() && given.empty() ? s.name : ...`.
+- Severity: parse/specialization error on real PDK subcircuits.
+
 **BUG-1 — `.ic` + `uic`: MOS charge initialisation is wrong** (filed by Cline, 2026-10-12, from the Phase 3.2 QA pass) — **FIXED – RETEST** (harness, not engine: see the `fix/qa-bugs` entry below)
 - Reproducer: `acutesim_engine/tests/ngspice_diff/netlists/qa_mos_uic.cir` (expected to FAIL until fixed). Control `qa_ctrl_rc_uic.cir` (same circuit, plain RC, no MOS) **passes** at 0.43 mV — so the engine's `.ic`/`uic` handling itself matches ngspice; the divergence is MOS-specific (MOS charge history under `uic`, likely initialised from zero instead of the `.ic` node voltages).
 - Numbers: worst 122 mV / 2.5 % (tolerance is max(5 mV, 2 % of swing)), systematic at 10+ sample points, identical in cpu and gpu.
@@ -76,14 +85,29 @@ The engine is bumped to TreeSPICE `6b40c10` (PR #9: PWL sources, `.osdi` paths r
 - `bench/klu_bench` on `datasets/suitesparse` (call the binary directly; `klu_bench.py` downloads).
 - `tests/scale_ladder.py`: 1e5 stages run in 318 s / 2.65 GB.
 
-**Attack:**
-- **Ordering:** circuits where minimum degree and nested dissection disagree (mixed grid + logic); compare `TREESPICE_ORDERING=nd|md` with the default for the same answers.
-- **Bypass:** sensitive circuits where a 1 mV bypass could matter (high-gain amplifiers, oscillators, comparators near threshold, current mirrors); compare `TREESPICE_BYPASS=0` against ngspice.
-- **Delayed-pivot cap:** near-singular circuits (floating gates, `gminsteps=0`, huge E/G gains) must not silently get worse answers.
-- **PWL:** every form (TD, R, R at the first point, single point, non-increasing times as an error), in V and I sources, inside subcircuits, with `.dc` (the t=0 value) and `.ac`.
-- **Corners:** dense PULSE trains, a PWL with sub-ps corner spacing, inductors driven by ramps.
-- **Threads:** run with `TREESPICE_THREADS=1` and with the default; results must be identical.
-- **Scale:** `tests/scale_ladder.py --stages 1000,30000`, memory with `/usr/bin/time -l`.
+**Task Split (Owner request 2026-10-16):**
+
+**Assigned to Claude Code (Engine internals, profiling, and numerical analysis):**
+- **Scale & Memory Profiling:** `tests/scale_ladder.py --stages 1000,30000`, resident set memory profiling with `/usr/bin/time -l`.
+- **Ordering Benchmark Validation:** Validate `TREESPICE_ORDERING=nd|md` across SuiteSparse circuit matrices (`bench/klu_bench`), verifying the cost model picks the cheaper plan without numerical degradation.
+- **Delayed-Pivot Cap & Numerics:** Near-singular circuits (floating gates, `gminsteps=0`, huge E/G gains) — ensure the 8-row cap triggers clean singularity diagnostics instead of silently degrading precision.
+- **Concurrency & Thread Scaling:** Verify `TREESPICE_THREADS=1` vs default thread pool for bit-exactness and thread safety across persistent worker queues.
+
+**Assigned to Cline (QA & Adversarial SPICE testing):**
+- **Device Bypass Sensitivity:** Adversarial netlists for circuits where a 1 mV bypass threshold could affect precision (high-gain amplifiers, oscillators, comparators near threshold, current mirrors) — compare `TREESPICE_BYPASS=0` against ngspice.
+- **PWL Source Adversarial Matrix:** Test every PWL form (`TD=`, `R=`, `R` at first point, single point, non-monotonic times error handling) in V and I sources, nested subcircuits, `.dc` operating point, and `.ac`.
+- **Corner Stepping:** Stress-test dense PULSE trains, sub-picosecond PWL corner intervals, and ramp-driven inductors.
+- **Sky130 & Real-PDK Boundaries:** Fuzz bin edges on multi-finger devices (`NF=1, 2, 4`), nested `.subckt` parameter overrides, and `.option scale`.
+- **Reference SoC (Phase 5 prep):** Black-box smoke test of GUI action "Simulation → Run Reference SoC (Hello World)".
+
+**QA verdict (Cline/Gemini, 2026-10-16): PASSED with BUG-1 (Phase 4) filed.**
+- Device Bypass Sensitivity: `qa4_bypass_comp.cir`, `qa4_bypass_currmirror.cir`, `qa4_bypass_diffpair.cir`, `qa4_bypass_ring.cir` all PASS. Bit-exact match between `TREESPICE_BYPASS=0` and default bypass ON.
+- PWL Sources: `qa4_pwl_dc_op.cir`, `qa4_pwl_params.cir` (TD+R), `qa4_pwl_repeat_first.cir` (R=0), `qa4_pwl_single.cir`, `qa4_pwl_subckt.cir` all PASS against ngspice.
+- Corner Stepping: `qa4_corner_fastpulse.cir` (20 ps edges), `qa4_corner_pwl_subps.cir` (100 fs edges), `qa4_corner_ramp_inductor.cir` (order-1 Euler suppresses ringing) all PASS against ngspice.
+- Sky130 PDK: `qa4_sky130_nfet_bin_w042.cir`, `qa4_sky130_nfet_bin_w126_nf2.cir`, `qa4_sky130_pfet_bin_w042.cir`, `qa4_sky130_pfet_bin_w200_nf2.cir`, `qa4_sky130_subckt_scale.cir` all PASS against ngspice.
+- BUG-1 (Phase 4) filed: multi-instance subcircuit specialization with body `.param` triggers duplicate model definition. Reproducer: `qa4_sky130_nfet_bins.cir`.
+- Reference SoC (Phase 5): `CuteApp-dev/build/test_soc_hello` passes 100% (RV32I ISA, SRAM read characterisation, SPICE UART transmission decoding).
+- Report and 18 netlists committed on `qa/phase4` (`2cb5da9`).
 
 ### READY FOR QA — Phase 3 close-out + Phase 4 GPU fronts (TreeSPICE PR #8 `phase3/pdk` @ `e7561a3`, draft PR #9 `phase4/gpu` @ `5b79ad6`; OpenVLSI PR #12 `phase3/pdk-app` @ `f563462`) — Claude Code, 2026-10-15
 
