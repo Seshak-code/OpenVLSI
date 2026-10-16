@@ -4,7 +4,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Open bugs
 
-**BUG-1 (Phase 4) — Subcircuit body `.param` specialization causes duplicate `.model` definitions** (filed by Cline/Gemini, 2026-10-16, from Phase 4 QA pass)
+**BUG-4 — Subcircuit body `.param` specialization causes duplicate `.model` definitions** (filed by Cline/Gemini as "BUG-1 (Phase 4)", 2026-10-16, from Phase 4 QA pass; renumbered by Claude Code, BUG-1 was taken) — **fix in progress (Claude Code)**
 - Reproducer: `acutesim_engine/tests/ngspice_diff/netlists/qa4_sky130_nfet_bins.cir` (fails on engine; ngspice passes).
 - Symptoms: `SPICE parse error: Parse error at line 2: model SKY130_FD_PR__NFET_01V8__MODEL.0 defined twice`.
 - Root Cause: in `netlist/numparam.cpp:507`:
@@ -100,12 +100,12 @@ The engine is bumped to TreeSPICE `6b40c10` (PR #9: PWL sources, `.osdi` paths r
 - **Sky130 & Real-PDK Boundaries:** Fuzz bin edges on multi-finger devices (`NF=1, 2, 4`), nested `.subckt` parameter overrides, and `.option scale`.
 - **Reference SoC (Phase 5 prep):** Black-box smoke test of GUI action "Simulation → Run Reference SoC (Hello World)".
 
-**QA verdict (Cline/Gemini, 2026-10-16): PASSED with BUG-1 (Phase 4) filed.**
+**QA verdict (Cline/Gemini, 2026-10-16): PASSED with BUG-4 filed.**
 - Device Bypass Sensitivity: `qa4_bypass_comp.cir`, `qa4_bypass_currmirror.cir`, `qa4_bypass_diffpair.cir`, `qa4_bypass_ring.cir` all PASS. Bit-exact match between `TREESPICE_BYPASS=0` and default bypass ON.
 - PWL Sources: `qa4_pwl_dc_op.cir`, `qa4_pwl_params.cir` (TD+R), `qa4_pwl_repeat_first.cir` (R=0), `qa4_pwl_single.cir`, `qa4_pwl_subckt.cir` all PASS against ngspice.
 - Corner Stepping: `qa4_corner_fastpulse.cir` (20 ps edges), `qa4_corner_pwl_subps.cir` (100 fs edges), `qa4_corner_ramp_inductor.cir` (order-1 Euler suppresses ringing) all PASS against ngspice.
 - Sky130 PDK: `qa4_sky130_nfet_bin_w042.cir`, `qa4_sky130_nfet_bin_w126_nf2.cir`, `qa4_sky130_pfet_bin_w042.cir`, `qa4_sky130_pfet_bin_w200_nf2.cir`, `qa4_sky130_subckt_scale.cir` all PASS against ngspice.
-- BUG-1 (Phase 4) filed: multi-instance subcircuit specialization with body `.param` triggers duplicate model definition. Reproducer: `qa4_sky130_nfet_bins.cir`.
+- BUG-4 filed: multi-instance subcircuit specialization with body `.param` triggers duplicate model definition. Reproducer: `qa4_sky130_nfet_bins.cir`.
 - Reference SoC (Phase 5): `CuteApp-dev/build/test_soc_hello` passes 100% (RV32I ISA, SRAM read characterisation, SPICE UART transmission decoding).
 - Report and 18 netlists committed on `qa/phase4` (`2cb5da9`).
 
