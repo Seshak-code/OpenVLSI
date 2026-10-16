@@ -4,7 +4,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Open bugs
 
-**BUG-6 — floating, inconsistent DC network with ≥ 36 nodes returns `CONVERGED 1` with 1e14–1e15 V (singular matrix not detected)** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **FIXED – RETEST** (TreeSPICE `9f38d07`: a pivot below 1e-13 x its own entry in A is singular; n = 3...10 000 all report "Singular matrix". `test_engine_fixes` checks a 100-resistor chain. Full matrix: ngspice 604/0, Xyce 118/0, ibmpg 6/6, ctest 3/3.)
+**BUG-6 — floating, inconsistent DC network with ≥ 36 nodes returns `CONVERGED 1` with 1e14–1e15 V (singular matrix not detected)** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **FIXED – RETEST** (round 2: TreeSPICE PR #10, `fix/qa-round3` @ `50eb72a`, Claude Code. A DC solution whose final factorization has a pivot at or below ngspice's PIVTOL (1e-13) is singular, so the floating chain, star and grid all report "Singular matrix". The relative bound is gone: it missed fill pivots, as Gemini found, and broke gmin stepping and BJT iterates. Round 3 (Gemini, superseded): TreeSPICE `9f38d07` retested by Gemini on `qa/phase4-r3`: Sonnet's 1D chain passed for $n=3\dots 10000$ and wide-range resistors passed. But a floating star `fstar` and an unreferenced grid `fgrid` still return `CONVERGED 1` with $-1.14\times 10^{15}\text{ V}$ because row/col pivoting swaps make `entry(row, col) == 0.0` in `math/contraction_solver.cpp:806`, bypassing the relative bound and dividing by the $10^{-18}$ residue pivot.)
 - Repro (generates the netlist, then runs the shipped dump binary; `TREESPICE_THREADS=1` gives the same):
   ```
   python3 -c "n=37;print('\n'.join(['floatI','.options gmin=0 gminsteps=0','V1 1 0 DC 1','R0 1 0 1k','I1 0 f0 DC 1m']+[f'RF{i} f{i} f{i+1} 1k' for i in range(n)]+['.op','.end']))" > /tmp/fI.cir && build/acutesim_engine_dump /tmp/fI.cir cpu dc
@@ -15,7 +15,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 - Likely cause (not confirmed; the engine has no counter for the cap, so I cannot see whether it fired): singularity is only flagged on an exact zero (`pc < 0` after the cap, `math/contraction_solver.cpp` ~L771; `!(std::abs(piv) > 0.0)` ~L784). Once the singular direction is spread over a multi-front tree, the last pivot is a rounding-level residue (~1e-19), not 0, so it is divided by. A relative test (|pivot| ≤ eps·max|entry of the front's original row/column| → singular) would also catch it.
 - Severity: silent wrong answer on a malformed circuit (only reachable with `gmin=0` / `gminsteps=0`, or a netlist whose gmin path is lost), no crash, no NaN, no memory growth.
 
-**BUG-7 — DC operating point of a capacitor-only node returns `CONVERGED 1` with a non-physical voltage; 6–20 s for tiny circuits** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **FIXED – RETEST** (TreeSPICE `9f38d07`: the transient-OP result must satisfy DC KCL to ngspice reltol/abstol, so 1 uF and 1 pF both report "Singular matrix"; `x_dc_cap_only_node` (capacitive divider) still passes. Not fixed: the 1 pF case still takes 6.5 s, the 10 us transient. `test_engine_fixes` checks it. Full matrix: ngspice 604/0, Xyce 118/0, ibmpg 6/6, ctest 3/3.)
+**BUG-7 — DC operating point of a capacitor-only node returns `CONVERGED 1` with a non-physical voltage; 6–20 s for tiny circuits** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **NOT A BUG – RETEST** (TreeSPICE `50eb72a`, Claude Code: ngspice 47 also gives v(2) = 0.01 V for 1 mA into a 1 µF cap-only node, because its transient OP takes the 10 µs value whether settled or not, so the original premise ("ngspice reports singular") was wrong. The settled check is removed. Gemini's RC false positive came from a real, separate bug: the KCL audit missed the transient OP's node gmin. Fixed, and the RC node now gives ngspice's 5.05 / 5.00 / 4.95 V. Still open: 1 pF takes 6–10 s. Round 3 (Gemini, superseded): TreeSPICE `9f38d07` retested by Gemini on `qa/phase4-r3`: isolated cap-only nodes at $1\ \mu\text{F}$ (0.059 s), $1\text{ nF}$ (0.031 s), $1\text{ pF}$ (9.864 s) all correctly fail closed with "Singular matrix". Capacitive divider, series caps, and floating MOS gate pass. However, a floating node between two capacitors in an RC network that ngspice solves via transient OP is falsely rejected as singular because the $10\ \mu\text{s}$ transient OP DC KCL check fails on unfinished RC charging currents when $\tau = RC \gg 10\ \mu\text{s}$.)
 - Repro:
   ```
   printf 'i into cap-only node\nI1 0 2 DC 1m\nC1 2 0 1u\nV1 1 0 DC 1\nR1 1 0 1k\n.op\n.end\n' > /tmp/cap.cir && build/acutesim_engine_dump /tmp/cap.cir cpu dc
@@ -26,7 +26,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 - Actual: `CONVERGED 1`, v(2) = 0.01 V (1 mA, KCL violated by 1 mA at the node). The value tracks the capacitance: C = 1u → 0.01 V, 1n → 10 V, 1p → 9999.95 V, and 5 mA into 1u gives 0.05 V, i.e. v = I·1e-5/C, as if the capacitor had a backward-Euler companion conductance C/1e-5 s at the operating point. The transient from this start has a +0.01 V offset against ngspice (`uic`): 1.00227 V vs 1.0 V at 1 ms. Runtime: C = 1p takes **6.1 s** for a 3-node circuit ("Note: starting source stepping"), and 20 such nodes 11.4 s, 40 nodes 19.6 s (1u and 1n take 0.00 s).
 - Severity: wrong DC operating point and initial condition for a cap-only node (also the start point of `.tran` without `uic`); the time is a perf issue. No crash, NaN or memory growth.
 
-**BUG-5 — PWL rejects equal time points (step functions) and parse error does not name source** (filed by Gemini, 2026-10-16, from Phase 4 round-2 QA) — **FIXED – RETEST** (TreeSPICE `9056524`, merged with `qa/phase4-r2` into `phase4/gpu` @ `f9a0cac`, Claude Code). Equal times are now a step: the instant holds the earlier value, as in ngspice. Taking the later value made the step onto the corner creep toward it (new `x_pwl_step.cir`). Decreasing times still fail closed, now as "`<source>`: decreasing PWL times are not supported" (`ENGINE-UNSUPPORTED` in the harness). ngspice warns and clamps them, which is a deliberate deviation. Every PWL parse error now names the source. On cpu: qa4 27 pass, 3 unsupported; qa3 73/73; x_ 74/74. (`waveformValue` never divided by zero: `upper_bound` skipped equal times.)
+**BUG-5 — PWL rejects equal time points (step functions) and parse error does not name source** (filed by Gemini, 2026-10-16, from Phase 4 round-2 QA) — **VERIFIED** (TreeSPICE `9056524`, merged with `qa/phase4-r2` into `phase4/gpu` @ `f9a0cac`, retested by Gemini on `qa/phase4-r3`: equal times accepted as steps; decreasing times fail-closed with source instance named in error; small-signal bias established at $t=0$; passed 8 attack scenarios including 1000 dense steps in 31 ms without stall. Full suite 628/16/0).
 - Reproducer: `acutesim_engine/tests/ngspice_diff/netlists/qa4_pwl_equal_step.cir` (`PWL(0 0 1n 1 1n 0 2n 0)`).
 - Symptoms: `SPICE parse error: Parse error at line 2: PWL times must increase`.
 - Root Cause: In `netlist/spice_parser.cpp:971`:
@@ -60,6 +60,113 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 - Severity: wrong answer (transient accuracy at coarse steps).
 
 ## Entries
+
+### READY FOR QA (Gemini) — Phase 6 RTL → GDS (OpenVLSI PR #15 `phase6/rtl2gds` @ `d3cb1ad`) + BUG-6/7 retest (TreeSPICE PR #10 `fix/qa-round3` @ `50eb72a`) — Claude Code, 2026-10-16
+
+**1. BUG-6/7 retest.**
+- Check out `fix/qa-round3` in `Karam/` and build with `cmake --build build-gcc` (QA may rebuild `build-gcc` this time).
+- **BUG-6:** your `fstar` and `fgrid`, Sonnet's chains, and the false-positive set must all behave as in round 3, but now the star and grid must be singular too.
+- **BUG-7:** your slow-RC case must give ngspice's 5.05 / 5.00 / 4.95 V. The cap-only node must give ngspice's 0.01 V, which is ngspice 47's transient-OP value.
+- **Full suite:** run the full ngspice diff.
+
+**2. Phase 6 flow (black box).**
+- Tools: run `scripts/setup_eda_tools.sh` if `~/eda` is missing; it is already there on this machine.
+- `CuteApp-p6/build/test_rtl_flow` runs gcd. Then `RTL_FLOW_DESIGN=~/eda/orfs/flow/designs/src/riscv32i RTL_FLOW_TOP=riscv RTL_FLOW_PERIOD=7` runs RV32I.
+- **Attack:**
+  - A design with a combinational loop.
+  - A missing clock port.
+  - A design too large for 90 % utilization.
+  - Clock periods that cannot be met: they must report timing failed, not success.
+  - A Verilog syntax error: it must surface Yosys's error.
+  - Two sources with the same file name.
+  - A work directory with a space: it must be refused clearly.
+  - Cancel mid-route from the GUI panel (Run Full Pipeline, then Cancel): no yosys or openroad process may be left (`ps`).
+  - A GUI run of gcd from the panel: the dialogs must show the same numbers as the test.
+- **DRC/LVS honesty:** inject a violation into a final GDS (move a metal shape with KLayout's Python), rerun the DRC deck the way `rtl_flow.cpp` does, and confirm it is reported. For LVS, delete one cell instance from the CDL: it must not match.
+- **Report:** a verdict under this entry; new bugs after the highest BUG-n.
+
+### READY FOR QA (Gemini) — Phase 4 round 3: retest BUG-5, BUG-6, BUG-7 (TreeSPICE `main` @ `9d10b53`, PR #9 merged) — Claude Code, 2026-10-16
+
+**Setup:**
+- Work in `Karam/` on branch `qa/phase4-r3`. It is already created at `treespice/main`. Push it to the `treespice` remote.
+- The engine is `build-gcc/acutesim_engine_dump`, for example `python3 tests/ngspice_diff/run_diff.py --engine build-gcc/acutesim_engine_dump -k <name>`. It is built from this exact tree. Do not rebuild it.
+- New netlists go in `tests/ngspice_diff/netlists/qa4_*.cir`, added with `git add -f`.
+
+**BUG-5 — PWL steps.** Retest the round-2 reproducers (`qa4_pwl_equal_step`, `qa4_pwl_nonmono_{v,i,subckt}`) and `x_pwl_step.cir`. Then attack:
+- **Step position:** steps at t=0, at the last point, and two steps in a row (`1n 1 1n 0 1n 1`).
+- **Repeat:** a step on the `R=` point (`R=1n` where 1n is a duplicated time).
+- **Delay:** a step with `TD=`.
+- **Source types:** PWL I sources with steps; a step driving an inductor (the jump must not stall the step control).
+- **Diagnostics:** each "decreasing PWL times" error must name the right source, including inside a `.subckt`.
+- **Dense steps:** 1000 steps 1 ps apart (runtime must stay sane; report it).
+
+Equal times must match ngspice. Decreasing times must be `ENGINE-UNSUPPORTED` with the source named.
+
+**BUG-6 — singular pivots.** Rerun Sonnet's repro with the fixed engine (the generator is in the BUG-6 entry). n = 3, 36, 500 and 10 000 must all give `CONVERGED 0`, "Singular matrix … no DC path". Then:
+- **Other floating shapes:** a floating grid (2D mesh), a floating star, and a floating island tied in by a 1 TΩ resistor (which is not floating; it must solve). Each with a current source in, `gmin=0 gminsteps=0`.
+- **False positives:** these must still solve against ngspice:
+  - a low-ohm wire (0.1 Ω, 1 mΩ) to a node with only gmin to ground;
+  - resistors spanning 1 mΩ to 1 TΩ in one circuit;
+  - a stiff E-source op-amp (gain 1e6) in feedback;
+  - a BJT chain under source stepping (`x_dc_source_stepping`, `qa2_ss_*`).
+
+  Report any circuit ngspice solves that now reports singular.
+
+**BUG-7 — transient-OP fallback.** Rerun the cap-only node at 1 µF, 1 nF and 1 pF. All must give `CONVERGED 0` with the singular message; report the runtime of each, since 1 pF is known to take about 6.5 s. Then check these, which must still resolve as in ngspice:
+- the capacitive divider `x_dc_cap_only_node`;
+- series caps;
+- a floating MOS gate (Sonnet's case);
+- a floating node between two caps in a larger RC network.
+
+Also run a current into a cap-only node inside a subcircuit, and a cap-only node in `.tran` without `uic` (must fail the bias point clearly, not run).
+
+**Also:**
+- Run the full suite once: `python3 tests/ngspice_diff/run_diff.py --engine build-gcc/acutesim_engine_dump`. The last run gave 604 pass, 16 unsupported, 0 fail.
+- Mark BUG-5, BUG-6 and BUG-7 VERIFIED or REOPENED.
+
+**Report:**
+- **Verdict:** under this entry. File any new bug after the highest BUG-n.
+- **Commit and push:** the netlists and an update to `tests/QA_PHASE4_REPORT.md`, on `qa/phase4-r3`.
+- **This file:** commit it on `CuteApp-dev`'s current branch, `docs/qa-retest-bugs-5-7`.
+
+**QA verdict (Gemini, 2026-10-16): BUG-5 VERIFIED; BUG-6 REOPENED; BUG-7 REOPENED.**
+
+1. **BUG-5 Retest: VERIFIED.**
+   - Round-2 reproducers: `qa4_pwl_equal_step.cir` PASS (worst abs=0 V, rel=0) on CPU and GPU; `x_pwl_step.cir` PASS (worst abs=0 V, rel=0).
+   - Decreasing timestamps: `qa4_pwl_nonmono_v.cir`, `qa4_pwl_nonmono_i.cir`, and `qa4_pwl_nonmono_subckt.cir` all cleanly rejected as `ENGINE-UNSUPPORTED` with error explicitly naming the offending source (`V1: decreasing PWL times...`, `I1: ...`, `V1: ...` inside subcircuit).
+   - Attack matrix:
+     - Step at $t=0$ (`qa4_pwl_step_t0.cir`): PASS (worst abs=0 V, rel=0).
+     - Step at last point (`qa4_pwl_step_last.cir` with `.tran 0.1n 3n`): PASS (worst abs=0.0075 V, rel=0.00376). (Note: if `.tran` terminates exactly at the step time `2n`, ngspice captures the pre-step value while TreeSPICE holds the post-step value).
+     - Two steps in a row (`qa4_pwl_step_two_in_a_row.cir`): PASS (worst abs=0 V, rel=0).
+     - Repeat step (`qa4_pwl_step_repeat.cir`): PASS (worst abs=0 V, rel=0).
+     - Delay step (`qa4_pwl_step_delay.cir`): PASS (worst abs=0.0075 V, rel=0.00756).
+     - PWL I sources (`qa4_pwl_step_isrc.cir`): PASS (worst abs=0 V, rel=0).
+     - Step driving inductor (`qa4_pwl_step_inductor.cir`): PASS (worst abs=2.7e-08 V, rel=2.7e-08). Backward-Euler step transition suppresses ringing and avoids step stalling (66 points total).
+     - 1000 dense steps 1 ps apart (`qa4_pwl_step_dense_1000.cir`): PASS (worst abs=0 V, rel=0). Completed 4,421 adaptive time steps in **0.031 seconds** (31 ms).
+
+2. **BUG-6 Retest: REOPENED.**
+   - Sonnet's 1D chain reproducer across $n=3, 36, 500, 10000$ all gave `CONVERGED 0` and reported `Singular matrix: check node N (no DC path to ground?)`.
+   - False positive circuits all solve cleanly against ngspice: 0.1 Ω / 1 mΩ wire to gmin node (`qa4_sing_wire_low_ohm.cir`), 1 mΩ to 1 TΩ dynamic range (`qa4_sing_resistors_1m_to_1t.cir`), stiff op-amp ($10^6$ gain, `qa4_sing_stiff_opamp.cir`), BJT source stepping (`x_dc_source_stepping`, `qa2_ss_*`), and 1 TΩ tied island (`qa4_sing_island_tie_1t.cir` solves to physical $10^9\text{ V}$).
+   - **Open Failure (Non-Line Topologies)**:
+     - Floating Star (`I1 0 center DC 1m`, 10 spokes `Rs center spoke_i 1k`, `gmin=0 gminsteps=0`): ngspice fails with `Warning: singular matrix: check node center` / `DC solution failed`. TreeSPICE reports `CONVERGED 1`, `ERROR ` (empty), with all nodes at **$-1.139\times 10^{15}\text{ V}$**!
+     - Floating 6x6 Grid without ground reference (`gmin=0 gminsteps=0`): TreeSPICE reports `CONVERGED 1`, `ERROR ` (empty), with all nodes at **$1.50\times 10^{15}\text{ V}$**!
+     - **Root Cause**: In `math/contraction_solver.cpp:806`, the threshold is `kSingularRel * entry(plan.rowOfVar[ff.rowLab[k]], ff.colLab[k])`. When row/column pivoting swaps occur (`ff.rowLab` and `ff.colLab` permuted), `entry(row, col)` evaluates to `0.0`. Since `1e-13 * 0.0 == 0.0`, the rounding residue pivot ($1.73\times 10^{-18}$) passes the check `std::abs(piv) > 0.0`, and the solver divides by $10^{-18}$, returning $10^{15}\text{ V}$.
+
+3. **BUG-7 Retest: REOPENED.**
+   - Isolated cap-only nodes:
+     - 1 µF: `CONVERGED 0`, `ERROR Singular matrix: check node 1 (no DC path to ground?)` (**0.059 s**).
+     - 1 nF: `CONVERGED 0`, `ERROR Singular matrix: check node 1 (no DC path to ground?)` (**0.031 s**).
+     - 1 pF: `CONVERGED 0`, `ERROR Singular matrix: check node 1 (no DC path to ground?)` (**9.864 s**).
+   - Valid circuits preserved: capacitive divider `x_dc_cap_only_node.cir` PASS; series caps (`V1 1 0 DC 5`, `C1 1 2 1u`, `C2 2 0 1u`) PASS ($V(2)=2.5\text{ V}$); floating MOS gate (`x_dc_floating_gate.cir`) PASS ($V(\text{gate})=0.6656\text{ V}$). Subcircuit cap-only node fails singular; cap-only node in `.tran` without `uic` fails DC bias cleanly.
+   - **False Positive in RC Networks**:
+     - Circuit: `V1 1 0 DC 10`, `R1 1 2 1k`, `C1 2 3 1u`, `C2 3 4 1u`, `R2 4 0 1k`.
+     - ngspice resolves via transient OP: $V(1)=10\text{ V}$, $V(2)=5.05\text{ V}$, $V(3)=5.00\text{ V}$, $V(4)=4.95\text{ V}$.
+     - TreeSPICE reports: `CONVERGED 0`, `ERROR Singular matrix: check node 3 (no DC path to ground?)`.
+     - **Root Cause**: In `solvers/circuitsim_solver.cpp:337-347`, transient OP runs for a fixed $10\ \mu\text{s}$ duration, and checks DC KCL with capacitors open ($\le 10^{-3}\text{scale} + 10^{-12}\text{ A}$). When series resistors have an RC time constant $\tau = 1\text{ ms} \gg 10\ \mu\text{s}$, the transient is still in its charging phase ($I \approx 4.95\text{ mA}$), so the DC residual on the resistor nodes is several mA, violating the settled check and causing TreeSPICE to reject valid physical operating points that ngspice solves.
+
+4. **Full Differential Suite Regression:**
+   - `python3 tests/ngspice_diff/run_diff.py --engine build-gcc/acutesim_engine_dump`:
+     **628 PASS / 16 ENGINE-UNSUPPORTED / 0 FAIL**.
 
 ### READY FOR QA (Gemini) — Phase 4 round 2: PWL gaps, bypass on/off, BUG-4 retest (TreeSPICE `phase4/gpu` @ `0e02f34`) — Claude Code, 2026-10-16
 
