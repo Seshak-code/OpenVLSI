@@ -22,6 +22,69 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Entries
 
+### READY FOR QA (Sonnet 5.5, after Gemini closes Phase 4) — Phase 5 reference SoC (OpenVLSI `phase5/soc` @ `39d7c3f`) — Claude Code, 2026-10-16
+
+**What changed:** `compute/soc/`:
+- An RV32I instruction-set model (`rv32i.cpp`) and instruction encoders (`rv32i_asm.h`).
+- The reference SoC (`soc.cpp`): ROM, SRAM and UART.
+- `characterizeSram()`: a TreeSPICE transient of an IHP SG13G2 6T read gives the SRAM wait cycles.
+- `cosimUart()`: the UART TX pin drives a SPICE pad driver, line and receiver; the receiver waveform is thresholded and decoded.
+- App action: Simulation → Run Reference SoC (Hello World).
+
+The engine is bumped to TreeSPICE `6b40c10` (PR #9: PWL sources, `.osdi` paths relative to the netlist).
+
+**Dev checks:**
+- `build/test_soc_hello` all pass: the ISA checks, the wait-cycle accounting, the SRAM read (41.5 ps to a 100 mV split), and the decoded UART text.
+- `test_regression` 4/4.
+- 14 more integration suites pass.
+
+**Attack:**
+- **ISA:** every RV32I instruction: the sign/zero-extension of each load, every branch with signed and unsigned operands, JALR with odd targets, shifts by 31 and by register, writes to x0, misaligned and unmapped accesses (bus faults).
+- **Firmware:** longer strings, strings that end at 4 KiB, and a store to ROM (fault).
+- **SRAM:**
+  - characterisation across corners (`mos_ff` / `mos_ss`) and bitline capacitance;
+  - a cell storing 1;
+  - the sense margin;
+  - wait cycles at clocks where the read crosses a cycle boundary.
+- **UART co-simulation:** baud rates near the line's RC limit (100 Ω · 1 pF), long messages, framing at every byte value 0..255.
+- **GUI:** the menu action with datasets missing (it should report, not hang); `TREESPICE_DATASETS` pointing elsewhere.
+- **Known open items (no BUG):** bidirectional lockstep co-simulation; the Yosys/OpenROAD design-flow UI (the tools are not installed).
+
+### READY FOR QA (Gemini) — Phase 4 (TreeSPICE PR #9 `phase4/gpu` @ `6b40c10`) — Claude Code, 2026-10-16
+
+**What changed (engine):**
+- **Ordering:** approximate minimum degree with supernode amalgamation next to nested dissection; the cheaper plan wins (`TREESPICE_ORDERING=nd|md` forces one).
+- **Worker pool:** a persistent one.
+- **GPU:** dense FP32 GPU fronts ≥ 512 (`TREESPICE_GPU_FRONT`, GPU build only).
+- **OSDI evaluation:**
+  - parallel;
+  - the audit's evaluation reused by the next stamp;
+  - device bypass (`TREESPICE_BYPASS=0` turns it off);
+  - cached CSR assembly.
+- **Delayed-pivot cap (8 rows a front):** a zero pivot past the cap is reported singular, and grown front buffers give memory back.
+- **Sources:** PWL with `TD=` and `R=`.
+- **Transient steps:** ngspice's step rule after a corner, and three steps without the LTE check after a corner.
+- **`.osdi`:** paths relative to the netlist.
+
+**Dev checks** (in the TreeSPICE worktree):
+- ctest 3/3.
+- `tests/ngspice_diff/run_diff.py`: 548/0.
+- `tests/xyce_diff.py`: 118/0.
+- `tests/ibmpg_diff.py`: 6/6.
+- `tests/char_cells.py`: 0.087 %.
+- `tests/qa3_ihp_cells.py`: 75/77.
+- `bench/klu_bench` on `datasets/suitesparse` (call the binary directly; `klu_bench.py` downloads).
+- `tests/scale_ladder.py`: 1e5 stages run in 318 s / 2.65 GB.
+
+**Attack:**
+- **Ordering:** circuits where minimum degree and nested dissection disagree (mixed grid + logic); compare `TREESPICE_ORDERING=nd|md` with the default for the same answers.
+- **Bypass:** sensitive circuits where a 1 mV bypass could matter (high-gain amplifiers, oscillators, comparators near threshold, current mirrors); compare `TREESPICE_BYPASS=0` against ngspice.
+- **Delayed-pivot cap:** near-singular circuits (floating gates, `gminsteps=0`, huge E/G gains) must not silently get worse answers.
+- **PWL:** every form (TD, R, R at the first point, single point, non-increasing times as an error), in V and I sources, inside subcircuits, with `.dc` (the t=0 value) and `.ac`.
+- **Corners:** dense PULSE trains, a PWL with sub-ps corner spacing, inductors driven by ramps.
+- **Threads:** run with `TREESPICE_THREADS=1` and with the default; results must be identical.
+- **Scale:** `tests/scale_ladder.py --stages 1000,30000`, memory with `/usr/bin/time -l`.
+
 ### READY FOR QA — Phase 3 close-out + Phase 4 GPU fronts (TreeSPICE PR #8 `phase3/pdk` @ `e7561a3`, draft PR #9 `phase4/gpu` @ `5b79ad6`; OpenVLSI PR #12 `phase3/pdk-app` @ `f563462`) — Claude Code, 2026-10-15
 
 The engine work is in the TreeSPICE worktree `Karam`, and the app bump is in `CuteApp-dev`.
