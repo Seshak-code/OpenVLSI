@@ -161,6 +161,7 @@ private slots:
     void newProject();
     void openProject();
     void runSimulation();
+    void runReferenceSoc();  // Roadmap Phase 5 gate: hello-world firmware on the reference SoC
     
     // Stage Switching
     void setupStageToolbar();

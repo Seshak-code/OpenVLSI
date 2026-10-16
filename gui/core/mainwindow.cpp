@@ -30,6 +30,11 @@
 #include <QDebug>
 #include <QComboBox>
 #include "../widgets/inline_dialog.h"
+#ifndef __EMSCRIPTEN__
+#include "compute/soc/soc.h"
+#include <QFutureWatcher>
+#include <QtConcurrent/QtConcurrent>
+#endif
 #include <QPushButton>
 #include <QLabel>
 #include <QToolButton>
@@ -1196,6 +1201,44 @@ void MainWindow::setupMenus() {
             simulationWorkspace->runQuickDC();
         }
     });
+#ifndef __EMSCRIPTEN__
+    simMenu->addSeparator();
+    simMenu->addAction("Run Reference SoC (Hello World)", this, &MainWindow::runReferenceSoc);
+#endif
+}
+
+void MainWindow::runReferenceSoc() {
+#ifndef __EMSCRIPTEN__
+    // The reference SoC (compute/soc/soc.h): SRAM read time from a TreeSPICE characterisation of an
+    // IHP SG13G2 6T cell, the firmware on the RV32I model, the UART line co-simulated in SPICE. The
+    // SPICE runs take seconds, so it runs off the GUI thread. TREESPICE_DATASETS overrides the
+    // datasets directory (pdk/ihp, osdi/psp103.osdi).
+    const QByteArray env = qgetenv("TREESPICE_DATASETS");
+    const std::string datasets = env.isEmpty() ? std::string(SOC_DATASETS) : env.toStdString();
+    statusBar()->showMessage("Reference SoC: characterising the SRAM and running the firmware...");
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+        statusBar()->clearMessage();
+        acutesim::gui::widgets::InlineDialog::information(this, "Reference SoC", watcher->result());
+        watcher->deleteLater();
+    });
+    watcher->setFuture(QtConcurrent::run([datasets]() -> QString {
+        soc::SocConfig cfg;
+        cfg.clockHz = 2e9;
+        cfg.uartDivider = 200;  // 10 Mbaud
+        const soc::SramTiming sram = soc::characterizeSram(datasets, cfg.clockHz);
+        if (!sram.error.empty()) return QString("SRAM characterisation failed: %1").arg(QString::fromStdString(sram.error));
+        const soc::SocRun run = soc::runSoc(soc::helloFirmware(), sram, cfg);
+        if (!run.ok) return QString("The firmware failed: %1").arg(QString::fromStdString(run.error));
+        const soc::CosimResult line = soc::cosimUart(run, datasets, cfg);
+        QString text = line.ok ? QString::fromStdString(line.text).trimmed() : QString("(co-simulation failed: %1)").arg(QString::fromStdString(line.error));
+        return QString("UART output, decoded from the SPICE waveform of the pad driver, line and receiver:\n\n    %1\n\n"
+                       "CPU: RV32I at 2 GHz, %2 instructions in %3 cycles (%4 us)\n"
+                       "SRAM: IHP SG13G2 6T read %5 ps to a 100 mV bitline split -> %6 wait cycle(s)")
+            .arg(text).arg(run.instructions).arg(run.cycles).arg(run.seconds * 1e6, 0, 'f', 2)
+            .arg(sram.readDelay * 1e12, 0, 'f', 1).arg(sram.waitCycles);
+    }));
+#endif
 }
 
 void MainWindow::newProject() {

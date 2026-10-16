@@ -212,17 +212,35 @@ and see the program's output — covering every step from schematic/RTL to sign-
 - [x] PDK model-card ingestion (`.lib` sections, corners); DC source stepping (ngspice gillespie_src)
 - **Gate:** standard-cell characterisation (delay/power) within 1 % of ngspice on a real PDK
 
-**Phase 4 — Single-GPU scale**
-- [ ] Device evaluation on GPU (today the GPU computes nothing that is used; CPU stamps everything)
-- [ ] Partitioning + batched small-block LU on GPU (Schur/BBD; existing `schur_solver`, `graph_partitioner`)
-- [ ] Isomorphism reuse: identical cell instances share tensors/evaluations (`graph_canonical.h`)
-- [ ] Activity/latency bypass and multirate integration for quiescent partitions
-- **Gate:** scale ladder 10³ → 10⁵ → 10⁷ → 10⁹ devices, each rung with accuracy + runtime targets
+**Phase 4 — Single-GPU scale** *(TreeSPICE `phase4/gpu`, 2026-10-16)*
+- [x] Fill-reducing ordering closes the KLU gap.
+  - The planner adds approximate minimum degree with supernode amalgamation and keeps the cheaper plan, so grids still use nested dissection.
+  - TreeSPICE is within 1.1-3× of KLU on small SuiteSparse circuit matrices (was 3-2200×) and faster on the large ones (G2_circuit 2.1× on the CPU, 7.2× with GPU fronts).
+  - See `acutesim_engine/bench/results-2026-10-15.md`.
+- [~] Device evaluation, done on CPU threads instead of the GPU.
+  - OSDI models (BSIM4, PSP, BSIM-CMG) are compiled host code, so they cannot run on the GPU; device evaluation runs in parallel on CPU threads.
+  - Each Newton iterate is evaluated once, and the device list and CSR pattern are cached.
+  - A 1000-stage BSIM4 chain transient runs 3.8× faster.
+- [~] GPU fronts.
+  - Dense FP32 GPU LU of large fronts with FP64 refinement is kept.
+  - A whole-tree batched GPU solver (one dispatch per level) was built, measured 1.5-10× slower than the CPU (per-pivot barrier latency on small fronts), and deleted.
+- [~] Bypass: done (ngspice's voltage criterion). Isomorphism reuse beyond bypass and multirate integration are still open.
+- **Gate:** scale ladder (`acutesim_engine/tests/scale_ladder.py`, BSIM4 inverter chains):
+  - 2·10² devices: ngspice is faster (0.6×), timing agrees to 0.1 %.
+  - 2·10³ devices: 2.0× ngspice.
+  - 2·10⁴ devices: 25 s; ngspice fails ("timestep too small").
+  - 2·10⁵ devices: 318 s at 2.65 GB.
+  - 10⁷ and above: open (needs hierarchy and multirate).
 
-**Phase 5 — SoC flow in the app**
-- [ ] Mixed-signal co-simulation: RTL/firmware engine ↔ SPICE blocks through A2D/D2A ports
-- [ ] SoC + RAM reference design: CPU RTL + SRAM macro (SPICE-characterised) + firmware → visible program output
-- [ ] Unified design flow UI: schematic/RTL → synthesis (Yosys) → P&R (OpenROAD) → extraction → simulation → sign-off
+**Phase 5 — SoC flow in the app** *(OpenVLSI `compute/soc/`, 2026-10-16)*
+- [~] Mixed-signal co-simulation.
+  - Done, one direction: the UART TX pin of the firmware run drives a SPICE pad driver, line and receiver (IHP cells); the receiver's analog waveform is thresholded (A2D) and decoded back into the text the app shows.
+  - Open: lockstep, bidirectional co-simulation, with analog results feeding back into the running CPU.
+- [x] SoC + RAM reference design.
+  - An RV32I instruction-set model, with firmware built by in-repo encoders.
+  - SRAM wait cycles come from a TreeSPICE read characterisation of an IHP SG13G2 6T cell.
+  - Run it from Simulation → Run Reference SoC (Hello World); `tests/test_soc_hello` is the check.
+- [ ] Unified design flow UI. Open: needs Yosys and OpenROAD installed.
 - **Gate:** "hello world" firmware runs on the reference SoC inside the app, with SRAM timing taken from SPICE characterisation
 
 ---

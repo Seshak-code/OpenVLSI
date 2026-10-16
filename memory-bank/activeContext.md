@@ -1,20 +1,32 @@
 # Active Context
 
-**Last session: Claude Code (dev), 2026-10-15 — Phase 3 close-out, Phase 4 GPU, ordering**
+**Last session: Claude Code (dev), 2026-10-16 — Phase 4 done (TreeSPICE PR #9), Phase 5 gate met (OpenVLSI `phase5/soc`)**
 
-**QA is back with Cline/Gemini (owner, 2026-10-15).** This replaces the 2026-10-13 rule that Claude Code tests everything itself. Pick up the READY FOR QA entry at the top of `memory-bank/qa-queue.md`. QA does not edit engine source.
+**QA hand-off (owner, 2026-10-15/16):**
+- **Phase 4 task split (owner request 2026-10-16):**
+  - **Claude Code**: Benchmarks, solver scale ladder (`scale_ladder.py`), KLU ordering validation (`klu_bench`), numerical stability of delayed-pivot cap on stiff/near-singular circuits, and thread scaling/determinism.
+  - **Cline / Gemini**: Adversarial SPICE testing (device bypass sensitivity on high-gain blocks, PWL source matrix, dense corner stepping, Sky130 PDK bin edges).
+- **A Sonnet 5.5 session** takes the Phase 5 entry once Phase 4 is closed.
+- QA does not edit engine or GUI source.
 
 PRs:
-- **TreeSPICE #8 and OpenVLSI #12: merged (owner, 2026-10-15).** Phase 3 close-out with real PDKs (IHP, sky130) and the QA round 3 fixes; the app's submodule now points at TreeSPICE `e7561a3`.
-- **TreeSPICE #9 (draft, `phase4/gpu`):** FP32 GPU fronts with FP64 refinement. The GPU is 2–7× faster on large fronts but did not close the KLU gap; the ordering work below does.
+- **TreeSPICE #8 and OpenVLSI #12:** merged.
+- **OpenVLSI #13:** docs, the QA hand-off.
+- **TreeSPICE #9 (`phase4/gpu`, ready for review):** Phase 4.
+  - The ordering closes the KLU gap: within 1.1–3× on the small matrices, faster on the large ones.
+  - Parallel device evaluation and bypass: a BSIM4 chain transient runs 3.8× faster.
+  - 1e5-stage circuits now run (they died at 133 GB).
+  - PWL sources.
+- **OpenVLSI `phase5/soc`:** the reference SoC.
+  - An RV32I model, an SRAM characterised by TreeSPICE, and the UART line co-simulated in SPICE.
+  - Simulation → Run Reference SoC (Hello World).
+  - The engine submodule is bumped to `6b40c10`. Merge #9 first.
 
-**In progress** (Claude Code, `phase4/gpu`, not committed yet; the owner approved it):
-- A minimum-degree ordering (AMD) with relaxed supernodes, next to nested dissection. The planner keeps whichever plan is cheaper.
-- First numbers: TreeSPICE is now within 1.4–5× of KLU on small circuit matrices, down from 100–2000×, and faster than KLU on ASIC_100k, G2_circuit, rajat15 and scircuit.
-- **Next:**
-  - the per-front cost model for choosing between the two plans;
-  - faster AMD planning on meshes;
-  - then the owner's GPU direction: CPU symbolic, and batched per-level small fronts on the GPU (superposition / extend-add on the device), resident on the GPU for dGPUs.
+Open after Phases 4 and 5:
+- Device evaluation on the GPU (OSDI models are host code).
+- Isomorphism reuse beyond bypass, and multirate integration.
+- Lockstep, bidirectional co-simulation.
+- The Yosys/OpenROAD design-flow UI (needs the tools installed).
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at

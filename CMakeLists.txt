@@ -675,7 +675,8 @@ if(Qt6Svg_FOUND)
 endif()
 
 if(NOT EMSCRIPTEN)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Concurrent)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Concurrent acutesim_soc)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE SOC_DATASETS="${CMAKE_CURRENT_SOURCE_DIR}/datasets")
 else()
     # Export runtime methods but do NOT generate HTML (we manage it manually)
     set_target_properties(${PROJECT_NAME} PROPERTIES 
@@ -1981,6 +1982,17 @@ target_link_libraries(test_verification_harness PRIVATE acutesim_compute_core)
 target_include_directories(test_verification_harness PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_verification_harness PUBLIC cxx_std_17)
 # Standard Cell Verification (Generic Darlington)
+# Reference SoC (Roadmap Phase 5): RV32I ISS, memory map, SPICE-characterised SRAM, UART co-simulation
+if(NOT EMSCRIPTEN)
+    add_library(acutesim_soc STATIC compute/soc/rv32i.cpp compute/soc/soc.cpp)
+    target_link_libraries(acutesim_soc PUBLIC acutesim_engine)
+    target_include_directories(acutesim_soc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(acutesim_soc PUBLIC cxx_std_17)
+    add_executable(test_soc_hello tests/test_soc_hello.cpp)
+    target_link_libraries(test_soc_hello PRIVATE acutesim_soc)
+    target_compile_definitions(test_soc_hello PRIVATE SOC_DATASETS="${CMAKE_CURRENT_SOURCE_DIR}/datasets")
+endif()
+
 add_executable(test_std_cells
     tests/test_std_cells.cpp
     components/standard_cells.cpp
@@ -2496,4 +2508,15 @@ if(NOT EMSCRIPTEN)
         TEST_MODE 
         ACUTESIM_THREADS_ENABLED
     )
+endif()
+
+# Targets compiling gui/core/mainwindow.cpp need what its Reference SoC action uses
+if(NOT EMSCRIPTEN)
+    foreach(t test_auto_harness test_copilot_validate test_pdk_compliance test_hierarchical_sim
+              test_introspection test_hierarchy_gui)
+        if(TARGET ${t})
+            target_link_libraries(${t} PRIVATE acutesim_soc)
+            target_compile_definitions(${t} PRIVATE SOC_DATASETS="${CMAKE_CURRENT_SOURCE_DIR}/datasets")
+        endif()
+    endforeach()
 endif()
