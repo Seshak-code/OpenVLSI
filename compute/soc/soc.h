@@ -6,6 +6,9 @@
 //   ROM   0x0000_0000  4 KiB   firmware and its string, 0 wait cycles
 //   SRAM  0x1000_0000  4 KiB   ceil(t_read / t_clk) - 1 wait cycles per access, from characterizeSram()
 //   UART  0x2000_0000          write: transmit a byte (the store waits while the line is busy)
+//         0x2000_0004          read: status, bit 0 RX byte available, bit 1 TX busy, bit 2 framing error seen
+//         0x2000_0008          read: RX byte (clears bit 0)
+//         0x2000_000C          write: debug port, a byte collected as the run's output (not sent on TX)
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -44,6 +47,10 @@ struct SocConfig {
 std::vector<uint32_t> helloFirmware();
 const char *helloText();
 
+// The firmware for cosimLockstep: sends each character of helloText() on TX, waits for it to come back
+// on RX (a loopback cable), and writes the received byte to the debug port. Word accesses only.
+std::vector<uint32_t> echoFirmware();
+
 SocRun runSoc(const std::vector<uint32_t> &rom, const SramTiming &sram, const SocConfig &cfg = {});
 
 struct CosimResult {
@@ -57,5 +64,26 @@ struct CosimResult {
 // through a 100 ohm / 1 pF line into an sg13g2_inv_1 receiver (TreeSPICE transient); the receiver
 // output is thresholded at VDD/2 (A2D) and decoded as 8N1 UART frames.
 CosimResult cosimUart(const SocRun &run, const std::string &datasets, const SocConfig &cfg = {});
+
+struct LockstepResult {
+    bool ok = false;
+    std::string error;
+    std::string debug;               // bytes the firmware wrote to the debug port
+    std::string rx;                  // bytes the UART receiver completed, in order
+    uint64_t instructions = 0, cycles = 0;
+    int exchanges = 0;               // CPU <-> SPICE hand-overs, one per RX oversampling tick
+    int framingErrors = 0;
+    std::vector<double> latency;     // per RX byte: stop-bit sample time minus the ideal one [s]
+    double seconds = 0.0;            // simulated time
+    double wallSeconds = 0.0;        // run time of the co-simulation itself
+};
+
+// Lockstep mixed-signal co-simulation: the TX pin is wired through SPICE (the cosimUart pad driver, line
+// and receiver, one live TreeSPICE transient) back to RX. Every uartDivider/16 cycles (one RX oversampling
+// tick) the pin level re-drives the SPICE source, SPICE advances to now, and the receiver output (A2D at
+// VDD/2) is the level the UART RX sees, so the CPU's next step depends on the analog result.
+// uartDivider must be a multiple of 16.
+LockstepResult cosimLockstep(const std::vector<uint32_t> &rom, const SramTiming &sram, const std::string &datasets,
+                             const SocConfig &cfg = {});
 
 }  // namespace soc
