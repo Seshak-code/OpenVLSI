@@ -1,20 +1,20 @@
 # Active Context
 
-**Last session: Claude Code (dev), 2026-10-14 — Phase 3 devices (diode + Gummel–Poon BJT)**
+**Last session: Claude Code (dev), 2026-10-15 — Phase 3 close-out, Phase 4 GPU, ordering**
 
-**Owner's rule (2026-10-13), overrides the dev/QA split for now:** Claude Code does ALL testing itself and
-does not hand QA to Cline; it tests once per phase, after implementing everything in that phase.
+**QA is back with Cline/Gemini (owner, 2026-10-15).** This replaces the 2026-10-13 rule that Claude Code tests everything itself. Pick up the READY FOR QA entry at the top of `memory-bank/qa-queue.md`. QA does not edit engine source.
 
-- **Phase 3 devices done** (TreeSPICE PR #6, OpenVLSI companion PR): SPICE diode (RS, CJO, TT, BV, AREA)
-  and Gummel–Poon BJT (VAF/IKF/ISE/RB/RC/RE/CJE/CJC/XCJC/CJS/ISS/TF/TR, substrate node); one device path
-  (`junctionCurrents` → `stampJunction`); SIMD kernels and KernelDispatcher deleted; ngspice junction
-  limiting; convergence fixes. Verified: ngspice 190/0, Xyce 92/0, ibmpg2, OpenVLSI suites + ctest.
-- KLU baseline recorded (TreeSPICE PR #5): 3–1,900× slower than KLU on transistor-level matrices; owner
-  accepted the gap for now.
-- Repos: OpenVLSI (this app) and TreeSPICE (engine, submodule `acutesim_engine/`). Engine changes land in
-  TreeSPICE first; then bump the pointer here. New worktrees: `git submodule update --init`.
+PRs:
+- **TreeSPICE #8 and OpenVLSI #12: merged (owner, 2026-10-15).** Phase 3 close-out with real PDKs (IHP, sky130) and the QA round 3 fixes; the app's submodule now points at TreeSPICE `e7561a3`.
+- **TreeSPICE #9 (draft, `phase4/gpu`):** FP32 GPU fronts with FP64 refinement. The GPU is 2–7× faster on large fronts but did not close the KLU gap; the ordering work below does.
 
-Next: Phase 3 remainder — BSIM4/BSIM-CMG via OpenVAF/OSDI, `.lib` sections and corners, source stepping.
+**In progress** (Claude Code, `phase4/gpu`, not committed yet; the owner approved it):
+- A minimum-degree ordering (AMD) with relaxed supernodes, next to nested dissection. The planner keeps whichever plan is cheaper.
+- First numbers: TreeSPICE is now within 1.4–5× of KLU on small circuit matrices, down from 100–2000×, and faster than KLU on ASIC_100k, G2_circuit, rajat15 and scircuit.
+- **Next:**
+  - the per-front cost model for choosing between the two plans;
+  - faster AMD planning on meshes;
+  - then the owner's GPU direction: CPU symbolic, and batched per-level small fronts on the GPU (superposition / extend-add on the device), resident on the GPU for dGPUs.
 
 **This file is the live cross-agent state. Claude Code auto-imports it at every
 session start (`@memory-bank/activeContext.md` in CLAUDE.md). Update it at
