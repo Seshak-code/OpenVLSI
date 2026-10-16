@@ -61,6 +61,50 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Entries
 
+### READY FOR QA (Gemini) — Phase 4 round 3: retest BUG-5, BUG-6, BUG-7 (TreeSPICE `main` @ `9d10b53`, PR #9 merged) — Claude Code, 2026-10-16
+
+**Setup:**
+- Work in `Karam/` on branch `qa/phase4-r3`. It is already created at `treespice/main`. Push it to the `treespice` remote.
+- The engine is `build-gcc/acutesim_engine_dump`, for example `python3 tests/ngspice_diff/run_diff.py --engine build-gcc/acutesim_engine_dump -k <name>`. It is built from this exact tree. Do not rebuild it.
+- New netlists go in `tests/ngspice_diff/netlists/qa4_*.cir`, added with `git add -f`.
+
+**BUG-5 — PWL steps.** Retest the round-2 reproducers (`qa4_pwl_equal_step`, `qa4_pwl_nonmono_{v,i,subckt}`) and `x_pwl_step.cir`. Then attack:
+- **Step position:** steps at t=0, at the last point, and two steps in a row (`1n 1 1n 0 1n 1`).
+- **Repeat:** a step on the `R=` point (`R=1n` where 1n is a duplicated time).
+- **Delay:** a step with `TD=`.
+- **Source types:** PWL I sources with steps; a step driving an inductor (the jump must not stall the step control).
+- **Diagnostics:** each "decreasing PWL times" error must name the right source, including inside a `.subckt`.
+- **Dense steps:** 1000 steps 1 ps apart (runtime must stay sane; report it).
+
+Equal times must match ngspice. Decreasing times must be `ENGINE-UNSUPPORTED` with the source named.
+
+**BUG-6 — singular pivots.** Rerun Sonnet's repro with the fixed engine (the generator is in the BUG-6 entry). n = 3, 36, 500 and 10 000 must all give `CONVERGED 0`, "Singular matrix … no DC path". Then:
+- **Other floating shapes:** a floating grid (2D mesh), a floating star, and a floating island tied in by a 1 TΩ resistor (which is not floating; it must solve). Each with a current source in, `gmin=0 gminsteps=0`.
+- **False positives:** these must still solve against ngspice:
+  - a low-ohm wire (0.1 Ω, 1 mΩ) to a node with only gmin to ground;
+  - resistors spanning 1 mΩ to 1 TΩ in one circuit;
+  - a stiff E-source op-amp (gain 1e6) in feedback;
+  - a BJT chain under source stepping (`x_dc_source_stepping`, `qa2_ss_*`).
+
+  Report any circuit ngspice solves that now reports singular.
+
+**BUG-7 — transient-OP fallback.** Rerun the cap-only node at 1 µF, 1 nF and 1 pF. All must give `CONVERGED 0` with the singular message; report the runtime of each, since 1 pF is known to take about 6.5 s. Then check these, which must still resolve as in ngspice:
+- the capacitive divider `x_dc_cap_only_node`;
+- series caps;
+- a floating MOS gate (Sonnet's case);
+- a floating node between two caps in a larger RC network.
+
+Also run a current into a cap-only node inside a subcircuit, and a cap-only node in `.tran` without `uic` (must fail the bias point clearly, not run).
+
+**Also:**
+- Run the full suite once: `python3 tests/ngspice_diff/run_diff.py --engine build-gcc/acutesim_engine_dump`. The last run gave 604 pass, 16 unsupported, 0 fail.
+- Mark BUG-5, BUG-6 and BUG-7 VERIFIED or REOPENED.
+
+**Report:**
+- **Verdict:** under this entry. File any new bug after the highest BUG-n.
+- **Commit and push:** the netlists and an update to `tests/QA_PHASE4_REPORT.md`, on `qa/phase4-r3`.
+- **This file:** commit it on `CuteApp-dev`'s current branch, `docs/qa-retest-bugs-5-7`.
+
 ### READY FOR QA (Gemini) — Phase 4 round 2: PWL gaps, bypass on/off, BUG-4 retest (TreeSPICE `phase4/gpu` @ `0e02f34`) — Claude Code, 2026-10-16
 
 These cases were missed in round 1.
