@@ -1,42 +1,41 @@
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
 #include <map>
 #include <chrono>
-#include <memory>
 #include <functional>
 
 namespace acutesim::orchestration {
 
 struct SubprocessResult {
-    int exit_code;
+    int exit_code = -1;
     std::string stdout_output;
     std::string stderr_output;
-    bool timed_out;
+    bool timed_out = false;
+    bool cancelled = false;
 };
 
 class Subprocess {
 public:
-    // Callback for streaming stdout/stderr line by line
+    // Receives output chunks as they arrive (not split into lines)
     using OutputCallback = std::function<void(const std::string&)>;
 
-    // Configure the subprocess
     Subprocess(const std::string& command, const std::vector<std::string>& args);
 
-    // Set working directory (Sandboxing)
     void setWorkingDirectory(const std::string& path);
 
-    // Set Environment variables (Sanitization)
+    // Added to (or overriding) the inherited environment
     void setEnvironment(const std::map<std::string, std::string>& env);
 
-    // Set timeout in milliseconds (Watchdog)
+    // Watchdog: the whole process group is killed when it expires
     void setTimeout(std::chrono::milliseconds timeout);
 
-    // Run synchronously and return result
-    SubprocessResult run();
+    // Polled while running; setting it kills the process group
+    void setCancelFlag(const std::atomic<bool>* cancel);
 
-    // Run and stream output via callback (blocks until finish)
+    SubprocessResult run();
     SubprocessResult runWithStreaming(OutputCallback stdoutCb, OutputCallback stderrCb);
 
 private:
@@ -45,6 +44,7 @@ private:
     std::string workDir_;
     std::map<std::string, std::string> env_;
     std::chrono::milliseconds timeout_ = std::chrono::minutes(10);
+    const std::atomic<bool>* cancel_ = nullptr;
 };
 
 } // namespace acutesim::orchestration

@@ -257,12 +257,39 @@ being designed and an integrated OpenROAD RTL → GDS pipeline, in one applicati
   - The IHP platform (LEF, Liberty, GDS, DRC/LVS decks, PDN) comes from OpenROAD-flow-scripts
     `flow/platforms/ihp-sg13g2`.
 
-**Phase 6 — RTL → GDS in the app**
-- [ ] Yosys → OpenROAD (floorplan, PDN, place, CTS, route) → KLayout (GDS merge, DRC, LVS), run
-      from the app. The existing drivers (`compute/orchestration/drivers/*_task.cpp`) are finished and
-      pointed at the IHP platform instead of FreePDK45 placeholders.
-- [ ] An RV32I RTL core to take through the flow, the RTL counterpart of `compute/soc/rv32i`.
-- **Gate:** the RV32I core is placed and routed on IHP SG13G2, DRC and LVS clean, from the app's flow UI.
+**Phase 6 — RTL → GDS in the app** *(OpenVLSI `phase6/rtl2gds`, 2026-10-16)*
+- [x] The flow runner `compute/orchestration/drivers/rtl_flow.{h,cpp}`, behind WorkerManager::submitRtlToGds
+      and the RTL pipeline panel:
+  - **Implementation:** OpenROAD-flow-scripts (ORFS) for synthesis → floorplan → PDN → placement → CTS →
+    routing → fill → GDS, then IHP's maximal KLayout DRC deck and KLayout LVS.
+  - **Why ORFS:** its maintained recipe replaced the FreePDK45 TCL generators (`yosys_task`, `openroad_task`,
+    `klayout_task`, `tool_driver`, ~1,750 lines), which could not have run: the panel never passed
+    the Verilog sources.
+  - **Subprocess fixes** (`Subprocess`): the environment is now applied, tool output is no longer lost at
+    exit, and a timeout or cancel kills the whole process group.
+- [x] The RV32I core: ORFS's `riscv32i` (Apache-2.0, ~1,100 lines; single-cycle, memories outside
+      the block).
+- [x] Tool setup: `scripts/setup_eda_tools.sh`.
+- **Gate:** `tests/test_rtl_flow` (ORFS `gcd` by default; `RTL_FLOW_DESIGN/TOP/PERIOD` for others):
+  - **gcd:** 421 cells, timing met at 10 ns, 0 routing and antenna violations, 0 errors on IHP's maximal
+    DRC deck, LVS netlists match, 108 s.
+  - **RV32I** (`RTL_FLOW_DESIGN=~/eda/orfs/flow/designs/src/riscv32i RTL_FLOW_TOP=riscv RTL_FLOW_PERIOD=7`):
+    - 8,454 cells, 0.153 mm² placed at 45 % utilization.
+    - Timing met at 7 ns (143 MHz), 18.2 mW.
+    - 0 routing and antenna violations; DRC clean on IHP's maximal deck; LVS netlists match; 963 s.
+    - It misses 6 ns by 0.11 ns, and 4 ns by 1.2 ns, once its I/O is constrained: the single-cycle
+      ALU result leaves the block to data memory within the cycle. (ORFS's own template meets 4 ns
+      only because a Tcl bug, `lappend $non_clock_inputs`, leaves its input delays unapplied.)
+- **Block-level sign-off rules:**
+  - **Global metal density:** IHP's 35–60 % per-layer density is checked at chip level, where IHP's filler
+    fills inside the seal ring and keeps fill off transistors. OpenROAD's fill reaches 18–37 % inside a
+    standard-cell block.
+  - **DRC:** runs every other rule (495 rules: off-grid, filler and recommended included) with
+    `densityRules=false`.
+  - **LVS:** writes the netlist with fill and decap cells (decaps hold transistors). It flattens the antenna
+    cells before align: IHP's deck extracts their diodes in the parent, so the empty layout cell was
+    purged after align and the schematic's instances had no counterpart.
+- **Open:** chip assembly (pad ring, seal ring, IHP filler, global density); the flow on more PDKs.
 
 **Phase 7 — Firmware on your own silicon**
 - [ ] The firmware runs on that core's RTL (Verilator), then on its post-layout gate netlist with SDF

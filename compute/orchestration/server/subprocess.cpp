@@ -11,8 +11,7 @@
 #include <cstring>
 #include <filesystem>
 
-// Simple POSIX implementation for macOS
-// NOTE: For a production cross-platform tool on Windows, we'd wrap CreateProcess/pipes.
+// POSIX implementation (macOS, Linux). ponytail: no Windows path (CreateProcess + pipes).
 
 namespace acutesim::orchestration {
 
@@ -31,6 +30,10 @@ void Subprocess::setTimeout(std::chrono::milliseconds timeout) {
     timeout_ = timeout;
 }
 
+void Subprocess::setCancelFlag(const std::atomic<bool>* cancel) {
+    cancel_ = cancel;
+}
+
 SubprocessResult Subprocess::run() {
     return runWithStreaming(nullptr, nullptr);
 }
@@ -38,140 +41,86 @@ SubprocessResult Subprocess::run() {
 SubprocessResult Subprocess::runWithStreaming(OutputCallback stdoutCb, OutputCallback stderrCb) {
     int pipe_out[2], pipe_err[2];
     if (pipe(pipe_out) == -1 || pipe(pipe_err) == -1) {
-        return {-1, "", "Failed to create pipes", false};
+        SubprocessResult r;
+        r.stderr_output = "Failed to create pipes";
+        return r;
     }
 
-    auto start_time = std::chrono::steady_clock::now();
-    pid_t pid = fork();
+    const auto start_time = std::chrono::steady_clock::now();
+    const pid_t pid = fork();
 
     if (pid == 0) {
-        // Child Process
-        
-        // redirect stdout -> pipe_out[1]
+        // Own process group: a timeout or cancel kills the tools a make or shell started too
+        setpgid(0, 0);
         dup2(pipe_out[1], STDOUT_FILENO);
-        close(pipe_out[0]);
-        close(pipe_out[1]);
-
-        // redirect stderr -> pipe_err[1]
         dup2(pipe_err[1], STDERR_FILENO);
-        close(pipe_err[0]);
-        close(pipe_err[1]);
-
-        // Change Dir
-        if (!workDir_.empty()) {
-            if (chdir(workDir_.c_str()) != 0) {
-                perror("chdir failed");
-                exit(127);
-            }
+        for (int fd : {pipe_out[0], pipe_out[1], pipe_err[0], pipe_err[1]}) close(fd);
+        if (!workDir_.empty() && chdir(workDir_.c_str()) != 0) {
+            perror("chdir failed");
+            _exit(127);
         }
-
-        // Prepare args
+        for (const auto& [k, v] : env_) setenv(k.c_str(), v.c_str(), 1);
         std::vector<char*> c_args;
-        c_args.push_back(strdup(command_.c_str()));
-        for (const auto& arg : args_) {
-            c_args.push_back(strdup(arg.c_str()));
-        }
+        c_args.push_back(const_cast<char*>(command_.c_str()));
+        for (const auto& arg : args_) c_args.push_back(const_cast<char*>(arg.c_str()));
         c_args.push_back(nullptr);
-
-        // Environment would be set here with setenv/execvpe ideally
-        // For now inheriting + PATH is usually sufficient for yosys if in brew path
         execvp(command_.c_str(), c_args.data());
-        
-        // If we get here, exec failed
         perror("execvp failed");
-        exit(127);
-    } else if (pid > 0) {
-        // Parent Process
-        close(pipe_out[1]);
-        close(pipe_err[1]);
-
-        std::string full_stdout, full_stderr;
-        SubprocessResult result;
-        result.timed_out = false;
-
-        // Monitoring loop with select for timeout
-        while (true) {
-            fd_set read_fds;
-            FD_ZERO(&read_fds);
-            FD_SET(pipe_out[0], &read_fds);
-            FD_SET(pipe_err[0], &read_fds);
-            int max_fd = std::max(pipe_out[0], pipe_err[0]);
-
-            // Calculate remaining time
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time);
-            if (elapsed > timeout_) {
-                result.timed_out = true;
-                kill(pid, SIGKILL);
-                break;
-            }
-            
-            struct timeval tv;
-            long remaining_ms = (timeout_ - elapsed).count();
-            tv.tv_sec = remaining_ms / 1000;
-            tv.tv_usec = (remaining_ms % 1000) * 1000;
-
-            int activity = select(max_fd + 1, &read_fds, nullptr, nullptr, &tv);
-
-            if (activity == -1) {
-                if (errno == EINTR) continue;
-                break; // Error
-            }
-            if (activity == 0) {
-                // Timeout inside select (redundant check but safe)
-                result.timed_out = true;
-                kill(pid, SIGKILL);
-                break;
-            }
-
-            char buffer[1024];
-            bool got_data = false;
-
-            // Read stdout
-            if (FD_ISSET(pipe_out[0], &read_fds)) {
-                ssize_t bytes = read(pipe_out[0], buffer, sizeof(buffer) - 1);
-                if (bytes > 0) {
-                    buffer[bytes] = 0;
-                    std::string chunk(buffer);
-                    full_stdout += chunk;
-                    if (stdoutCb) stdoutCb(chunk);
-                    got_data = true;
-                } else if (bytes == 0) {
-                    // unexpected EOF? usually wait handles this
-                }
-            }
-            
-            // Read stderr
-            if (FD_ISSET(pipe_err[0], &read_fds)) {
-                ssize_t bytes = read(pipe_err[0], buffer, sizeof(buffer) - 1);
-                if (bytes > 0) {
-                    buffer[bytes] = 0;
-                    std::string chunk(buffer);
-                    full_stderr += chunk;
-                    if (stderrCb) stderrCb(chunk);
-                    got_data = true;
-                }
-            }
-
-            // Check if child is dead
-            int status;
-            pid_t wait_res = waitpid(pid, &status, WNOHANG);
-            if (wait_res == pid) {
-                result.exit_code = WEXITSTATUS(status);
-                break;
-            }
-        }
-        
+        _exit(127);
+    }
+    close(pipe_out[1]);
+    close(pipe_err[1]);
+    SubprocessResult result;
+    if (pid < 0) {
         close(pipe_out[0]);
         close(pipe_err[0]);
-        
-        result.stdout_output = full_stdout;
-        result.stderr_output = full_stderr;
+        result.stderr_output = "Fork failed";
         return result;
-
-    } else {
-        return {-1, "", "Fork failed", false};
     }
+    setpgid(pid, pid);  // also from the parent: no race with the kill below
+
+    // Read until both pipes hit EOF (output written just before exit is not lost),
+    // polling the watchdog and the cancel flag every 200 ms
+    bool outOpen = true, errOpen = true, killed = false;
+    auto drain = [](int fd, std::string& all, const OutputCallback& cb) {
+        char buffer[4096];
+        const ssize_t n = read(fd, buffer, sizeof(buffer));
+        if (n <= 0) return false;
+        all.append(buffer, n);
+        if (cb) cb(std::string(buffer, n));
+        return true;
+    };
+    while (outOpen || errOpen) {
+        if (!killed) {
+            const bool cancelled = cancel_ && cancel_->load();
+            const bool expired = std::chrono::steady_clock::now() - start_time > timeout_;
+            if (cancelled || expired) {
+                result.cancelled = cancelled;
+                result.timed_out = expired && !cancelled;
+                kill(-pid, SIGKILL);
+                killed = true;
+            }
+        }
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        if (outOpen) FD_SET(pipe_out[0], &read_fds);
+        if (errOpen) FD_SET(pipe_err[0], &read_fds);
+        struct timeval tv {0, 200000};
+        const int activity = select(std::max(pipe_out[0], pipe_err[0]) + 1, &read_fds, nullptr, nullptr, &tv);
+        if (activity < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (outOpen && FD_ISSET(pipe_out[0], &read_fds)) outOpen = drain(pipe_out[0], result.stdout_output, stdoutCb);
+        if (errOpen && FD_ISSET(pipe_err[0], &read_fds)) errOpen = drain(pipe_err[0], result.stderr_output, stderrCb);
+    }
+    close(pipe_out[0]);
+    close(pipe_err[0]);
+
+    int status = 0;
+    waitpid(pid, &status, 0);
+    result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return result;
 }
 
 } // namespace acutesim::orchestration

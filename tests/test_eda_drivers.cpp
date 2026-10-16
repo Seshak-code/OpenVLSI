@@ -1,9 +1,8 @@
 /**
  * test_eda_drivers.cpp — Unit tests for EDA tool drivers
  *
- * Tests Yosys TCL generation, Yosys log parsing, OpenROAD TCL generation,
- * OpenROAD report parsing, DEF coordinate translation, and KLayout DRC/LVS
- * report parsing.
+ * Tests Yosys log parsing, OpenROAD report parsing, DEF coordinate translation,
+ * and KLayout DRC/LVS report parsing. (The flow itself is test_rtl_flow.)
  *
  * All tests are pure unit tests using hardcoded golden strings.
  * NO external tools (Yosys, OpenROAD) are required.
@@ -15,9 +14,7 @@
 #include <string>
 #include <algorithm>
 
-#include "compute/orchestration/drivers/yosys_task.h"
 #include "compute/orchestration/drivers/yosys_log_parser.h"
-#include "compute/orchestration/drivers/openroad_task.h"
 #include "compute/orchestration/drivers/openroad_report_parser.h"
 #include "compute/orchestration/drivers/klayout_report_parser.h"
 
@@ -77,90 +74,6 @@ static int testsFailed = 0;
         } \
     } register_##name; \
     static void test_##name()
-
-// ============================================================================
-// YOSYS TCL GENERATION TESTS
-// ============================================================================
-
-TEST(yosys_tcl_area_goal) {
-    SynthesisConfig config;
-    config.topModule = "counter";
-    config.sourceFiles = {"counter.v"};
-    config.targetLibrary = "sky130_fd_sc_hd";
-    config.goal = SynthesisGoal::AREA;
-    
-    std::string tcl = YosysTask::generateTcl(config);
-    
-    ASSERT_CONTAINS(tcl, "read_liberty -lib sky130_fd_sc_hd.lib");
-    ASSERT_CONTAINS(tcl, "read_verilog counter.v");
-    ASSERT_CONTAINS(tcl, "hierarchy -check -top counter");
-    ASSERT_CONTAINS(tcl, "proc; opt; fsm; opt; memory; opt");
-    ASSERT_CONTAINS(tcl, "techmap; opt");
-    ASSERT_CONTAINS(tcl, "abc -liberty sky130_fd_sc_hd.lib");
-    ASSERT_CONTAINS(tcl, "map,-a");  // Area optimization flag
-    ASSERT_CONTAINS(tcl, "dfflibmap -liberty sky130_fd_sc_hd.lib");
-    ASSERT_CONTAINS(tcl, "write_verilog -noattr syn_counter.v");
-    ASSERT_CONTAINS(tcl, "stat -liberty sky130_fd_sc_hd.lib");
-}
-
-TEST(yosys_tcl_speed_goal) {
-    SynthesisConfig config;
-    config.topModule = "alu";
-    config.sourceFiles = {"alu.v", "adder.v"};
-    config.targetLibrary = "sky130_fd_sc_hd";
-    config.goal = SynthesisGoal::SPEED;
-    
-    std::string tcl = YosysTask::generateTcl(config);
-    
-    ASSERT_CONTAINS(tcl, "read_verilog alu.v");
-    ASSERT_CONTAINS(tcl, "read_verilog adder.v");
-    ASSERT_CONTAINS(tcl, "map,-p");  // Speed optimization flag
-    ASSERT_NOT_CONTAINS(tcl, "map,-a");  // Should NOT contain area flag
-}
-
-TEST(yosys_tcl_power_goal) {
-    SynthesisConfig config;
-    config.topModule = "sensor_ctrl";
-    config.sourceFiles = {"sensor_ctrl.v"};
-    config.targetLibrary = "sky130_fd_sc_hd";
-    config.goal = SynthesisGoal::POWER;
-    
-    std::string tcl = YosysTask::generateTcl(config);
-    
-    ASSERT_CONTAINS(tcl, "scorr");   // Power-specific optimization
-    ASSERT_CONTAINS(tcl, "dc2");     // Power-specific optimization
-}
-
-TEST(yosys_tcl_balanced_goal) {
-    SynthesisConfig config;
-    config.topModule = "top";
-    config.sourceFiles = {"top.v"};
-    config.goal = SynthesisGoal::BALANCED;
-    
-    std::string tcl = YosysTask::generateTcl(config);
-    
-    // Balanced should NOT have specific optimization scripts
-    ASSERT_NOT_CONTAINS(tcl, "map,-a");
-    ASSERT_NOT_CONTAINS(tcl, "map,-p");
-    ASSERT_NOT_CONTAINS(tcl, "scorr");
-}
-
-TEST(yosys_json_tcl) {
-    SynthesisConfig config;
-    config.topModule = "top";
-    config.sourceFiles = {"top.v"};
-    config.targetLibrary = "sky130_fd_sc_hd";
-    
-    std::string tcl = YosysTask::generateJsonTcl(config);
-    
-    ASSERT_CONTAINS(tcl, "stat -json -liberty");
-    ASSERT_CONTAINS(tcl, "JSON Output Mode");
-}
-
-TEST(yosys_batch_command) {
-    std::string cmd = YosysTask::generateBatchCommand("/tmp/script.tcl");
-    assert(cmd == "yosys -s /tmp/script.tcl");
-}
 
 // ============================================================================
 // YOSYS LOG PARSER TESTS
@@ -262,97 +175,6 @@ TEST(yosys_parse_empty_output) {
 TEST(yosys_isSuccessful) {
     assert(YosysLogParser::isSuccessful("All good\nstat done\n"));
     assert(!YosysLogParser::isSuccessful("Some output\nERROR: bad thing\n"));
-}
-
-// ============================================================================
-// OPENROAD TCL GENERATION TESTS
-// ============================================================================
-
-TEST(openroad_floorplan_tcl) {
-    FloorplanConfig config;
-    config.designName = "counter";
-    config.dieArea = Size2D{.width=100.0, .height=100.0};
-    config.techLef = "sky130_tech.lef";
-    config.cellLefs = {"sky130_fd_sc_hd.lef"};
-    config.synthesizedNetlist = "syn_counter.v";
-    
-    std::string tcl = OpenRoadTask::generateFloorplanTcl(config);
-    
-    ASSERT_CONTAINS(tcl, "read_lef sky130_tech.lef");
-    ASSERT_CONTAINS(tcl, "read_lef sky130_fd_sc_hd.lef");
-    ASSERT_CONTAINS(tcl, "read_verilog syn_counter.v");
-    ASSERT_CONTAINS(tcl, "link_design counter");
-    ASSERT_CONTAINS(tcl, "initialize_floorplan -die_area");
-    ASSERT_CONTAINS(tcl, "place_pins");
-}
-
-TEST(openroad_placement_tcl) {
-    PlacementConfig config;
-    config.designName = "counter";
-    config.goal = PlacementGoal::TIMING;
-    config.targetDensity = 0.7;
-    
-    std::string tcl = OpenRoadTask::generatePlacementTcl(config);
-    
-    ASSERT_CONTAINS(tcl, "global_placement");
-    ASSERT_CONTAINS(tcl, "0.7");
-    ASSERT_CONTAINS(tcl, "-timing_driven");
-    ASSERT_CONTAINS(tcl, "detailed_placement");
-    ASSERT_CONTAINS(tcl, "check_placement");
-}
-
-TEST(openroad_cts_tcl) {
-    CTSConfig config;
-    config.clockNet = "clk";
-    config.bufferCell = "sky130_fd_sc_hd__clkbuf_4";
-    
-    std::string tcl = OpenRoadTask::generateCTSTcl(config);
-    
-    ASSERT_CONTAINS(tcl, "clock_tree_synthesis");
-    ASSERT_CONTAINS(tcl, "sky130_fd_sc_hd__clkbuf_4");
-    ASSERT_CONTAINS(tcl, "repair_clock_nets");
-}
-
-TEST(openroad_routing_tcl) {
-    RoutingConfig config;
-    config.designName = "counter";
-    config.effort = RoutingEffort::HIGH;
-    config.repairAntennas = true;
-    
-    std::string tcl = OpenRoadTask::generateRoutingTcl(config);
-    
-    ASSERT_CONTAINS(tcl, "global_route");
-    ASSERT_CONTAINS(tcl, "detailed_route");
-    ASSERT_CONTAINS(tcl, "repair_antennas");
-    ASSERT_CONTAINS(tcl, "check_routing");
-}
-
-TEST(openroad_full_flow_tcl) {
-    FloorplanConfig fpConfig;
-    fpConfig.designName = "counter";
-    fpConfig.dieArea = Size2D{.width=200, .height=200};
-    fpConfig.techLef = "tech.lef";
-    fpConfig.synthesizedNetlist = "syn.v";
-    
-    PlacementConfig plConfig;
-    plConfig.designName = "counter";
-    
-    CTSConfig ctsConfig;
-    ctsConfig.clockNet = "clk";
-    
-    RoutingConfig rtConfig;
-    rtConfig.designName = "counter";
-    
-    std::string tcl = OpenRoadTask::generateFullFlowTcl(fpConfig, plConfig, ctsConfig, rtConfig);
-    
-    ASSERT_CONTAINS(tcl, "PHASE 1: FLOORPLAN");
-    ASSERT_CONTAINS(tcl, "PHASE 2: PLACEMENT");
-    ASSERT_CONTAINS(tcl, "PHASE 3: CLOCK TREE SYNTHESIS");
-    ASSERT_CONTAINS(tcl, "PHASE 4: ROUTING");
-    ASSERT_CONTAINS(tcl, "report_design_area");
-    ASSERT_CONTAINS(tcl, "report_power");
-    ASSERT_CONTAINS(tcl, "report_worst_slack");
-    ASSERT_CONTAINS(tcl, "write_def counter_final.def");
 }
 
 // ============================================================================

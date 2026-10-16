@@ -464,13 +464,10 @@ target_include_directories(acutesim_engine_api INTERFACE
 # ============================================================================
 if(NOT EMSCRIPTEN)
     add_library(acutesim_orchestration STATIC
-        compute/orchestration/drivers/yosys_task.cpp
-        compute/orchestration/drivers/openroad_task.cpp
-        compute/orchestration/drivers/klayout_task.cpp
         compute/orchestration/drivers/yosys_log_parser.cpp
         compute/orchestration/drivers/openroad_report_parser.cpp
         compute/orchestration/drivers/klayout_report_parser.cpp
-        compute/orchestration/drivers/tool_driver.cpp
+        compute/orchestration/drivers/rtl_flow.cpp
         compute/orchestration/proto_mapper.cpp
         compute/orchestration/driver/remote_grpc_driver.cpp
         compute/orchestration/server/simulation_service_impl.cpp
@@ -1405,14 +1402,11 @@ add_executable(test_pdk_swap
     gui/widgets/inline_dialog.cpp
     gui/widgets/inline_progress.cpp
     gui/widgets/toast_manager.cpp
-    compute/orchestration/drivers/yosys_task.cpp
-    compute/orchestration/drivers/openroad_task.cpp
-    compute/orchestration/drivers/klayout_task.cpp
     compute/orchestration/drivers/yosys_log_parser.cpp
     compute/orchestration/drivers/openroad_report_parser.cpp
     compute/orchestration/drivers/klayout_report_parser.cpp
-    compute/orchestration/drivers/tool_driver.cpp
     compute/orchestration/server/subprocess.cpp
+    compute/orchestration/drivers/rtl_flow.cpp
     gui/widgets/cell_pie_chart.h
     gui/widgets/timing_indicator.h
 )
@@ -1791,11 +1785,8 @@ if(NOT EMSCRIPTEN)
         gui/widgets/inline_dialog.cpp
         gui/widgets/inline_progress.cpp
         gui/widgets/toast_manager.cpp
-        compute/orchestration/drivers/tool_driver.cpp
         compute/orchestration/server/subprocess.cpp
-        compute/orchestration/drivers/yosys_task.cpp
-        compute/orchestration/drivers/openroad_task.cpp
-        compute/orchestration/drivers/klayout_task.cpp
+        compute/orchestration/drivers/rtl_flow.cpp
         compute/orchestration/drivers/yosys_log_parser.cpp
         compute/orchestration/drivers/openroad_report_parser.cpp
         compute/orchestration/drivers/klayout_report_parser.cpp
@@ -2242,6 +2233,11 @@ endif()
 add_executable(test_eda_drivers tests/test_eda_drivers.cpp)
 target_link_libraries(test_eda_drivers PRIVATE acutesim_orchestration)
 target_compile_features(test_eda_drivers PUBLIC cxx_std_17)
+
+# test_rtl_flow — Phase 6 gate check: RTL -> GDS on IHP SG13G2 (skips without the tools)
+add_executable(test_rtl_flow tests/test_rtl_flow.cpp)
+target_link_libraries(test_rtl_flow PRIVATE acutesim_orchestration)
+target_compile_features(test_rtl_flow PUBLIC cxx_std_17)
 
 if(APPLE AND CMAKE_PREFIX_PATH)
     set(_qt_plugin_dir "${CMAKE_PREFIX_PATH}/share/qt/plugins")
