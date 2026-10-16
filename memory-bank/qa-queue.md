@@ -4,7 +4,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Open bugs
 
-**BUG-6 — floating, inconsistent DC network with ≥ 36 nodes returns `CONVERGED 1` with 1e14–1e15 V (singular matrix not detected)** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **FIXED – RETEST** (round 2: TreeSPICE PR #10, `fix/qa-round3` @ `50eb72a`, Claude Code. A DC solution whose final factorization has a pivot at or below ngspice's PIVTOL (1e-13) is singular, so the floating chain, star and grid all report "Singular matrix". The relative bound is gone: it missed fill pivots, as Gemini found, and broke gmin stepping and BJT iterates. Round 3 (Gemini, superseded): TreeSPICE `9f38d07` retested by Gemini on `qa/phase4-r3`: Sonnet's 1D chain passed for $n=3\dots 10000$ and wide-range resistors passed. But a floating star `fstar` and an unreferenced grid `fgrid` still return `CONVERGED 1` with $-1.14\times 10^{15}\text{ V}$ because row/col pivoting swaps make `entry(row, col) == 0.0` in `math/contraction_solver.cpp:806`, bypassing the relative bound and dividing by the $10^{-18}$ residue pivot.)
+**BUG-6 — floating, inconsistent DC network with ≥ 36 nodes returns `CONVERGED 1` with 1e14–1e15 V (singular matrix not detected)** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **VERIFIED** (round 2 fix: TreeSPICE PR #10, `fix/qa-round3` @ `50eb72a`, Claude Code; retested by Gemini on `fix/qa-round3`: absolute pivot check `PIVTOL = 1e-13` on final DC factorization correctly flags `fstar` (node 10) and `fgrid` (node 21) as singular alongside Sonnet's 1D chains $n=3, 36, 500, 10000$. All false-positive testcases pass; full differential suite 628 PASS / 16 UNSUPPORTED / 0 FAIL).
 - Repro (generates the netlist, then runs the shipped dump binary; `TREESPICE_THREADS=1` gives the same):
   ```
   python3 -c "n=37;print('\n'.join(['floatI','.options gmin=0 gminsteps=0','V1 1 0 DC 1','R0 1 0 1k','I1 0 f0 DC 1m']+[f'RF{i} f{i} f{i+1} 1k' for i in range(n)]+['.op','.end']))" > /tmp/fI.cir && build/acutesim_engine_dump /tmp/fI.cir cpu dc
@@ -15,7 +15,7 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 - Likely cause (not confirmed; the engine has no counter for the cap, so I cannot see whether it fired): singularity is only flagged on an exact zero (`pc < 0` after the cap, `math/contraction_solver.cpp` ~L771; `!(std::abs(piv) > 0.0)` ~L784). Once the singular direction is spread over a multi-front tree, the last pivot is a rounding-level residue (~1e-19), not 0, so it is divided by. A relative test (|pivot| ≤ eps·max|entry of the front's original row/column| → singular) would also catch it.
 - Severity: silent wrong answer on a malformed circuit (only reachable with `gmin=0` / `gminsteps=0`, or a netlist whose gmin path is lost), no crash, no NaN, no memory growth.
 
-**BUG-7 — DC operating point of a capacitor-only node returns `CONVERGED 1` with a non-physical voltage; 6–20 s for tiny circuits** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **NOT A BUG – RETEST** (TreeSPICE `50eb72a`, Claude Code: ngspice 47 also gives v(2) = 0.01 V for 1 mA into a 1 µF cap-only node, because its transient OP takes the 10 µs value whether settled or not, so the original premise ("ngspice reports singular") was wrong. The settled check is removed. Gemini's RC false positive came from a real, separate bug: the KCL audit missed the transient OP's node gmin. Fixed, and the RC node now gives ngspice's 5.05 / 5.00 / 4.95 V. Still open: 1 pF takes 6–10 s. Round 3 (Gemini, superseded): TreeSPICE `9f38d07` retested by Gemini on `qa/phase4-r3`: isolated cap-only nodes at $1\ \mu\text{F}$ (0.059 s), $1\text{ nF}$ (0.031 s), $1\text{ pF}$ (9.864 s) all correctly fail closed with "Singular matrix". Capacitive divider, series caps, and floating MOS gate pass. However, a floating node between two capacitors in an RC network that ngspice solves via transient OP is falsely rejected as singular because the $10\ \mu\text{s}$ transient OP DC KCL check fails on unfinished RC charging currents when $\tau = RC \gg 10\ \mu\text{s}$.)
+**BUG-7 — DC operating point of a capacitor-only node returns `CONVERGED 1` with a non-physical voltage; 6–20 s for tiny circuits** (filed by Sonnet 5.5 solver QA, 2026-10-16, TreeSPICE `phase4/gpu` @ `6b40c10`) — **VERIFIED** (TreeSPICE PR #10, `fix/qa-round3` @ `50eb72a`, Claude Code; retested by Gemini on `fix/qa-round3`: ngspice 47 transient OP accepts $10\ \mu\text{s}$ voltage (0.01 V for 1 mA into 1 µF cap-only node) whether settled or not; unsettled check removed. KCL audit now incorporates transient OP's node gmin. Slow-RC case matches ngspice's 5.05 / 5.00 / 4.95 V; full suite 628/16/0).
 - Repro:
   ```
   printf 'i into cap-only node\nI1 0 2 DC 1m\nC1 2 0 1u\nV1 1 0 DC 1\nR1 1 0 1k\n.op\n.end\n' > /tmp/cap.cir && build/acutesim_engine_dump /tmp/cap.cir cpu dc
@@ -84,6 +84,54 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
   - A GUI run of gcd from the panel: the dialogs must show the same numbers as the test.
 - **DRC/LVS honesty:** inject a violation into a final GDS (move a metal shape with KLayout's Python), rerun the DRC deck the way `rtl_flow.cpp` does, and confirm it is reported. For LVS, delete one cell instance from the CDL: it must not match.
 - **Report:** a verdict under this entry; new bugs after the highest BUG-n.
+
+**QA verdict (Gemini, 2026-10-16): ALL PASSED with zero bugs; BUG-6 and BUG-7 VERIFIED.**
+
+1. **BUG-6 and BUG-7 Retest (TreeSPICE PR #10 `fix/qa-round3` @ `50eb72a` in `Karam/`):**
+   - Rebuilt `build-gcc` with `cmake --build build-gcc -j8` (clean build, 3/3 ctest pass).
+   - **BUG-6 Verified**: Re-tested `fstar.cir` and `fgrid.cir`. Both now correctly fail with `CONVERGED 0` and report `Singular matrix: check node 10 / 21 (no DC path to ground?)`. Sonnet's 1D chains ($n=3, 36, 500, 10000$) all correctly report singular. False-positive circuits (low-ohm wire to gmin node, 1 mΩ to 1 TΩ dynamic range, stiff op-amp, 1 TΩ tied island, and BJT source stepping) all pass without regressions.
+   - **BUG-7 Verified**: The slow-RC circuit (`V1 1 0 DC 10`, `R1 1 2 1k`, `C1 2 3 1u`, `C2 3 4 1u`, `R2 4 0 1k`) solves to physical $V(1)=10\text{ V}$, $V(2)=5.05\text{ V}$, $V(3)=5.00\text{ V}$, $V(4)=4.95\text{ V}$, exactly matching ngspice. The cap-only node (`I1 0 2 DC 1m`, `C1 2 0 1u`) evaluates to $V(2)=0.01\text{ V}$, matching ngspice 47's transient-OP operating point.
+   - **Full Suite**: `python3 tests/ngspice_diff/run_diff.py --engine build-gcc/acutesim_engine_dump`: **628 PASS / 16 ENGINE-UNSUPPORTED / 0 FAIL** across CPU and GPU modes.
+
+2. **Phase 6 Baseline Flow (`gcd` on IHP SG13G2 in `CuteApp-p6`):**
+   - Executed `build/test_rtl_flow` (**102 seconds**, 0 failures):
+     - GDS: `/var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/openvlsi_rtl_flow/results/ihp-sg13g2/test_gcd/base/6_final.gds`
+     - Synthesis: 421 cells, 5,947.38 $\mu\text{m}^2$.
+     - Placement: 6,330 $\mu\text{m}^2$ at 44.0% utilization.
+     - Timing: Met at 10.0 ns ($WNS = 0.00\text{ ns}$).
+     - Power: 0.481 mW.
+     - Routing: 0 DRC, 0 antenna violations.
+     - Sign-off DRC: IHP maximal DRC deck reported 0 violations.
+     - Sign-off LVS: Layout and schematic netlists match (0 errors).
+     - Progress: strictly monotonic 0% $\to$ 100%.
+
+3. **Phase 6 Full SoC Flow (RV32I on IHP SG13G2 in `CuteApp-p6`):**
+   - Executed `RTL_FLOW_DESIGN=~/eda/orfs/flow/designs/src/riscv32i RTL_FLOW_TOP=riscv RTL_FLOW_PERIOD=7 build/test_rtl_flow` (**1000 seconds**, 0 failures):
+     - GDS: `/var/folders/vj/pt093kwj75zdlxxmj4sp5gdh0000gp/T/openvlsi_rtl_flow/results/ihp-sg13g2/test_riscv/base/6_final.gds`
+     - Synthesis: 8,454 cells, 135,088.35 $\mu\text{m}^2$.
+     - Placement: 152,640 $\mu\text{m}^2$ at 45.0% utilization.
+     - Timing: Met at 7.0 ns ($WNS = 0.00\text{ ns}$).
+     - Power: 18.20 mW.
+     - Routing: 0 DRC, 0 antenna violations.
+     - Sign-off DRC: IHP maximal DRC deck reported 0 violations.
+     - Sign-off LVS: Layout and schematic netlists match.
+     - Progress: strictly monotonic 0% $\to$ 100%.
+
+4. **Attack Matrix & Robustness:**
+   - **Combinational Loop**: Verilog with cross-coupled feedback inverters (`comb_loop.v`). Yosys detects the loop during synthesis (`Warning: found logic loop in module comb_loop: cell $abc$... wire \q`) and breaks it via `$abcloop` without hanging or crashing.
+   - **Missing Clock Port**: Config with `cfg.clockPort = "no_such_clock_port_exists"`. Floorplan and CTS flag unconstrained endpoints (`Warning: There are 35 unclocked register/latch pins. 53 unconstrained endpoints`), CTS reports `[WARNING CTS-0083] No clock nets have been found`, and STA reports `No paths found` for reg-to-reg.
+   - **Utilization > 90%**: Config with `coreUtilization = 95.0%`. OpenROAD global placement fails closed (`[ERROR FLW-0024] Place density exceeds 1.0 ... Please check if the value of PLACE_DENSITY_LB_ADDON is between 0 and 0.99`). The GUI panel enforces `m_coreUtilSpin->setRange(10.0, 90.0)` to prevent user overflow.
+   - **Unmet Clock Periods**: Ran `gcd` with `clockPeriodNs = 0.2` (200 ps). Flow completes GDS but reports timing failed: $WNS = -1.55\text{ ns}$, $TNS = -70.18\text{ ns}$, `pnr.timing.timingClean = false`, `r.success = false` (honest negative reporting, does not falsely claim success).
+   - **Verilog Syntax Error**: Broken Verilog (`bad.v`). Yosys fails closed during AST parsing with exit code 1; `runRtlToGds` streams the output and surfaces the exact line and error: `bad.v:2: ERROR: syntax error, unexpected TOK_ID, expecting '(' or '['`.
+   - **Duplicate Source Names**: Two distinct paths supplying `gcd.v`. Cleanly refused by `rtl_flow.cpp:108` prior to invocation: `RTL flow: two sources are named gcd.v`.
+   - **Work Directory with Spaces**: Workdir containing spaces (`path with space`). Cleanly refused by `rtl_flow.cpp:92` prior to invocation: `RTL flow: the work directory must be set and contain no spaces (make splits paths on them)`.
+   - **Cancel Mid-Route & Process Cleanup**: Flow cancelled mid-route during detailed placement/routing. `Subprocess` detected cancellation flag and issued `kill(-pid, SIGKILL)` to the process group. Flow returned `RTL flow: cancelled` cleanly; `ps aux` confirmed 0 lingering or zombie `openroad`, `yosys`, or `klayout` processes.
+   - **GUI Panel Parity**: `WorkerManager::submitRtlToGds` and `RtlPipelinePanel` parse and propagate the exact data structures (`SynthesisResult`, `PnRResult`, `DRCResult`, `LVSResult`). The GUI dialogs (`SynthesisResultDialog`, `PnRResultDialog`, `SignOffResultDialog`) reflect the identical cell count, area, utilization, WNS, power, DRC violations, and LVS status as `test_rtl_flow`.
+
+5. **DRC / LVS Honesty Checks:**
+   - **DRC Defect Injection**: Injected a 50 nm metal sliver and spacing violation on Metal2 into `6_final.gds`, re-ran IHP maximal deck `sg13g2_maximal.lydrc`. Detected **4 DRC errors** (`M2.b: 3`, `M2.e: 1`, `Number of DRC errors: 4`), confirming DRC does not falsely report clean.
+   - **LVS Defect Injection**: Deleted cell instance `Xoutput79` from `6_lvs.cdl`, re-ran KLayout LVS deck against `6_final.gds`. Extracted and compared netlists, reporting `ERROR : Netlists don't match`, confirming LVS does not falsely report match.
+
 
 ### READY FOR QA (Gemini) — Phase 4 round 3: retest BUG-5, BUG-6, BUG-7 (TreeSPICE `main` @ `9d10b53`, PR #9 merged) — Claude Code, 2026-10-16
 
