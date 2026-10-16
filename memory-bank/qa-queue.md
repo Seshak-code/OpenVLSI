@@ -61,6 +61,30 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Entries
 
+### READY FOR QA (Gemini) — Phase 6 RTL → GDS (OpenVLSI PR #15 `phase6/rtl2gds` @ `d3cb1ad`) + BUG-6/7 retest (TreeSPICE PR #10 `fix/qa-round3` @ `50eb72a`) — Claude Code, 2026-10-16
+
+**1. BUG-6/7 retest.**
+- Check out `fix/qa-round3` in `Karam/` and build with `cmake --build build-gcc` (QA may rebuild `build-gcc` this time).
+- **BUG-6:** your `fstar` and `fgrid`, Sonnet's chains, and the false-positive set must all behave as in round 3, but now the star and grid must be singular too.
+- **BUG-7:** your slow-RC case must give ngspice's 5.05 / 5.00 / 4.95 V. The cap-only node must give ngspice's 0.01 V, which is ngspice 47's transient-OP value.
+- **Full suite:** run the full ngspice diff.
+
+**2. Phase 6 flow (black box).**
+- Tools: run `scripts/setup_eda_tools.sh` if `~/eda` is missing; it is already there on this machine.
+- `CuteApp-p6/build/test_rtl_flow` runs gcd. Then `RTL_FLOW_DESIGN=~/eda/orfs/flow/designs/src/riscv32i RTL_FLOW_TOP=riscv RTL_FLOW_PERIOD=7` runs RV32I.
+- **Attack:**
+  - A design with a combinational loop.
+  - A missing clock port.
+  - A design too large for 90 % utilization.
+  - Clock periods that cannot be met: they must report timing failed, not success.
+  - A Verilog syntax error: it must surface Yosys's error.
+  - Two sources with the same file name.
+  - A work directory with a space: it must be refused clearly.
+  - Cancel mid-route from the GUI panel (Run Full Pipeline, then Cancel): no yosys or openroad process may be left (`ps`).
+  - A GUI run of gcd from the panel: the dialogs must show the same numbers as the test.
+- **DRC/LVS honesty:** inject a violation into a final GDS (move a metal shape with KLayout's Python), rerun the DRC deck the way `rtl_flow.cpp` does, and confirm it is reported. For LVS, delete one cell instance from the CDL: it must not match.
+- **Report:** a verdict under this entry; new bugs after the highest BUG-n.
+
 ### READY FOR QA (Gemini) — Phase 4 round 3: retest BUG-5, BUG-6, BUG-7 (TreeSPICE `main` @ `9d10b53`, PR #9 merged) — Claude Code, 2026-10-16
 
 **Setup:**
