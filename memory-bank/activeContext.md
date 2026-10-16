@@ -1,6 +1,18 @@
 # Active Context
 
-**Last session: Claude Code (dev), 2026-10-16 — Phase 6 gate met (OpenVLSI `phase6/rtl2gds`), Phase 4 QA round 3 fixed (TreeSPICE PR #10)**
+**Last session: Claude Code (dev), 2026-10-16 — Phase 7 gate met (OpenVLSI `phase7/fw-on-silicon`, TreeSPICE PR #11)**
+
+**Phase 7 (firmware on your own silicon):**
+- **Firmware sim:** `runFirmware` (`compute/orchestration/drivers/rtl_flow`) runs the hello firmware on the RV32I core's RTL and on its routed netlist with layout SDF, in Icarus.
+- **Gate:** `tests/test_firmware_on_silicon`. Correct at 7 ns, wrong at 2.5 ns, fastest correct 5.03 ns, against STA's 5.36 ns floor.
+- **Lockstep:** TreeSPICE PR #11 adds `TransientHandle` (`setSource`, `advanceTo`, `voltage`). `soc::cosimLockstep` runs a UART loopback through the SPICE line (in `test_soc_hello`).
+- **GUI:** Simulation → Run Firmware on Routed Core.
+- **Agents:** Sonnet/Haiku did the investigations, the engine API and the loopback; Opus reviewed.
+- **Next:** Phase 8, the real-time loop (incremental re-flow, a GDB stub).
+
+---
+
+**Earlier: Claude Code (dev), 2026-10-16 — Phase 6 gate met (OpenVLSI `phase6/rtl2gds`), Phase 4 QA round 3 fixed (TreeSPICE PR #10)**
 
 **Phase 6 (RTL → GDS on IHP SG13G2):**
 - **Flow:** `compute/orchestration/drivers/rtl_flow.{h,cpp}` runs OpenROAD-flow-scripts, then IHP's KLayout DRC and LVS decks. It sits behind WorkerManager::submitRtlToGds and the RTL pipeline panel.

@@ -36,6 +36,11 @@ class RtlPipelinePanel : public QWidget {
 public:
     explicit RtlPipelinePanel(QWidget* parent = nullptr);
 
+    // The last successful run (empty before one): what Run Firmware on Routed Core uses
+    QString lastGds() const { return m_lastGds; }
+    QString lastTop() const { return m_lastTop; }
+    double lastClockPeriodNs() const { return m_lastPeriodNs; }
+
 signals:
     void pipelineCompleted(bool success);
     void logMessage(const QString& msg);
@@ -65,6 +70,8 @@ private:
 
     QVector<PipelineStep> m_steps;
     QString m_jobId;  // the running flow
+    QString m_lastGds, m_lastTop, m_runTop;
+    double m_lastPeriodNs = 0.0, m_runPeriodNs = 0.0;
     bool m_running = false;
 
     QLineEdit* m_topModuleEdit = nullptr;

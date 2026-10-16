@@ -291,12 +291,30 @@ being designed and an integrated OpenROAD RTL → GDS pipeline, in one applicati
     purged after align and the schematic's instances had no counterpart.
 - **Open:** chip assembly (pad ring, seal ring, IHP filler, global density); the flow on more PDKs.
 
-**Phase 7 — Firmware on your own silicon**
-- [ ] The firmware runs on that core's RTL (Verilator), then on its post-layout gate netlist with SDF
-      timing from OpenSTA.
-- [ ] Lockstep, bidirectional co-simulation: an engine API for D2A sources set during a transient.
-      SRAM and I/O stay in TreeSPICE.
-- **Gate:** the post-layout netlist prints "Hello, world!", with timing that agrees with STA.
+**Phase 7 — Firmware on your own silicon** *(OpenVLSI `phase7/fw-on-silicon`, TreeSPICE PR #11, 2026-10-16)*
+- [x] The firmware runs on the core's RTL and on its routed IHP SG13G2 netlist with an SDF that
+      OpenROAD writes from the layout (`runFirmware` in `compute/orchestration/drivers/rtl_flow`).
+  - **Simulator:** Icarus Verilog. Verilator has no SDF support, and IHP's flop UDPs simulate wrong in it.
+  - **Cell-model fixes for Icarus:** IHP's cell models need their `delayed_*` pins aliased (only timing
+    checks drive them), their escaped names flattened, and `min::max` delays rewritten.
+  - **Firmware:** word accesses only. The core (ORFS riscv32i) has no byte enables.
+  - **In the app:** Simulation → Run Firmware on Routed Core.
+- [x] The lockstep engine API (TreeSPICE `TransientHandle`: `setSource`, `advanceTo`, `voltage`).
+      The never-wired `digital_event_engine` is deleted.
+- [x] Bidirectional UART loopback on that API (`soc::cosimLockstep`, `echoFirmware`):
+  - The SoC model's TX pin drives the SPICE pad driver, line and receiver; the receiver's output
+    (A2D) feeds the same SoC's 16x-oversampling UART RX, every oversampling tick.
+  - The firmware waits for each echo before sending the next byte.
+  - Result: "Hello, world!" with 0 framing errors, 2,236 exchanges, 8,947 cycles, 0.55 s.
+  - Not yet: lockstep with the gate-level simulation itself (Icarus is a separate process; that
+    needs VPI).
+- **Gate** (`tests/test_firmware_on_silicon`, met):
+  - "Hello, world!" from the RTL and from the routed netlist with layout SDF at 7 ns, in 153 cycles:
+    the instruction-set model's instruction count.
+  - The post-layout run is wrong at 2.5 ns.
+  - Its fastest correct period is 5.03 ns, just under STA's 5.36 ns floor for the core's own paths:
+    STA bounds every instruction, and the firmware uses a subset.
+  - With the 20 % per-side I/O budget it was closed with, STA gives 6.99 ns.
 
 **Phase 8 — Real-time loop**
 - [ ] Incremental re-synthesis and re-place-and-route after an RTL edit.

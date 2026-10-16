@@ -162,6 +162,7 @@ private slots:
     void openProject();
     void runSimulation();
     void runReferenceSoc();  // Roadmap Phase 5 gate: hello-world firmware on the reference SoC
+    void runFirmwareOnCore();  // Roadmap Phase 7: the same firmware on the routed core, layout timing (SDF)
     
     // Stage Switching
     void setupStageToolbar();
