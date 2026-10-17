@@ -23,8 +23,8 @@ SimAutoDetector::Recommendation SimAutoDetector::analyze(
         r.reason     = "Medium VLSI block — SIMD tensor path recommended";
         r.confidence = 0.75;
     } else {
-        r.mode       = "LEGACY_AOS";
-        r.reason     = "Small circuit — scalar AoS path sufficient";
+        r.mode       = "TENSOR_SOA_SIMD";
+        r.reason     = "Small circuit — the CPU tensor path";
         r.confidence = 0.90;
     }
 
@@ -41,7 +41,7 @@ acutesim::orchestration::SimulationContext SimAutoDetector::detect(const QString
     ctx.sources.push_back(ref);
     
     ctx.contextId = path.toStdString();
-    ctx.solverMode = "LEGACY_AOS";
+    ctx.solverMode = "TENSOR_SOA_SIMD";
     
     return ctx;
 }

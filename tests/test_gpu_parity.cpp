@@ -43,13 +43,14 @@ static GpuParityResult runGpuParityCheck(const std::string& name, TensorNetlist 
 
     CircuitSim sim;
 
-    // ── CPU reference (AoS) ──────────────────────────────────────────────────
-    sim.execMode = CircuitSim::ExecutionMode::LEGACY_AOS;
+    // ── CPU reference (SoA scalar) ───────────────────────────────────────────
+    sim.execMode = CircuitSim::ExecutionMode::TENSOR_SOA_SCALAR;
     SolverStep resCpu = sim.solveDC(nl);
 
-    // ── GPU path ─────────────────────────────────────────────────────────────
-    sim.execMode = CircuitSim::ExecutionMode::GPU;
-    SolverStep resGpu = sim.solveDC(nl);
+    // ── GPU path (its own simulator: a reused one warm-starts from the CPU answer) ──
+    CircuitSim gpu;
+    gpu.execMode = CircuitSim::ExecutionMode::GPU;
+    SolverStep resGpu = gpu.solveDC(nl);
 
     GpuParityResult r;
     r.name           = name;
@@ -83,7 +84,10 @@ static GpuParityResult runGpuParityCheck(const std::string& name, TensorNetlist 
               << (r.voltagePassed ? " [OK]" : " [FAIL]") << "\n";
 
     // ── KCL check via calculatePhysicalResiduals ─────────────────────────────
-    double kclResidual = sim.calculatePhysicalResiduals(nl, resGpu.nodeVoltages);
+    // the full solution: node voltages, then the source / inductor branch currents KCL needs
+    std::vector<double> x = resGpu.nodeVoltages;
+    x.insert(x.end(), resGpu.branchCurrents.begin(), resGpu.branchCurrents.end());
+    double kclResidual = gpu.calculatePhysicalResiduals(nl, x);
     r.kclPassed = (kclResidual < KCL_RESIDUAL_TOL);
     std::cout << "  KCL residual: " << kclResidual
               << (r.kclPassed ? " [OK]" : " [FAIL]") << "\n";

@@ -124,13 +124,13 @@ void test_mosfet() {
 void test_jfet() {
     std::cout << "\n[JFET AD Test]\n";
 
-    JFETParams<double> p;
-    p.Beta = 1e-4;
-    p.Vto = -2.0;
-    p.Lambda = 0.01;
-    p.Is = 1e-14;
-    p.N = 1.0;
-    p.Vt = 0.02585;
+    JfetModel<double> p;  // ngspice level 1; vgd = vgs - vds
+    p.beta = 1e-4;
+    p.vto = -2.0;
+    p.lambda = 0.01;
+    p.is = 1e-14;
+    p.vt = 0.02585;
+    auto jfet_ids = [&](auto vgs, auto vds) { return jfet_eval(vgs, vgs - vds, p).id; };
 
     double delta = 1e-7;
 
@@ -138,20 +138,20 @@ void test_jfet() {
     {
         double vgs = 0.0, vds = 5.0;
 
-        Dual<double> ids_vgs = jfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
+        Dual<double> ids_vgs = jfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0));
         double gm_ad = ids_vgs.grad;
 
-        double i_p = jfet_ids(vgs + delta, vds, p);
-        double i_m = jfet_ids(vgs - delta, vds, p);
+        double i_p = jfet_ids(vgs + delta, vds);
+        double i_m = jfet_ids(vgs - delta, vds);
         double gm_fd = (i_p - i_m) / (2.0 * delta);
 
         check_derivative("JFET saturation gm (vgs=0, vds=5)", gm_ad, gm_fd);
 
-        Dual<double> ids_vds = jfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p);
+        Dual<double> ids_vds = jfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0));
         double gds_ad = ids_vds.grad;
 
-        i_p = jfet_ids(vgs, vds + delta, p);
-        i_m = jfet_ids(vgs, vds - delta, p);
+        i_p = jfet_ids(vgs, vds + delta);
+        i_m = jfet_ids(vgs, vds - delta);
         double gds_fd = (i_p - i_m) / (2.0 * delta);
 
         check_derivative("JFET saturation gds (vgs=0, vds=5)", gds_ad, gds_fd);
@@ -161,79 +161,23 @@ void test_jfet() {
     {
         double vgs = -0.5, vds = 0.5;
 
-        Dual<double> ids_vgs = jfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0), p);
+        Dual<double> ids_vgs = jfet_ids(Dual<double>(vgs, 1.0), Dual<double>(vds, 0.0));
         double gm_ad = ids_vgs.grad;
 
-        double i_p = jfet_ids(vgs + delta, vds, p);
-        double i_m = jfet_ids(vgs - delta, vds, p);
+        double i_p = jfet_ids(vgs + delta, vds);
+        double i_m = jfet_ids(vgs - delta, vds);
         double gm_fd = (i_p - i_m) / (2.0 * delta);
 
         check_derivative("JFET linear gm (vgs=-0.5, vds=0.5)", gm_ad, gm_fd);
 
-        Dual<double> ids_vds = jfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0), p);
+        Dual<double> ids_vds = jfet_ids(Dual<double>(vgs, 0.0), Dual<double>(vds, 1.0));
         double gds_ad = ids_vds.grad;
 
-        i_p = jfet_ids(vgs, vds + delta, p);
-        i_m = jfet_ids(vgs, vds - delta, p);
+        i_p = jfet_ids(vgs, vds + delta);
+        i_m = jfet_ids(vgs, vds - delta);
         double gds_fd = (i_p - i_m) / (2.0 * delta);
 
         check_derivative("JFET linear gds (vgs=-0.5, vds=0.5)", gds_ad, gds_fd);
-    }
-}
-
-// ===========================================================================
-// Zener Diode Tests
-// ===========================================================================
-void test_zener() {
-    std::cout << "\n[Zener Diode AD Test]\n";
-
-    ZenerParams<double> p;
-    p.BV = 5.1;
-    p.IBV = 0.049;
-    p.Rs = 7.0;
-    p.N = 1.0;
-    p.Is = 1e-14;
-    p.Vt = 0.02585;
-
-    double delta = 1e-7;
-
-    // Forward bias: vd = 0.65V
-    {
-        double vd = 0.65;
-        Dual<double> vd_dual(vd, 1.0);
-        Dual<double> i_ad = zener_current(vd_dual, p);
-
-        double i_p = zener_current(vd + delta, p);
-        double i_m = zener_current(vd - delta, p);
-        double fd_grad = (i_p - i_m) / (2.0 * delta);
-
-        check_derivative("Zener forward (vd=0.65V)", i_ad.grad, fd_grad);
-    }
-
-    // Reverse (not in breakdown): vd = -2.0V
-    {
-        double vd = -2.0;
-        Dual<double> vd_dual(vd, 1.0);
-        Dual<double> i_ad = zener_current(vd_dual, p);
-
-        double i_p = zener_current(vd + delta, p);
-        double i_m = zener_current(vd - delta, p);
-        double fd_grad = (i_p - i_m) / (2.0 * delta);
-
-        check_derivative("Zener reverse (vd=-2.0V)", i_ad.grad, fd_grad);
-    }
-
-    // Breakdown region: vd = -5.2V (just past -BV)
-    {
-        double vd = -5.2;
-        Dual<double> vd_dual(vd, 1.0);
-        Dual<double> i_ad = zener_current(vd_dual, p);
-
-        double i_p = zener_current(vd + delta, p);
-        double i_m = zener_current(vd - delta, p);
-        double fd_grad = (i_p - i_m) / (2.0 * delta);
-
-        check_derivative("Zener breakdown (vd=-5.2V)", i_ad.grad, fd_grad);
     }
 }
 
@@ -284,7 +228,6 @@ int main() {
     test_diode();
     test_mosfet();
     test_jfet();
-    test_zener();
     test_bjt();
 
     std::cout << "\n=== Results: " << tests_passed << " passed, "

@@ -475,7 +475,6 @@ VerilogAParseResult parseVerilogA(const std::string& source) {
     // Initialize state arrays for transient solver compatibility
     netlist.globalState.capacitorState.resize(netlist.globalBlock.capacitors.size());
     netlist.globalState.inductorState.resize(netlist.globalBlock.inductors.size());
-    netlist.globalState.powerRailState.resize(netlist.globalBlock.powerRails.size());
 
     result.success = true;
     return result;

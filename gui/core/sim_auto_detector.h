@@ -14,7 +14,7 @@ public:
     // Mode as a string to avoid pulling in engine internals.
     // Callers convert to CircuitSim::ExecutionMode inside engine_impl.cpp.
     struct Recommendation {
-        std::string mode;          // "GPU" | "TENSOR_SOA_SIMD" | "LEGACY_AOS"
+        std::string mode;          // "GPU" | "TENSOR_SOA_SIMD"
         std::string reason;
         double      confidence        = 0.0;
         int         estimatedNodeCount  = 0;

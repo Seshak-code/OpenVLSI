@@ -434,7 +434,6 @@ static bool testDriverVerilogAPath() {
     }
     nl.globalState.capacitorState.resize(0);
     nl.globalState.inductorState.resize(0);
-    nl.globalState.powerRailState.resize(0);
 
     // Generate Verilog-A source
     std::string vaSrc = VerilogAGenerator::generate(nl);

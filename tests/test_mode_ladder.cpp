@@ -36,11 +36,10 @@ void runTest(const std::string& testName, const TensorNetlist& nl) {
 
     std::vector<ModeResult> results;
     std::vector<CircuitSim::ExecutionMode> modes = {
-        CircuitSim::ExecutionMode::LEGACY_AOS,
-        CircuitSim::ExecutionMode::TENSOR_SOA_SCALAR
-        // TENSOR_SOA_SIMD is currently identical to SCALAR in the SoA pathway
+        CircuitSim::ExecutionMode::TENSOR_SOA_SCALAR,
+        CircuitSim::ExecutionMode::TENSOR_SOA_SIMD
     };
-    std::vector<std::string> modeNames = {"Legacy AoS", "Tensor SoA Scalar"};
+    std::vector<std::string> modeNames = {"Tensor SoA Scalar", "Tensor SoA SIMD"};
 
     CircuitSim sim;
     for (size_t i = 0; i < modes.size(); ++i) {
