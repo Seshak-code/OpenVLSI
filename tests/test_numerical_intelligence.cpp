@@ -4,8 +4,8 @@
  *
  * Tests:
  *   1. Singular Matrix Detection — floating node → rankDeficient flag
- *   2. Divergence Detection — unrealistic Is forces NR divergence
- *   3. Regularization Logging — Darlington pair uses GMIN stepping
+ *   2. A GMIN-held node — the solver reaches ngspice's 1e9 V
+ *   3. Regularization Logging — GMIN stepping recorded when it ran, and only then
  *   4. RMS + Worst Node Tracking — bridge rectifier
  *   5. Linear Solver Residual Tracked — ConvergenceHistory has linearSolverResidual
  */
@@ -37,12 +37,9 @@ static bool testSingularMatrix() {
     return flagged;
 }
 
-// ── Test 2: Divergence/Non-Convergence Detection ────────────────────────────
-// 1mA current source forces node 1 positive, but the only conducting path is
-// a reverse-biased diode (anode=GND, cathode=node1) which can carry at most
-// Is ≈ 1e-14 A of reverse leakage — not 1mA. KCL has no DC solution.
-// As GMIN is reduced toward 1e-12, the required V1 = 1mA/GMIN → 1e9V,
-// which NR cannot reach (pnjlim limits steps), forcing final GMIN step to fail.
+// ── Test 2: A node held only by GMIN ──────────────────────────────────────
+// 1 mA into node 1, whose only path is a reverse-biased diode: the junction's GMIN (1e-12 S) carries it,
+// so V1 = 1e9 V. ngspice 47 converges there too (v(1) = 1.000000e+09); the solver must reach it, not give up.
 
 static bool testDivergenceDetection() {
     TensorNetlist nl;
@@ -52,17 +49,14 @@ static bool testDivergenceDetection() {
     CircuitSim sim;
     SolverStep result = sim.solveDC(nl);
 
-    bool flagged = result.stats.divergenceDetected || result.stats.rankDeficient
-                   || !result.stats.converged;
-    std::cout << "  divergenceDetected=" << result.stats.divergenceDetected
-              << " rankDeficient=" << result.stats.rankDeficient
-              << " converged=" << result.stats.converged
-              << " residual=" << std::scientific << result.stats.residual << "\n";
-    return flagged;
+    const double v1 = result.nodeVoltages.empty() ? 0.0 : result.nodeVoltages[0];
+    std::cout << "  converged=" << result.stats.converged << " v(1)=" << std::scientific << v1
+              << " gminStepping=" << result.stats.regularization.applied << "\n";
+    return result.stats.converged && std::abs(v1 - 1e9) <= 1e-6 * 1e9;
 }
 
 // ── Test 3: Regularization Logging ─────────────────────────────────────────
-// Darlington pair requires GMIN stepping for cold start.
+// GMIN stepping is recorded when it ran, and only then: a Darlington pair converges directly; a floating pair steps.
 
 static bool testRegularizationLogging() {
     TensorNetlist nl;
@@ -73,13 +67,20 @@ static bool testRegularizationLogging() {
     nl.addCurrentSource(1, 3, 1e-5);
 
     CircuitSim sim;
-    SolverStep result = sim.solveDC(nl);
+    SolverStep direct = sim.solveDC(nl);
 
-    bool logged = result.stats.regularization.applied;
-    std::cout << "  gminApplied=" << result.stats.regularization.gminValue
-              << " injections=" << result.stats.regularization.injections
-              << " converged=" << result.stats.converged << "\n";
-    return logged;
+    TensorNetlist hard;  // test 1's floating pair: the direct solve fails, then GMIN stepping (and source stepping) run
+    hard.numGlobalNodes = 2;
+    hard.addResistor(1, 2, 1000.0);
+    hard.addCurrentSource(0, 1, 1e-3);
+    CircuitSim sim2;
+    SolverStep stepped = sim2.solveDC(hard);
+
+    std::cout << "  darlington converged=" << direct.stats.converged << " gminApplied=" << direct.stats.regularization.applied
+              << "; floating pair gminApplied=" << stepped.stats.regularization.applied
+              << " gmin=" << stepped.stats.regularization.gminValue << " injections=" << stepped.stats.regularization.injections << "\n";
+    return direct.stats.converged && !direct.stats.regularization.applied &&
+           stepped.stats.regularization.applied && stepped.stats.regularization.injections > 0;
 }
 
 // ── Test 4: RMS + Worst Node Tracking ──────────────────────────────────────

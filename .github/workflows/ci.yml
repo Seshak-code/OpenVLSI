@@ -1,188 +1,86 @@
 name: CI
 
 on:
-  # Run once a month on the 1st at 02:00 UTC
-  schedule:
-    - cron: '0 2 1 * *'
-  # Still allow manual runs from the Actions tab
-  workflow_dispatch:
-  # Keep PR checks for main (optional — remove if too noisy)
+  push:
+    branches: [main]
   pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
+# The app and its test suite on each platform. Third-party C++ libraries come from vcpkg (binary-cached in the
+# Actions cache) on Linux and Windows and from Homebrew on macOS; Dawn is fetched by CMake and kept warm by the
+# compiler cache. The GPU-labelled tests need a GPU the hosted runners do not have.
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          submodules: recursive
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.9.0'
-          host: 'windows'
-          target: 'desktop'
-          arch: 'win64_msvc2022_64'
-          cache: true
-
-      - name: Configure CMake
-        run: |
-          cmake -S . -B out/build/windows-msvc -G "Visual Studio 17 2022" -A x64 -DQt6_DIR="$env:Qt6_DIR"
-
-      - name: Build Application
-        run: cmake --build out/build/windows-msvc --config Release --target AcuteSim
-
-      - name: Build Regression Tests
-        run: cmake --build out/build/windows-msvc --config Release --target test_regression
-        continue-on-error: true
-
-      - name: Run Regression Suite
-        run: |
-          cd out/build/windows-msvc/Release
-          ./test_regression.exe
+  app:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-24.04, qt-arch: linux_gcc_64, triplet: x64-linux }
+          - { name: windows-x86_64, os: windows-2022, qt-arch: win64_msvc2022_64, triplet: x64-windows }
+          - { name: macos-arm64, os: macos-14 }
+    env:
+      VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
+    defaults:
+      run:
         shell: bash
-        continue-on-error: true
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: AcuteSim-Windows
-          path: out/build/windows-msvc/Release/AcuteSim.exe
-          if-no-files-found: warn
-
-  build-macos:
-    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
           submodules: recursive
 
-      - name: Install Dependencies
-        run: |
-          brew update
-          brew install ninja qt@6 libomp re2
-          echo "$(brew --prefix qt@6)/bin" >> $GITHUB_PATH
-
-      - name: Configure CMake
-        run: |
-          QT_PATH="$(brew --prefix qt@6)"
-          cmake -S . -B out/build/macos -G Ninja \
-            -DCMAKE_PREFIX_PATH="$QT_PATH/lib/cmake" \
-            -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build Application
-        run: cmake --build out/build/macos --target AcuteSim
-
-      - name: Build Regression Tests
-        run: cmake --build out/build/macos --target test_regression
-        continue-on-error: true
-
-      - name: Run Regression Suite
-        run: |
-          cd out/build/macos
-          ./test_regression
-        continue-on-error: true
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      - name: Expose the Actions cache to vcpkg
+        if: runner.os != 'macOS'
+        uses: actions/github-script@v7
         with:
-          name: AcuteSim-macOS
-          path: out/build/macos/AcuteSim.app
-          if-no-files-found: warn
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-  build-ubuntu:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          submodules: recursive
-
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            ninja-build \
-            qt6-base-dev \
-            qt6-base-private-dev \
-            libgl1-mesa-dev \
-            libvulkan-dev \
-            libxkbcommon-dev \
-            libre2-dev \
-            python3
-
-      - name: Static Architecture Linting
-        run: python3 scripts/check_layering.py
-        continue-on-error: true
-
-      - name: Configure CMake
-        run: |
-          cmake -S . -B out/build/linux -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build Application
-        run: cmake --build out/build/linux --target AcuteSim
-
-      - name: Build Regression Tests
-        run: cmake --build out/build/linux --target test_regression
-        continue-on-error: true
-
-      - name: Run Regression Suite
-        run: |
-          cd out/build/linux
-          ./test_regression
-        continue-on-error: true
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: AcuteSim-Linux
-          path: |
-            out/build/linux/AcuteSim
-            regression_golden.db
-          if-no-files-found: warn
-
-  build-wasm:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          submodules: recursive
-
-      - name: Install Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: 3.1.64
-
-      - name: Install Qt for WASM
+      - name: Qt 6.9
+        if: runner.os != 'macOS'
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.9.0'
-          target: 'wasm_singlethread'
-          arch: 'wasm_32'
+          arch: ${{ matrix.qt-arch }}
           cache: true
 
-      - name: Configure CMake
+      - name: Libraries
         run: |
-          emcmake cmake -S . -B out/build/wasm -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
+          case "$RUNNER_OS" in
+          Linux)
+            sudo apt-get install -y -q ninja-build libgl1-mesa-dev libxkbcommon-dev
+            "$VCPKG_INSTALLATION_ROOT/vcpkg" install grpc tcl --triplet "${{ matrix.triplet }}" ;;
+          Windows)
+            "$VCPKG_INSTALLATION_ROOT/vcpkg" install grpc tcl --triplet "${{ matrix.triplet }}" ;;
+          macOS)
+            brew install ninja qt@6 grpc > /dev/null
+            echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> "$GITHUB_ENV" ;;
+          esac
 
-      - name: Build Application
-        run: cmake --build out/build/wasm --target AcuteSim
-        continue-on-error: true
+      - name: MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      - name: Compiler cache
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
-          name: AcuteSim-WASM
-          path: |
-            out/build/wasm/AcuteSim.js
-            out/build/wasm/AcuteSim.wasm
-            out/build/wasm/AcuteSim.html
-            out/build/wasm/qtloader.js
-          if-no-files-found: warn
+          key: ${{ matrix.name }}
+          variant: ${{ runner.os == 'Windows' && 'sccache' || 'ccache' }}
+          max-size: 2G
+
+      - name: Configure
+        run: |
+          launcher=ccache; [ "$RUNNER_OS" = Windows ] && launcher=sccache
+          vcpkg=()
+          [ "$RUNNER_OS" != macOS ] && vcpkg=(-DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+                                             -DVCPKG_TARGET_TRIPLET="${{ matrix.triplet }}")
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "${vcpkg[@]}" \
+            -DCMAKE_C_COMPILER_LAUNCHER=$launcher -DCMAKE_CXX_COMPILER_LAUNCHER=$launcher
+
+      - name: Build
+        run: cmake --build build -j4
+
+      - name: Tests
+        run: ctest --test-dir build --output-on-failure -LE gpu --timeout 900
