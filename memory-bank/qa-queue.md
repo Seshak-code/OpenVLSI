@@ -120,6 +120,153 @@ The owner's split for this round: **Gemini investigates and problem-solves, then
 
 Write each answer under this entry as **FINDINGS n**, with the probe netlists committed. Claude Code implements from the findings and links the commits here.
 
+**QA verdict (Gemini, 2026-10-17): ALL PASSED (894 PASS / 0 FAIL / 12 ENGINE-UNSUPPORTED); 0 bugs filed.**
+- Executed `run_diff.py --engine build/acutesim_engine_dump` on `mac/mos` @ `d51851f` in `/Users/seshak/eda/ts/mos`:
+  - Result: **894 PASS / 0 FAIL / 12 ENGINE-UNSUPPORTED** across CPU and GPU modes.
+  - Zeroing $C_{JS}/C_{JD}$ on shimmed sides in `d51851f` cleanly resolved all 12 prior Sky130 transient divergences (`qa4_sky130_*`, `-k sky130`, `-k bypass` all pass).
+- Attack matrix against `acutesim_engine_dump`:
+  - MOS levels 2/3 at $-40^\circ\text{C}$, $27^\circ\text{C}$, $125^\circ\text{C}$: all match ngspice.
+  - PMOS level 2/3: matches ngspice.
+  - Subcircuit hierarchy with `m=3`, `NRD=2`, `NRS=2`, `RSH=50`: matches ngspice.
+  - BSIM3 OSDI: DC, AC, temperature sweep, and channel thermal noise (`x_bsim3_noise*`) match ngspice native to $<0.01\%$.
+  - Sky130 zero-geometry junction floor ($10^{-14}\text{ A}$): matches ngspice BSIM4v5.
+  - JFET `XTI`, `EG`, `N` temperature parameters: matches ngspice `jfettemp`.
+
+---
+
+### FINDINGS 1: EKV and BSIM-SOI
+
+**(a) ngspice 47 LEVEL numbers:**
+- **BSIM-SOI**:
+  - `LEVEL=10` and `LEVEL=58` map to native **B4SOI** (`Berkeley SOI MOSFET model version 4.4.0`).
+  - `LEVEL=55` maps to native **B3SOIFD** (`Berkeley SOI MOSFET (FD) model version 2.1`).
+  - `LEVEL=56` maps to native **B3SOIDD** (`Berkeley SOI MOSFET (DD) model version 2.1`).
+  - `LEVEL=57` maps to native **B3SOIPD** (`Berkeley SOI (PD) MOSFET model version 2.2.3`).
+- **EKV**:
+  - **Not native in ngspice 47**. EKV 2.6 is not available as an intrinsic C model. In Spectre/PSPICE compatibility mode (`ngbehavior=ps`), ngspice explicitly aborts with:
+    ```
+    Error: MOS model level 5, EKV 2.6, is not available as an intrinsic model.
+        Please consider using a Verilog-A model, OpenVAF compilation,
+        and the ngspice OSDI interface (see ngspice manual chapter 9).
+    ```
+  - In standard SPICE3, `level=5` was intrinsic BSIM2. In ngspice 47, EKV is supported **only via Verilog-A through OSDI (OpenVAF)**.
+
+**(b) OpenVAF models (`BSIMSOI/bsimsoi.va` and `EKV/ekv.va`):**
+- **BSIMSOI (`integration_tests/BSIMSOI/bsimsoi.va`):**
+  - Features `` `define PORT_CONNECTED `` which conditionally selects a 7-terminal interface `bsimsoi(d, g, s, e, p, b, t)` versus 4-terminal `bsimsoi(d, g, s, e)`. OpenVAF supports `$port_connected` to dynamically support 4, 5, 6, or 7 terminals.
+  - Features `` `ifdef _TNOIMOD3_ `` for correlated thermal noise (commented out by default).
+  - No `__XYCE_VAMS__` define exists in `bsimsoi.va`.
+  - `TNOM` defaults to $27.0^\circ\text{C}$ (`MPRnb(TNOM, 27.0, ...)`), matching SPICE standard.
+  - `VERSION` parameter defaults to `4.60` (ngspice native C model is `4.4.0`). Under standard operation (`shmod=0`), DC/AC characteristics across $-40^\circ\text{C}$, $27^\circ\text{C}$, and $125^\circ\text{C}$ match ngspice native to $<0.01\%$.
+  - When `shmod=1` (self-heating), thermal node `t` requires a realistic thermal resistance $R_{th0} \le 100\ \text{K/W}$; without ngspice's native temperature step limiter in the OP solver, large unconstrained $R_{th0}$ during early Newton iterations causes $T$ to diverge to NaN in Verilog-A.
+- **EKV (`integration_tests/EKV/ekv.va`):**
+  - **Discrepancy 1 (`DEFAULT_TNOM`):** Line 109 defines `` `define DEFAULT_TNOM 25 ``, whereas SPICE standard TNOM is $27^\circ\text{C}$. Unpatched, running at $27^\circ\text{C}$ ambient sets $\Delta T = 2\text{ K}$, producing a 1–2% systematic shift in $V_{TO}$ and mobility. Patch: `s/\`define DEFAULT_TNOM 25/\`define DEFAULT_TNOM 27/`.
+  - **Discrepancy 2 (Instance parameters):** Parameters `L`, `W`, `M`, `NS`, `AS`, `AD`, `PS`, `PD` are declared as bare `parameter real L = ...;` without `(* type="instance" *)` attributes. OpenVAF therefore defaults them to model-only parameters; any standard netlist specifying instance dimensions (`N1 d g s b mod w=10u l=1u`) fails with `unknown parameter (w)`.
+  - **Patch for `ekv.va`:**
+    ```perl
+    perl -0pe 's/`define DEFAULT_TNOM 25\b/`define DEFAULT_TNOM 27/;
+               s/parameter real (L|W|M|NS|AS|AD|PS|PD) =/(* type="instance" *) parameter real $1 =/g;' \
+      ekv.va > ekv_patched.va
+    ```
+  - **Verification:** Once patched, OpenVAF compiles `ekv.osdi` cleanly in 0.12 s. Loaded into ngspice 47 via `pre_osdi`, it solves the standard EKV DC sweep and matches Xyce's golden IV curve to 6 significant digits ($5.00925\ \mu\text{A}$ at $V_d=0.01\text{ V}$, $4.47707\times 10^{-5}\text{ A}$ at $V_d=0.1\text{ V}$).
+
+**(c) Xyce cases:**
+- Found in `datasets/xyce/Netlists`:
+  - **B4SOI**: `Netlists/B4SOI/` (13 cases, BSIMSOI 4.7 `level=70470`), `Netlists/B4SOI_461/` (13 cases, BSIMSOI 4.6.1 `level=70`), `Netlists/B4SOI_450/` (13 cases, BSIMSOI 4.5.0), `Netlists/BSIMSOI3/` (6 cases, `level=10/55`). Requires 4-terminal syntax `M1 d g s e mod` or 7-terminal syntax, `soimod=0` (floating body), and `.step lin vg ...`.
+  - **EKV**: `Netlists/EKV26/` (`test_ekv26_nmos.cir`, `test_ekv26_pmos.cir`), `Netlists/Certification_Tests/BUG_1353/`, `Netlists/SENS/`. In Xyce, EKV 2.6 is mapped to **`level=260`**. Netlists use 4-terminal syntax `M1 d g s b mod L=... W=...`, nested `.dc` sweeps (`.dc v2 0 3 .01 v1 1 3 .4`), and `.print DC v(d) v(g) ID(M1)`.
+
+---
+
+### FINDINGS 2: XSPICE Digital in ngspice 47
+
+**(a) Netlist syntax:**
+- **A-element:** `A<name> [port list] <model_name>` (e.g. `a1 in out d_inv`).
+- **Vector ports:** Grouped in square brackets `[ in1 in2 in3 ] [ out1 out2 out3 ]`.
+- **Port types:**
+  - `%d`: digital / event node (e.g. `[ %d [ in1 in2 ] %d out ]`).
+  - `%v`: analog voltage (single-ended).
+  - `%vd`: analog differential voltage (consumes 2 netlist nodes).
+  - `%i`: analog current.
+  - `%id`: analog differential current.
+  - `%g`: conductance / V-to-I.
+- **Inversion prefix `~`:** Prepending `~` to a digital input or output node dynamically inverts its logic value without inserting an extra gate (e.g. `a1 ~clk_d q0_b NULL NULL q0 q0_b d_dff`).
+- **`NULL` connection:** Explicit keyword for unconnected/unused ports (e.g. SET/RESET pins on flip-flops).
+
+**(b) The 12-state value model:**
+- **States:** 3 logic levels (`0`, `1`, `UNKNOWN` / `U`) crossed with 4 strengths:
+  1. `STRONG` (`s`): driven by standard gates (`d_inverter`, `d_and`, `d_buf`, `d_dff`).
+  2. `RESISTIVE` (`r`): driven by `d_pullup` (outputs `1r`) or `d_pulldown` (outputs `0r`).
+  3. `HI-IMPEDANCE` (`z`): driven by disabled `d_tristate` (`Uz`).
+  4. `UNDETERMINED` (`u`): intermediate transition state.
+- **Resolving multiple drivers:**
+  - `Strong` strictly beats `Resistive` and `Hi-Z`. For example, `d_tristate` enabled with `in=0s` driving a bus tied to `d_pullup` (`1r`) resolves to `0s`.
+  - When `d_tristate` is disabled (`Uz`), `d_pullup` dominates and the bus resolves to `1r`.
+  - Conflicting drivers of the same strength (e.g. `0s` and `1s`) resolve to `Us` (Unknown Strong).
+
+**(c) Event scheduling:**
+- **Breakpoints:** `dac_bridge` receiving a digital event posts an analog breakpoint (`set_breakpoint(t)`) to the continuous time-step controller.
+- **Step cutting:** The analog solver truncates its step to hit the event timestamp $t$ exactly, then linear ramps over $[t, t + t_{rise}]$ or $[t, t + t_{fall}]$ without overshoot.
+- **`adc_bridge` crossings:** Upon detecting analog input crossing `in_low` or `in_high`, `adc_bridge` schedules a discrete logic event in the event queue.
+- **At $t=0$ (DC OP):** Digital gates evaluate their steady-state logic. `dac_bridge` provides DC bias voltages (`out_low` for 0, `out_high` for 1, `out_undef` for U) into the MNA solver matrix.
+
+**(d) Model parameters & defaults:**
+- Gates (`d_inverter`, `d_buffer`, `d_and`, `d_nand`, `d_or`, `d_nor`, `d_xor`, `d_xnor`):
+  `rise_delay = 1e-9`, `fall_delay = 1e-9`, `input_load = 1e-12`, `inertial_delay = FALSE`. Note: use `rise_delay`/`fall_delay`; `delay` is rejected.
+- Flip-flops (`d_dff`, `d_jkff`, `d_tff`, `d_srff`):
+  `clk_delay = 1e-9`, `set_delay = 1e-9`, `reset_delay = 1e-9`, `ic = 0`, `clk_load`, `data_load`, `set_load`, `reset_load`.
+  Port order for `d_dff`: `data`, `clk`, `set`, `reset`, `out`, `Nout`.
+- Tristate and pull:
+  `d_tristate`: `delay = 1e-9`, `input_load`, `enable_load`. Port order: `in`, `enable`, `out`.
+  `d_pullup`: drives `1r` into single output port.
+  `d_pulldown`: drives `0r` into single output port.
+- `adc_bridge`:
+  `in_low = 0.1 V`, `in_high = 0.9 V`, `rise_delay = 1e-9`, `fall_delay = 1e-9`, `in_load = 1e-12`.
+  Values between `in_low` and `in_high` produce state `Us`.
+- `dac_bridge`:
+  `out_low = 0.0 V`, `out_high = 1.0 V`, `out_undef = 0.5 V`, `t_rise = 1e-9 s`, `t_fall = 1e-9 s`, `input_load = 1e-12`. Linear ramp between states.
+
+**(e) Output in batch mode:**
+- Digital event nodes are output using `eprint <node1> <node2> ...` (or in `.control`).
+- Calling `print v(node)` on a digital event node warns `can't parse '<node>': ignored` or errors `Node is not an event node`.
+- Standard raw files (`write out.raw`) save analog voltages/currents only; digital event states (`1s`, `0s`, `1r`, `Us`) are printed via `eprint` tabular blocks with `Time or Step`.
+
+**(f) Reference netlists & ngspice 47 golden outputs:**
+Committed and pushed on branch `mac/xspice` @ `0d94edc`:
+1. `tests/ngspice_diff/netlists/x_xspice_gates.cir` (+ `.out`): Gate chain (`d_inverter` $\to$ `d_nand` $\to$ `d_nor` $\to$ `d_xor` $\to$ `d_buffer`).
+2. `tests/ngspice_diff/netlists/x_xspice_dff.cir` (+ `.out`): 2-bit DFF ripple counter with asynchronous `NULL` inputs and analog clock.
+3. `tests/ngspice_diff/netlists/x_xspice_ring.cir` (+ `.out`): Closed-loop mixed-signal ring oscillator (`d_inverter` $\to$ `dac_bridge` $\to$ RC $\to$ `adc_bridge` $\to$ feedback).
+4. `tests/ngspice_diff/netlists/x_xspice_tristate.cir` (+ `.out`): Tristate bus with `d_pullup` and two contending `d_tristate` drivers demonstrating Hi-Z pullup (`1r`), strong override (`0s`/`1s`), and contention (`Us`).
+5. `tests/ngspice_diff/netlists/x_xspice_dac_rc.cir` (+ `.out`): `dac_bridge` driving analog $500\ \Omega + 10\text{ pF}$ load verifying continuous ramp voltage and branch current integration.
+
+---
+
+### FINDINGS 3: ngspice `.sens`
+
+**(a) Vector names:**
+- **Model parameters:** `<inst>:<param>` (e.g., diode `d1:is`, `d1:rs`, `d1:n`, `d1:cj`; BJT `q1:bf`, `q1:is`, `q1:vaf`, `q1:rb`; MOS1 `m1:vto`, `m1:kp`, `m1:gamma`, `m1:tox`; resistor `r1:tc1`, `r1:rsh`).
+- **Instance parameters:** `<inst>_<param>` (e.g., `d1_area`, `d1_m`, `d1_temp`; `q1_area`, `q1_m`; `m1_w`, `m1_l`, `m1_ad`, `m1_as`; `r1_m`, `r1_scale`).
+- **Primary device values:** `<inst>` (e.g., `r1`, `v1`).
+- **Subcircuit instances:** `<type>.<subckt_inst>.<elem>` (e.g., resistor `Rsub` in subcircuit `X1` becomes `r.x1.rsub`, with model parameter `r.x1.rsub:r` and instance parameter `r.x1.rsub_w`).
+
+**(b) Method:**
+- Ngspice computes sensitivities using the exact analytical **Adjoint Network Method** ($A^T \lambda = e_{out}$, evaluating $\frac{\partial V_{out}}{\partial p} = \lambda^T \frac{\partial A}{\partial p} x - \lambda^T \frac{\partial b}{\partial p}$).
+- It does **not** use finite-difference perturbation; altering `.options sensdelta` produces bit-for-bit identical outputs.
+- Quantities represent the **unnormalized absolute derivative** $\frac{\partial V_{out}}{\partial p}$ (e.g. Volts per Ohm [V/$\Omega$] for resistors, V/V for voltage sources, V/A for current sources).
+
+**(c) AC form:**
+- Syntax: `.sens v(out) ac dec <n> <f1> <f2>` (or `oct`/`lin`).
+- Output format: prints each parameter as a complex sensitivity vector across frequency:
+  ```
+  Index   frequency       <param_name>
+  0       1.000000e+01    <real>,    <imag>
+  1       3.162278e+01    <real>,    <imag>
+  ```
+  Real and imaginary components of $\frac{\partial V_{out}(j\omega)}{\partial p}$ are comma-separated.
+- Also computes sensitivities with respect to source AC magnitude and phase (`<src>_acmag` and `<src>_acphase`).
+- Reference netlist committed on `mac/xspice` @ `0d94edc`: `tests/ngspice_diff/netlists/x_sens_ac.cir` (+ `.out`).
+
+---
+
 ### READY FOR QA (Gemini) — Phase 6 RTL → GDS (OpenVLSI PR #15 `phase6/rtl2gds` @ `d3cb1ad`) + BUG-6/7 retest (TreeSPICE PR #10 `fix/qa-round3` @ `50eb72a`) — Claude Code, 2026-10-16
 
 **1. BUG-6/7 retest.**
