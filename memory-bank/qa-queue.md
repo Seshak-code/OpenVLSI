@@ -61,6 +61,65 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Entries
 
+### ASSIGNED TO GEMINI (INVESTIGATE) — TreeSPICE macOS feature completeness: MOS-batch QA, then findings for EKV / BSIM-SOI, XSPICE, device `.sens` — Claude Code, 2026-10-17
+
+The owner's split for this round: **Gemini investigates and problem-solves, then writes its answers here. Claude Code implements them.** Gemini does not edit engine source. As usual, test netlists, reproducers and harness classifications are fine (`.clinerules/06-dev-qa-split.md`).
+
+**Setup:**
+- Engine repo: TreeSPICE (remote `treespice`; checkout `/Users/seshak/Documents/Projects/Coding Projects/Karam`).
+- ngspice 47 is the oracle; its source is not on disk. Answers backed by `ngspice -b` probes, or by the ngspice manual and ngspice source quoted from memory with the claim marked as such, are what Claude needs.
+- Baselines (TreeSPICE `mac/complete` @ `f7f7cda`, PR #12):
+  - `run_diff.py` 836 PASS / 0 FAIL / 12 ENGINE-UNSUPPORTED;
+  - `xyce_diff.py` 184 PASS / 0 FAIL / 1 ENGINE-LIMIT;
+  - `ibmpg_diff.py` 6 PASS;
+  - ctest 4/4;
+  - `tests/cli_check.py --treespice build/treespice` clean.
+
+**1. QA: verify `mac/mos` @ `d51851f`.** Worktree `/Users/seshak/eda/ts/mos`, build dir `build`; use it alone.
+- Contents:
+  - MOS levels 2/3 (native);
+  - BSIM3 LEVEL 8/49 on OSDI (`bsim3.osdi` is in `datasets/osdi`);
+  - the JFET temperature law;
+  - BSIM4 `version < 4.6` zero-geometry junctions (the 1e-14 A floor of ngspice's BSIM4v5).
+- The last full run was before `d51851f`, which zeroes CJS/CJD on shimmed sides. It had 12 FAIL, all sky130 transients; `-k sky130` and `-k bypass` now pass.
+- Run the full matrix, then attack:
+  - MOS2/3 at -40/27/125 C;
+  - PMOS;
+  - inside `.subckt`;
+  - m=, NRD/NRS and RSH;
+  - BSIM3 noise;
+  - sky130 with AD/AS=0 against non-zero, in tran and ac;
+  - JFET XTI/EG/N combinations.
+- File BUG-n entries as usual.
+
+**2. INVESTIGATE: EKV and BSIM-SOI.** Answer:
+- **(a) ngspice 47 LEVEL numbers.** Which LEVEL numbers map to native B4SOI and EKV, and is EKV native at all? Probe with `ngspice -b`.
+- **(b) OpenVAF models.** For OpenVAF's `integration_tests/BSIMSOI/*.va` and `EKV/*.va` (in `/Users/seshak/Documents/Projects/Coding Projects/tools/OpenVAF/integration_tests/`): which `ifdef` sections, `__XYCE_VAMS__` included, and which defaults differ from ngspice's C models?
+  - Context: OpenVAF compiled bsim4.va's body network wrongly under that define, and bsim3.va needed five patches; both are listed in TreeSPICE `tests/build_osdi.sh` on `mac/mos`.
+  - Compile the .va to a scratch dir with `OPENVAF_DIR=… tests/build_osdi.sh`-style commands, and compare against ngspice native, or ngspice `pre_osdi` of the same file.
+  - Report each mismatch with numbers and the patch that fixes it.
+- **(c) Xyce cases.** Which Xyce B4SOI/EKV cases exist, and what do they need?
+
+**3. INVESTIGATE: XSPICE digital in ngspice 47.** Write the spec Claude implements against, from probes of ngspice 47. Its code models are `/opt/homebrew/Cellar/libngspice/47/lib/ngspice/*.cm`, loaded automatically.
+- **(a) Netlist syntax:** A-element syntax, vector ports `[ ]`, port types `%d %v %g %id %vd`, `~` inversion and `NULL`.
+- **(b) The 12-state value model:** the 0/1/U values crossed with strong/resistive/hi-Z/undetermined, and how a node resolves several drivers (the d_tristate and d_pullup cases).
+- **(c) Event scheduling:** the event queue, how delays interact with analog breakpoints, what happens at t=0 (initial values, DC operating point with digital nodes), and how the analog step is cut at an event.
+- **(d) Model parameters:** each `d_*` model's parameters and defaults, plus adc_bridge and dac_bridge (thresholds, t_rise/t_fall, out_undef, input_load).
+- **(e) Output:** how ngspice prints a digital node in batch (`eprint`? `print`?), and what a raw file holds for event nodes.
+- **(f) Reference netlists:** five small netlists with their ngspice outputs saved under `acutesim_engine/tests/ngspice_diff/netlists/x_xspice_*.cir` (git add -f):
+  - a gate chain;
+  - a DFF counter clocked through adc_bridge;
+  - a ring oscillator through dac_bridge + RC + adc_bridge;
+  - a tristate bus;
+  - an RC load driven by dac_bridge.
+
+**4. INVESTIGATE: ngspice `.sens`.**
+- **(a) Vector names:** the exact names and quantities ngspice 47 prints for diodes, BJTs, MOS1 and subcircuit instances.
+- **(b) Method:** how ngspice computes them (perturbation size, relative or absolute, one-sided or central). `.options sensdelta`?
+- **(c) AC form:** `.sens v(out) ac dec n f1 f2`, its output format (complex? magnitude/phase?), with a reference netlist and its output.
+
+Write each answer under this entry as **FINDINGS n**, with the probe netlists committed. Claude Code implements from the findings and links the commits here.
+
 ### READY FOR QA (Gemini) — Phase 6 RTL → GDS (OpenVLSI PR #15 `phase6/rtl2gds` @ `d3cb1ad`) + BUG-6/7 retest (TreeSPICE PR #10 `fix/qa-round3` @ `50eb72a`) — Claude Code, 2026-10-16
 
 **1. BUG-6/7 retest.**
