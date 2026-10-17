@@ -11,6 +11,8 @@
 #include <grpcpp/grpcpp.h>
 
 #include "engine_api/simulation_dto.h"
+#include "components/veriloga_generator.h"
+#include "acutesim_engine/netlist/circuit.h"
 #include "../compute/orchestration/driver/local_worker_driver.h"
 #include "../compute/orchestration/driver/remote_grpc_driver.h"
 #include "../compute/orchestration/server/simulation_service_impl.h"
@@ -27,23 +29,14 @@ using namespace acutesim::compute::orchestration;
         } \
     } while(0)
 
-static std::string makeResistiveDividerJson() {
-    return R"({
-        "numGlobalNodes": 2,
-        "globalBlock": {
-            "resistors": [
-                {"nodeA": 1, "nodeB": 2, "resistance": 1000.0, "name": "R1"},
-                {"nodeA": 2, "nodeB": 0, "resistance": 1000.0, "name": "R2"}
-            ],
-            "voltageSources": [
-                {"nodePositive": 1, "nodeNegative": 0, "voltage": 5.0, "name": "V1"}
-            ],
-            "capacitors": [],
-            "probes": [
-                {"nodePositive": 2, "nodeNegative": 0, "name": "Vmid"}
-            ]
-        }
-    })";
+// The divider as Verilog-A, the drivers' only transport (JSON was removed): V1 5 V, R1 and R2 1k, probe at the middle
+static std::string makeResistiveDivider() {
+    TensorNetlist nl;
+    nl.addVoltageSource(1, 0, 5.0);
+    nl.addResistor("R1", 1, 2, 1e3);
+    nl.addResistor("R2", 2, 0, 1e3);
+    nl.addProbe("Vmid", 2, 0);
+    return VerilogAGenerator::generate(nl);
 }
 
 std::unique_ptr<grpc::Server> g_server;
@@ -94,7 +87,8 @@ int testRemoteBatchSweep() {
 
     SimulationBatchRequestDTO batchReq;
     batchReq.sessionToken = "batch-sweep-1";
-    batchReq.source.payload = makeResistiveDividerJson();
+    batchReq.source.format = NetlistFormatDTO::VERILOG_A;
+    batchReq.source.payload = makeResistiveDivider();
     batchReq.analysis = AnalysisTypeDTO::DC;
     
     for (int i = 0; i < 10; ++i) {
@@ -136,7 +130,8 @@ int testSeedDeterminism() {
 
     SimulationRequestDTO baseReq;
     baseReq.sessionToken = "mc-test";
-    baseReq.source.payload = makeResistiveDividerJson();
+    baseReq.source.format = NetlistFormatDTO::VERILOG_A;
+    baseReq.source.payload = makeResistiveDivider();
     baseReq.analysis = AnalysisTypeDTO::DC;
 
     MonteCarloConfigDTO mcConfig;

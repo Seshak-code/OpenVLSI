@@ -4,6 +4,19 @@
 
 namespace acutesim::compute::orchestration {
 
+// One write at a time: gRPC allows no concurrent Write on a stream, and the driver's callbacks run on its
+// worker threads (Monte Carlo runs in parallel: GRPC_CALL_ERROR_TOO_MANY_OPERATIONS, then an abort).
+// After the final message nothing is written: the handler has returned and the stream is gone.
+namespace {
+struct StreamGuard {
+    grpc::ServerWriter<simulation::SimulationEvent>* w;
+    std::mutex m;
+    bool closed = false;
+    void write(const simulation::SimulationEvent& e) { std::lock_guard<std::mutex> g(m); if (!closed) w->Write(e); }
+    void close(const simulation::SimulationEvent& e) { std::lock_guard<std::mutex> g(m); if (!closed) w->Write(e); closed = true; }
+};
+}  // namespace
+
 void SimulationServiceImpl::registerJob(const std::string& token, std::shared_ptr<ActiveJob> job) {
     if (token.empty()) return;
     std::lock_guard<std::mutex> lock(jobMapMutex_);
@@ -33,6 +46,7 @@ grpc::Status SimulationServiceImpl::SubmitJob(
     auto dto = ProtoMapper::fromProto(*request);
 
     std::mutex mtx;
+    StreamGuard out{writer};  // before the job: its driver (and worker threads) goes first
     std::condition_variable cv;
     bool finished = false;
 
@@ -43,7 +57,7 @@ grpc::Status SimulationServiceImpl::SubmitJob(
         simulation::SimulationEvent event;
         event.set_session_token(dto.sessionToken);
         *event.mutable_run_result() = ProtoMapper::toProto(res);
-        writer->Write(event);
+        out.write(event);
 
         std::lock_guard<std::mutex> lock(mtx);
         finished = true;
@@ -56,7 +70,7 @@ grpc::Status SimulationServiceImpl::SubmitJob(
         auto* prog = event.mutable_progress();
         prog->set_percent(pct);
         prog->set_message(msg);
-        writer->Write(event);
+        out.write(event);
     };
 
     job->internalId = job->driver->submitJob(dto);
@@ -75,7 +89,7 @@ grpc::Status SimulationServiceImpl::SubmitJob(
     simulation::SimulationEvent done;
     done.set_session_token(dto.sessionToken);
     done.set_is_finished(true);
-    writer->Write(done);
+    out.close(done);
 
     return grpc::Status::OK;
 }
@@ -88,6 +102,7 @@ grpc::Status SimulationServiceImpl::SubmitBatchJob(
     auto dto = ProtoMapper::fromProto(*request);
 
     std::mutex mtx;
+    StreamGuard out{writer};  // before the job: its driver (and worker threads) goes first
     std::condition_variable cv;
     bool finished = false;
 
@@ -98,7 +113,7 @@ grpc::Status SimulationServiceImpl::SubmitBatchJob(
         simulation::SimulationEvent event;
         event.set_session_token(dto.sessionToken);
         *event.mutable_batch_summary() = ProtoMapper::toProtoBatchSummary(batch);
-        writer->Write(event);
+        out.write(event);
 
         std::lock_guard<std::mutex> lock(mtx);
         finished = true;
@@ -109,7 +124,7 @@ grpc::Status SimulationServiceImpl::SubmitBatchJob(
         simulation::SimulationEvent event;
         event.set_session_token(dto.sessionToken);
         *event.mutable_run_result() = ProtoMapper::toProto(res);
-        writer->Write(event);
+        out.write(event);
     };
 
     job->driver->onBatchProgress = [&](JobID, uint32_t completed, uint32_t total) {
@@ -118,7 +133,7 @@ grpc::Status SimulationServiceImpl::SubmitBatchJob(
         auto* bp = event.mutable_batch_progress();
         bp->set_completed(completed);
         bp->set_total(total);
-        writer->Write(event);
+        out.write(event);
     };
 
     job->internalId = job->driver->submitBatchJob(dto);
@@ -136,7 +151,7 @@ grpc::Status SimulationServiceImpl::SubmitBatchJob(
     simulation::SimulationEvent done;
     done.set_session_token(dto.sessionToken);
     done.set_is_finished(true);
-    writer->Write(done);
+    out.close(done);
 
     return grpc::Status::OK;
 }
@@ -150,6 +165,7 @@ grpc::Status SimulationServiceImpl::SubmitStatisticalJob(
     auto config = ProtoMapper::fromProto(request->mc_config());
 
     std::mutex mtx;
+    StreamGuard out{writer};  // before the job: its driver (and worker threads) goes first
     std::condition_variable cv;
     bool finished = false;
 
@@ -160,7 +176,7 @@ grpc::Status SimulationServiceImpl::SubmitStatisticalJob(
         simulation::SimulationEvent event;
         event.set_session_token(baseReq.sessionToken);
         *event.mutable_batch_summary() = ProtoMapper::toProtoBatchSummary(batch);
-        writer->Write(event);
+        out.write(event);
 
         std::lock_guard<std::mutex> lock(mtx);
         finished = true;
@@ -171,7 +187,7 @@ grpc::Status SimulationServiceImpl::SubmitStatisticalJob(
         simulation::SimulationEvent event;
         event.set_session_token(baseReq.sessionToken);
         *event.mutable_run_result() = ProtoMapper::toProto(res);
-        writer->Write(event);
+        out.write(event);
     };
 
     job->driver->onBatchProgress = [&](JobID, uint32_t completed, uint32_t total) {
@@ -180,7 +196,7 @@ grpc::Status SimulationServiceImpl::SubmitStatisticalJob(
         auto* bp = event.mutable_batch_progress();
         bp->set_completed(completed);
         bp->set_total(total);
-        writer->Write(event);
+        out.write(event);
     };
 
     job->internalId = job->driver->submitStatisticalJob(baseReq, config);
@@ -198,7 +214,7 @@ grpc::Status SimulationServiceImpl::SubmitStatisticalJob(
     simulation::SimulationEvent done;
     done.set_session_token(baseReq.sessionToken);
     done.set_is_finished(true);
-    writer->Write(done);
+    out.close(done);
 
     return grpc::Status::OK;
 }
