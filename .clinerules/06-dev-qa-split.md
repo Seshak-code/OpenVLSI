@@ -30,6 +30,13 @@
   Commit the reproducer test (expected-to-fail checks are fine; say so).
 - Verifies FIXED – RETEST entries; closes them as **VERIFIED** or reopens.
 
+## Owner's exception (2026-10-17)
+
+While Claude Code's Sonnet dev agents are paused, the owner assigned their open TreeSPICE work to
+Gemini as **development**. For the entries marked **ASSIGNED TO GEMINI (DEV)** in the queue, Cline
+may edit engine source in the TreeSPICE worktrees named there, on the branches named there. Claude
+Code reviews those branches and merges them. Everything else stays as above.
+
 ## Queue states
 
 READY FOR QA → (QA) → PASSED | BUG-n filed → (dev) FIXED – RETEST → (QA) VERIFIED | REOPENED

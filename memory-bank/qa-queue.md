@@ -61,6 +61,73 @@ Newest first. States: READY FOR QA → PASSED | BUG-n → FIXED – RETEST → V
 
 ## Entries
 
+### ASSIGNED TO GEMINI (DEV, owner's exception) — TreeSPICE macOS feature completeness: MOS-batch verification, EKV / BSIM-SOI, XSPICE, device `.sens` — Claude Code, 2026-10-17
+
+The Sonnet dev agents are paused until Oct 21 (weekly limit). The owner assigned their open work to Gemini, as **development**, not only QA (see `.clinerules/06-dev-qa-split.md`, "Owner's exception"). Claude Code reviews each branch and merges it into `mac/complete`, which is TreeSPICE PR #12.
+
+**Setup (all items):**
+- Engine repo: TreeSPICE (`git remote` `treespice` in `/Users/seshak/Documents/Projects/Coding Projects/Karam`).
+- Each item has its own git worktree, branch and build dir. Never share a build dir between concurrent builds.
+- Follow `/Users/seshak/eda/ts/AGENT_BRIEF.md` (the shared rules), with two changes:
+  - commit with your own attribution, not the Sonnet trailer;
+  - write the report here, under this entry, not as a chat reply.
+- ngspice 47 is the oracle. Every feature gets an `x_<feature>.cir` in `tests/ngspice_diff/netlists/` (`git add -f`) that `run_diff.py` passes in cpu and gpu.
+- Anything not implemented stays an explicit "not supported yet" error, never a silent wrong answer.
+- Baselines (`mac/complete` @ `f7f7cda`):
+  - `run_diff.py` 836 PASS / 0 FAIL / 12 ENGINE-UNSUPPORTED;
+  - `xyce_diff.py` 184 PASS / 0 FAIL / 1 ENGINE-LIMIT;
+  - `ibmpg_diff.py` 6 PASS;
+  - ctest 4/4;
+  - `tests/cli_check.py --treespice build/treespice` clean.
+- OSDI models are built by `tests/build_osdi.sh`, with `OPENVAF_DIR="/Users/seshak/Documents/Projects/Coding Projects/tools/OpenVAF"`. Set `OSDI_OUT=<dir>` to build to a scratch dir, and test with `TREESPICE_OSDI_PATH=<dir>` before installing into `datasets/osdi` (shared by every worktree).
+
+**1. QA: verify `mac/mos` @ `d51851f`** (worktree `/Users/seshak/eda/ts/mos`, build dir `build`).
+- Contents: MOS levels 2/3 (native), BSIM3 LEVEL 8/49 on OSDI (`bsim3.osdi` is already in `datasets/osdi`), the JFET temperature law, and BSIM4 `version < 4.6` zero-geometry junctions (a 1e-14 A floor, as in ngspice's BSIM4v5).
+- Claude's interrupted run, before the last fix, showed `run_diff` 882 PASS / 12 FAIL. The fails were all sky130 transient cases, because the shim's stand-in area added bottom-junction capacitance. `d51851f` zeroes CJS/CJD on shimmed sides; `-k sky130` and `-k bypass` then pass, but the full matrix was not rerun.
+- Run the full matrix and report the numbers.
+- Then attack:
+  - MOS2/3 at -40/27/125 C;
+  - PMOS;
+  - inside `.subckt`;
+  - m=, NRD/NRS and RSH;
+  - noise for BSIM3;
+  - sky130 nfet/pfet with explicit AD/AS=0 against non-zero, in tran and ac;
+  - JFET XTI/EG/N combinations.
+- File each defect as a BUG-n.
+
+**2. DEV: EKV and BSIM-SOI on OSDI** (new worktree `/Users/seshak/eda/ts/soi`, branch `mac/soi` from `mac/mos`).
+- Build OpenVAF's `integration_tests/EKV` and `BSIMSOI` `.va` files in `tests/build_osdi.sh`.
+- Map the ngspice LEVEL numbers that have a native equivalent: B4SOI is level 10/57/58 (check which in ngspice 47); EKV is level 44 if ngspice 47 has it.
+- Bridge them in `netlist/spice_parser.cpp` like `bsimOsdi`.
+- Compare against ngspice native where it exists, else against ngspice loading the same `.osdi` (`pre_osdi`).
+- Watch for `__XYCE_VAMS__` sections. OpenVAF compiled bsim4.va's body network wrongly under that define; see `build_osdi.sh`. Also patch any default that differs from ngspice's C model, the way BSIM3/BSIM4 are patched there.
+- Xyce has B4SOI and EKV cases: report which pass now.
+
+**3. DEV: XSPICE digital** (worktree `/Users/seshak/eda/ts/xspice`, branch `mac/xspice`, untouched, at `4ba3410`; merge `mac/complete` first).
+- Scope:
+  - A-element parsing (vector ports, `%d/%v/%g` port types, `.model` with `d_*` types);
+  - an event-driven 12-state digital core, hooked into the existing transient loop (`solvers/circuitsim_solver.cpp` `advanceTo` / `TranLoop`), not a second simulator;
+  - d_buffer, d_inverter, d_and, d_nand, d_or, d_nor, d_xor, d_xnor, d_tristate, d_pullup, d_pulldown;
+  - d_dff, d_jkff, d_tff, d_srff, d_dlatch, d_srlatch, d_open_c, d_open_e;
+  - adc_bridge and dac_bridge;
+  - then gain/summer/mult/limit/int/d_dt/s_xfer/pwl if solid.
+- ngspice 47's code models are in `/opt/homebrew/Cellar/libngspice/47/lib/ngspice/*.cm` (loaded automatically).
+- `run_diff.py` support: event-node transition times within 1 ps, plus logic values.
+- Tests:
+  - a gate chain;
+  - a DFF counter clocked through adc_bridge;
+  - a ring oscillator through dac_bridge + RC + adc_bridge;
+  - a tristate bus;
+  - an RC load driven by dac_bridge.
+- Commit after each step that works end to end.
+
+**4. DEV: `.sens` for device parameters and AC** (branch `mac/sens2` from `mac/complete`).
+- `CircuitSim::solveSens` (`solvers/circuitsim_solver.cpp`) covers top-level R/V/I and lists other devices as unsupported.
+- Add the parameters ngspice 47 reports for diodes, BJTs and MOS1 (check its actual vector names), and subcircuit instances. ngspice perturbs by finite difference, so dF/dp by central difference of the device residual is acceptable.
+- Add `.sens ... ac` if feasible; otherwise keep the explicit error.
+
+Do 1 first. Then 2-4 in order, each on its own branch, pushed with `git push -u treespice <branch>`. Add your report under this entry when each is done.
+
 ### READY FOR QA (Gemini) — Phase 6 RTL → GDS (OpenVLSI PR #15 `phase6/rtl2gds` @ `d3cb1ad`) + BUG-6/7 retest (TreeSPICE PR #10 `fix/qa-round3` @ `50eb72a`) — Claude Code, 2026-10-16
 
 **1. BUG-6/7 retest.**
