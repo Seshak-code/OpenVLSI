@@ -4,7 +4,8 @@
 # RtlFlowTools::detect() (compute/orchestration/drivers/rtl_flow.cpp) finds them there.
 #
 # Downloads (about 3 GB of sources, 1 h of builds on 14 cores):
-#   Homebrew: yosys, verilator, make (GNU make 4; ORFS), ruby (KLayout's DRC engine), bazelisk
+#   Homebrew: yosys, verilator, icarus-verilog (SDF simulation), make (GNU make 4; ORFS),
+#             ruby (KLayout's DRC engine), bazelisk
 #   git: OpenROAD (2.2 GB with submodules), KLayout v0.30.12 (380 MB),
 #        OpenROAD-flow-scripts, sparse: flow scripts + the IHP SG13G2 platform (115 MB)
 set -euo pipefail
@@ -57,4 +58,12 @@ chmod +x "$EDA/bin/klayout" "$EDA/bin/pmap"
 (cd orfs && git sparse-checkout set --no-cone /flow/Makefile '/flow/scripts/' '/flow/util/' '/flow/platforms/common/' \
   '/flow/platforms/ihp-sg13g2/' '/flow/designs/ihp-sg13g2/' '/flow/designs/src/gcd/' '/flow/designs/src/riscv32i/')
 
-echo "RTL flow tools in $EDA. Check: build/test_rtl_flow"
+# IHP's standard-cell Verilog models (with specify blocks) for SDF gate-level simulation in Icarus
+mkdir -p "$EDA/ihp-verilog"
+for f in sg13g2_stdcell.v sg13g2_udp.v; do
+  [ -f "$EDA/ihp-verilog/$f" ] || curl -sfL -o "$EDA/ihp-verilog/$f" \
+    "https://raw.githubusercontent.com/IHP-GmbH/IHP-Open-PDK/main/ihp-sg13g2/libs.ref/sg13g2_stdcell/verilog/$f"
+done
+HOMEBREW_NO_AUTO_UPDATE=1 brew install icarus-verilog
+
+echo "RTL flow tools in $EDA. Checks: build/test_rtl_flow, build/test_firmware_on_silicon"

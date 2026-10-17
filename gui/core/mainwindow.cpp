@@ -32,6 +32,8 @@
 #include "../widgets/inline_dialog.h"
 #ifndef __EMSCRIPTEN__
 #include "compute/soc/soc.h"
+#include "compute/orchestration/drivers/rtl_flow.h"
+#include <QDir>
 #include <QFutureWatcher>
 #include <QtConcurrent/QtConcurrent>
 #endif
@@ -1204,6 +1206,7 @@ void MainWindow::setupMenus() {
 #ifndef __EMSCRIPTEN__
     simMenu->addSeparator();
     simMenu->addAction("Run Reference SoC (Hello World)", this, &MainWindow::runReferenceSoc);
+    simMenu->addAction("Run Firmware on Routed Core (post-layout)", this, &MainWindow::runFirmwareOnCore);
 #endif
 }
 
@@ -1237,6 +1240,50 @@ void MainWindow::runReferenceSoc() {
                        "SRAM: IHP SG13G2 6T read %5 ps to a 100 mV bitline split -> %6 wait cycle(s)")
             .arg(text).arg(run.instructions).arg(run.cycles).arg(run.seconds * 1e6, 0, 'f', 2)
             .arg(sram.readDelay * 1e12, 0, 'f', 1).arg(sram.waitCycles);
+    }));
+#endif
+}
+
+void MainWindow::runFirmwareOnCore() {
+#ifndef __EMSCRIPTEN__
+    // The hello-world firmware on the core the RTL pipeline last routed: its netlist with the SDF
+    // OpenROAD writes from the layout, in Icarus, at the clock it was closed for, checked against
+    // the instruction-set model. The core must have ORFS riscv32i's ports.
+    using namespace acutesim::compute::orchestration;
+    if (!rtlPipelinePanel || rtlPipelinePanel->lastGds().isEmpty() || rtlPipelinePanel->lastTop() != "riscv") {
+        acutesim::gui::widgets::InlineDialog::information(
+            this, "Firmware on Routed Core",
+            "Run the RTL \u2192 GDS pipeline on the RV32I core first (top module riscv, the ORFS riscv32i sources).");
+        return;
+    }
+    const QByteArray env = qgetenv("TREESPICE_DATASETS");
+    const std::string datasets = env.isEmpty() ? std::string(SOC_DATASETS) : env.toStdString();
+    FirmwareSimConfig cfg;
+    cfg.results = QFileInfo(rtlPipelinePanel->lastGds()).absolutePath().toStdString();
+    cfg.clockPeriodNs = rtlPipelinePanel->lastClockPeriodNs();
+    cfg.rom = soc::helloFirmware();
+    cfg.workDir = (QDir::homePath() + "/.openvlsi/firmware").toStdString();
+    statusBar()->showMessage("Firmware on the routed core: writing the SDF and simulating the netlist...");
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher]() {
+        statusBar()->clearMessage();
+        acutesim::gui::widgets::InlineDialog::information(this, "Firmware on Routed Core", watcher->result());
+        watcher->deleteLater();
+    });
+    watcher->setFuture(QtConcurrent::run([cfg, datasets]() mutable -> QString {
+        const soc::SramTiming sram = soc::characterizeSram(datasets, 1e9 / cfg.clockPeriodNs);
+        cfg.memReadDelayNs = sram.error.empty() ? sram.readDelay * 1e9 : 0.1;
+        cfg.maxCycles = 4096;
+        const soc::SocRun iss = soc::runSoc(cfg.rom, soc::SramTiming{});
+        const FirmwareSimResult r = runFirmware(cfg, RtlFlowTools::detect());
+        if (!r.ok) return QString("The post-layout run failed: %1").arg(QString::fromStdString(r.error));
+        const bool match = r.uart == iss.uart && r.cycles == (long)iss.instructions;
+        return QString("UART output of the routed netlist (IHP SG13G2, SDF from the layout) at %1 ns:\n\n    %2\n\n"
+                       "%3 cycles in %4 s; memory read %5 ps (%6)\n%7")
+            .arg(cfg.clockPeriodNs).arg(QString::fromStdString(r.uart).trimmed()).arg(r.cycles).arg(r.seconds, 0, 'f', 1)
+            .arg(cfg.memReadDelayNs * 1e3, 0, 'f', 1).arg(sram.error.empty() ? "SPICE, IHP 6T cell" : "assumed")
+            .arg(match ? "Matches the instruction-set model, cycle for cycle."
+                       : "DIFFERS from the instruction-set model: the layout's paths are too slow at this clock.");
     }));
 #endif
 }

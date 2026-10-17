@@ -6,6 +6,7 @@
 #include "compute/soc/rv32i_asm.h"
 #include "compute/soc/soc.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -99,6 +100,25 @@ int main() {
         check(co.ok && co.text == soc::helloText(),
               "UART co-simulated (pad driver, line, receiver in SPICE) decodes \"" + co.text + "\"" +
                   (co.error.empty() ? "" : " (" + co.error + ")"));
+
+        // Lockstep: TX -> SPICE -> RX is a loopback; the firmware's debug output is what came back through the analog line
+        soc::SocConfig lc;
+        lc.clockHz = clk;
+        lc.uartDivider = 64;  // 31 Mbaud at 2 GHz: 32 ns a bit, slow against the line's ~100 ps RC
+        const soc::LockstepResult ls = soc::cosimLockstep(soc::echoFirmware(), sram, datasets, lc);
+        const size_t n = std::strlen(soc::helloText());
+        check(ls.ok && ls.debug == soc::helloText() && ls.rx == soc::helloText() && ls.framingErrors == 0,
+              "lockstep loopback echoes \"" + ls.debug + "\" with no framing errors" +
+                  (ls.error.empty() ? "" : " (" + ls.error + ")"));
+        // The last echo completes at its stop bit's middle, half a bit before the frame ends
+        const uint64_t floor = n * 10 * lc.uartDivider - lc.uartDivider / 2;
+        check(ls.cycles > floor && ls.exchanges > 0,
+              "the CPU waits on each echo: " + std::to_string(ls.cycles) + " cycles > " + std::to_string(floor) + ", " + std::to_string(ls.exchanges) + " exchanges, " +
+                  std::to_string(ls.instructions) + " instructions, " + std::to_string(ls.wallSeconds) + " s wall");
+        double worst = 0;
+        for (const double l : ls.latency) worst = std::max(worst, l);
+        std::printf("  TX -> RX latency per byte (stop-bit sample vs ideal): worst %.2f ns over %zu bytes\n", worst * 1e9,
+                    ls.latency.size());
     }
 
     std::printf("\n%s (%d failure%s)\n", g_fail ? "FAILED" : "ALL PASSED", g_fail, g_fail == 1 ? "" : "s");

@@ -291,6 +291,8 @@ void RtlPipelinePanel::startFullPipeline() {
     updateStepUI(0);
     log(QString("Starting RTL \u2192 GDS for %1 (%2 source%3)")
             .arg(m_topModuleEdit->text()).arg(cfg.verilog.size()).arg(cfg.verilog.size() == 1 ? "" : "s"));
+    m_runTop = QString::fromStdString(cfg.top);
+    m_runPeriodNs = cfg.clockPeriodNs;
     m_jobId = m_workerMgr->submitRtlToGds(cfg);
 }
 
@@ -324,6 +326,9 @@ void RtlPipelinePanel::onJobCompleted(const QString& jobId, bool success, const 
             updateStepUI(i);
         }
         log("GDS: " + artifactPath);
+        m_lastGds = artifactPath;
+        m_lastTop = m_runTop;
+        m_lastPeriodNs = m_runPeriodNs;
         const QString def = QFileInfo(artifactPath).dir().filePath("6_final.def");
         if (m_showOverlayCheck->isChecked() && QFileInfo::exists(def)) emit overlayRequested(def);
     } else {
