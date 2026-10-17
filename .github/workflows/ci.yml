@@ -47,14 +47,12 @@ jobs:
           arch: ${{ matrix.qt-arch }}
           cache: true
 
+      # Linux and Windows: vcpkg.json's libraries are installed by the vcpkg toolchain at configure time
       - name: Libraries
         run: |
           case "$RUNNER_OS" in
           Linux)
-            sudo apt-get install -y -q ninja-build libgl1-mesa-dev libxkbcommon-dev
-            "$VCPKG_INSTALLATION_ROOT/vcpkg" install grpc tcl --triplet "${{ matrix.triplet }}" ;;
-          Windows)
-            "$VCPKG_INSTALLATION_ROOT/vcpkg" install grpc tcl --triplet "${{ matrix.triplet }}" ;;
+            sudo apt-get install -y -q ninja-build libgl1-mesa-dev libxkbcommon-dev ;;
           macOS)
             brew install ninja qt@6 grpc > /dev/null
             echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> "$GITHUB_ENV" ;;
