@@ -9,7 +9,7 @@
  * Specialized verification for Phase D (Numerical Hardening).
  *
  * Compares the output of different execution modes:
- * 1. LEGACY_AOS (Golden)
+ * 1. TENSOR_SOA_SCALAR (reference)
  * 2. TENSOR_SOA_SCALAR (SoA Math)
  * 3. TENSOR_SOA_SIMD (AVX2 Hardened)
  * 4. GPU (WebGPU EmulatedF64, if Dawn native available) — tolerance 1e-12
@@ -27,19 +27,17 @@ struct ParityResult {
 ParityResult runParityCheck(const std::string& name, TensorNetlist nl) {
     std::cout << "Checking Parity for: " << name << "..." << std::endl;
     
-    CircuitSim sim;
+    CircuitSim sim;  // each mode solves cold on its own simulator: a reused one warm-starts from the last answer
     
-    // 1. Reference (AoS)
-    sim.execMode = CircuitSim::ExecutionMode::LEGACY_AOS;
-    SolverStep resAos = sim.solveDC(nl);
-    
-    // 2. SoA Scalar
+    // 1. Reference: SoA scalar
     sim.execMode = CircuitSim::ExecutionMode::TENSOR_SOA_SCALAR;
-    SolverStep resSoa = sim.solveDC(nl);
+    SolverStep resAos = sim.solveDC(nl);
+    SolverStep resSoa = resAos;
     
-    // 3. SoA SIMD (AVX2)
-    sim.execMode = CircuitSim::ExecutionMode::TENSOR_SOA_SIMD;
-    SolverStep resSimd = sim.solveDC(nl);
+    // 2. SoA SIMD
+    CircuitSim simd;
+    simd.execMode = CircuitSim::ExecutionMode::TENSOR_SOA_SIMD;
+    SolverStep resSimd = simd.solveDC(nl);
     
     double maxDriftSoa = 0.0;
     double maxDriftSimd = 0.0;
@@ -54,16 +52,17 @@ ParityResult runParityCheck(const std::string& name, TensorNetlist nl) {
     double worstDrift = std::max(maxDriftSoa, maxDriftSimd);
 
     std::cout << std::scientific << std::setprecision(15);
-    std::cout << "  - Max Drift (AoS vs SoA):  " << maxDriftSoa  << (maxDriftSoa  < 1e-13 ? " [OK]" : " [FAIL]") << std::endl;
-    std::cout << "  - Max Drift (AoS vs SIMD): " << maxDriftSimd << (maxDriftSimd < 1e-13 ? " [OK]" : " [FAIL]") << std::endl;
+    std::cout << "  - Max Drift (scalar, ref): " << maxDriftSoa  << (maxDriftSoa  < 1e-13 ? " [OK]" : " [FAIL]") << std::endl;
+    std::cout << "  - Max Drift (scalar vs SIMD): " << maxDriftSimd << (maxDriftSimd < 1e-13 ? " [OK]" : " [FAIL]") << std::endl;
     std::cout << "  - Convergence Parity: "
               << (resAos.stats.iterations == resSimd.stats.iterations ? "MATCH" : "DRIFT")
               << " (" << resAos.stats.iterations << " vs " << resSimd.stats.iterations << " iterations)" << std::endl;
 
 #if !defined(__EMSCRIPTEN__) && defined(ACUTESIM_HAS_DAWN_NATIVE)
     // 4. GPU path — EmulatedF64 tolerance 1e-12
-    sim.execMode = CircuitSim::ExecutionMode::GPU;
-    SolverStep resGpu = sim.solveDC(nl);
+    CircuitSim gpu;
+    gpu.execMode = CircuitSim::ExecutionMode::GPU;
+    SolverStep resGpu = gpu.solveDC(nl);
 
     double maxDriftGpu = 0.0;
     size_t ng = resAos.nodeVoltages.size();

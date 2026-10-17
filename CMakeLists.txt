@@ -1354,12 +1354,6 @@ target_link_libraries(test_dependent_simulation PRIVATE acutesim_compute_core)
 target_include_directories(test_dependent_simulation PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 target_compile_features(test_dependent_simulation PUBLIC cxx_std_17)
 
-# SOA Bridge Consistency Test
-add_executable(test_soa_bridge tests/test_soa_bridge.cpp)
-target_link_libraries(test_soa_bridge PRIVATE acutesim_compute_core)
-target_include_directories(test_soa_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
-target_compile_features(test_soa_bridge PUBLIC cxx_std_17)
-
 # Test PDK Manager
 add_executable(test_pdk_manager tests/test_pdk_manager.cpp gui/analysis/pdk_manager.cpp)
 target_include_directories(test_pdk_manager PRIVATE

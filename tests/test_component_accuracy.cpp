@@ -8,6 +8,7 @@
 #include "acutesim_engine/physics/circuitsim.h"
 #include "components/standard_cells.h"
 #include "acutesim_engine/infrastructure/netlist_compiler.h"
+#include "acutesim_engine/netlist/spice_parser.h"
 
 #define GREEN "\033[32m"
 #define RED "\033[31m"
@@ -104,18 +105,15 @@ void test_jfet() {
 }
 
 void test_zener() {
-    TensorNetlist nl;
-    // V1 (10V) -> R (1k) -> Zener (5.1V) -> GND
-    nl.addVoltageSource(2, 0, 10.0);
-    nl.addResistor(2, 1, 100.0); // 100 ohm
-    // Zener: Anode=0, Cathode=1. (Reverse Biased)
-    nl.addZenerDiode("D1", 0, 1, 5.1, 5.0);
+    // V1 (10V) -> R (100 ohm) -> reverse-biased zener (a D model with BV, as in SPICE) -> GND
+    const auto parsed = SPICEParser().parse("zener\nV1 2 0 10\nR1 2 1 100\nD1 0 1 DZ\n.model DZ D(BV=5.1 IBV=5m)\n.op\n.end\n");
+    TensorNetlist nl = parsed.netlist;
     
     CircuitSim sim;
     auto step = sim.solveDC(nl);
     
-    double vz = step.nodeVoltages[1];
-    if (std::abs(vz - 5.1) < 0.2) {
+    double vz = step.nodeVoltages[0];
+    if (parsed.success && std::abs(vz - 5.1) < 0.2) {
         std::cout << "[PASS] " << std::setw(40) << std::left << "Zener Regulation (5.1V)" << GREEN << "OK (" << vz << "V)" << RESET << "\n";
     } else {
         std::cout << "[FAIL] " << std::setw(40) << std::left << "Zener Regulation (5.1V)" << RED << "FAILED (" << vz << "V)" << RESET << "\n";

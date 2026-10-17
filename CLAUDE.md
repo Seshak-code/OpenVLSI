@@ -69,7 +69,7 @@ python3 tests/parity_harness.py
 
 Only `test_regression` runs in CI. All other tests are developer-run locally.
 
-Tests NOT registered with CTest (run binary directly): `test_regression`, `test_simulation`, `test_sensitivity`, `test_superposition`, `test_mode_ladder`, `test_dependent_simulation`, `test_soa_bridge`, `test_noise_analysis`, `test_convergence_engine`, `test_ad_integration`, `test_erc_rules`, `test_std_cells`, and many others — see CMakeLists.txt for the full list.
+Tests NOT registered with CTest (run binary directly): `test_regression`, `test_simulation`, `test_sensitivity`, `test_superposition`, `test_mode_ladder`, `test_dependent_simulation`, `test_noise_analysis`, `test_convergence_engine`, `test_ad_integration`, `test_erc_rules`, `test_std_cells`, and many others — see CMakeLists.txt for the full list.
 
 ## Architecture
 

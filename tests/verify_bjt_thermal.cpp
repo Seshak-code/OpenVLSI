@@ -6,6 +6,10 @@
 
 #include "../physics/circuitsim.h"
 #include "acutesim_engine/netlist/circuit.h"
+#include "acutesim_engine/netlist/spice_parser.h"
+
+using acutesim::SPICEParser;
+using acutesim::SPICEParseResult;
 
 // ANSI Color Codes
 #define GREEN "\033[32m"
@@ -24,22 +28,10 @@ void verify_darlington_thermal() {
     std::cout << " Temperatures: 0C, 25C, 85C, 125C\n";
     std::cout << "==================================================\n";
 
-    // Standard Darlington Pair Setup
-    TensorNetlist nl;
-    // VCC = 10V at Node 1
-    nl.addVoltageSource(1, 0, 10.0);
-    
-    // Load R1 = 100 Ohm at Node 2 (Collector)
-    nl.addResistor(1, 2, 100.0);
-    
-    // Q1: C=2, B=3, E=4
-    nl.addBJT("Q1", 2, 3, 4, "genericNPN", true, 100.0, 1.0, 1e-14);
-    
-    // Q2: C=2, B=4, E=0 (Emitter Grounded)
-    nl.addBJT("Q2", 2, 4, 0, "genericNPN", true, 100.0, 1.0, 1e-14);
-    
-    // Bias Current into Q1 Base (Node 3): 1uA (Active Region)
-    nl.addCurrentSource(1, 3, 1e-6);
+    // Standard Darlington pair: VCC 10 V, 100 ohm collector load, 1 uA into Q1's base. The parser resolves
+    // every temperature-dependent device value, so each temperature is its own parse (.temp).
+    const std::string netlist = "darlington\nV1 1 0 10\nR1 1 2 100\nQ1 2 3 4 QN\nQ2 2 4 0 QN\nI1 1 3 1u\n"
+                                ".model QN NPN(BF=100 IS=1e-14)\n.op\n";
 
     CircuitSim sim;
     
@@ -59,13 +51,9 @@ void verify_darlington_thermal() {
     for (double tempC : temps) {
         std::cout << "Running at T = " << tempC << " C ... ";
         
-        // Apply Temperature Corner
-        acutesim::physics::CornerConfig corner;
-        corner.temperatureC = tempC;
-        corner.voltageScale = 1.0;
-        sim.applyCorner(nl, corner);
-        
-        // Solve DC
+        SPICEParseResult parsed = SPICEParser().parse(netlist + ".temp " + std::to_string(tempC) + "\n.end\n");
+        if (!parsed.success) { std::cout << RED << "FAIL (" << parsed.errorMessage << ")" << RESET << "\n"; all_passed = false; continue; }
+        TensorNetlist& nl = parsed.netlist;
         SolverStep step = sim.solveDC(nl);
         
         // Check 1: Convergence
@@ -85,7 +73,7 @@ void verify_darlington_thermal() {
         }
         
         // Result Storage
-        double v_base = step.nodeVoltages[3]; // Node 3 is Base of Q1
+        double v_base = step.nodeVoltages[parsed.nodeIndex.at("3") - 1]; // Q1's base
         double v_emit = 0.0;                 // Node 0 is Ground
         double vbe = v_base - v_emit;
         
