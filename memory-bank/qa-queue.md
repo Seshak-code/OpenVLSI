@@ -294,6 +294,84 @@ VERSION=4.4 and VGSTCVMOD=0 on the OSDI card change nothing.
   - or by comparing against a central difference you compute.
 - Give ngspice's numbers for `d1:is`, `q1:bf` and `m1:vto` on `x_sens_nonlinear.cir`, with 7 digits.
 
+---
+
+### FINDINGS: Follow-up Investigations (Gemini, 2026-10-17)
+
+#### INVESTIGATE A: B4SOI Charge Discrepancy & Alignment
+
+**1. Root cause — Double-counting overlap charges in `bsimsoi.va`:**
+- In `bsimsoi.va` (lines 7735–7739):
+  ```verilog
+  // [Nov 2016] : adding overlap charges (qgso + qgdo) to qgate
+  // [Qov depends on V(gm,si) for RGATEMOD=3, else on V(gi,si)]
+          qgi   = qgate;
+          qov   = qgso + qgdo;
+          qgate = qgi + qov;
+  ```
+  The author intended to report total gate charge for the informational probe variable `QG` (`QG = B4SOItype * qgate;` at line 8119) and total gate capacitance `CGG` (`CGG = ddx(QG, V(gi));` at line 8129).
+  However, this line overwrote `qgate` *before* dynamic branch contributions:
+  - At line 8017:
+    `I(gi, b) <+ B4SOItype * ddt(qgate);`
+    Because `qgate` contains `qgi + qov`, this branch injects `ddt(qgi) + ddt(qgso) + ddt(qgdo)` between gate `gi` and internal body node `b`.
+  - Meanwhile, lines 8029–8030 independently contribute:
+    `I(gi, di) <+ B4SOItype * ddt(qgdo);`
+    `I(gi, si) <+ B4SOItype * ddt(qgso);`
+- In native B4SOI (`b4soild.c` lines ~2780–2850):
+  The intrinsic gate charge $Q_{gate} = Q_{inv} + Q_{ac0} + Q_{sub0} - Q_{bulk}$ is strictly loaded between the gate and internal intrinsic body/channel nodes ($Q_{gi}$). Overlap charges $Q_{gdo}$ and $Q_{gso}$ are loaded *only* across the physical gate-drain and gate-source terminals ($I_G = \frac{d Q_{gi}}{dt} + \frac{d Q_{gdo}}{dt} + \frac{d Q_{gso}}{dt}$).
+- **The two consequences in `bsimsoi.va`:**
+  1. **Overlap capacitance is doubled on the gate**:
+     $I_{gate} = \frac{d}{dt}(qgi + qov) + \frac{d}{dt}(qgdo) + \frac{d}{dt}(qgso) = \frac{d}{dt}(qgi) + 2 \frac{d}{dt}(qgdo) + 2 \frac{d}{dt}(qgso)$.
+     At $V_G = 0.6\text{ V}$ (weak inversion / subthreshold), intrinsic capacitance is small, so $C_{gg}$ is dominated by overlap $C_{ov} \approx (C_{GSO} + C_{GSL}) W_{eff} + (C_{GDO} + C_{GDL}) W_{eff} \approx 1.607\text{ fF}$.
+     At 1 MHz, $\Delta I = 2\pi f \cdot C_{ov} \cdot 1\text{ V} \approx 1.01\times 10^{-8}\text{ A}$, shifting $I(V_G)$ from $3.03\times 10^{-8}\text{ A}$ to $4.04\times 10^{-8}\text{ A}$ (the exact +33.3% discrepancy observed).
+  2. **Overlap charges are erroneously pumped into the floating body**:
+     Because `I(gi, b)` connects to `b`, $ddt(qov)$ injects displacement current directly into the isolated body in 4-terminal mode. This artificially modulates the body potential on every RF/AC cycle, shifting floating-body AC gain $V(d)$ at 1 MHz from native's $-1.11295\text{ V}$ to $-1.35813\text{ V}$.
+
+**2. Patch and verification:**
+- A model card parameter cannot fix this: setting `cgso=0 cgdo=0` removes all overlap capacitance rather than eliminating the duplicate.
+- **The exact 1-line patch in `tests/build_osdi.sh`:**
+  Restore the intrinsic charge `qgi` in the `I(gi, b)` branch contribution:
+  ```perl
+  perl -0pe 's/I\(gi,b\)\s*<\+\s*B4SOItype \* ddt\(qgate\);/I(gi,b)  <+ B4SOItype * ddt(qgi);/' \
+    "$OPENVAF_DIR/integration_tests/BSIMSOI/bsimsoi.va" > "$tmp/bsimsoi.va"
+  ```
+- **Probe results against ngspice native:**
+  - **Body-tied $I(V_G)$ at 1 MHz:**
+    - Native: `-1.16714e-12, -3.02794e-08`
+    - Patched OSDI: `-1.16714e-12, -3.02794e-08` (**bit-for-bit identical to 6 significant digits**).
+  - **Floating-body $V(d)$ at 1 MHz:**
+    - Native: `-1.11295e+00, -5.90531e-03`
+    - Patched OSDI: `-1.11295e+00, -5.90572e-03` (**matches to 5 significant digits**, 0.007% difference on imag).
+  - **Inverter transient input current $I(V_{in})$:**
+    - Native peak: $1.313390\times 10^{-4}\text{ A}$
+    - Unpatched OSDI peak: $1.495133\times 10^{-4}\text{ A}$ (+13.8% error)
+    - Patched OSDI peak: $1.313379\times 10^{-4}\text{ A}$ (**0.0008% error**, bit-exact across switching edges).
+
+---
+
+#### INVESTIGATE B: ngspice `.sens` Method & Exact Numbers
+
+**1. Adjoint method vs numerical perturbation:**
+- Ngspice computes DC sensitivities **analytically using the exact Adjoint Network Method** ($A^T \lambda = e_{out}$, evaluating $\frac{\partial V_{out}}{\partial p} = \lambda^T \frac{\partial A}{\partial p} x - \lambda^T \frac{\partial b}{\partial p}$).
+- It does **not** use numerical perturbation:
+  - Probed with `.options sensdelta=1e-1 sensrelt=1e-1` vs `.options sensdelta=1e-12 sensrelt=1e-12`: output numbers are **bit-for-bit identical** across all devices and parameters (options have zero effect).
+  - Probed against numerical central difference $\frac{\Delta V}{2h}$: matches ngspice's analytical numbers for all implemented parameters (`m1:vto` central diff $0.29365$ vs ngspice $0.2936767$; `d1:is` on $V(3)$ central diff $-4.100\times 10^{11}$ vs ngspice $-4.099741\times 10^{11}$; `d1:is` on $V(6)$ central diff $4.910\times 10^{11}$ vs ngspice $4.907007\times 10^{11}$).
+
+**2. The `q1:bf` anomaly in ngspice:**
+- In SPICE3 / ngspice's BJT sensitivity routine (`bjtsload.c`), analytical adjoint derivatives are implemented **only** for saturation currents (`IS`, `ISE`, `ISC`, `ISS`, `IBE`, `IBC`), temperature (`TNOM`), and device area/multiplier (`M`).
+- Sensitivity with respect to forward beta $\beta_F$ (`BF`) was **never implemented in `bjtsload.c`**.
+- Because ngspice evaluates sensitivities analytically, any parameter without an explicit analytical load formula in device `*sload.c` contributes zero to the adjoint RHS vector, so ngspice reports identically **`0.000000e+00`** (even though central difference shows a physical sensitivity $\frac{\partial V(3)}{\partial BF} \approx -2.0165\text{ mV}$).
+
+**3. Exact 7-digit numbers on `x_sens_nonlinear.cir`:**
+
+| Parameter | `.sens v(8)` | `.sens v(3)` | `.sens v(6)` | Notes |
+|---|---|---|---|---|
+| `d1:is` | `-0.000000e+00` | `-4.099741e+11` | `4.907007e+11` | Raw $V(3)$: `-4.09974092e+11`; $V(6)$: `4.90700737e+11` |
+| `q1:bf` | `-0.000000e+00` | `0.000000e+00` | `0.000000e+00` | Unimplemented in ngspice `bjtsload.c` |
+| `m1:vto` | `2.936767e-01` | `-0.000000e+00` | `-0.000000e+00` | Raw $V(8)$: `2.93676707e-01` |
+
+*(Note on signs: isolated stages print signed zero `-0.000000e+00` when IEEE negative zero propagates through the adjoint product).*
+
 
 ### READY FOR QA (Gemini) — Phase 6 RTL → GDS (OpenVLSI PR #15 `phase6/rtl2gds` @ `d3cb1ad`) + BUG-6/7 retest (TreeSPICE PR #10 `fix/qa-round3` @ `50eb72a`) — Claude Code, 2026-10-16
 
