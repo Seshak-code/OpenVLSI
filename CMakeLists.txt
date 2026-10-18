@@ -635,7 +635,10 @@ if(NOT EMSCRIPTEN)
     if(WIN32)  # vcpkg's Tcl 9: FindTCL only knows the 8.x library names
         find_library(TCL_LIBRARY NAMES tcl90 tcl90t)
     endif()
-    find_package(TCL REQUIRED)
+    find_package(TCL)  # not REQUIRED: that also demands Tk, which the app does not use
+    if(NOT TCL_FOUND)
+        message(FATAL_ERROR "Tcl not found (headers and library)")
+    endif()
     target_include_directories(${PROJECT_NAME} PRIVATE ${TCL_INCLUDE_PATH})
     target_link_libraries(${PROJECT_NAME} PRIVATE ${TCL_LIBRARY})
 else()
