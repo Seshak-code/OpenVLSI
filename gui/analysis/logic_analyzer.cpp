@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "logic_analyzer.h"
 #include <QPainterPath>
 #include <QResizeEvent>

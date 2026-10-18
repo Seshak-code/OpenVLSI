@@ -5,6 +5,7 @@
 // solver headers. If this file compiles, the layering boundary is valid.
 // ============================================================================
 
+#include <cstdint>
 #include "engine_api/isimulation_driver.h"
 #include <iostream>
 #include <cassert>

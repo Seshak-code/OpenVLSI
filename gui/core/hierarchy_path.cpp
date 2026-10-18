@@ -1,3 +1,4 @@
+#include <optional>
 #include "hierarchy_path.h"
 
 /**

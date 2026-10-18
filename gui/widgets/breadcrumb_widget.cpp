@@ -1,3 +1,4 @@
+#include <optional>
 #include "breadcrumb_widget.h"
 #include <QStyle>
 

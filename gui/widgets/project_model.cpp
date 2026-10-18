@@ -1,3 +1,4 @@
+#include <memory>
 #include "project_model.h"
 #include "gui/core/icon_provider.h"
 #include <QJsonArray>

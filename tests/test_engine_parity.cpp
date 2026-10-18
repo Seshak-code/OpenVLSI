@@ -11,6 +11,7 @@
 // This test MUST link against acutesim_engine only — no compute/ or physics/ sources.
 // ============================================================================
 
+#include <limits>
 #include "engine_api/isimulation_engine.h"
 #include "engine_api/simulation_session.h"
 #include "engine_api/simulation_dto.h"

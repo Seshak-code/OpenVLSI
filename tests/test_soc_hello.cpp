@@ -2,6 +2,7 @@
 // timing from a SPICE characterisation (TreeSPICE, IHP SG13G2) and the UART line co-simulated in SPICE.
 // Needs datasets/pdk/ihp and datasets/osdi/psp103.osdi (acutesim_engine/tests/build_osdi.sh); without
 // them the SPICE parts are skipped and only the ISA checks run.
+#include <cstdint>
 #include "compute/soc/rv32i.h"
 #include "compute/soc/rv32i_asm.h"
 #include "compute/soc/soc.h"

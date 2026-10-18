@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "batch_execution_engine.h"
 #include "job_scheduler.h"
 #include <cmath>

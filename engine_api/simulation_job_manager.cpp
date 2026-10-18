@@ -1,6 +1,8 @@
 // ============================================================================
 // simulation_job_manager.cpp — Implementation
 // ============================================================================
+#include <memory>
+#include <cstdint>
 #include "simulation_job_manager.h"
 #include "isimulation_driver.h"
 

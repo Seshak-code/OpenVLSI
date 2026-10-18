@@ -23,6 +23,7 @@ jobs:
           - { name: macos-arm64, os: macos-14 }
     env:
       VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
+      PYTHONUTF8: "1"  # the build's check scripts print UTF-8; Windows consoles default to cp1252
     defaults:
       run:
         shell: bash

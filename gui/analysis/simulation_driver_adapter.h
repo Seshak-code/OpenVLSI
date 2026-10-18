@@ -12,6 +12,8 @@
 // 3. Ensures callbacks are marshalled to the GUI thread via QMetaObject::invokeMethod
 // ============================================================================
 
+#include <functional>
+#include <cstdint>
 #include <QObject>
 #include <QJsonObject>
 #include <memory>

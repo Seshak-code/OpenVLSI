@@ -1,3 +1,4 @@
+#include <functional>
 #include "keybinding_manager.h"
 #include <QWidget>
 #include <QJsonDocument>

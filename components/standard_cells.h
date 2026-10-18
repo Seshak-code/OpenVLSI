@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include "acutesim_engine/netlist/circuit.h"
 #include "../compute/orchestration/dto/schematic_dto.h"
 #include <map>

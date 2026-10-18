@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include "engine_api/simulation_dto.h"
 #include "components/component_library.h"
 #include "components/design_rules.h"

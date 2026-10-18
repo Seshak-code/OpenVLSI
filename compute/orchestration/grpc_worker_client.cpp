@@ -1,3 +1,4 @@
+#include <memory>
 #include "grpc_worker_client.h"
 
 // Check if orchestration is enabled in CMake

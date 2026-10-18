@@ -1,3 +1,5 @@
+#include <functional>
+#include <cstdint>
 #include "rtl_flow.h"
 #include "../server/subprocess.h"
 

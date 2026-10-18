@@ -1,3 +1,5 @@
+#include <optional>
+#include <functional>
 #include "design_db.h"
 #include "acutesim_engine/netlist/circuit.h"
 #include <iostream>

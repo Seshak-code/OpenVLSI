@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include "speculative_runner.h"
 #include "local_vector_store.h"
 #include "trace_chunker.h"

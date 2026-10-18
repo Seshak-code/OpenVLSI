@@ -1,4 +1,5 @@
 
+#include <optional>
 #include "context_engine.h"
 #include "schema_api.h"
 #include "crash_report.h"

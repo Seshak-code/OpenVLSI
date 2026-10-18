@@ -1,3 +1,5 @@
+#include <memory>
+#include <cstdint>
 #include "remote_grpc_driver.h"
 #include "../proto_mapper.h"
 #include "simulation_service.grpc.pb.h"

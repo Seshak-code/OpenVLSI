@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <QDialog>
 #include <QLineEdit>
 #include <QListWidget>

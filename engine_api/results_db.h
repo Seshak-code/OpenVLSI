@@ -10,6 +10,7 @@
 //   5. No Qt. No filesystem paths. No GUI types.
 // ============================================================================
 
+#include <cstdint>
 #include "job_status.h"           // JobID
 #include "simulation_dto.h"       // SimulationResponseDTO, AnalysisTypeDTO
 #include <memory>

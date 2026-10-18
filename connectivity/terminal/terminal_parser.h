@@ -9,6 +9,7 @@
 // all share the same parser without duplicating logic.
 // ============================================================================
 
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <unordered_map>

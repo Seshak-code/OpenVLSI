@@ -1,3 +1,4 @@
+#include <optional>
 #include "schematic_editor.h"
 #include "../component_wizard.h"
 #include "../../widgets/compliance_report_widget.h"

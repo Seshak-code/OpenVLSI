@@ -1,3 +1,4 @@
+#include <memory>
 #include "worker_manager.h"
 #include <QTimer>
 #include <QDebug>

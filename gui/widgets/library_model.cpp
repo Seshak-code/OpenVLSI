@@ -1,3 +1,4 @@
+#include <memory>
 #include "library_model.h"
 #include "gui/core/icon_provider.h"
 #include <QDebug>

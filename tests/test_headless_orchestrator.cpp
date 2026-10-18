@@ -9,6 +9,8 @@
 // can be driven without any Qt dependency at the call site.
 // ============================================================================
 
+#include <memory>
+#include <cstdint>
 #include <cassert>
 #include <iostream>
 #include <string>

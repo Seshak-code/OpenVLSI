@@ -15,6 +15,7 @@
 //   5. Cancel mid-run drains without crash or hang
 // ============================================================================
 
+#include <cstdint>
 #include "compute/orchestration/driver/batch_execution_engine.h"
 #include "compute/orchestration/driver/job_scheduler.h"
 #include "engine_api/simulation_dto.h"
