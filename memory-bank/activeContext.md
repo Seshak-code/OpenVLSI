@@ -1,5 +1,24 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-18 — CI/CD phase (OpenVLSI `openvlsi/ci-weekly`), TreeSPICE #15/#16 merged**
+
+**CI/CD (owner's choice: weekly, Mondays, plus manual dispatch; Vercel deploy disabled):**
+- **TreeSPICE:** green on linux-x86_64, windows-x86_64 and macos-arm64. 06:00 UTC. The oracle on Windows is MSYS2's `ngspice_con.exe`.
+- **OpenVLSI:** 07:00 UTC.
+  - Linux and Windows get libraries from `vcpkg.json` through the toolchain. Tcl is vcpkg's 9.0 on Windows and apt's `tcl-dev` on Linux.
+  - Dawn is built without GLFW. macOS uses brew.
+  - Run `ctest -LE gpu`.
+- **TreeSPICE #16:** B4SOI overlap charges are now counted once, via a patch in `tests/build_osdi.sh` (Gemini's diagnosis). B4SOI now supports `.tran/.ac/.noise/.pz`.
+  - Rebuild OSDI after pulling.
+  - Xyce LEVEL 10 cards (BSIMSOI 3.x) are classified XYCE-DIALECT.
+- **Open:**
+  - `.sens` device parameters and AC sensitivity: decide true derivatives vs ngspice's zeros.
+  - Carry Gemini's df7bc00 findings into main.
+  - GUI process-corner no-op; parasiticResistors never stamped.
+- **Next:** Phase 8, the real-time loop (incremental re-flow, a GDB stub).
+
+---
+
 **Last session: Claude Code (dev), 2026-10-16 — Phase 7 gate met (OpenVLSI `phase7/fw-on-silicon`, TreeSPICE PR #11)**
 
 **Phase 7 (firmware on your own silicon):**
