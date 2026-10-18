@@ -137,6 +137,10 @@ if(NOT EMSCRIPTEN)
     find_package(protobuf CONFIG REQUIRED)
     find_package(gRPC CONFIG REQUIRED)
     find_package(absl CONFIG REQUIRED)
+    if(NOT TARGET absl::string_view)  # Abseil before 20230802 (vcpkg's baseline) has it inside absl::strings; Dawn links it
+        add_library(absl::string_view INTERFACE IMPORTED)
+        target_link_libraries(absl::string_view INTERFACE absl::strings)
+    endif()
 
     # Phase 1.1: Integrate Google Dawn (GPU Acceleration)
     # Moved after gRPC to avoid Abseil target conflicts
