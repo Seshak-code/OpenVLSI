@@ -174,6 +174,7 @@ if(NOT EMSCRIPTEN)
     endif()
     set(DAWN_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
     set(DAWN_USE_GLFW OFF CACHE BOOL "" FORCE)  # only Dawn's samples use it
+    set(DAWN_USE_X11 OFF CACHE BOOL "" FORCE)   # window surfaces only (Vulkan is off)
     set(DAWN_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_D3D12 OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
