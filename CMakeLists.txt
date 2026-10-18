@@ -137,10 +137,6 @@ if(NOT EMSCRIPTEN)
     find_package(protobuf CONFIG REQUIRED)
     find_package(gRPC CONFIG REQUIRED)
     find_package(absl CONFIG REQUIRED)
-    if(NOT TARGET absl::string_view)  # Abseil before 20230802 (vcpkg's baseline) has it inside absl::strings; Dawn links it
-        add_library(absl::string_view INTERFACE IMPORTED)
-        target_link_libraries(absl::string_view INTERFACE absl::strings)
-    endif()
 
     # Phase 1.1: Integrate Google Dawn (GPU Acceleration)
     # Moved after gRPC to avoid Abseil target conflicts
@@ -2173,9 +2169,7 @@ if(NOT EMSCRIPTEN)
     set(GRPC_SRCS "${PROTO_GEN_DIR}/worker_service.grpc.pb.cc")
     set(GRPC_HDRS "${PROTO_GEN_DIR}/worker_service.grpc.pb.h")
 
-    # 3. Generate Sources
-    set(gRPC_CPP_PLUGIN_EXECUTABLE "/opt/homebrew/bin/grpc_cpp_plugin")
-    
+    # 3. Generate Sources (gRPC_CPP_PLUGIN_EXECUTABLE: found with the simulation service's protos above)
     add_custom_command(
         OUTPUT ${PB_SRCS} ${PB_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
         COMMAND ${Protobuf_PROTOC_EXECUTABLE}
