@@ -167,7 +167,11 @@ if(NOT EMSCRIPTEN)
     set(DAWN_WERROR OFF CACHE BOOL "" FORCE)
     set(TINT_WERROR OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
-    set(DAWN_ENABLE_METAL ON CACHE BOOL "" FORCE)
+    if(APPLE)  # elsewhere only the Null backend (the hosted CI runners have no GPU)
+        set(DAWN_ENABLE_METAL ON CACHE BOOL "" FORCE)
+    else()
+        set(DAWN_ENABLE_METAL OFF CACHE BOOL "" FORCE)
+    endif()
     set(DAWN_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
     set(DAWN_USE_GLFW OFF CACHE BOOL "" FORCE)  # only Dawn's samples use it
     set(DAWN_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
@@ -188,7 +192,7 @@ if(NOT EMSCRIPTEN)
         set(CMAKE_WARN_DEPRECATED OFF) 
     endif()
     
-    if(TARGET dawn_internal_config)
+    if(TARGET dawn_internal_config AND NOT MSVC)  # a GCC/Clang flag
         target_compile_options(dawn_internal_config INTERFACE -Wno-error)
     endif()
 
