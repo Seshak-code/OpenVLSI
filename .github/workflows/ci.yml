@@ -52,7 +52,7 @@ jobs:
         run: |
           case "$RUNNER_OS" in
           Linux)
-            sudo apt-get install -y -q ninja-build libgl1-mesa-dev libxkbcommon-dev ;;
+            sudo apt-get install -y -q ninja-build libgl1-mesa-dev libxkbcommon-dev tcl-dev ;;
           macOS)
             brew install ninja qt@6 grpc > /dev/null
             echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> "$GITHUB_ENV" ;;

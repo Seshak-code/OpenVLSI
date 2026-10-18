@@ -165,6 +165,7 @@ if(NOT EMSCRIPTEN)
     set(DAWN_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_METAL ON CACHE BOOL "" FORCE)
     set(DAWN_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(DAWN_USE_GLFW OFF CACHE BOOL "" FORCE)  # only Dawn's samples use it
     set(DAWN_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_D3D12 OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
@@ -631,6 +632,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 if(NOT EMSCRIPTEN)
+    if(WIN32)  # vcpkg's Tcl 9: FindTCL only knows the 8.x library names
+        find_library(TCL_LIBRARY NAMES tcl90 tcl90t)
+    endif()
     find_package(TCL REQUIRED)
     target_include_directories(${PROJECT_NAME} PRIVATE ${TCL_INCLUDE_PATH})
     target_link_libraries(${PROJECT_NAME} PRIVATE ${TCL_LIBRARY})

@@ -7,7 +7,10 @@
     "nlohmann-json",
     "protobuf",
     "spdlog",
-    "tcl"
+    {
+      "name": "tcl",
+      "platform": "windows"
+    }
   ],
-  "builtin-baseline": "501db0f17ef6df184fcdbfbe0f87cde2313b6ab1" 
+  "builtin-baseline": "501db0f17ef6df184fcdbfbe0f87cde2313b6ab1"
 }
