@@ -644,6 +644,7 @@ if(NOT EMSCRIPTEN)
     if(NOT TCL_FOUND)
         message(FATAL_ERROR "Tcl not found (headers and library)")
     endif()
+    include_directories(${TCL_INCLUDE_PATH})  # every later target that compiles gui/scripting/tcl_bridge.cpp
     target_include_directories(${PROJECT_NAME} PRIVATE ${TCL_INCLUDE_PATH})
     target_link_libraries(${PROJECT_NAME} PRIVATE ${TCL_LIBRARY})
 else()
