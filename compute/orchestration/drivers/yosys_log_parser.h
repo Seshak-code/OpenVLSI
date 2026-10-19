@@ -45,7 +45,7 @@ struct SynthesisResult {
 class YosysLogParser {
 public:
     static SynthesisResult parse(const std::string& output);
-    static void parseErrors(const std::string& stderr, SynthesisResult& result);
+    static void parseErrors(const std::string& text, SynthesisResult& result);
     static bool isSuccessful(const std::string& output);
 
 private:

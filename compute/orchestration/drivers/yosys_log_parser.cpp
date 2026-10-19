@@ -137,8 +137,8 @@ SynthesisResult YosysLogParser::parse(const std::string& output) {
 // ERROR PARSER
 // ============================================================================
 
-void YosysLogParser::parseErrors(const std::string& stderr, SynthesisResult& result) {
-    for (const auto& line : splitLines(stderr)) {
+void YosysLogParser::parseErrors(const std::string& text, SynthesisResult& result) {
+    for (const auto& line : splitLines(text)) {
         std::string trimmed = trimStr(line);
         if (startsWith(trimmed, "ERROR:") || startsWith(trimmed, "error:"))
             result.errors.push_back(trimmed);
