@@ -24,6 +24,7 @@ jobs:
     env:
       VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
       PYTHONUTF8: "1"  # the build's check scripts print UTF-8; Windows consoles default to cp1252
+      QT_QPA_PLATFORM: offscreen  # GUI tests on runners without a display
     defaults:
       run:
         shell: bash

@@ -11,6 +11,9 @@ if(NOT ACUTESIM_DEPS_NOISY_WARNINGS)
     set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
 endif()
 
+if(WIN32)  # as the engine's CMakeLists: windows.h's min/max macros break std::min / std::max; M_PI needs _USE_MATH_DEFINES
+    add_compile_definitions(NOMINMAX _USE_MATH_DEFINES)
+endif()
 if(MSVC)
     add_compile_options(/fp:strict)
 else()
