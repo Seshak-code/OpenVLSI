@@ -30,7 +30,7 @@ QVector<FailureLabel> FailureClassifier::analyzeConvergenceFailure(
     if (checkFloatingNodes(matrix, floatingNodes)) {
         FailureLabel label;
         label.type = FailureType::FLOATING_NODE;
-        label.severity = FailureSeverity::ERROR;
+        label.severity = FailureSeverity::ERR;
         label.message = "Diagonal element is zero or near-zero.";
         label.timestamp = currentTime;
         label.involvedNodes = floatingNodes;
@@ -42,7 +42,7 @@ QVector<FailureLabel> FailureClassifier::analyzeConvergenceFailure(
     if (!result.converged && failures.empty()) {
         FailureLabel label;
         label.type = FailureType::CONVERGENCE_FAILED;
-        label.severity = FailureSeverity::ERROR;
+        label.severity = FailureSeverity::ERR;
         label.message = QString("Newton-Raphson failed after %1 iterations (Residual: %2)")
                    .arg(result.iterations).arg(result.finalResidual);
         label.timestamp = currentTime;
@@ -80,7 +80,7 @@ QVector<FailureLabel> FailureClassifier::analyzeTransientFailure(
     if (timeStep < 1e-15) { // Arbitrary small dt
         FailureLabel label;
         label.type = FailureType::TIMESTEP_TOO_SMALL;
-        label.severity = FailureSeverity::ERROR;
+        label.severity = FailureSeverity::ERR;
         label.message = "Time-step collapsed to machine precision limit.";
         label.timestamp = 0.0;
         label.debugContext = QVariantMap{{"attempts", attemptCount}};

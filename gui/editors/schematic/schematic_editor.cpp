@@ -1040,7 +1040,7 @@ void GridScene::drawViolationMarkers(QPainter* painter) {
         // Choose color based on severity
         QColor color;
         switch (v.severity) {
-            case ERC::Severity::ERROR:
+            case ERC::Severity::ERR:
                 color = QColor(255, 60, 60);   // Red
                 break;
             case ERC::Severity::WARNING:
@@ -1568,7 +1568,7 @@ QStringList GridScene::runERC() {
     // Convert to StringList for legacy compatibility / UI display
     QStringList errors;
     for (const auto& v : violations) {
-        QString prefix = (v.severity == ERC::Severity::ERROR) ? "Error" : 
+        QString prefix = (v.severity == ERC::Severity::ERR) ? "Error" : 
                         ((v.severity == ERC::Severity::WARNING) ? "Warning" : "Info");
         errors << QString("[%1] %2").arg(prefix).arg(v.message);
     }

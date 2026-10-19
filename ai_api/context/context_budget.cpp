@@ -47,7 +47,7 @@ ChunkPriority ContextBudgetManager::assignPriority(const TraceChunk& chunk, cons
 
     // Reference designs and historical context are optional
     if (type == "ReferenceDesign" || type == "SimilarTrace") {
-        return ChunkPriority::OPTIONAL;
+        return ChunkPriority::EXTRA;
     }
 
     // Context-aware boost: if context indicates a failure, promote solver chunks

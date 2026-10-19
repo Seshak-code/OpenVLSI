@@ -18,14 +18,14 @@ enum class ChunkPriority {
     HIGH     = 1,   // Signal path analysis, active probes
     MEDIUM   = 2,   // Passive device tables, topology summary
     LOW      = 3,   // Waveform summaries, reference designs
-    OPTIONAL = 4    // Historical context, similar designs
+    EXTRA = 4    // Historical context, similar designs
 };
 
 /**
  * PriorityMode - Controls allocation strategy.
  */
 enum class PriorityMode {
-    STRICT,     // Fill highest priority first, then next
+    STRICT_FILL,     // Fill highest priority first, then next
     BALANCED,   // Guarantee minimum allocation per priority level
     DEBUG       // Prioritize failure and solver context
 };
@@ -79,7 +79,7 @@ public:
      */
     static BudgetAllocation allocate(QVector<BudgetedChunk>& candidates,
                                      int maxTokens,
-                                     PriorityMode mode = PriorityMode::STRICT);
+                                     PriorityMode mode = PriorityMode::STRICT_FILL);
 
     /**
      * Build candidate list from all available context sources.
@@ -97,7 +97,7 @@ public:
     static BudgetAllocation compressForBudget(
         const QJsonObject& fullContext,
         int maxTokens,
-        PriorityMode mode = PriorityMode::STRICT);
+        PriorityMode mode = PriorityMode::STRICT_FILL);
 };
 
 } // namespace AIAPI

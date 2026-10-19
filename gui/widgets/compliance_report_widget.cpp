@@ -39,9 +39,9 @@ void ComplianceReportWidget::setupUi(const ComplianceReport& report) {
         table->setItem(i, 0, new QTableWidgetItem(v.componentId));
         table->setItem(i, 1, new QTableWidgetItem(v.componentType));
 
-        QString sevStr = (v.severity == ComplianceSeverity::ERROR) ? "ERROR" : "WARNING";
+        QString sevStr = (v.severity == ComplianceSeverity::ERR) ? "ERROR" : "WARNING";
         QTableWidgetItem* sevItem = new QTableWidgetItem(sevStr);
-        if (v.severity == ComplianceSeverity::ERROR) sevItem->setForeground(QColor("#F44747"));
+        if (v.severity == ComplianceSeverity::ERR) sevItem->setForeground(QColor("#F44747"));
         else sevItem->setForeground(QColor("#DCDCAA"));
 
         table->setItem(i, 2, sevItem);

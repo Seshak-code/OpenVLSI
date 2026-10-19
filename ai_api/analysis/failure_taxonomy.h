@@ -70,7 +70,7 @@ inline QString failureTypeToString(FailureType type) {
 enum class FailureSeverity {
     INFO,       // Informational (e.g., fallback used but succeeded)
     WARNING,    // May affect accuracy
-    ERROR,      // Simulation failed
+    ERR,      // Simulation failed
     CRITICAL    // Data corruption / crash risk
 };
 
@@ -87,7 +87,7 @@ inline FailureSeverity getFailureSeverity(FailureType type) {
         case FailureType::LTE_VIOLATION:
         case FailureType::TIMESTEP_TOO_SMALL:
         case FailureType::NO_DC_PATH:
-            return FailureSeverity::ERROR;
+            return FailureSeverity::ERR;
         case FailureType::SINGULAR_JACOBIAN:
         case FailureType::OVERFLOW_DETECTED:
         case FailureType::VOLTAGE_SOURCE_LOOP:
@@ -95,7 +95,7 @@ inline FailureSeverity getFailureSeverity(FailureType type) {
         case FailureType::DISCONNECTED_COMPONENT:
             return FailureSeverity::CRITICAL;
         default:
-            return FailureSeverity::ERROR;
+            return FailureSeverity::ERR;
     }
 }
 

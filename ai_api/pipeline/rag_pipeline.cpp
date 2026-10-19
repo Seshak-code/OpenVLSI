@@ -57,7 +57,7 @@ void RAGPipelineOrchestrator::ingestFromSolver(
     if (!converged) {
         FailureLabel label;
         label.type = FailureType::CONVERGENCE_FAILED;
-        label.severity = FailureSeverity::ERROR;
+        label.severity = FailureSeverity::ERR;
         label.message = QString("Convergence failed after %1 iterations. Residual: %2")
                             .arg(iterations).arg(residual, 0, 'e', 3);
         label.timestamp = trace.timestamp;

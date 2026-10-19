@@ -78,7 +78,7 @@ public:
      */
     QJsonObject buildStructuredContext(const QString& userQuery,
                                        int maxTokens = 4000,
-                                       PriorityMode mode = PriorityMode::STRICT);
+                                       PriorityMode mode = PriorityMode::STRICT_FILL);
 
     // =========================================================================
     // Attribution

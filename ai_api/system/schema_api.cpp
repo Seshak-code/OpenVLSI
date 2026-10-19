@@ -194,7 +194,7 @@ QJsonObject getSimulationContext() {
                 for (const auto& v : scene->getViolations()) {
                     QJsonObject vObj;
                     vObj["type"] = static_cast<int>(v.type);
-                    vObj["severity"] = v.severity == ERC::Severity::ERROR ? "ERROR" :
+                    vObj["severity"] = v.severity == ERC::Severity::ERR ? "ERROR" :
                                        v.severity == ERC::Severity::WARNING ? "WARNING" : "INFO";
                     vObj["message"] = v.message;
                     vObj["x"] = v.location.x();
