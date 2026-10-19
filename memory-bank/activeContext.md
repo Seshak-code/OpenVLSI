@@ -1,5 +1,40 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-19 (cont.) — TreeSPICE ngspice parity on `mac/parity3` (PR #19 open: mac/parity -> main)**
+
+**TreeSPICE `mac/parity3` (pushed to `treespice`; open its PR to main after #19 merges):**
+- **XSPICE digital:** complete except d_tristate inertial.
+  - Flip-flops and latches: jk/t/sr flip-flops, d/sr latches.
+  - open_c/e, fdiv, lut, source (vector file), osc, pwm, state (state table), ram.
+- **XSPICE analog:** ota, ilimit, oneshot, multi_input_pwl, filesource, pwlts, xfer (AC/DC; transient is an error).
+- **XSPICE xtradev:** zener, potentiometer, capacitoric, inductoric, sidiode, pswitch, memristor, core, lcouple.
+- **XSPICE input convergence limiting:** ngspice's mifload default, max(0.25 |last|, 0.1) per Newton iteration.
+- **Engine-wide fixes:**
+  - Transient used `h > 1e-15` as its "is transient?" test, so femtosecond steps stamped DC sources. The test is now h > 0.
+  - Corners closer than 5e-5·maxStep merge, as ngspice's CKTminBreak.
+- **BJT:** IBE/IBC; Kull quasi-saturation (RCO..QCO, an 8th junction terminal, kJT).
+- **Small items:** switch negative hysteresis; SFFM's full form with TSTOP defaults; diode TREF and SOA limits.
+- **Deliberate divergences** (each checked analytically in test_engine_fixes, with ngspice's number in the comment):
+  - inductoric AC (ngspice gives jωL).
+  - lcouple AC sign.
+  - pswitch AC (−1/r).
+  - BJT BC IS times AREA² by default.
+  - Quasi-saturation AC uses a wrong Irci partial.
+- **Results** (last full matrix): run_diff 1190 PASS / 0 FAIL; Xyce 193; cli 0; ctest 4/4.
+- **Parity left:**
+  - **XSPICE:** delay, astate and seegen are step-dependent in ngspice (they are left unsupported on purpose). Also cmeter, lmeter, the real/int event nodes, ota/gain noise, xfer Touchstone.
+  - **LTRA**, CPL/TXL.
+  - **Diode:** RSW (sidewall node; ngspice drives the sidewall current from the bottom vd when NS is not given), VP (soft recovery), RTH0/CTH0, LEVEL 3.
+  - **BJT:** RTH0; quasi-saturation with AREA/M.
+  - **Other models:** BSIM1/2, B3SOI (bsim3soi_*), BSIM3 v3.0/3.1, BSIM4 v4.5–4.7 (separate ngspice models), MESA, HiSIM, E/G FREQ (ngspice translates it to xfer).
+
+**OpenVLSI `openvlsi/ci-weekly`:**
+- Linux and macOS are green.
+- Windows got past Configure (stderr macro clash in yosys_log_parser fixed, 6be5772). Run 39297868166 is pending.
+- Open the OpenVLSI PR once it's green.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-19 — TreeSPICE ngspice parity (PR #17 open, PR #18 stacked on it); OpenVLSI CI fixes**
 
 **Owner's order (2026-10-18):**
