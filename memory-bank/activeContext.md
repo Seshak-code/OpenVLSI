@@ -1,5 +1,51 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-19 — TreeSPICE ngspice parity (PR #17 open, PR #18 stacked on it); OpenVLSI CI fixes**
+
+**Owner's order (2026-10-18):**
+1. TreeSPICE macOS feature-complete: ngspice parity.
+2. Scale track S1/S3: about 1–2 KB/device; isomorphic sharing so 1e9 SRAM-like arrays fit.
+3. Spectre-class analyses: PSS, HB, stb, MC mismatch, Spectre syntax.
+4. S2/S4: partitioning, multirate, GPU device evaluation.
+
+CI/CD is secondary.
+
+**TreeSPICE, `mac/parity2` (PR #18, base `mac/parity` = PR #17):**
+- **Devices:**
+  - BJT: PTF; the TLEV/TLEVC temperature set.
+  - IC= (D/Q/J/MOS) and MOS OFF.
+  - MOS6 and MOS9.
+  - VDMOS through OSDI (`tests/models/vdmos_ng.va`, built by `build_osdi.sh`).
+  - MESFET (Z) on the JFET path.
+  - The rest of the diode card.
+- **Fixes:**
+  - The OSDI AC/noise Jacobian came from a bypassed cache.
+  - JFET M.
+  - Flicker noise M·KF·(I/M)^AF.
+- **Also:**
+  - XSPICE: inertial delay, ~ outputs, A devices in subckts, and 8 stateless analog code models.
+  - URC.
+  - `-r` for .noise/.tf/.sens.
+- **Results:** run_diff 1108 PASS / 0 FAIL; Xyce 193; cli_check clean; ctest 4/4.
+- **After #17 merges:** retarget #18 to main, then rebuild OSDI (`tests/build_osdi.sh`).
+
+**Parity left (explicit errors today):**
+- **XSPICE:**
+  - Stateful analog code models: int, d_dt, s_xfer, slew, hyst, oneshot, sine/square/triangle, delay, and xtradev devices. XSPICE integration is BE (cm_static_integrate). They need per-instance history at the accepted step.
+  - Digital models: jkff, tff, srff, dlatch, srlatch, open_c/e, osc, source, state, ram, lut.
+  - d_tristate inertial.
+- **LTRA:** convolution over the full time history, about 4,300 lines in ngspice. Also CPL/TXL.
+- **BJT:** quasi-saturation (RCO/VO/GAMMA/QCO; needs an 8th junction terminal), RTH0, IBE/IBC.
+- **Diode:** RSW, VP, LEVEL 3.
+- **Legacy and other models:** MESA (Z levels 2–4), BSIM1/2, BSIM3 < 3.2, NQSMOD, HiSIM.
+
+**OpenVLSI, `openvlsi/ci-weekly`:**
+- Linux is green (QT_QPA_PLATFORM=offscreen; NOMINMAX / _USE_MATH_DEFINES on WIN32).
+- Windows: Win32 Subprocess (CreateProcess + job object) and a portable rtl_flow tool search. Run 39256298282 is pending.
+- Open the OpenVLSI PR once Windows is green.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-18 — CI/CD phase (OpenVLSI `openvlsi/ci-weekly`), TreeSPICE #15/#16 merged**
 
 **CI/CD (owner's choice: weekly, Mondays, plus manual dispatch; Vercel deploy disabled):**
