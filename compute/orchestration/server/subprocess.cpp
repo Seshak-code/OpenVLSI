@@ -14,6 +14,7 @@
 #include <array>
 #include <sstream>
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
 
 // POSIX (fork/exec, a process group) and Win32 (CreateProcess, a kill-on-close job object) implementations.
@@ -73,15 +74,13 @@ SubprocessResult Subprocess::runWithStreaming(OutputCallback stdoutCb, OutputCal
     SetHandleInformation(outR, HANDLE_FLAG_INHERIT, 0);
     SetHandleInformation(errR, HANDLE_FLAG_INHERIT, 0);
 
-    // The inherited environment with env_ on top, as a sorted NUL-separated block
+    // The inherited environment with env_ on top, as a sorted NUL-separated block. The CRT's narrow _environ:
+    // GetEnvironmentStringsA exists only without UNICODE (a Qt build defines it)
     std::map<std::string, std::string> env;
-    if (LPCH block = GetEnvironmentStringsA()) {
-        for (LPCH p = block; *p; p += std::strlen(p) + 1) {
-            const std::string kv(p);
-            const size_t eq = kv.find('=', 1);  // "=C:=C:\..." entries start with '='
-            if (eq != std::string::npos) env[kv.substr(0, eq)] = kv.substr(eq + 1);
-        }
-        FreeEnvironmentStringsA(block);
+    for (char** e = _environ; e && *e; ++e) {
+        const std::string kv(*e);
+        const size_t eq = kv.find('=', 1);  // "=C:=C:\..." entries start with '='
+        if (eq != std::string::npos) env[kv.substr(0, eq)] = kv.substr(eq + 1);
     }
     for (const auto& [k, v] : env_) env[k] = v;
     std::string envBlock;
