@@ -1,5 +1,47 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-24 — TreeSPICE parity finished at the device level; scale track S1**
+
+**TreeSPICE PRs, merge in order (merge commits):** #19 `mac/parity` → main, then #20 `mac/parity3` (retarget to
+main), then #21 `mac/scale`. Each branch's tip passed the full matrix.
+
+**#20 `mac/parity3` (parity 3):**
+- **Diode:** VP, RSW, self-heating (THERMAL, RTH0/CTH0), LEVEL 3.
+- **Also:** LTRA; BJT IBE/IBC and quasi-saturation; E/G FREQ (as an xfer); XSPICE digital, analog and xtradev
+  models; commas in A ports.
+- **Deliberate divergences** (where ngspice disagrees with its own DC slope or transient), each checked in
+  test_engine_fixes:
+  - RSW: transient sidewall charge; bottom-characteristic AC.
+  - Self-heating AC: CTH0, charge-current power, IKF.
+  - LEVEL 3: M applied once; XOM in Angstrom.
+- **Parity left (explicit errors):** CPL/TXL, BSIM1/2, HiSIM, BSIM3 < 3.2, exact BSIM4v5–v7, MESA. The owner
+  chose the scale track over these.
+
+**#21 `mac/scale` (S1, memory per device; `bench/scale_probe`):**
+- **Changes:**
+  - OSDI setup sharing; `.options bypass=0` memory mode (owner: keep compact bypass as the default, the switch
+    for memory).
+  - Contraction singles.
+  - CSR binary search.
+  - Flat OSDI caches.
+  - `.save` narrows storage; `treespice -r` streams a full `.tran`.
+- **Results:** BSIM4 ~13 → 3.5 KB/device at the transient peak; MOS1 1.5 KB/device. Scale ladder 1e4 stages
+  28 → 13 s.
+- **Next:** slot-indexed stamps, then S3: a hierarchical plan per cell type, shared factors, and
+  class-compressed state.
+
+**Results** (full matrix on every commit): run_diff 1234 PASS / 0 FAIL; Xyce 193 PASS (two LTRA cases time out,
+ngspice is as slow); cli_check 29 PASS; ctest 4/4.
+
+**OpenVLSI `openvlsi/ci-weekly`:**
+- Windows fixes: `_environ` for `GetEnvironmentStringsA` (afdf2ee); no designated initializers in
+  test_eda_drivers (de3548f).
+- CI run 40098236499 is pending. Linux and macOS are green. Open the OpenVLSI PR once Windows is green.
+
+**ngspice-47 source** (the parity reference): `~/eda/ngspice-src/ngspice-47`.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-19 (cont.) — TreeSPICE ngspice parity on `mac/parity3` (PR #19 open: mac/parity -> main)**
 
 **TreeSPICE `mac/parity3` (pushed to `treespice`; open its PR to main after #19 merges):**
