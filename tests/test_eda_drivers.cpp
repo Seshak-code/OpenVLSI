@@ -317,7 +317,7 @@ TEST(def_coordinate_flip) {
     
     std::string def = DEFTranslator::generateDEF(
         "test_design", placements,
-        Size2D{.width=100.0, .height=100.0},  // 100x100 um die
+        Size2D{100.0, 100.0},  // 100x100 um die
         0.1, 1000.0, 1000);
     
     ASSERT_CONTAINS(def, "DESIGN test_design");
@@ -366,7 +366,7 @@ TEST(def_multiple_components) {
     
     std::string def = DEFTranslator::generateDEF(
         "multi_test", placements,
-        Size2D{.width=200.0, .height=200.0}, 0.1, 1000.0, 1000);
+        Size2D{200.0, 200.0}, 0.1, 1000.0, 1000);
     
     ASSERT_CONTAINS(def, "COMPONENTS 3");
     ASSERT_CONTAINS(def, "U1 sky130_fd_sc_hd__inv_1");
@@ -379,7 +379,7 @@ TEST(def_multiple_components) {
 TEST(def_empty_placements) {
     std::vector<SchematicPlacement> empty;
     std::string def = DEFTranslator::generateDEF("empty_design", empty,
-                                              Size2D{.width=10, .height=10});
+                                              Size2D{10, 10});
     ASSERT_CONTAINS(def, "COMPONENTS 0");
     ASSERT_CONTAINS(def, "END DESIGN");
 }
@@ -387,7 +387,7 @@ TEST(def_empty_placements) {
 TEST(def_header_format) {
     std::vector<SchematicPlacement> placements;
     std::string def = DEFTranslator::generateDEF("mydesign", placements,
-                                              Size2D{.width=50, .height=50});
+                                              Size2D{50, 50});
     ASSERT_CONTAINS(def, "VERSION 5.8");
     ASSERT_CONTAINS(def, "DIVIDERCHAR \"/\"");
     ASSERT_CONTAINS(def, "BUSBITCHARS \"[]\"");
