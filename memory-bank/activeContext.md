@@ -36,7 +36,10 @@ ngspice is as slow); cli_check 29 PASS; ctest 4/4.
 **OpenVLSI `openvlsi/ci-weekly`:**
 - Windows fixes: `_environ` for `GetEnvironmentStringsA` (afdf2ee); no designated initializers in
   test_eda_drivers (de3548f).
-- CI run 40098236499 is pending. Linux and macOS are green. Open the OpenVLSI PR once Windows is green.
+- Linux CI found a hang in the parallel batch barrier: a lost wakeup and a cancel use-after-return (fixed in
+  66fb210).
+- All three platforms green (run 40104573881). **OpenVLSI PR #21** (`openvlsi/ci-weekly` → main) is open for the
+  owner to merge. It also moves the engine to TreeSPICE edfa9b7.
 
 **ngspice-47 source** (the parity reference): `~/eda/ngspice-src/ngspice-47`.
 
