@@ -1,5 +1,150 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-24 — TreeSPICE parity finished at the device level; scale track S1**
+
+**TreeSPICE PRs, merge in order (merge commits):** #19 `mac/parity` → main, then #20 `mac/parity3` (retarget to
+main), then #21 `mac/scale`. Each branch's tip passed the full matrix.
+
+**#20 `mac/parity3` (parity 3):**
+- **Diode:** VP, RSW, self-heating (THERMAL, RTH0/CTH0), LEVEL 3.
+- **Also:** LTRA; BJT IBE/IBC and quasi-saturation; E/G FREQ (as an xfer); XSPICE digital, analog and xtradev
+  models; commas in A ports.
+- **Deliberate divergences** (where ngspice disagrees with its own DC slope or transient), each checked in
+  test_engine_fixes:
+  - RSW: transient sidewall charge; bottom-characteristic AC.
+  - Self-heating AC: CTH0, charge-current power, IKF.
+  - LEVEL 3: M applied once; XOM in Angstrom.
+- **Parity left (explicit errors):** CPL/TXL, BSIM1/2, HiSIM, BSIM3 < 3.2, exact BSIM4v5–v7, MESA. The owner
+  chose the scale track over these.
+
+**#21 `mac/scale` (S1, memory per device; `bench/scale_probe`):**
+- **Changes:**
+  - OSDI setup sharing; `.options bypass=0` memory mode (owner: keep compact bypass as the default, the switch
+    for memory).
+  - Contraction singles.
+  - CSR binary search.
+  - Flat OSDI caches.
+  - `.save` narrows storage; `treespice -r` streams a full `.tran`.
+- **Results:** BSIM4 ~13 → 3.5 KB/device at the transient peak; MOS1 1.5 KB/device. Scale ladder 1e4 stages
+  28 → 13 s.
+- **Next:** slot-indexed stamps, then S3: a hierarchical plan per cell type, shared factors, and
+  class-compressed state.
+
+**Results** (full matrix on every commit): run_diff 1234 PASS / 0 FAIL; Xyce 193 PASS (two LTRA cases time out,
+ngspice is as slow); cli_check 29 PASS; ctest 4/4.
+
+**OpenVLSI `openvlsi/ci-weekly`:**
+- Windows fixes: `_environ` for `GetEnvironmentStringsA` (afdf2ee); no designated initializers in
+  test_eda_drivers (de3548f).
+- Linux CI found a hang in the parallel batch barrier: a lost wakeup and a cancel use-after-return (fixed in
+  66fb210).
+- All three platforms green (run 40104573881). **OpenVLSI PR #21** (`openvlsi/ci-weekly` → main) is open for the
+  owner to merge. It also moves the engine to TreeSPICE edfa9b7.
+
+**ngspice-47 source** (the parity reference): `~/eda/ngspice-src/ngspice-47`.
+
+---
+
+**Last session: Claude Code (dev), 2026-10-19 (cont.) — TreeSPICE ngspice parity on `mac/parity3` (PR #19 open: mac/parity -> main)**
+
+**TreeSPICE `mac/parity3` (pushed to `treespice`; open its PR to main after #19 merges):**
+- **XSPICE digital:** complete except d_tristate inertial.
+  - Flip-flops and latches: jk/t/sr flip-flops, d/sr latches.
+  - open_c/e, fdiv, lut, source (vector file), osc, pwm, state (state table), ram.
+- **XSPICE analog:** ota, ilimit, oneshot, multi_input_pwl, filesource, pwlts, xfer (AC/DC; transient is an error).
+- **XSPICE xtradev:** zener, potentiometer, capacitoric, inductoric, sidiode, pswitch, memristor, core, lcouple.
+- **XSPICE input convergence limiting:** ngspice's mifload default, max(0.25 |last|, 0.1) per Newton iteration.
+- **Engine-wide fixes:**
+  - Transient used `h > 1e-15` as its "is transient?" test, so femtosecond steps stamped DC sources. The test is now h > 0.
+  - Corners closer than 5e-5·maxStep merge, as ngspice's CKTminBreak.
+- **BJT:** IBE/IBC; Kull quasi-saturation (RCO..QCO, an 8th junction terminal, kJT).
+- **Small items:** switch negative hysteresis; SFFM's full form with TSTOP defaults; diode TREF and SOA limits.
+- **Deliberate divergences** (each checked analytically in test_engine_fixes, with ngspice's number in the comment):
+  - inductoric AC (ngspice gives jωL).
+  - lcouple AC sign.
+  - pswitch AC (−1/r).
+  - BJT BC IS times AREA² by default.
+  - Quasi-saturation AC uses a wrong Irci partial.
+- **Results** (last full matrix): run_diff 1190 PASS / 0 FAIL; Xyce 193; cli 0; ctest 4/4.
+- **Parity left:**
+  - **XSPICE:** delay, astate and seegen are step-dependent in ngspice (they are left unsupported on purpose). Also cmeter, lmeter, the real/int event nodes, ota/gain noise, xfer Touchstone.
+  - **LTRA**, CPL/TXL.
+  - **Diode:** RSW (sidewall node; ngspice drives the sidewall current from the bottom vd when NS is not given), VP (soft recovery), RTH0/CTH0, LEVEL 3.
+  - **BJT:** RTH0; quasi-saturation with AREA/M.
+  - **Other models:** BSIM1/2, B3SOI (bsim3soi_*), BSIM3 v3.0/3.1, BSIM4 v4.5–4.7 (separate ngspice models), MESA, HiSIM, E/G FREQ (ngspice translates it to xfer).
+
+**OpenVLSI `openvlsi/ci-weekly`:**
+- Linux and macOS are green.
+- Windows got past Configure (stderr macro clash in yosys_log_parser fixed, 6be5772). Run 39297868166 is pending.
+- Open the OpenVLSI PR once it's green.
+
+---
+
+**Last session: Claude Code (dev), 2026-10-19 — TreeSPICE ngspice parity (PR #17 open, PR #18 stacked on it); OpenVLSI CI fixes**
+
+**Owner's order (2026-10-18):**
+1. TreeSPICE macOS feature-complete: ngspice parity.
+2. Scale track S1/S3: about 1–2 KB/device; isomorphic sharing so 1e9 SRAM-like arrays fit.
+3. Spectre-class analyses: PSS, HB, stb, MC mismatch, Spectre syntax.
+4. S2/S4: partitioning, multirate, GPU device evaluation.
+
+CI/CD is secondary.
+
+**TreeSPICE, `mac/parity2` (PR #18, base `mac/parity` = PR #17):**
+- **Devices:**
+  - BJT: PTF; the TLEV/TLEVC temperature set.
+  - IC= (D/Q/J/MOS) and MOS OFF.
+  - MOS6 and MOS9.
+  - VDMOS through OSDI (`tests/models/vdmos_ng.va`, built by `build_osdi.sh`).
+  - MESFET (Z) on the JFET path.
+  - The rest of the diode card.
+- **Fixes:**
+  - The OSDI AC/noise Jacobian came from a bypassed cache.
+  - JFET M.
+  - Flicker noise M·KF·(I/M)^AF.
+- **Also:**
+  - XSPICE: inertial delay, ~ outputs, A devices in subckts, and 8 stateless analog code models.
+  - URC.
+  - `-r` for .noise/.tf/.sens.
+- **Results:** run_diff 1108 PASS / 0 FAIL; Xyce 193; cli_check clean; ctest 4/4.
+- **After #17 merges:** retarget #18 to main, then rebuild OSDI (`tests/build_osdi.sh`).
+
+**Parity left (explicit errors today):**
+- **XSPICE:**
+  - Stateful analog code models: int, d_dt, s_xfer, slew, hyst, oneshot, sine/square/triangle, delay, and xtradev devices. XSPICE integration is BE (cm_static_integrate). They need per-instance history at the accepted step.
+  - Digital models: jkff, tff, srff, dlatch, srlatch, open_c/e, osc, source, state, ram, lut.
+  - d_tristate inertial.
+- **LTRA:** convolution over the full time history, about 4,300 lines in ngspice. Also CPL/TXL.
+- **BJT:** quasi-saturation (RCO/VO/GAMMA/QCO; needs an 8th junction terminal), RTH0, IBE/IBC.
+- **Diode:** RSW, VP, LEVEL 3.
+- **Legacy and other models:** MESA (Z levels 2–4), BSIM1/2, BSIM3 < 3.2, NQSMOD, HiSIM.
+
+**OpenVLSI, `openvlsi/ci-weekly`:**
+- Linux is green (QT_QPA_PLATFORM=offscreen; NOMINMAX / _USE_MATH_DEFINES on WIN32).
+- Windows: Win32 Subprocess (CreateProcess + job object) and a portable rtl_flow tool search. Run 39256298282 is pending.
+- Open the OpenVLSI PR once Windows is green.
+
+---
+
+**Last session: Claude Code (dev), 2026-10-18 — CI/CD phase (OpenVLSI `openvlsi/ci-weekly`), TreeSPICE #15/#16 merged**
+
+**CI/CD (owner's choice: weekly, Mondays, plus manual dispatch; Vercel deploy disabled):**
+- **TreeSPICE:** green on linux-x86_64, windows-x86_64 and macos-arm64. 06:00 UTC. The oracle on Windows is MSYS2's `ngspice_con.exe`.
+- **OpenVLSI:** 07:00 UTC.
+  - Linux and Windows get libraries from `vcpkg.json` through the toolchain. Tcl is vcpkg's 9.0 on Windows and apt's `tcl-dev` on Linux.
+  - Dawn is built without GLFW. macOS uses brew.
+  - Run `ctest -LE gpu`.
+- **TreeSPICE #16:** B4SOI overlap charges are now counted once, via a patch in `tests/build_osdi.sh` (Gemini's diagnosis). B4SOI now supports `.tran/.ac/.noise/.pz`.
+  - Rebuild OSDI after pulling.
+  - Xyce LEVEL 10 cards (BSIMSOI 3.x) are classified XYCE-DIALECT.
+- **Open:**
+  - `.sens` device parameters and AC sensitivity: decide true derivatives vs ngspice's zeros.
+  - Carry Gemini's df7bc00 findings into main.
+  - GUI process-corner no-op; parasiticResistors never stamped.
+- **Next:** Phase 8, the real-time loop (incremental re-flow, a GDB stub).
+
+---
+
 **Last session: Claude Code (dev), 2026-10-16 — Phase 7 gate met (OpenVLSI `phase7/fw-on-silicon`, TreeSPICE PR #11)**
 
 **Phase 7 (firmware on your own silicon):**

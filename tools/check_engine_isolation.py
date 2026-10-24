@@ -178,7 +178,7 @@ def run_check():
             for fname in files:
                 if fname.endswith(('.h', '.cpp', '.hpp', '.cc')):
                     fp = os.path.join(root, fname)
-                    rel = os.path.relpath(fp, PROJECT_ROOT)
+                    rel = os.path.relpath(fp, PROJECT_ROOT).replace(os.sep, '/')  # the allowlists use '/'
                     violations = check_engine_file(fp, rel)
                     if violations:
                         print(f"  ❌ {rel}:")
@@ -200,7 +200,7 @@ def run_check():
             for fname in files:
                 if fname.endswith(('.h', '.cpp', '.hpp', '.cc')):
                     fp = os.path.join(root, fname)
-                    rel = os.path.relpath(fp, PROJECT_ROOT)
+                    rel = os.path.relpath(fp, PROJECT_ROOT).replace(os.sep, '/')  # the allowlists use '/'
                     violations = check_gui_file(fp, rel)
                     if violations:
                         print(f"  ❌ {rel}:")

@@ -1,9 +1,10 @@
 name: CI
 
+# Weekly (owner's choice), plus a manual run from the Actions tab. GitHub disables a scheduled workflow after
+# 60 days without repository activity; re-enable it there.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  schedule:
+    - cron: '0 7 * * 1'  # Mondays 07:00 UTC (TreeSPICE's runs at 06:00)
   workflow_dispatch:
 
 # The app and its test suite on each platform. Third-party C++ libraries come from vcpkg (binary-cached in the
@@ -22,6 +23,8 @@ jobs:
           - { name: macos-arm64, os: macos-14 }
     env:
       VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
+      PYTHONUTF8: "1"  # the build's check scripts print UTF-8; Windows consoles default to cp1252
+      QT_QPA_PLATFORM: offscreen  # GUI tests on runners without a display
     defaults:
       run:
         shell: bash
@@ -46,14 +49,12 @@ jobs:
           arch: ${{ matrix.qt-arch }}
           cache: true
 
+      # Linux and Windows: vcpkg.json's libraries are installed by the vcpkg toolchain at configure time
       - name: Libraries
         run: |
           case "$RUNNER_OS" in
           Linux)
-            sudo apt-get install -y -q ninja-build libgl1-mesa-dev libxkbcommon-dev
-            "$VCPKG_INSTALLATION_ROOT/vcpkg" install grpc tcl --triplet "${{ matrix.triplet }}" ;;
-          Windows)
-            "$VCPKG_INSTALLATION_ROOT/vcpkg" install grpc tcl --triplet "${{ matrix.triplet }}" ;;
+            sudo apt-get install -y -q ninja-build libgl1-mesa-dev libxkbcommon-dev tcl-dev ;;
           macOS)
             brew install ninja qt@6 grpc > /dev/null
             echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> "$GITHUB_ENV" ;;

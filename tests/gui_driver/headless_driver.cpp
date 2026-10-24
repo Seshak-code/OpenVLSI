@@ -5,6 +5,8 @@
 // Connectivity is resolved via explicit n+/n- net-name params on each component.
 // This avoids the full SchematicEditor dependency chain.
 // ============================================================================
+#include <memory>
+#include <cstdint>
 #include "headless_driver.h"
 
 #include "local_worker_driver.h"

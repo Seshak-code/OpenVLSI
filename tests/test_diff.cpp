@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <iostream>
 #include <cassert>
 #include "acutesim_engine/netlist/circuit.h"

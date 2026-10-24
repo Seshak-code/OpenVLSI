@@ -1,3 +1,5 @@
+#include <memory>
+#include <cstdint>
 #include "local_worker_driver.h"
 #include "batch_execution_engine.h"
 #include "job_scheduler.h"

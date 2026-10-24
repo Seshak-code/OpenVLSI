@@ -1,3 +1,5 @@
+#include <memory>
+#include <cstdint>
 #include "simulation_service_impl.h"
 #include "../proto_mapper.h"
 #include <condition_variable>

@@ -167,7 +167,7 @@ struct Net {
 // Phase 1.3: Placement Intent Preservation
 struct PlacementConstraint {
     std::string refId; // Reference component instance name/ID
-    enum Type { RELATIVE, ABSOLUTE, ALIGN } type;
+    enum Type { RELATIVE_POS, ABSOLUTE_POS, ALIGN } type;
     double offset; // Spacing or offset value
     std::string direction; // "East", "North", etc.
 };

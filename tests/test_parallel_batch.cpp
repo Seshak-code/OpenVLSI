@@ -8,6 +8,7 @@
 //   4. JobScheduler(0) defaults to hardware_concurrency workers
 // ============================================================================
 
+#include <cstdint>
 #include "compute/orchestration/driver/job_scheduler.h"
 #include "compute/orchestration/driver/batch_execution_engine.h"
 #include "engine_api/simulation_dto.h"

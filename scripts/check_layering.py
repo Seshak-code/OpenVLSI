@@ -44,7 +44,7 @@ def check_layering():
                         sys.stdout.flush()
                         if VIOLATION_REGEX.search(line):
                             violations_found = True
-                            print(f"\n❌ [ERROR] Layering violation detected:")
+                            print(f"\n[ERROR] Layering violation detected:")
                             print(f"GUI layer must not directly include physics or solver headers.")
                             print(f"File: {rel_path}:{line_num}")
                             print(f"    {line.strip()}")
@@ -53,10 +53,10 @@ def check_layering():
                 print(f"Warning: Could not read file {rel_path}: {e}")
 
     if violations_found:
-        print("\n❌ Architecture check failed. Build aborted.")
+        print("\nERROR: Architecture check failed. Build aborted.")
         sys.exit(1)
     else:
-        print("\n✅ Architecture check passed. No layering violations found in GUI.")
+        print("\nOK: Architecture check passed. No layering violations found in GUI.")
         sys.exit(0)
 
 if __name__ == "__main__":

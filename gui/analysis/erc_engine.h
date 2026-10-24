@@ -55,7 +55,7 @@ enum class ViolationType {
 enum class Severity {
     INFO,       // Advisory only
     WARNING,    // Should fix, but can simulate
-    ERROR       // Must fix, blocks simulation
+    ERR       // Must fix, blocks simulation
 };
 
 inline Severity getSeverity(ViolationType type) {
@@ -65,7 +65,7 @@ inline Severity getSeverity(ViolationType type) {
         case ViolationType::FLOATING_GATE:
         case ViolationType::SOLVER_SINGULAR_MATRIX:
         case ViolationType::SOLVER_DIVERGENCE:
-             return Severity::ERROR;
+             return Severity::ERR;
         case ViolationType::FLOATING_NODE:
         case ViolationType::MULTIPLE_DRIVERS:
         case ViolationType::OPEN_DRAIN:
@@ -162,7 +162,7 @@ public:
      */
     bool hasBlockingErrors() const {
         for (const auto& v : violations_) {
-            if (v.severity == Severity::ERROR) return true;
+            if (v.severity == Severity::ERR) return true;
         }
         return false;
     }
@@ -180,7 +180,7 @@ public:
     int errorCount() const {
         int count = 0;
         for (const auto& v : violations_) {
-            if (v.severity == Severity::ERROR) count++;
+            if (v.severity == Severity::ERR) count++;
         }
         return count;
     }

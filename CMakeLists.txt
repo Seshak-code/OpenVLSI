@@ -11,6 +11,9 @@ if(NOT ACUTESIM_DEPS_NOISY_WARNINGS)
     set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
 endif()
 
+if(WIN32)  # as the engine's CMakeLists: windows.h's min/max macros break std::min / std::max; M_PI needs _USE_MATH_DEFINES
+    add_compile_definitions(NOMINMAX _USE_MATH_DEFINES)
+endif()
 if(MSVC)
     add_compile_options(/fp:strict)
 else()
@@ -163,8 +166,14 @@ if(NOT EMSCRIPTEN)
     set(DAWN_WERROR OFF CACHE BOOL "" FORCE)
     set(TINT_WERROR OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
-    set(DAWN_ENABLE_METAL ON CACHE BOOL "" FORCE)
+    if(APPLE)  # elsewhere only the Null backend (the hosted CI runners have no GPU)
+        set(DAWN_ENABLE_METAL ON CACHE BOOL "" FORCE)
+    else()
+        set(DAWN_ENABLE_METAL OFF CACHE BOOL "" FORCE)
+    endif()
     set(DAWN_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(DAWN_USE_GLFW OFF CACHE BOOL "" FORCE)  # only Dawn's samples use it
+    set(DAWN_USE_X11 OFF CACHE BOOL "" FORCE)   # window surfaces only (Vulkan is off)
     set(DAWN_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_D3D12 OFF CACHE BOOL "" FORCE)
     set(DAWN_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
@@ -183,7 +192,7 @@ if(NOT EMSCRIPTEN)
         set(CMAKE_WARN_DEPRECATED OFF) 
     endif()
     
-    if(TARGET dawn_internal_config)
+    if(TARGET dawn_internal_config AND NOT MSVC)  # a GCC/Clang flag
         target_compile_options(dawn_internal_config INTERFACE -Wno-error)
     endif()
 
@@ -631,7 +640,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 if(NOT EMSCRIPTEN)
-    find_package(TCL REQUIRED)
+    if(WIN32)  # vcpkg's Tcl 9: FindTCL only knows the 8.x library names
+        find_library(TCL_LIBRARY NAMES tcl90 tcl90t)
+    endif()
+    find_package(TCL)  # not REQUIRED: that also demands Tk, which the app does not use
+    if(NOT TCL_FOUND)
+        message(FATAL_ERROR "Tcl not found (headers and library)")
+    endif()
+    include_directories(${TCL_INCLUDE_PATH})  # every later target that compiles gui/scripting/tcl_bridge.cpp
     target_include_directories(${PROJECT_NAME} PRIVATE ${TCL_INCLUDE_PATH})
     target_link_libraries(${PROJECT_NAME} PRIVATE ${TCL_LIBRARY})
 else()
@@ -2157,9 +2173,7 @@ if(NOT EMSCRIPTEN)
     set(GRPC_SRCS "${PROTO_GEN_DIR}/worker_service.grpc.pb.cc")
     set(GRPC_HDRS "${PROTO_GEN_DIR}/worker_service.grpc.pb.h")
 
-    # 3. Generate Sources
-    set(gRPC_CPP_PLUGIN_EXECUTABLE "/opt/homebrew/bin/grpc_cpp_plugin")
-    
+    # 3. Generate Sources (gRPC_CPP_PLUGIN_EXECUTABLE: found with the simulation service's protos above)
     add_custom_command(
         OUTPUT ${PB_SRCS} ${PB_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
         COMMAND ${Protobuf_PROTOC_EXECUTABLE}

@@ -124,7 +124,7 @@ void ProblemsPanel::setViolations(const QList<ERC::Violation>& violations) {
         
         // Count by severity
         switch (v.severity) {
-            case ERC::Severity::ERROR:   errorCount_++;   break;
+            case ERC::Severity::ERR:   errorCount_++;   break;
             case ERC::Severity::WARNING: warningCount_++; break;
             case ERC::Severity::INFO:    infoCount_++;    break;
         }
@@ -191,7 +191,7 @@ void ProblemsPanel::onClearClicked() {
 QIcon ProblemsPanel::getSeverityIcon(ERC::Severity severity) const {
     // Use Qt's standard icons as fallback, or custom icons if available
     switch (severity) {
-        case ERC::Severity::ERROR:
+        case ERC::Severity::ERR:
             return style()->standardIcon(QStyle::SP_MessageBoxCritical);
         case ERC::Severity::WARNING:
             return style()->standardIcon(QStyle::SP_MessageBoxWarning);
@@ -204,7 +204,7 @@ QIcon ProblemsPanel::getSeverityIcon(ERC::Severity severity) const {
 
 QColor ProblemsPanel::getSeverityColor(ERC::Severity severity) const {
     switch (severity) {
-        case ERC::Severity::ERROR:   return QColor("#f44747"); // VS Code red
+        case ERC::Severity::ERR:   return QColor("#f44747"); // VS Code red
         case ERC::Severity::WARNING: return QColor("#cca700"); // VS Code yellow
         case ERC::Severity::INFO:    return QColor("#3794ff"); // VS Code blue
         default:                     return QColor("#cccccc");

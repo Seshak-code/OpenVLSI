@@ -1,3 +1,5 @@
+#include <memory>
+#include <cstdint>
 #include "simulation_workspace.h"
 #include "../../gui/styling/theme_manager.h"
 #include "variables_panel.h"

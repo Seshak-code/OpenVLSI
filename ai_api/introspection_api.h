@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include "engine_api/simulation_dto.h"
 #include "components/component_library.h"
 #include "components/design_rules.h"
@@ -48,7 +49,7 @@ enum class RuleCategory {
 enum class RuleSeverity {
     INFO,      // Advisory
     WARNING,   // Should fix
-    ERROR,     // Must fix
+    ERR,     // Must fix
     FATAL      // Cannot proceed
 };
 
@@ -64,7 +65,7 @@ struct DesignRule {
     std::string description;  // Full description for AI context
     
     RuleCategory category = RuleCategory::ELECTRICAL;
-    RuleSeverity defaultSeverity = RuleSeverity::ERROR;
+    RuleSeverity defaultSeverity = RuleSeverity::ERR;
     
     // PDK-adaptable parameters
     double value = 0.0;       // Numeric threshold (µm, Ω, W, etc.)
@@ -102,7 +103,7 @@ public:
     void overrideFromPDK(const std::string& ruleId, 
                          double newValue, 
                          const std::string& pdkName,
-                         RuleSeverity newSeverity = RuleSeverity::ERROR) {
+                         RuleSeverity newSeverity = RuleSeverity::ERR) {
         if (rules_.count(ruleId)) {
             rules_[ruleId].value = newValue;
             rules_[ruleId].pdkSource = pdkName;
@@ -326,7 +327,7 @@ inline std::string RuleRegistry::toJSON() const {
         switch (rule.defaultSeverity) {
             case RuleSeverity::INFO: ss << "info"; break;
             case RuleSeverity::WARNING: ss << "warning"; break;
-            case RuleSeverity::ERROR: ss << "error"; break;
+            case RuleSeverity::ERR: ss << "error"; break;
             case RuleSeverity::FATAL: ss << "fatal"; break;
         }
         ss << "\",\n";
@@ -355,7 +356,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Floating Gate",
         "MOSFET gate has no DC path to ground. Gate capacitance can charge to arbitrary voltage.",
         RuleCategory::ELECTRICAL,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.0, "",
         "", false,
         nullptr,
@@ -367,7 +368,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Floating Node",
         "Circuit node has no DC path to ground reference.",
         RuleCategory::ELECTRICAL,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.0, "",
         "", false,
         nullptr,
@@ -407,7 +408,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Metal 1 Minimum Width",
         "Minimum allowed width for Metal 1 traces.",
         RuleCategory::GEOMETRIC,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.14, "um",  // Generic 180nm-ish value
         "", false,
         nullptr,
@@ -419,7 +420,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Metal 1 Minimum Spacing",
         "Minimum spacing between Metal 1 traces.",
         RuleCategory::GEOMETRIC,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.14, "um",
         "", false,
         nullptr,
@@ -431,7 +432,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Polysilicon Minimum Width",
         "Minimum gate length for polysilicon.",
         RuleCategory::GEOMETRIC,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.18, "um",
         "", false,
         nullptr,
@@ -443,7 +444,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Via Enclosure",
         "Metal must extend beyond via edge by minimum enclosure.",
         RuleCategory::GEOMETRIC,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.05, "um",
         "", false,
         nullptr,
@@ -459,7 +460,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Device Count Mismatch",
         "Number of devices in layout does not match schematic.",
         RuleCategory::CONNECTIVITY,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.0, "",
         "", false,
         nullptr,
@@ -471,7 +472,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Net Connectivity Mismatch",
         "Layout connectivity differs from schematic.",
         RuleCategory::CONNECTIVITY,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.0, "",
         "", false,
         nullptr,
@@ -483,7 +484,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Open Net",
         "Net in schematic has no corresponding layout connection.",
         RuleCategory::CONNECTIVITY,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         0.0, "",
         "", false,
         nullptr,
@@ -511,7 +512,7 @@ inline void RuleRegistry::initializeGenericRules() {
         "Electromigration Limit",
         "Current density exceeds electromigration threshold.",
         RuleCategory::THERMAL,
-        RuleSeverity::ERROR,
+        RuleSeverity::ERR,
         1e6, "A/cm2",
         "", false,
         nullptr,

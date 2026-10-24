@@ -12,7 +12,7 @@ class GridScene;
 enum class ComplianceSeverity {
     INFO,
     WARNING,
-    ERROR
+    ERR
 };
 
 struct ComplianceViolation {

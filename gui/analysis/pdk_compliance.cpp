@@ -34,7 +34,7 @@ ComplianceReport PDKComplianceChecker::checkCompliance(GridScene* scene) {
         // --- Rule 1: Unknown Model (if PDK defines classes) ---
         if (!rules.deviceClasses.isEmpty() && devClass == "UNKNOWN" && !model.isEmpty()) {
              // If model is set but not in PDK
-             report.violations.append({comp->name, "Unknown", QString("Model '%1' not found in %2").arg(model).arg(rules.name), ComplianceSeverity::ERROR});
+             report.violations.append({comp->name, "Unknown", QString("Model '%1' not found in %2").arg(model).arg(rules.name), ComplianceSeverity::ERR});
              report.errorCount++;
              continue; // Cannot check params for unknown model
         }
@@ -64,7 +64,7 @@ ComplianceReport PDKComplianceChecker::checkCompliance(GridScene* scene) {
                             report.violations.append({
                                 comp->name, devClass,
                                 QString("Parameter '%1' (%2) < min (%3%4)").arg(paramName).arg(d).arg(rule.min).arg(rule.units),
-                                ComplianceSeverity::ERROR
+                                ComplianceSeverity::ERR
                             });
                             report.errorCount++;
                         }

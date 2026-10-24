@@ -45,7 +45,7 @@ private slots:
 
         AIAPI::TraceChunk refChunk;
         refChunk.contentType = "ReferenceDesign";
-        QCOMPARE(AIAPI::ContextBudgetManager::assignPriority(refChunk), AIAPI::ChunkPriority::OPTIONAL);
+        QCOMPARE(AIAPI::ContextBudgetManager::assignPriority(refChunk), AIAPI::ChunkPriority::EXTRA);
     }
 
     void testBudgetAllocationStrictMode() {
@@ -75,7 +75,7 @@ private slots:
         optional.chunkId = "c3";
         optional.content = "Similar design from history";
         optional.contentType = "ReferenceDesign";
-        optional.priority = AIAPI::ChunkPriority::OPTIONAL;
+        optional.priority = AIAPI::ChunkPriority::EXTRA;
         optional.relevanceScore = 0.3;
         optional.estimatedTokens = 200;
         optional.included = false;

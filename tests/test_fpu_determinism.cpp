@@ -37,8 +37,8 @@ int main() {
     }
 
     // 4. Subnormal Test (We want them preserved, NOT flushed to zero)
-    volatile double small = 1e-308;
-    volatile double subnormal = small / 10.0; // 1e-309 (Subnormal)
+    volatile double tiny = 1e-308;
+    volatile double subnormal = tiny / 10.0; // 1e-309 (Subnormal)
     
     if (subnormal == 0.0) {
         std::cout << "INFO: Subnormals are flushed to zero (FTZ is ON). This is acceptable for some configs but 'Strict' usually implies preservation." << std::endl;

@@ -1,7 +1,11 @@
+#include <functional>
+#include <cstdint>
 #include "rtl_flow.h"
 #include "../server/subprocess.h"
 
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -22,12 +26,22 @@ using acutesim::orchestration::Subprocess;
 
 namespace {
 
+#ifdef _WIN32
+constexpr char kPathSep = ';';
+bool executable(const std::string& p) { std::error_code ec; return !p.empty() && fs::is_regular_file(p, ec); }
+#else
+constexpr char kPathSep = ':';
 bool executable(const std::string& p) { return !p.empty() && access(p.c_str(), X_OK) == 0; }
+#endif
 
 std::string onPath(const std::string& name) {
     std::stringstream path(std::getenv("PATH") ? std::getenv("PATH") : "");
-    for (std::string dir; std::getline(path, dir, ':');)
+    for (std::string dir; std::getline(path, dir, kPathSep);) {
         if (executable(dir + "/" + name)) return dir + "/" + name;
+#ifdef _WIN32
+        if (executable(dir + "/" + name + ".exe")) return dir + "/" + name + ".exe";
+#endif
+    }
     return "";
 }
 
@@ -57,7 +71,7 @@ bool run(const RtlFlowTools& tools, const fs::path& work, const std::string& exe
     Subprocess p(exe, args);
     p.setWorkingDirectory(work.string());
     const char* path = std::getenv("PATH");
-    p.setEnvironment({{"PATH", (tools.binDir.empty() ? "" : tools.binDir + ":") + (path ? path : "")}});
+    p.setEnvironment({{"PATH", (tools.binDir.empty() ? "" : tools.binDir + kPathSep) + (path ? path : "")}});
     p.setTimeout(std::chrono::hours(4));
     p.setCancelFlag(cancel);
     std::string pending;

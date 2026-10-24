@@ -27,7 +27,7 @@ private:
         if (failure) {
             AIAPI::FailureLabel label;
             label.type = AIAPI::FailureType::CONVERGENCE_FAILED;
-            label.severity = AIAPI::FailureSeverity::ERROR;
+            label.severity = AIAPI::FailureSeverity::ERR;
             label.message = "Convergence failed after 20 iterations";
             label.nodeOrComponent = "M1";
             label.residual = 1e-3;

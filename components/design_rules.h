@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include "acutesim_engine/netlist/circuit.h"
 #include "component_library.h"
 #include <vector>

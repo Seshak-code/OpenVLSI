@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "rv32i.h"
 
 namespace soc {

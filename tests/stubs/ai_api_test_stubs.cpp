@@ -2,6 +2,7 @@
 // Provides minimal implementations so AI-layer tests can link without
 // compiling mainwindow.cpp, schematic_editor.cpp, etc.
 
+#include <optional>
 #include "context_engine.h"
 #include "schema_api.h"
 #include "../analysis/topology_analyzer.h"

@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "soc.h"
 #include "rv32i.h"
 #include "rv32i_asm.h"

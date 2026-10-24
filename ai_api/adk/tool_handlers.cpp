@@ -210,7 +210,7 @@ ToolResult handleCompressContext(const QJsonObject& params) {
     int maxTokens = params["max_tokens"].toInt(4000);
     QString modeStr = params["priority_mode"].toString("strict");
 
-    PriorityMode mode = PriorityMode::STRICT;
+    PriorityMode mode = PriorityMode::STRICT_FILL;
     if (modeStr == "balanced") mode = PriorityMode::BALANCED;
     else if (modeStr == "debug") mode = PriorityMode::DEBUG;
 

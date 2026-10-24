@@ -1,3 +1,4 @@
+#include <memory>
 #include <grpcpp/grpcpp.h>
 #include <string>
 #include <iostream>

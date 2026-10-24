@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include "circuitsim.h"
 #include <random>
 #include <iostream>

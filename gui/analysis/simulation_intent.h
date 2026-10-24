@@ -108,7 +108,7 @@ enum class VerdictStatus {
     PASS,       // Metric within bounds
     FAIL,       // Metric out of bounds
     MARGINAL,   // Within 10% of boundary
-    ERROR       // Could not evaluate (sim failed, expression invalid)
+    ERR       // Could not evaluate (sim failed, expression invalid)
 };
 
 inline QString verdictToString(VerdictStatus v) {
@@ -117,7 +117,7 @@ inline QString verdictToString(VerdictStatus v) {
         case VerdictStatus::PASS: return "PASS";
         case VerdictStatus::FAIL: return "FAIL";
         case VerdictStatus::MARGINAL: return "MARGINAL";
-        case VerdictStatus::ERROR: return "ERROR";
+        case VerdictStatus::ERR: return "ERROR";
         default: return "?";
     }
 }

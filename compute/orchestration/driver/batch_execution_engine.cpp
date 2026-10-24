@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "batch_execution_engine.h"
 #include "job_scheduler.h"
 #include <cmath>
@@ -91,13 +92,17 @@ SimulationBatchResponseDTO BatchExecutionEngine::executeBatchParallel(
     for (const auto& run : request.runs)
         runMap[run.runIndex] = &run;
 
-    // Barrier: use a counter + condition variable to wait for all tasks.
+    // Barrier: every submitted task counts itself done under barrierMu. The waiter waits for all of them, cancelled
+    // or not: the tasks hold references into this frame, and a cancelled task returns at once. (The count used to
+    // be bumped and notified outside the mutex, so the last notify could fall between the waiter's check and its
+    // sleep: a hang. Returning on `cancelled` left queued tasks writing into a dead frame.)
     std::mutex              barrierMu;
     std::condition_variable barrierCV;
-    std::atomic<uint32_t>   doneCount{0};
+    uint32_t                doneCount = 0, submitted = 0;
 
     for (uint32_t slot = 0; slot < total; ++slot) {
         if (cancelled.load()) break;
+        ++submitted;
 
         uint32_t idx = sortedIdx[slot];
         const BatchRunDTO* run = runMap.at(idx);
@@ -128,17 +133,18 @@ SimulationBatchResponseDTO BatchExecutionEngine::executeBatchParallel(
 
             uint32_t done = completed.fetch_add(1) + 1;
             if (progress) progress(done, total);
-            doneCount.fetch_add(1);
+            {
+                std::lock_guard<std::mutex> lk(barrierMu);
+                ++doneCount;
+            }
             barrierCV.notify_all();
         });
     }
 
-    // Wait for all submitted tasks to finish.
+    // Wait for every submitted task to finish.
     {
         std::unique_lock<std::mutex> lk(barrierMu);
-        barrierCV.wait(lk, [&] {
-            return doneCount.load() >= total || cancelled.load();
-        });
+        barrierCV.wait(lk, [&] { return doneCount >= submitted; });
     }
 
     return batchResp;

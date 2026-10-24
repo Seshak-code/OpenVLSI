@@ -8,6 +8,7 @@
 // sequences, state initialization, and solver logic inside BatchExecutionEngine.
 // ============================================================================
 
+#include <cstdint>
 #include "compute/orchestration/driver/local_worker_driver.h"
 #include "components/veriloga_generator.h"
 #include "acutesim_engine/netlist/circuit.h"

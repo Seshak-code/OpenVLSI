@@ -12,6 +12,7 @@
 //   - This header is PURE C++ / STL — no Qt, no filesystem assumptions
 // ============================================================================
 
+#include <cstdint>
 #include "job_status.h"
 #include "ijob_observer.h"
 #include "engine_callbacks.h"

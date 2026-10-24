@@ -13,6 +13,8 @@
 //                                   analytic RC answers
 // ============================================================================
 
+#include <optional>
+#include <cstdint>
 #include <iostream>
 #include <cassert>
 #include <cmath>

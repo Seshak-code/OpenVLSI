@@ -1,3 +1,4 @@
+#include <memory>
 #include <QtTest>
 #include "ai_api/simulation/trace_chunker.h"
 #include "ai_api/simulation/local_vector_store.h"
