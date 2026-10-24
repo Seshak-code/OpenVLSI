@@ -1,6 +1,6 @@
 # Active Context
 
-**Last session: Claude Code (dev), 2026-10-24 — TreeSPICE parity finished at the device level; scale track S1, S3.0–S3.2**
+**Last session: Claude Code (dev), 2026-10-24 — TreeSPICE parity finished at the device level; scale track S1, S3.0–S3.3**
 
 **TreeSPICE PRs, merge in order (merge commits):** #19 `mac/parity` → main, then #20 `mac/parity3` (retarget to
 main), then #21 `mac/scale`. Each branch's tip passed the full matrix.
@@ -35,7 +35,11 @@ main), then #21 `mac/scale`. Each branch's tip passed the full matrix.
   (`netlist/hier_partition.h`); `.op`, `.dc`, `.tran`. AC etc. refused for now (S3.3).
 - **Gate met:** 1.05e9 6T cells (`bench/s3_sram.py`), write then read: 36 unknowns, 2.2 s, 498 MB. 8k cells:
   4e-17 V from flat, 0.03 s vs 19.3 s.
-- **Next:** S3.3 (AC/noise/sens on the quotient, multi-member I/L/Q/J classes, path `.ic`), parser peak memory.
+- TreeSPICE #23 merged by the owner.
+
+**`mac/s3.3` (S3.3):** `.ac`, `.noise`, `.tf` on the quotient (noise/.tf outputs must be a one-net class; `.pz`,
+`.sens` refused); multi-member I/L/BJT/JFET classes; `.ic` by hierarchical path; the metastable warning only for
+coupled pairs; 1e9 gate 2.2 s, 328 MB. Not done: an automatic hierarchical mode (owner's call).
 
 **Results** (full matrix on every commit): run_diff 1234 PASS / 0 FAIL; Xyce 193 PASS (two LTRA cases time out,
 ngspice is as slow); cli_check 29 PASS; ctest 4/4.
