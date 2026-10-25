@@ -69,4 +69,8 @@ void addSchematicCommands(Registry& r);  // cell properties, shapes, pins, insta
 void addSimulationCommands(Registry& r);  // netlist, simulate, results_get
 void addAdeCommands(Registry& r);         // ade_setup_get/set, ade_run, ade_stop, ade_history_list/get
 
+// A run directory a caller names (simulate's, an ADE point's): one under the workspace's simulation/ with results,
+// else an error
+std::string runDirectory(Context& c, const std::string& run);
+
 }  // namespace cmd

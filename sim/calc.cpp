@@ -22,7 +22,7 @@ struct Val {  // an argument: a number or waveform, or a string ("rising")
 
 Wave number(cplx v) { return {{}, {v}}; }
 Wave map(const Wave& w, const std::function<cplx(cplx)>& f) {
-    Wave o{w.x, {}};
+    Wave o{w.x, {}, w.scale};
     for (const cplx v : w.y) o.y.push_back(f(v));
     return o;
 }
@@ -156,7 +156,7 @@ private:
             }
         };
         if (!a.scalar() && !b.scalar() && a.x != b.x) fail("the waveforms have different scales (different analyses?)");
-        Wave o{a.scalar() ? b.x : a.x, {}};
+        Wave o{a.scalar() ? b.x : a.x, {}, a.scalar() ? b.scale : a.scale};
         const size_t n = std::max(a.y.size(), b.y.size());
         for (size_t k = 0; k < n; ++k) o.y.push_back(f(a.y[a.scalar() ? 0 : k], b.y[b.scalar() ? 0 : k]));
         return o;
@@ -359,5 +359,50 @@ double siNumber(const std::string& text) {
 }
 
 Wave evaluate(const std::string& expression, const Lookup& lookup) { return Parser(expression, lookup).parse(); }
+
+namespace {
+const Plot* plot(const std::vector<Plot>& plots, const std::string& name) {
+    for (const auto& p : plots) if (p.name == name) return &p;
+    return nullptr;
+}
+
+Wave access(const std::vector<Plot>& plots, const std::string& kind, const std::string& arg) {
+    static const std::map<std::string, std::string> plotOf = {
+        {"VT", "Transient Analysis"}, {"IT", "Transient Analysis"}, {"VF", "AC Analysis"}, {"IF", "AC Analysis"},
+        {"VDC", "DC transfer characteristic"}, {"IDC", "DC transfer characteristic"}, {"VOP", "Operating Point"}, {"IOP", "Operating Point"},
+        {"VN", "Noise Spectral Density Curves"}, {"VNTOT", "Integrated Noise"}};
+    std::string a = arg;
+    for (auto& c : a) c = (char)std::tolower((unsigned char)c);
+    const Plot* p = plot(plots, plotOf.at(kind));
+    if (!p) throw std::runtime_error("calculator: " + kind + "(" + arg + "): the test ran no " + plotOf.at(kind));
+    std::string want;
+    if (kind == "VN" || kind == "VNTOT") {
+        if (a != "out" && a != "in") throw std::runtime_error("calculator: " + kind + "(" + arg + "): out or in");
+        want = kind == "VN" ? a + "oise_spectrum" : a + "oise_total";
+    } else {
+        want = std::string(kind[0] == 'V' ? "v(" : "i(") + a + ")";
+    }
+    for (size_t k = 0; k < p->vectors.size(); ++k) {
+        std::string n = p->vectors[k];
+        for (auto& c : n) c = (char)std::tolower((unsigned char)c);
+        if (kind == "VNTOT" && n.size() > 2) n = n.substr(2, n.size() - 3);  // v(onoise_total) / i(inoise_total)
+        if (n != want) continue;
+        const bool scaled = kind != "VOP" && kind != "IOP" && kind != "VNTOT";
+        Wave w;
+        if (scaled) {
+            for (const auto& x : p->data[0]) w.x.push_back(x.real());
+            w.scale = p->vectors[0];
+        }
+        w.y = scaled ? p->data[k] : std::vector<std::complex<double>>{p->data[k][0]};
+        return w;
+    }
+    throw std::runtime_error("calculator: " + kind + "(" + arg + "): the " + p->name + " has no " + want);
+}
+
+}  // namespace
+
+Lookup resultsLookup(const std::vector<Plot>& plots) {
+    return [&plots](const std::string& kind, const std::string& name) { return access(plots, kind, name); };
+}
 
 }  // namespace sim

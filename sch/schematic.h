@@ -38,6 +38,7 @@ struct Net {
 struct Connectivity {
     std::vector<Net> nets;  // sorted by name
     std::map<std::string, std::map<std::string, std::string>> instanceNets;  // instance -> its pin -> net
+    std::map<int64_t, std::string> wireNets, labelNets;                      // a wire's or a label's id -> its net
     std::vector<std::string> errors, warnings;
     bool ok() const { return errors.empty(); }
 };

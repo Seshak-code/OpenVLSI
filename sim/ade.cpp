@@ -136,41 +136,6 @@ void write(const std::string& dir, const QJsonObject& history) {  // whole or no
     fs::rename(tmp, fs::path(dir) / "history.json");
 }
 
-const Plot* plot(const std::vector<Plot>& plots, const std::string& name) {
-    for (const auto& p : plots) if (p.name == name) return &p;
-    return nullptr;
-}
-
-Wave access(const std::vector<Plot>& plots, const std::string& kind, const std::string& arg) {
-    static const std::map<std::string, std::string> plotOf = {
-        {"VT", "Transient Analysis"}, {"IT", "Transient Analysis"}, {"VF", "AC Analysis"}, {"IF", "AC Analysis"},
-        {"VDC", "DC transfer characteristic"}, {"IDC", "DC transfer characteristic"}, {"VOP", "Operating Point"}, {"IOP", "Operating Point"},
-        {"VN", "Noise Spectral Density Curves"}, {"VNTOT", "Integrated Noise"}};
-    std::string a = arg;
-    for (auto& c : a) c = (char)std::tolower((unsigned char)c);
-    const Plot* p = plot(plots, plotOf.at(kind));
-    if (!p) throw std::runtime_error("calculator: " + kind + "(" + arg + "): the test ran no " + plotOf.at(kind));
-    std::string want;
-    if (kind == "VN" || kind == "VNTOT") {
-        if (a != "out" && a != "in") throw std::runtime_error("calculator: " + kind + "(" + arg + "): out or in");
-        want = kind == "VN" ? a + "oise_spectrum" : a + "oise_total";
-    } else {
-        want = std::string(kind[0] == 'V' ? "v(" : "i(") + a + ")";
-    }
-    for (size_t k = 0; k < p->vectors.size(); ++k) {
-        std::string n = p->vectors[k];
-        for (auto& c : n) c = (char)std::tolower((unsigned char)c);
-        if (kind == "VNTOT" && n.size() > 2) n = n.substr(2, n.size() - 3);  // v(onoise_total) / i(inoise_total)
-        if (n != want) continue;
-        const bool scaled = kind != "VOP" && kind != "IOP" && kind != "VNTOT";
-        Wave w;
-        if (scaled) for (const auto& x : p->data[0]) w.x.push_back(x.real());
-        w.y = scaled ? p->data[k] : std::vector<std::complex<double>>{p->data[k][0]};
-        return w;
-    }
-    throw std::runtime_error("calculator: " + kind + "(" + arg + "): the " + p->name + " has no " + want);
-}
-
 QJsonObject outputs(const QJsonObject& setup, const QString& test, const std::vector<Plot>& plots) {
     QJsonObject out;
     for (const auto& v : setup["outputs"].toArray()) {
@@ -178,7 +143,7 @@ QJsonObject outputs(const QJsonObject& setup, const QString& test, const std::ve
         if (o["test"].toString() != test) continue;
         QJsonObject r;
         try {
-            const Wave w = evaluate(s(o["expression"]), [&](const std::string& k, const std::string& n) { return access(plots, k, n); });
+            const Wave w = evaluate(s(o["expression"]), resultsLookup(plots));
             const bool number = w.scalar(), real = number && w.y[0].imag() == 0;
             r["value"] = !number ? QJsonValue(QJsonObject{{"wave", (int)w.x.size()}})
                          : real  ? QJsonValue(w.y[0].real())

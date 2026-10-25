@@ -25,7 +25,7 @@ The flow and SoC gates (`test_rtl_flow`, `test_firmware_on_silicon`, `test_soc_h
 ## Architecture (docs/rebuild.md)
 
 ```
-app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi, ADE Explorer) → cmd/ (command registry) → oadb/ (design database)
+app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi, ADE Explorer, waveforms) → cmd/ (command registry) → oadb/ (design database)
                               ├── mcp/ (MCP server)          sim/ (netlister; treespice runs) → acutesim_engine/ (TreeSPICE)
                               └── flow/ (backends), soc/
 ```
@@ -40,7 +40,9 @@ app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi, ADE Explorer
   line each; anything else is refused. ADE (`sim/ade.h`): a maestro view's setup (tests, variables and sweeps,
   corners, outputs with specs) expands into points run in parallel, each output a calculator expression
   (`sim/calc.h`); runs are histories on disk (`simulation/<lib>/<cell>/<view>/Interactive.N`), in the background
-  through `ade_run` with `wait: false`.
+  through `ade_run` with `wait: false`. The waveform viewer (`app/waveform_viewer`) plots calculator expressions
+  over one run; `wave_eval` is the calculator as a command; it cross-probes with the schematic both ways
+  (`waveform_probe`, `editor_select_net`).
 - **oadb** (`oadb/oadb.h`): one SQLite file per library; cells, views, per-view JSON properties. `Library::change`
   makes one undo group (trigger-logged inverse SQL; session-scoped history). A workspace file lists libraries
   (`DEFINE <library> <path>`).

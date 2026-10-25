@@ -17,6 +17,7 @@ namespace app {
 class LibraryManager;
 class ViewEditor;
 class AdeExplorer;
+class WaveformViewer;
 
 class Ciw : public QMainWindow {
     Q_OBJECT
@@ -28,6 +29,7 @@ public:
     LibraryManager* libraryManager();  // opened on first use
     ViewEditor* editor(const QString& lib, const QString& cell, const QString& view) const;  // open, or null
     AdeExplorer* explorer(const QString& lib, const QString& cell, const QString& view) const;
+    WaveformViewer* viewer(const QString& run) const;  // the open viewer on a run directory, or null
 
 private:
     void append(const QString& html);
@@ -36,6 +38,8 @@ private:
     QLineEdit* input_;
     LibraryManager* libraryManager_ = nullptr;
     std::map<QString, QPointer<QWidget>> editors_;  // "lib/cell/view": a ViewEditor or an AdeExplorer
+    std::vector<QPointer<WaveformViewer>> viewers_;  // in the order they were opened (a probe goes to the newest)
+    WaveformViewer* openViewer(cmd::Context& c, const QString& run);
     bool typed_ = false;  // the call in progress came from the input line (reads are echoed only then)
 };
 

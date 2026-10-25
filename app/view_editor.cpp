@@ -133,6 +133,8 @@ void ViewEditor::buildMenus() {
             for (const auto& w : r["warnings"].toArray()) lines << "warning: " + w.toString();
             if (!lines.isEmpty()) QMessageBox::information(this, "Check", lines.join("\n"));
         });
+        QMenu* simMenu = menuBar()->addMenu("&Simulation");
+        act(simMenu, "Plot Net", QKeySequence("Shift+V"), [this] { plotSelectedNets(); });
         QMenu* hier = menuBar()->addMenu("&Hierarchy");
         act(hier, "Descend", QKeySequence("Shift+E"), [this] { descend(); });
     } else {
@@ -431,6 +433,32 @@ bool ViewEditor::generateSymbol() {
         return false;
     }
     return session_.call("editor_open", {{"library", lib_}, {"cell", cell_}, {"view", r.value.toString()}}).ok;
+}
+
+int ViewEditor::selectNet(const QString& net) {
+    const QJsonObject k = check();
+    selection_.clear();
+    for (const char* kind : {"wire", "label"}) {
+        const QJsonObject nets = k[QString(kind) + "s"].toObject();
+        for (auto it = nets.begin(); it != nets.end(); ++it)
+            if (it.value().toString() == net) selection_.insert({kind, it.key()});
+    }
+    redraw();
+    return (int)selection_.size();
+}
+
+QStringList ViewEditor::plotSelectedNets() {
+    const QJsonObject k = check();
+    QStringList nets;
+    for (const auto& [kind, key] : selection_)
+        if (kind == "wire" || kind == "label")
+            if (const QString n = k[kind + "s"].toObject()[key].toString(); !n.isEmpty() && !nets.contains(n)) nets << n;
+    if (nets.isEmpty()) status_->setText("Plot Net: select a wire or a net label");
+    for (const QString& n : nets) {
+        const cmd::Result r = session_.call("waveform_probe", {{"library", lib_}, {"cell", cell_}, {"view", view_}, {"net", n}});
+        status_->setText(r.ok ? "Plotted " + r.value.toString() : "✗ " + r.error);
+    }
+    return nets;
 }
 
 bool ViewEditor::descend() {

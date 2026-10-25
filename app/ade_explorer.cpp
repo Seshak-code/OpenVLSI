@@ -147,6 +147,7 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     connect(nominal_, &QCheckBox::toggled, this, [this] { if (!loading_) commit(); });
     connect(history_, &QComboBox::currentTextChanged, this, [this](const QString& h) { if (!loading_) showHistory(h); });
     connect(poll_, &QTimer::timeout, this, &AdeExplorer::poll);
+    connect(outputs_, &QTableWidget::cellDoubleClicked, this, [this](int row, int col) { openResult(row, col); });
     connect(&session_, &Session::changed, this, [this] { if (!loading_) load(); });
     load();
     resize(1100, 700);
@@ -266,6 +267,18 @@ void AdeExplorer::commit() {
     }
 }
 
+bool AdeExplorer::openResult(int row, int column) {
+    const int p = column - 5;
+    if (p < 0 || p >= shownPoints_.size()) return false;
+    const QJsonObject pt = shownPoints_[p].toObject();
+    if (pt["status"] != "done") return false;
+    cmd::Result r = session_.call("waveform_open", {{"run", pt["dir"]}});
+    const QJsonValue value = pt["outputs"].toObject()[text(outputs_, row, 1)].toObject()["value"];
+    if (r.ok && value.toObject().contains("wave")) r = session_.call("waveform_add", {{"run", pt["dir"]}, {"expression", text(outputs_, row, 2)}});
+    status_->setText(r.ok ? "Opened " + pt["dir"].toString() : "✗ " + r.error);
+    return r.ok;
+}
+
 void AdeExplorer::run() {
     if (running()) return;
     QJsonObject a = args();
@@ -313,6 +326,7 @@ void AdeExplorer::showHistory(const QString& name) {
     const cmd::Result r = session_.call("ade_history_get", a);
     if (!r.ok) return;
     const QJsonArray points = r.value.toObject()["points"].toArray();
+    shownPoints_ = points;
     loading_ = true;
     outputs_->setColumnCount(5 + (int)points.size());
     int done = 0;
