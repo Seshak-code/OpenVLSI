@@ -11,18 +11,8 @@ namespace cmd {
 
 namespace {
 
-QJsonObject str(const QString& description) { return {{"type", "string"}, {"description", description}}; }
-
-// An object schema whose listed properties are all required
-QJsonObject params(std::initializer_list<std::pair<const char*, QJsonObject>> props) {
-    QJsonObject p;
-    QJsonArray required;
-    for (const auto& [k, s] : props) {
-        p[k] = s;
-        required.append(k);
-    }
-    return {{"type", "object"}, {"properties", p}, {"required", required}};
-}
+QJsonObject str(const QString& description) { return param("string", description); }
+QJsonObject params(std::initializer_list<std::pair<const char*, QJsonObject>> props) { return object(props); }
 
 std::string s(const QJsonObject& a, const char* key) { return a[key].toString().toStdString(); }
 QString q(const std::string& v) { return QString::fromStdString(v); }
