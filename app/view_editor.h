@@ -56,6 +56,8 @@ public:
     QJsonObject check();    // schematic_check
     bool generateSymbol();  // symbol_generate from this schematic, then opens it
     bool descend();         // opens the selected instance's master (its schematic if it has one)
+    int selectNet(const QString& net);  // a schematic's wires and labels of that net, selected; how many
+    QStringList plotSelectedNets();     // Plot Net: each selected wire's or label's net, probed; the nets
     void fit();
 
 public slots:

@@ -216,8 +216,8 @@ void addSchematicCommands(Registry& r) {
            }});
 
     r.add({"schematic_check", "Checks a schematic's connectivity: returns its nets (with each instance pin and port), errors "
-                              "(shorts, labels on nothing, missing masters) and warnings (floating pins, dangling wires, "
-                              "a symbol whose pins differ).",
+                              "(shorts, labels on nothing, missing masters), warnings (floating pins, dangling wires, "
+                              "a symbol whose pins differ), and each wire's and label's net (by id).",
            object({{"library", kLib}, {"cell", kCell}, {"view", kView}}), [](Context& c, const QJsonObject& a) {
                const sch::Connectivity k = sch::extract(c.workspace, s(a, "library"), s(a, "cell"), s(a, "view"));
                QJsonArray nets, errors, warnings;
@@ -229,7 +229,11 @@ void addSchematicCommands(Registry& r) {
                }
                for (const auto& e : k.errors) errors.append(q(e));
                for (const auto& w : k.warnings) warnings.append(q(w));
-               return QJsonValue(QJsonObject{{"ok", k.ok()}, {"nets", nets}, {"errors", errors}, {"warnings", warnings}});
+               QJsonObject wireNets, labelNets;
+               for (const auto& [id, n] : k.wireNets) wireNets[QString::number((qint64)id)] = q(n);
+               for (const auto& [id, n] : k.labelNets) labelNets[QString::number((qint64)id)] = q(n);
+               return QJsonValue(QJsonObject{{"ok", k.ok()}, {"nets", nets}, {"errors", errors}, {"warnings", warnings},
+                                             {"wires", wireNets}, {"labels", labelNets}});
            }, true});
     r.add({"symbol_generate", "Creates a symbol view from a schematic's pins (inputs left, outputs right, inout on top).",
            object({{"library", kLib}, {"cell", kCell}},

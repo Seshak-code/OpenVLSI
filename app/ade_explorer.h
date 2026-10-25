@@ -7,6 +7,7 @@
 // then its section); variables, options "reltol=1e-4 gmin=1e-12". A blank last row adds; clearing a name removes.
 #include "app/session.h"
 
+#include <QJsonArray>
 #include <QMainWindow>
 
 class QCheckBox;
@@ -30,6 +31,7 @@ public:
     QString status() const;
     bool running() const { return !running_.isEmpty(); }
     QStringList histories() const;
+    bool openResult(int row, int column);  // a result's point in the waveform viewer, its waveform plotted (a double-click)
 
 public slots:
     void run();
@@ -52,6 +54,7 @@ private:
     QLabel* status_;
     QTimer* poll_;
     QString running_;
+    QJsonArray shownPoints_;  // the history the outputs table shows
     bool loading_ = false;
 };
 

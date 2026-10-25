@@ -166,6 +166,18 @@ int main() {
     bool c1 = false, c2 = false;
     for (const auto& n : check3["nets"].toArray()) { c1 = c1 || n.toObject()["name"] == "c1"; c2 = c2 || n.toObject()["name"] == "c2"; }
     check(check3["ok"].toBool() && c1 && c2, "crossing wires stay two nets (c1, c2)");
+    {
+        QStringList wireNets, labelNets;
+        for (const auto& w : must("view_get", sc).toObject()["wires"].toArray()) {
+            const QJsonArray p0 = w.toObject()["points"].toArray()[0].toArray();
+            if (p0 == xy(400, -50) || p0 == xy(500, -150))
+                wireNets << check3["wires"].toObject()[QString::number((qint64)w.toObject()["id"].toDouble())].toString();
+        }
+        const QJsonObject labels = check3["labels"].toObject();
+        for (auto it = labels.begin(); it != labels.end(); ++it) labelNets << it.value().toString();
+        check(wireNets == QStringList{"c1", "c2"} && labelNets.contains("c1") && labelNets.contains("vdd!"),
+              "the check names each wire's and each label's net (" + wireNets.join(",").toStdString() + ")");
+    }
 
     // objects move together, as one undo step; a move naming a missing object moves nothing
     {

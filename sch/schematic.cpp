@@ -91,12 +91,14 @@ Connectivity extract(oadb::Workspace& ws, const std::string& libName, const std:
     // Names: labels on the item they touch; schematic pins by their own name
     std::map<int, std::set<std::string>> names;
     std::vector<bool> labelled(W, false);
+    std::vector<std::pair<int64_t, int>> labelItems;  // a label's id and the item it names
     for (const auto& l : labels) {
         int item = -1;
         for (int a = 0; a < W && item < 0; ++a) if (onWire(l.at, wires[a])) item = a;
         for (size_t k = 0; k < pins.size() && item < 0; ++k) if (pins[k].at == l.at) item = W + (int)k;
         if (item < 0) { c.errors.push_back("label " + l.name + " at " + at(l.at) + " is on no wire or pin"); continue; }
         names[item].insert(l.name);
+        labelItems.emplace_back(l.id, item);
         if (item < W) labelled[item] = true;
     }
     for (int a = 0; a < W; ++a)  // a labelled stub connects by name: its free end is not dangling
@@ -158,6 +160,8 @@ Connectivity extract(oadb::Workspace& ws, const std::string& libName, const std:
         c.nets.push_back(std::move(net));
     }
     std::sort(c.nets.begin(), c.nets.end(), [](const Net& a, const Net& b) { return a.name < b.name; });
+    for (int a = 0; a < W; ++a) c.wireNets[wires[a].id] = netName[uf.find(a)];
+    for (const auto& [id, item] : labelItems) c.labelNets[id] = netName[uf.find(item)];
 
     // the cell's symbol must show the schematic's pins
     for (const auto& v : lib.views(cell)) {

@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
         for (const auto* c : session.registry().commands()) if (c->readOnly) reads.insert(c->name.toStdString());
         check(reads == std::set<std::string>{"workspace_libraries", "library_export", "cell_list", "view_list", "prop_get",
                                              "cell_prop_get", "view_get", "schematic_check",
-                                             "netlist", "simulate", "results_get", "ade_setup_get", "ade_run", "ade_stop",
+                                             "netlist", "simulate", "results_get", "wave_eval", "ade_setup_get", "ade_run", "ade_stop",
                                              "ade_history_list", "ade_history_get"},
               "exactly the commands that only read are marked read-only");
 

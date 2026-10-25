@@ -1,9 +1,11 @@
 // Netlisting and simulation commands: a schematic (or config) to SPICE, run on TreeSPICE, results read back
 #include "cmd/registry.h"
 #include "oadb/oadb.h"
+#include "sim/calc.h"
 #include "sim/netlist.h"
 #include "sim/run.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <set>
 #include <stdexcept>
@@ -39,14 +41,6 @@ std::string card(const QJsonValue& v, bool& analysis) {
 
 fs::path simulationRoot(Context& c) { return fs::absolute(fs::path(c.workspace.file()).parent_path() / "simulation"); }
 
-// A run directory named by a caller: only one under the workspace's simulation directory
-fs::path runDir(Context& c, const std::string& run) {
-    std::error_code e;
-    const fs::path root = fs::weakly_canonical(simulationRoot(c), e), dir = fs::weakly_canonical(fs::path(run), e);
-    const auto [r, d] = std::mismatch(root.begin(), root.end(), dir.begin(), dir.end());
-    if (e || r != root.end() || !fs::is_directory(dir)) throw std::invalid_argument("no run '" + run + "' under " + root.string());
-    return dir;
-}
 
 QJsonObject summary(const sim::Plot& p, int index) {
     QJsonArray names;
@@ -62,6 +56,14 @@ QJsonObject summary(const sim::Plot& p, int index) {
 }
 
 }  // namespace
+
+std::string runDirectory(Context& c, const std::string& run) {
+    std::error_code e;
+    const fs::path root = fs::weakly_canonical(simulationRoot(c), e), dir = fs::weakly_canonical(fs::path(run), e);
+    const auto [r, d] = std::mismatch(root.begin(), root.end(), dir.begin(), dir.end());
+    if (e || r != root.end() || !fs::is_regular_file(dir / "out.raw")) throw std::invalid_argument("no run '" + run + "' under " + root.string());
+    return dir.string();
+}
 
 void addSimulationCommands(Registry& r) {
     r.add({"netlist", "Returns a schematic's (or a config view's) hierarchy as SPICE for TreeSPICE.",
@@ -98,7 +100,7 @@ void addSimulationCommands(Registry& r) {
            object({{"run", param("string", "the run directory simulate returned")}, {"plot", param("integer", "the analysis' index")}},
                   {{"vectors", QJsonObject{{"type", "array"}, {"description", "names (default: all)"}, {"items", QJsonObject{{"type", "string"}}}}}}),
            [](Context& c, const QJsonObject& a) {
-               const auto plots = sim::readRaw((runDir(c, s(a, "run")) / "out.raw").string());
+               const auto plots = sim::readRaw((fs::path(runDirectory(c, s(a, "run"))) / "out.raw").string());
                const int k = a["plot"].toInt();
                if (k < 0 || k >= (int)plots.size()) throw std::invalid_argument("no plot " + std::to_string(k) + " (the run has " + std::to_string(plots.size()) + ")");
                const sim::Plot& p = plots[(size_t)k];
@@ -114,6 +116,21 @@ void addSimulationCommands(Registry& r) {
                }
                if (!want.empty()) throw std::invalid_argument("plot " + std::to_string(k) + " has no vector " + *want.begin());
                return QJsonValue(QJsonObject{{"name", q(p.name)}, {"complex", p.complex}, {"vectors", out}});
+           },
+           true});
+    r.add({"wave_eval", "Evaluates a calculator expression (VT(out), riseTime(VT(out)), dB20(VF(out)), ...) on a run's results: "
+                        "a number, {re, im}, or a waveform {x, y} ({x, re, im} when complex).",
+           object({{"run", param("string", "the run directory (simulate's run, or an ADE point's dir)")},
+                   {"expression", param("string", "a calculator expression (sim/calc.h)")}}),
+           [](Context& c, const QJsonObject& a) {
+               const auto plots = sim::readRaw((fs::path(runDirectory(c, s(a, "run"))) / "out.raw").string());
+               const sim::Wave w = sim::evaluate(s(a, "expression"), sim::resultsLookup(plots));
+               const bool complex = std::any_of(w.y.begin(), w.y.end(), [](const std::complex<double>& v) { return v.imag() != 0; });
+               if (w.scalar()) return complex ? QJsonValue(QJsonObject{{"re", w.y[0].real()}, {"im", w.y[0].imag()}}) : QJsonValue(w.y[0].real());
+               QJsonArray x, re, im;
+               for (const double v : w.x) x.append(v);
+               for (const auto& v : w.y) re.append(v.real()), im.append(v.imag());
+               return QJsonValue(complex ? QJsonObject{{"x", x}, {"re", re}, {"im", im}} : QJsonObject{{"x", x}, {"y", re}});
            },
            true});
 }

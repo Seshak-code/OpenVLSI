@@ -14,6 +14,8 @@
 //
 // Waveforms combine pointwise when they share a scale; a number combines with anything. Every failure (an unknown
 // function or vector, no crossing, a complex waveform where a real one is needed) is an error, never a NaN.
+#include "sim/run.h"
+
 #include <complex>
 #include <functional>
 #include <string>
@@ -24,6 +26,7 @@ namespace sim {
 struct Wave {  // a number (x empty, one y) or a waveform y(x)
     std::vector<double> x;
     std::vector<std::complex<double>> y;
+    std::string scale;  // a waveform's x: time, frequency, v-sweep, ...
     bool scalar() const { return x.empty(); }
 };
 
@@ -33,5 +36,9 @@ double siNumber(const std::string& s);  // "1.5k", "10meg", "2u", "1e-9"; anythi
 using Lookup = std::function<Wave(const std::string& kind, const std::string& name)>;
 
 Wave evaluate(const std::string& expression, const Lookup& lookup);
+
+// The access functions over a run's results (plots is read, not copied: it outlives the lookup). VT/IT the transient,
+// VF/IF the AC, VDC/IDC the DC sweep, VOP/IOP the operating point, VN/VNTOT the noise; names ignore case.
+Lookup resultsLookup(const std::vector<Plot>& plots);
 
 }  // namespace sim
