@@ -1,12 +1,16 @@
 #include "app/session.h"
 
+#include <QCoreApplication>
+
 namespace app {
 
 Session::Session(const QString& workspaceFile, QObject* parent)
     : QObject(parent), workspace_(std::make_unique<oadb::Workspace>(oadb::Workspace::load(workspaceFile.toStdString()))) {
     cmd::addCoreCommands(registry_);
     cmd::addSchematicCommands(registry_);
-    ctx_ = std::make_unique<cmd::Context>(cmd::Context{*workspace_});
+    cmd::addSimulationCommands(registry_);
+    // the bundle's own treespice, beside the app's executable
+    ctx_ = std::make_unique<cmd::Context>(cmd::Context{*workspace_, (QCoreApplication::applicationDirPath() + "/treespice").toStdString()});
 }
 
 QString Session::workspaceFile() const { return QString::fromStdString(workspace_->file()); }

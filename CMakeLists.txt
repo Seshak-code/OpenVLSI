@@ -58,15 +58,24 @@ target_link_libraries(oadb PUBLIC SQLite::SQLite3)
 add_library(openvlsi_sch STATIC sch/schematic.cpp)
 target_link_libraries(openvlsi_sch PUBLIC oadb)
 
-add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp)
+# ── Worker processes (a process group with a watchdog), and simulation: netlister, TreeSPICE runs, raw files ─────
+add_library(openvlsi_proc STATIC flow/subprocess.cpp)
+target_include_directories(openvlsi_proc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp)
+target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
+
+add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(openvlsi_cmd PUBLIC oadb openvlsi_sch Qt6::Core)
+target_link_libraries(openvlsi_cmd PUBLIC oadb openvlsi_sch openvlsi_sim Qt6::Core)
 
 # ── MCP server: the command registry over stdio JSON-RPC ─────────────────────────────────────────────────────────
 add_library(openvlsi_mcp STATIC mcp/server.cpp)
 target_link_libraries(openvlsi_mcp PUBLIC openvlsi_cmd)
 add_executable(openvlsi-mcp mcp/main.cpp)
 target_link_libraries(openvlsi-mcp PRIVATE openvlsi_mcp)
+# each executable that simulates finds treespice beside it
+add_custom_command(TARGET openvlsi-mcp POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:treespice> $<TARGET_FILE_DIR:openvlsi-mcp>)
+add_dependencies(openvlsi-mcp treespice)
 
 # ── The app: the CIW and the tools' windows, every action a command through app::Session ───────────────────────────
 set(CMAKE_AUTOMOC ON)
@@ -76,27 +85,32 @@ target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets PRIVATE Qt6:
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
 target_link_libraries(OpenVLSI PRIVATE openvlsi_app)
+add_custom_command(TARGET OpenVLSI POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:treespice> $<TARGET_FILE_DIR:OpenVLSI>)
+add_dependencies(OpenVLSI treespice)
 set_target_properties(OpenVLSI PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER org.openvlsi.OpenVLSI
                       MACOSX_BUNDLE_BUNDLE_NAME OpenVLSI MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
 
 # ── Flow backends (Yosys / OpenROAD / KLayout drivers, report parsers) and the RV32I SoC ─────────────────────────
 add_library(openvlsi_flow STATIC flow/yosys_log_parser.cpp flow/openroad_report_parser.cpp
-            flow/klayout_report_parser.cpp flow/def_parser.cpp flow/rtl_flow.cpp flow/subprocess.cpp)
+            flow/klayout_report_parser.cpp flow/def_parser.cpp flow/rtl_flow.cpp)
 target_include_directories(openvlsi_flow PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(openvlsi_flow PUBLIC acutesim_engine)
+target_link_libraries(openvlsi_flow PUBLIC acutesim_engine openvlsi_proc)
 add_library(openvlsi_soc STATIC soc/rv32i.cpp soc/soc.cpp)
 target_include_directories(openvlsi_soc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp test_schematic test_library_manager test_view_editor)
+foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_library_manager test_view_editor)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
 target_link_libraries(test_oadb PRIVATE oadb)
 target_link_libraries(test_commands PRIVATE openvlsi_cmd)
 target_link_libraries(test_schematic PRIVATE openvlsi_cmd)
+target_link_libraries(test_simulation PRIVATE openvlsi_cmd)
+target_compile_definitions(test_simulation PRIVATE OPENVLSI_TREESPICE="$<TARGET_FILE:treespice>")
+add_dependencies(test_simulation treespice)
 target_link_libraries(test_mcp PRIVATE openvlsi_mcp)
 target_link_libraries(test_library_manager PRIVATE openvlsi_app)
 target_link_libraries(test_view_editor PRIVATE openvlsi_app)

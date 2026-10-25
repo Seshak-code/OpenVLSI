@@ -40,7 +40,7 @@ ENGINE_QT_ALLOWLIST = {
 }
 
 # ─── Direction 2: GUI dirs must NOT include deep engine internals ───────────
-GUI_DIRS = ['app', 'oadb', 'cmd', 'mcp', 'flow', 'soc']  # the app's code: the engine's public API only
+GUI_DIRS = ['app', 'sim', 'oadb', 'cmd', 'mcp', 'flow', 'soc']  # the app's code: the engine's public API only
 
 # Patterns that flag a gui/ file bypassing the engine_api/ contract.
 # compute/orchestration/ (DTOs, drivers, gRPC client) is ALLOWED from GUI —
