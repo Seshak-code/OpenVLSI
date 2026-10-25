@@ -70,6 +70,23 @@ int main() {
         check(near(val("settlingTime(VT(s), 1)"), std::log(1 / (0.01 * (1 - std::exp(-10.0)) + std::exp(-10.0))), 1e-3) &&
                   near(val("overshoot(VT(p))"), 20, 1e-9),
               "an exponential settles to 1% at ln(100); a 1.2 peak over 1 is 20% overshoot");
+        {
+            std::vector<std::string> steps;
+            sim::evaluate("bandwidth(VF(h))", lookup, &steps);
+            std::string all;
+            for (const auto& t : steps) all += t + "\n";
+            const bool order = steps.size() >= 4 && steps[0].rfind("VF(h) = a waveform of 4001 points", 0) == 0 && steps[1].rfind("bandwidth(", 0) == 0;
+            check(order && all.find("at the first point (1) is 40 dB; 3 dB below is 37 dB") != std::string::npos &&
+                      all.find("the gain in dB: crosses 37 between (") != std::string::npos && all.find("linearly at 997.6") != std::string::npos,
+                  "a derivation: the vector read, the function's result, the reference, the bracketing points, the interpolation\n" + all);
+            steps.clear();
+            sim::evaluate("riseTime(VT(a)) * 2", lookup, &steps);
+            all.clear();
+            for (const auto& t : steps) all += t + "\n";
+            check(all.find("initial 0 (the first point), final 10 (the last): it rises by 10") != std::string::npos &&
+                      all.find("10% of the transition: crosses 1 between") != std::string::npos && all.find("8 * 2 = 16") != std::string::npos,
+                  "a rise time's derivation names its levels and crossings; arithmetic shows its operands\n" + all);
+        }
         auto refuses = [&](const std::string& e, const std::string& why) {
             try { sim::evaluate(e, lookup); } catch (const std::runtime_error& x) { return std::string(x.what()).find(why) != std::string::npos; }
             return false;
@@ -177,6 +194,15 @@ int main() {
         }
     }
     check(allDone && decks, "every point ran; its deck has the corner's .temp, the variables as .params, options and model section");
+    {
+        const QJsonObject p = pts[0].toObject(), bw = p["outputs"].toObject()["bw"].toObject(), dc = p["outputs"].toObject()["dc"].toObject();
+        const QJsonArray models = p["models"].toArray();
+        check(p["design"] == "sims/rc/schematic" && models.size() == 1 && models[0].toString().endsWith("models.lib (tt)") &&
+                  p["analyses"].toString().contains(".ac dec 200 1k 100meg") && bw["equation"].toString().startsWith("bandwidth(VF(out)) = ") &&
+                  bw["steps"].toArray().size() >= 3 && dc["spec"].toString().contains("<=") && dc["spec"].toString().endsWith(": pass"),
+              "a point records its design, models and analyses; an output its equation, derivation and spec verdict (" +
+                  QJsonDocument(bw).toJson(QJsonDocument::Compact).left(400).toStdString() + ")");
+    }
     check(bws, "the RC's 3 dB bandwidth is √(10^0.3 − 1)/(2πRC) at each point");
     check(trs, "the step's 10-90% rise time is ln 9 · RC, and VT(out) is a waveform");
     check(specs && fails == 1, "specs: dc passes everywhere; rise time < 5u fails only at 2k with 2n; a tran-only output in the ac test is an error");
@@ -200,6 +226,43 @@ int main() {
     check(stopped && sth["status"] == "stopped" && stoppedPoints > 0, "ade_stop stops a background run (" + std::to_string(stoppedPoints) + " points stopped)");
     check(must("ade_history_list", view).toArray() == QJsonArray{"Interactive.1", "Interactive.2", "Interactive.3"}, "the histories, oldest first");
     check(has(error("ade_history_get", with(view, {{"history", "../../x"}})), "Interactive.N"), "a history name cannot leave the view's directory");
+    // ── Monte Carlo: the RC's resistor drawn per sample (agauss, as a PDK's statistics would), seeded ──
+    {
+        QJsonObject mcSetup = setup;
+        mcSetup["montecarlo"] = QJsonObject{{"samples", 60}, {"seed", 5}, {"variables", QJsonObject{{"rval", "agauss(1k,100,1)"}}}};
+        must("ade_setup_set", with(view, {{"setup", mcSetup}}));
+        const QJsonObject mc = must("ade_run", with(view, {{"mode", "montecarlo"}})).toObject();
+        const QJsonArray mp = mc["points"].toArray();
+        const QJsonObject bw = mc["statistics"].toObject()["bw"].toObject(), tr = mc["statistics"].toObject()["tr"].toObject();
+        bool seeds = mp.size() == 120;
+        for (const auto& pv : mp) {
+            const QJsonObject p = pv.toObject();
+            std::ifstream f(fs::path(p["dir"].toString().toStdString()) / "input.cir");
+            const std::string deck((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+            seeds = seeds && p["corner"] == "MC" && p["seed"].toInt() == 4 + p["sample"].toInt() && has(deck, "seed=" + std::to_string(p["seed"].toInt())) &&
+                    has(deck, ".param rval=agauss(1k,100,1)");
+        }
+        check(mc["mode"] == "montecarlo" && seeds, "a Monte Carlo run: 60 samples per test, each its own seed (5 .. 64) in its deck");
+        // bw = sqrt(10^0.3 - 1) / (2 pi R C) with R ~ N(1k, 100): mean near 158.8k, spread about 10%
+        const double bw0 = std::sqrt(std::pow(10, 0.3) - 1) / (2 * M_PI * 1e3 * 1e-9);
+        check(bw["n"].toInt() == 60 && near(bw["mean"].toDouble(), bw0, 0.05) && bw["sd"].toDouble() > 0.05 * bw0 && bw["sd"].toDouble() < 0.2 * bw0 &&
+                  bw["min"].toDouble() < bw["mean"].toDouble() && bw["max"].toDouble() > bw["mean"].toDouble(),
+              "statistics over the samples: the bandwidth's mean " + std::to_string(bw["mean"].toDouble()) + ", sd " + std::to_string(bw["sd"].toDouble()));
+        check(tr["n"].toInt() == 60 && tr["pass"].toInt() + tr["fail"].toInt() == 60 && tr["yield"].toDouble() == tr["pass"].toDouble() / 60,
+              "the rise time's yield against its spec (" + std::to_string(tr["pass"].toInt()) + " of 60 pass)");
+        const QJsonObject again = must("ade_run", with(view, {{"mode", "montecarlo"}})).toObject();
+        check(again["statistics"].toObject()["bw"].toObject()["mean"] == bw["mean"], "the same seed repeats the run exactly");
+        mcSetup["montecarlo"] = QJsonObject{{"samples", 0}};
+        check(has(error("ade_setup_set", with(view, {{"setup", mcSetup}})), "montecarlo.samples"), "zero samples are refused");
+        mcSetup["montecarlo"] = QJsonObject{{"samples", 3}};
+        must("ade_setup_set", with(view, {{"setup", mcSetup}}));
+        check(has(error("ade_run", with(view, {{"mode", "montecarlo"}})), "no sweeps"), "Monte Carlo over a swept variable (rval 1k 2k) is refused");
+        check(has(error("ade_run", with(view, {{"mode", "sideways"}})), "not one of"), "an unknown run mode is refused");
+    }
+    must("ade_setup_set", with(view, {{"setup", setup}}));
+    must("edit_undo", {{"library", "sims"}});  // the Monte Carlo setups, undone again
+    must("edit_undo", {{"library", "sims"}});
+    must("edit_undo", {{"library", "sims"}});
     check(call("edit_undo", {{"library", "sims"}}).ok && must("ade_setup_get", view).toObject() == setup, "undo restores the previous setup");
 
     // ── malformed setups ──

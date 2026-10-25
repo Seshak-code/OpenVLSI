@@ -68,6 +68,7 @@ void addCoreCommands(Registry& r);       // workspace, library, cell, view, prop
 void addSchematicCommands(Registry& r);  // cell properties, shapes, pins, instances, wires, labels, check, symbols
 void addSimulationCommands(Registry& r);  // netlist, simulate, results_get
 void addAdeCommands(Registry& r);         // ade_setup_get/set, ade_run, ade_stop, ade_history_list/get
+void addPdkCommands(Registry& r);         // pdk_install
 
 // A run directory a caller names (simulate's, an ADE point's): one under the workspace's simulation/ with results,
 // else an error

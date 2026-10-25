@@ -121,16 +121,26 @@ void addSimulationCommands(Registry& r) {
     r.add({"wave_eval", "Evaluates a calculator expression (VT(out), riseTime(VT(out)), dB20(VF(out)), ...) on a run's results: "
                         "a number, {re, im}, or a waveform {x, y} ({x, re, im} when complex).",
            object({{"run", param("string", "the run directory (simulate's run, or an ADE point's dir)")},
-                   {"expression", param("string", "a calculator expression (sim/calc.h)")}}),
+                   {"expression", param("string", "a calculator expression (sim/calc.h)")}},
+                  {{"explain", param("boolean", "also return the derivation: {value, steps} (default false)")}}),
            [](Context& c, const QJsonObject& a) {
                const auto plots = sim::readRaw((fs::path(runDirectory(c, s(a, "run"))) / "out.raw").string());
-               const sim::Wave w = sim::evaluate(s(a, "expression"), sim::resultsLookup(plots));
+               std::vector<std::string> steps;
+               const sim::Wave w = sim::evaluate(s(a, "expression"), sim::resultsLookup(plots), &steps);
                const bool complex = std::any_of(w.y.begin(), w.y.end(), [](const std::complex<double>& v) { return v.imag() != 0; });
-               if (w.scalar()) return complex ? QJsonValue(QJsonObject{{"re", w.y[0].real()}, {"im", w.y[0].imag()}}) : QJsonValue(w.y[0].real());
-               QJsonArray x, re, im;
-               for (const double v : w.x) x.append(v);
-               for (const auto& v : w.y) re.append(v.real()), im.append(v.imag());
-               return QJsonValue(complex ? QJsonObject{{"x", x}, {"re", re}, {"im", im}} : QJsonObject{{"x", x}, {"y", re}});
+               QJsonValue value;
+               if (w.scalar()) {
+                   value = complex ? QJsonValue(QJsonObject{{"re", w.y[0].real()}, {"im", w.y[0].imag()}}) : QJsonValue(w.y[0].real());
+               } else {
+                   QJsonArray x, re, im;
+                   for (const double v : w.x) x.append(v);
+                   for (const auto& v : w.y) re.append(v.real()), im.append(v.imag());
+                   value = complex ? QJsonObject{{"x", x}, {"re", re}, {"im", im}} : QJsonObject{{"x", x}, {"y", re}};
+               }
+               if (!a["explain"].toBool()) return value;
+               QJsonArray st;
+               for (const auto& t : steps) st.append(q(t));
+               return QJsonValue(QJsonObject{{"value", value}, {"steps", st}});
            },
            true});
 }

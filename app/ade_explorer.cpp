@@ -1,5 +1,7 @@
 #include "app/ade_explorer.h"
 
+#include "sim/calc.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -7,6 +9,7 @@
 #include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -110,6 +113,8 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     vars_ = table({"Name", "Value (a list sweeps)"}, this);
     corners_ = table({"On", "Name", "Temperature", "Variables", "Models (file:section)"}, this);
     outputs_ = table({"Test", "Name", "Expression", "Min", "Max"}, this);
+    mc_ = table({"Samples", "Seed", "Temperature", "Variables", "Models (file:section)"}, this);
+    mc_->setRowCount(1);
     temperature_ = new QLineEdit(this);
     nominal_ = new QCheckBox("Run the nominal corner", this);
 
@@ -125,13 +130,20 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     cornerLayout->addWidget(nominal_);
     cornerLayout->addWidget(corners_);
     setup->addTab(cornerPage, "Corners");
+    setup->addTab(mc_, "Monte Carlo");
+    derivation_ = new QPlainTextEdit(this);
+    derivation_->setReadOnly(true);
+    derivation_->setFont(QFont("Menlo"));
+    derivation_->setPlaceholderText("Select a result to see how it was computed: its equation, the parameters its point ran with, each step.");
     auto* split = new QSplitter(Qt::Vertical, this);
     split->addWidget(setup);
     split->addWidget(outputs_);
+    split->addWidget(derivation_);
     setCentralWidget(split);
 
     QToolBar* bar = addToolBar("ADE");
-    bar->addAction("Run", this, &AdeExplorer::run);
+    bar->addAction("Run", this, [this] { run(); });
+    bar->addAction("Run Monte Carlo", this, [this] { run("montecarlo"); });
     bar->addAction("Stop", this, &AdeExplorer::stop);
     bar->addSeparator();
     bar->addWidget(new QLabel(" History ", this));
@@ -141,13 +153,14 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     status_ = new QLabel(this);
     statusBar()->addWidget(status_, 1);
 
-    for (QTableWidget* t : {tests_, vars_, corners_, outputs_})
+    for (QTableWidget* t : {tests_, vars_, corners_, outputs_, mc_})
         connect(t, &QTableWidget::itemChanged, this, [this] { if (!loading_) commit(); });
     connect(temperature_, &QLineEdit::editingFinished, this, [this] { if (!loading_) commit(); });
     connect(nominal_, &QCheckBox::toggled, this, [this] { if (!loading_) commit(); });
     connect(history_, &QComboBox::currentTextChanged, this, [this](const QString& h) { if (!loading_) showHistory(h); });
     connect(poll_, &QTimer::timeout, this, &AdeExplorer::poll);
     connect(outputs_, &QTableWidget::cellDoubleClicked, this, [this](int row, int col) { openResult(row, col); });
+    connect(outputs_, &QTableWidget::currentCellChanged, this, [this](int row, int col) { derivation_->setPlainText(derivation(row, col)); });
     connect(&session_, &Session::changed, this, [this] { if (!loading_) load(); });
     load();
     resize(1100, 700);
@@ -204,9 +217,15 @@ void AdeExplorer::load() {
         int c = 0;
         for (const char* key : {"test", "name", "expression", "min", "max"}) put(outputs_, k, c++, o[key].toString());
     }
+    const QJsonObject mcs = s["montecarlo"].toObject();
+    put(mc_, 0, 0, mcs.contains("samples") ? QString::number(mcs["samples"].toInt()) : QString());
+    put(mc_, 0, 1, mcs.contains("seed") ? QString::number(mcs["seed"].toInt()) : QString());
+    put(mc_, 0, 2, mcs["temperature"].toString());
+    put(mc_, 0, 3, pairs(mcs["variables"].toObject()));
+    put(mc_, 0, 4, modelsText(mcs["models"].toArray()));
     temperature_->setText(s["temperature"].toString());
     nominal_->setChecked(s["nominal"].toBool(true));
-    for (QTableWidget* t : {tests_, vars_, corners_}) t->resizeColumnsToContents();
+    for (QTableWidget* t : {tests_, vars_, corners_, mc_}) t->resizeColumnsToContents();
     const QString current = history_->currentText();
     history_->clear();
     for (const auto& h : session_.call("ade_history_list", args()).value.toArray()) history_->addItem(h.toString());
@@ -244,11 +263,30 @@ QJsonObject AdeExplorer::collect(QString& error) const {
         outputs.append(o);
     }
     QJsonObject s{{"tests", tests}, {"variables", vars}, {"corners", corners}, {"outputs", outputs}, {"nominal", nominal_->isChecked()}};
+    if (!text(mc_, 0, 0).isEmpty()) {  // a Monte Carlo section once it has a sample count
+        bool ok = false;
+        QJsonObject mc{{"samples", text(mc_, 0, 0).toInt(&ok)}};
+        if (!ok) error = "Monte Carlo samples: '" + text(mc_, 0, 0) + "' is not a whole number";
+        if (!text(mc_, 0, 1).isEmpty()) {
+            mc["seed"] = text(mc_, 0, 1).toInt(&ok);
+            if (!ok) error = "Monte Carlo seed: '" + text(mc_, 0, 1) + "' is not a whole number";
+        }
+        if (!text(mc_, 0, 2).isEmpty()) mc["temperature"] = text(mc_, 0, 2);
+        if (const QJsonObject v = parsePairs(text(mc_, 0, 3), error); !v.isEmpty()) mc["variables"] = v;
+        if (const QJsonArray m = parseModels(text(mc_, 0, 4)); !m.isEmpty()) mc["models"] = m;
+        s["montecarlo"] = mc;
+    }
     if (!temperature_->text().trimmed().isEmpty()) s["temperature"] = temperature_->text().trimmed();
     return s;
 }
 
 void AdeExplorer::commit() {
+    bool mcTyped = false;
+    for (int c = 1; c < mc_->columnCount(); ++c) mcTyped = mcTyped || !text(mc_, 0, c).isEmpty();
+    if (mcTyped && text(mc_, 0, 0).isEmpty()) {  // a Monte Carlo row in progress: kept as typed until it has its samples
+        status_->setText("Monte Carlo: enter the number of samples to save it");
+        return;
+    }
     QString error;
     const QJsonObject setup = collect(error);
     cmd::Result r;
@@ -267,7 +305,81 @@ void AdeExplorer::commit() {
     }
 }
 
+QString AdeExplorer::derivation(int row, int column) const {
+    if (shownMode_ == "montecarlo") {  // how each statistic came about
+        const QJsonObject st = shownStats_[text(outputs_, row, 1)].toObject();
+        if (row < 0 || column < 5 || st.isEmpty()) return {};
+        int first = 0, last = 0;
+        QStringList params;
+        for (const auto& pv : shownPoints_) {
+            const QJsonObject pt = pv.toObject();
+            if (pt["test"].toString() != text(outputs_, row, 0)) continue;
+            if (!first) {
+                first = pt["seed"].toInt();
+                QStringList models;
+                for (const auto& m : pt["models"].toArray()) models << m.toString();
+                QStringList vars;
+                const QJsonObject v = pt["variables"].toObject();
+                for (auto it = v.begin(); it != v.end(); ++it) vars << it.key() + " = " + it.value().toString();
+                params << "  design       " + pt["design"].toString() << "  temperature  " + pt["temperature"].toString() + " °C"
+                       << "  variables    " + (vars.isEmpty() ? "none" : vars.join(", ")) << "  models       " + (models.isEmpty() ? "none" : models.join("\n               "))
+                       << "  analyses     " + pt["analyses"].toString().replace('\n', "; ");
+            }
+            last = pt["seed"].toInt();
+        }
+        QStringList out;
+        out << text(outputs_, row, 1) + " — Monte Carlo over " + QString::number(st["n"].toInt()) + " samples (seeds " + QString::number(first) + " .. " +
+                   QString::number(last) + "; " + QString::number(st["errors"].toInt()) + " without a value)";
+        out << "Expression  " + text(outputs_, row, 2) << "" << "Parameters (each sample: .options seed = its seed; the PDK's statistics draw)" << params << "";
+        out << "Statistics";
+        out << "  mean = Σx / n                   = " + QString::fromStdString(sim::si(st["mean"].toDouble()));
+        out << "  σ    = √(Σ(x − mean)² / (n − 1)) = " + QString::fromStdString(sim::si(st["sd"].toDouble()));
+        out << "  min  = " + QString::fromStdString(sim::si(st["min"].toDouble())) + ", max = " + QString::fromStdString(sim::si(st["max"].toDouble()));
+        if (st.contains("yield"))
+            out << "  yield = pass / (pass + fail) = " + QString::number(st["pass"].toInt()) + " / " + QString::number(st["pass"].toInt() + st["fail"].toInt()) + " = " +
+                       QString::number(st["yield"].toDouble() * 100, 'g', 4) + "%   (spec " + (text(outputs_, row, 3).isEmpty() ? "" : text(outputs_, row, 3) + " <= ") +
+                       "x" + (text(outputs_, row, 4).isEmpty() ? "" : " <= " + text(outputs_, row, 4)) + ")";
+        out << "" << "Each sample's own derivation is in its point's history (ade_history_get).";
+        return out.join('\n');
+    }
+    const int p = column - 5;
+    if (row < 0 || p < 0 || p >= shownPoints_.size() || text(outputs_, row, 0) != shownPoints_[p].toObject()["test"].toString()) return {};
+    const QJsonObject pt = shownPoints_[p].toObject(), o = pt["outputs"].toObject()[text(outputs_, row, 1)].toObject();
+    QStringList out;
+    out << text(outputs_, row, 1) + " — test " + pt["test"].toString() + ", point " + QString::number(pt["index"].toInt()) + " (" + pt["status"].toString() + ")";
+    out << "Equation    " + (o.contains("equation") ? o["equation"].toString() : text(outputs_, row, 2));
+    out << "";
+    out << "Parameters";
+    out << "  design       " + pt["design"].toString();
+    out << "  corner       " + pt["corner"].toString() + ", temperature " + pt["temperature"].toString() + " °C";
+    QStringList vars;
+    const QJsonObject v = pt["variables"].toObject();
+    for (auto it = v.begin(); it != v.end(); ++it) vars << it.key() + " = " + it.value().toString();
+    out << "  variables    " + (vars.isEmpty() ? "none" : vars.join(", "));
+    QStringList models;
+    for (const auto& m : pt["models"].toArray()) models << m.toString();
+    out << "  models       " + (models.isEmpty() ? "none" : models.join("\n               "));
+    QStringList opts;
+    const QJsonObject op = pt["options"].toObject();
+    for (auto it = op.begin(); it != op.end(); ++it) opts << it.key() + "=" + it.value().toString();
+    out << "  options      " + (opts.isEmpty() ? "none" : opts.join(" "));
+    out << "  analyses     " + pt["analyses"].toString().replace('\n', "; ");
+    out << "  netlist      " + pt["dir"].toString() + "/input.cir";
+    out << "";
+    if (o.contains("error")) out << "Error       " + o["error"].toString();
+    else if (pt["status"] != "done") out << "Status      " + pt["status"].toString() + (pt["error"].toString().isEmpty() ? "" : ": " + pt["error"].toString());
+    if (!o["steps"].toArray().isEmpty()) {
+        out << "Steps";
+        int n = 0;
+        for (const auto& s : o["steps"].toArray())
+            out << (s.toString().startsWith("  ") ? "      " + s.toString().trimmed() : QString("  %1. ").arg(++n) + s.toString());
+    }
+    if (o.contains("spec")) out << "" << "Spec        " + o["spec"].toString();
+    return out.join('\n');
+}
+
 bool AdeExplorer::openResult(int row, int column) {
+    if (shownMode_ == "montecarlo") return false;  // a statistic has no single point to open
     const int p = column - 5;
     if (p < 0 || p >= shownPoints_.size()) return false;
     const QJsonObject pt = shownPoints_[p].toObject();
@@ -279,10 +391,11 @@ bool AdeExplorer::openResult(int row, int column) {
     return r.ok;
 }
 
-void AdeExplorer::run() {
+void AdeExplorer::run(const QString& mode) {
     if (running()) return;
     QJsonObject a = args();
     a["wait"] = false;
+    a["mode"] = mode;
     const cmd::Result r = session_.call("ade_run", a);
     if (!r.ok) {
         status_->setText("✗ " + r.error);
@@ -313,8 +426,10 @@ void AdeExplorer::poll() {
     const QJsonObject h = session_.call("ade_history_get", a).value.toObject();
     if (h["status"] != "running") {
         poll_->stop();
-        status_->setText(running_ + ": " + h["status"].toString());
+        const QString done = running_;
         running_.clear();
+        showHistory(done);  // as finished: a Monte Carlo run's statistics exist only now
+        status_->setText(done + ": " + h["status"].toString());
     }
 }
 
@@ -327,6 +442,33 @@ void AdeExplorer::showHistory(const QString& name) {
     if (!r.ok) return;
     const QJsonArray points = r.value.toObject()["points"].toArray();
     shownPoints_ = points;
+    shownMode_ = r.value.toObject()["mode"].toString();
+    shownStats_ = r.value.toObject()["statistics"].toObject();
+    if (shownMode_ == "montecarlo") {  // a column per statistic, not per sample
+        static const QStringList cols = {"n", "mean", "σ", "min", "max", "yield"};
+        loading_ = true;
+        outputs_->setColumnCount(5 + (int)cols.size());
+        for (int c = 0; c < cols.size(); ++c) outputs_->setHorizontalHeaderItem(5 + c, new QTableWidgetItem("MC " + cols[c]));
+        int done = 0;
+        for (const auto& p : points) done += p.toObject()["status"] != "pending" && p.toObject()["status"] != "running";
+        for (int row = 0; row < outputs_->rowCount(); ++row) {
+            const QJsonObject st = shownStats_[text(outputs_, row, 1)].toObject();
+            for (int c = 0; c < cols.size(); ++c) {
+                auto* item = new QTableWidgetItem;
+                item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+                if (!st.isEmpty()) {
+                    const char* key[] = {"n", "mean", "sd", "min", "max", "yield"};
+                    if (st.contains(key[c])) item->setText(c == 0 ? QString::number(st["n"].toInt()) : c == 5 ? QString::number(st["yield"].toDouble() * 100, 'g', 4) + "%"
+                                                                                                    : QString::fromStdString(sim::si(st[key[c]].toDouble())));
+                }
+                outputs_->setItem(row, 5 + c, item);
+            }
+        }
+        outputs_->resizeColumnsToContents();
+        loading_ = false;
+        if (running()) status_->setText(QString("Running %1 (Monte Carlo): %2 of %3 samples").arg(running_).arg(done).arg(points.size()));
+        return;
+    }
     loading_ = true;
     outputs_->setColumnCount(5 + (int)points.size());
     int done = 0;

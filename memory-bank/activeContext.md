@@ -1,5 +1,26 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 8: the M1 gate runs**
+
+- **PRs, merge in order:** TreeSPICE **#26** (`mac/mc`), then OpenVLSI **#33** (`rebuild/m1-s8`). #33 pins the engine at
+  b3719cf; after #26 merges, move the pointer to its merge commit.
+  - #26: seeded `agauss`/`gauss`/`unif`/`aunif` drawn per instance, and `.tran tmax` (it was dropped).
+  - #33:
+    - output derivations (equation, parameters, steps);
+    - `pdk_install` (analogLib, sg13g2);
+    - ADE temperature sweeps and Monte Carlo;
+    - `tools/m1_gate.py`;
+    - the `bundle` target.
+- **The gate:** 24 of 24 checks pass, 46 s, through MCP only, against ngspice.
+  - 30 corner and temperature points; the worst output disagreement is 0.02 of its tolerance.
+  - A 200-sample Monte Carlo compared by a KS test, D ≤ 0.135 against 0.163.
+- **Gate step 5 is open:** the bundle doesn't start on this Mac. Homebrew's `share/qt/plugins` lacks its `platforms`
+  link; `brew link --overwrite qt` is the owner's call. The clean-account run is the owner's.
+- **Next, after M1:** M2 (ADE Assembler, Spectre RF in TreeSPICE, ...) or the remaining M1 polish: buses,
+  edit-in-place, inherited nets, CDF callbacks, Library Manager copy and locks.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 7**
 
 - **PR #32** (`rebuild/m1-s7`): the waveform viewer.

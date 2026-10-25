@@ -74,6 +74,17 @@ int main(int argc, char** argv) {
                   error("wave_eval", {{"run", QString::fromStdString(dir.string())}, {"expression", "1"}}).contains("no run"),
               "wave_eval refuses a malformed expression and a directory that is not a run");
 
+        // noise: the RC's output density at low frequency is the resistor's sqrt(4kTR); its total, sqrt(kT/C)
+        {
+            const QString nrun = must("simulate", {{"library", "l"}, {"cell", "rc"}, {"view", "schematic"},
+                                                   {"cards", QJsonArray{".noise v(out) V0 dec 20 10 100meg"}}})
+                                     .toObject()["run"].toString();
+            const double kT = 1.380649e-23 * 300.15, density = must("wave_eval", {{"run", nrun}, {"expression", "value(VN(out), 10)"}}).toDouble();
+            const double total = must("wave_eval", {{"run", nrun}, {"expression", "VNTOT(out)"}}).toDouble();
+            check(near(density, std::sqrt(4 * kT * 1e3), 1e-3) && near(total, std::sqrt(kT / 1e-9), 2e-2),
+                  "noise: VN(out) at 10 Hz = sqrt(4kTR) (" + QString::number(density, 'g', 6).toStdString() + "), VNTOT(out) ≈ sqrt(kT/C) (" + QString::number(total, 'g', 6).toStdString() + ")");
+        }
+
         // ── the viewer ──
         check(must("waveform_open", {{"run", run}}).toString() == "l/rc/schematic", "waveform_open knows the run's schematic");
         app::WaveformViewer* v = ciw.viewer(QString::fromStdString(fs::weakly_canonical(run.toStdString()).string()));
@@ -92,6 +103,12 @@ int main(int argc, char** argv) {
               "cursors A and B: the readout shows x, each trace there and the difference (v(out) at 1u = 1 − e⁻¹)");
         const QString rise = v->calculate("riseTime(VT(out))");
         check(rise.endsWith("u") && near(rise.chopped(1).toDouble(), std::log(9.0) * tau * 1e6, 1e-2), "the calculator line evaluates a number (" + rise.toStdString() + ")");
+        check(v->derivation().contains("riseTime(VT(out)) = 2.197") && v->derivation().contains("10% of the transition: crosses 100m between"),
+              "and shows its derivation\n" + v->derivation().toStdString());
+        const QJsonObject explained = must("wave_eval", {{"run", run}, {"expression", "bandwidth(VF(out))"}, {"explain", true}}).toObject();
+        check(explained["value"].isDouble() && explained["steps"].toArray().size() >= 3 &&
+                  explained["steps"].toArray()[1].toString().startsWith("bandwidth(VF(out)) = "),
+              "wave_eval explains when asked: {value, steps}");
         if (const char* to = std::getenv("OPENVLSI_GRAB")) v->grab().save(to);  // to look at it
         check(v->calculate("VT(in)") == "plotted" && v->expressions().size() == 2, "the calculator line plots a waveform");
         p->resize(800, 400);

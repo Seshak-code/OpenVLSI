@@ -64,12 +64,15 @@ void addAdeCommands(Registry& r) {
     r.add({"ade_run", "Runs an ADE view's setup on TreeSPICE: every enabled test, corner and sweep point. Waits and returns the "
                       "history, or with wait false starts it in the background and returns its name (poll ade_history_get).",
            object({{"library", kLib}, {"cell", kCell}, {"view", kView}},
-                  {{"wait", param("boolean", "wait for the results (default true)")}, {"timeout", param("integer", "seconds per point (default 600)")}}),
+                  {{"wait", param("boolean", "wait for the results (default true)")}, {"timeout", param("integer", "seconds per point (default 600)")},
+                   {"mode", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"corners", "montecarlo"}},
+                                        {"description", "corners (the corners and sweeps; the default) or montecarlo (the setup's montecarlo section)"}}}}),
            [](Context& c, const QJsonObject& a) {
                maestro(c, a);
                const int timeout = a.contains("timeout") ? a["timeout"].toInt() : 600;
                if (timeout <= 0) throw std::invalid_argument("timeout: a positive number of seconds");
-               auto job = std::make_shared<sim::Job>(sim::prepare(c.workspace, s(a, "library"), s(a, "cell"), s(a, "view"), root(c)));
+               auto job = std::make_shared<sim::Job>(sim::prepare(c.workspace, s(a, "library"), s(a, "cell"), s(a, "view"), root(c),
+                                                                  a.contains("mode") ? s(a, "mode") : "corners"));
                if (!a.contains("wait") || a["wait"].toBool()) return QJsonValue(sim::execute(*job, c.simulator, std::chrono::seconds(timeout), nullptr));
                jobs(c).start(job->dir, [job, sim = c.simulator, timeout](const std::atomic<bool>& cancel) {
                    try {

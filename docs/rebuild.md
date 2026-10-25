@@ -116,14 +116,18 @@ should be as usable as Virtuoso + ADE Explorer + Spectre for the same circuit.
 - **Commands and MCP:** every M1 operation above, exposed and covered by command-level tests.
 - **macOS app:** a signed, notarized `.app` bundle that ships its own Qt plugins and engine; no Homebrew paths.
 
-**Gate (run, not claimed):**
+**Gate (run, not claimed):** `tools/m1_gate.py` (2026-10-25: steps 1–4 pass, 24 of 24 checks; step 5 waits on this
+machine's Homebrew Qt, see below).
 1. From an empty workspace, build a two-stage Miller op-amp on SG13G2: schematic, symbol, and a testbench using
    the symbol.
 2. In ADE, run op, ac, tran (step response) and noise, over 5 corners and a temperature sweep, plus a 200-sample
    Monte Carlo.
-3. Every result matches ngspice on the same exported netlist within run_diff's tolerances.
+3. Every result matches ngspice on the same exported netlist within run_diff's tolerances. The Monte Carlo is compared
+   by distribution (a two-sample Kolmogorov–Smirnov test per output): the simulators' random generators differ, so
+   their samples do.
 4. All of steps 1–3 is driven once more through the MCP server alone, by a script, with the same results.
-5. The bundle runs on a clean macOS user account.
+5. The bundle runs on a clean macOS user account (`cmake --build build --target bundle`; the gate's `--bundle` checks it
+   is self-contained and starts in an empty environment, and the owner runs it once on a clean account).
 
 ## Salvage and retirement
 
