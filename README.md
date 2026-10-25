@@ -1,62 +1,54 @@
 # OpenVLSI
 
-**An open, AI-assisted chip-design environment covering schematic and RTL entry, synthesis,
-place-and-route, simulation and sign-off in one application.** 
+**A macOS-first chip-design suite whose tools match Cadence's, block for block.** TreeSPICE is the simulator for
+everything; Yosys, OpenROAD, KLayout, Netgen, OpenRCX and OpenSTA are the implementation and sign-off backends, used
+as they are. OpenVLSI is the frontend that ties them together: one design database, one command layer, and
+Cadence-style tools over them.
 
-> **Status: in development.** The SPICE engine is verified against ngspice and Xyce. The full
-> flow (Yosys synthesis, OpenROAD P&R, KLayout sign-off) is wired through orchestration drivers,
-> but it is not yet a production tool.
-
-The goal is a single app in which you can design an SoC, attach RAM, run firmware on it and see
-the program's output. Transistor-level simulation is used where it matters, and RTL/gate-level
-models handle the rest.
+> **Status: rebuild in progress** (`docs/rebuild.md`). Milestone 1 is the analog loop: Library Manager, schematic
+> and symbol editors, ADE Explorer-class setup and waveforms, on TreeSPICE. The foundation is in: the design
+> database, the command layer and its MCP server. The GUI comes next.
 
 ## Parts
 
 | Part | Where | What it does |
 |---|---|---|
-| **TreeSPICE** engine | `acutesim_engine/` (git submodule, [Seshak-code/TreeSPICE](https://github.com/Seshak-code/TreeSPICE)) | SPICE-equivalent simulator (op/dc/tran/ac/noise) on a contraction-tree direct solver. TREE = Tensor Recursive Elimination Engine |
-| GUI IDE | `gui/` | Qt6 schematic editor, simulation workspace, waveform and analysis views |
-| AI copilot | `ai_api/` | Topology analysis, speculative "what-if" simulation, evidence-checked actions |
-| Flow orchestration | `compute/orchestration/` | Yosys, OpenROAD and KLayout drivers, batch and Monte Carlo runs |
-| Design model | `components/` | Circuit data model, Verilog/SPEF export, design-rule checks |
+| **TreeSPICE** | `acutesim_engine/` (submodule, [Seshak-code/TreeSPICE](https://github.com/Seshak-code/TreeSPICE)) | The simulator: op/dc/tran/ac/noise/sens/tf/pz, Monte Carlo, 1e9-cell arrays |
+| Design database | `oadb/` | Libraries (one SQLite file each), cells, views and their properties; undo/redo; text export |
+| Command layer | `cmd/` | Every action a typed, validated, undoable, logged command |
+| MCP server | `mcp/`, `openvlsi-mcp` | The command registry as MCP tools, for scripts and agents |
+| Flow backends | `flow/` | Yosys / OpenROAD / KLayout drivers and report parsers (RTL to GDS on IHP SG13G2) |
+| SoC | `soc/` | RV32I model and firmware co-simulation |
 
 ## Getting the code
 
-The engine is a submodule, so clone recursively:
-
 ```bash
 git clone --recurse-submodules https://github.com/Seshak-code/OpenVLSI.git
-```
-
-In an existing clone or a new git worktree:
-
-```bash
-git submodule update --init
+git submodule update --init        # in an existing clone or a new worktree
 ```
 
 ## Building (macOS)
 
 ```bash
-./scripts/setup_dependencies.sh                        # one time: cmake, ninja, vcpkg
-cmake -B build -S . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
+brew install cmake qt@6            # SQLite comes with the SDK
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(( $(sysctl -n hw.ncpu) - 2 ))
-./build/AcuteSim                                       # the app binary keeps its old name for now
+ctest --test-dir build             # the flow and SoC gates skip without ~/eda and datasets/
 ```
 
-Windows (MSVC) and WebAssembly builds are described in `CLAUDE.md`.
+`scripts/setup_eda_tools.sh` installs the flow tools into `~/eda`. `-DOPENVLSI_GPU=ON` builds Dawn for TreeSPICE's
+GPU fronts.
 
-## Testing
+## Using the MCP server
 
 ```bash
-cd build && ctest                                      # registered suites
-./build/test_regression                                # CI gate; run it from the repo root
+./build/openvlsi-mcp --workspace ~/designs/openvlsi.libs
 ```
 
-Engine-only checks (C++ suites and the ngspice/Xyce/IBM differential harnesses) live in the
-TreeSPICE repo. See `acutesim_engine/README.md` and `acutesim_engine/ENGINE_HANDOFF.md`.
+It speaks MCP over stdio. Every command is a tool: `library_create`, `cell_create`, `view_create`, `prop_set`,
+`edit_undo`, and so on. A workspace file lists the libraries as `DEFINE <library> <path>` lines.
 
 ## Contributing
 
-Make engine changes in TreeSPICE first, then bump the `acutesim_engine` submodule pointer
-here. Development and QA hand-offs follow `CLAUDE.md`, `.clinerules/` and `memory-bank/`.
+Make engine changes in TreeSPICE first, then bump the `acutesim_engine` submodule here. Hand-offs follow
+`CLAUDE.md`, `.clinerules/` and `memory-bank/`.

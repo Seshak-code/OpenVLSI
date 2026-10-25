@@ -1,11 +1,11 @@
 // test_firmware_on_silicon — Roadmap Phase 7 gate: the hello-world firmware on the RV32I core
 // itself, from its RTL and from its routed IHP SG13G2 netlist with layout timing (SDF), against
-// the instruction-set model of compute/soc. Timing must agree with STA: the SDF run is correct at
+// the instruction-set model of soc/. Timing must agree with STA: the SDF run is correct at
 // the period the layout was closed for, and fails once the clock is faster than its paths.
 // Needs the RTL flow tools and Icarus (RtlFlowTools); without them it says what is missing and
 // passes. The routed core comes from test_rtl_flow's RV32I run (7 ns), or is made here.
-#include "compute/orchestration/drivers/rtl_flow.h"
-#include "compute/soc/soc.h"
+#include "flow/rtl_flow.h"
+#include "soc/soc.h"
 
 #include <cstdio>
 #include <filesystem>

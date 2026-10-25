@@ -4,189 +4,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**OpenVLSI** (formerly CuteApp / AcuteSim; repo Seshak-code/OpenVLSI) — "Cognitive Foundry": an
-AI-agent ASIC design IDE covering schematic/RTL → synthesis → P&R → simulation → sign-off.
-- **TreeSPICE** (`acutesim_engine/`, git submodule, formerly Karam): the SPICE-equivalent simulation
-  engine (MNA, Newton, contraction-tree solver; TREE = Tensor Recursive Elimination Engine)
-- **App**: AI cognitive stack (6-layer architecture) + Qt6 GUI IDE
-- Code identifiers keep the old names for now (`acutesim::` namespaces, `ACUTESIM_` macros,
-  `acutesim_engine` target, `AcuteSim` binary/CMake project, Qt settings names)
+**OpenVLSI** (repo Seshak-code/OpenVLSI): a macOS-first chip-design suite whose tools match Cadence's, rebuilt from
+2026-10-24 on (`docs/rebuild.md`: read it first). TreeSPICE (`acutesim_engine/`, submodule) is the simulator for
+everything; Yosys/OpenROAD/KLayout/Netgen/OpenRCX/OpenSTA are backends used as they are; OpenVLSI is the frontend
+that ties them together. Platform order: macOS, other desktops, then web. Engine code keeps its old identifiers
+(`acutesim::` namespaces, the `acutesim_engine` target).
 
-## Build Commands
-
-### macOS (primary)
+## Build and test (macOS)
 
 ```bash
-# One-time setup
-./scripts/setup_dependencies.sh   # installs cmake, ninja, vcpkg (protobuf + gRPC)
-
-# Configure
-cmake -B build -S . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
-# With gRPC/vcpkg:
-cmake -B build -S . \
-  -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
-  -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
-
-# Build
-./scripts/build_safe.sh            # recommended (leaves 2 cores free)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # Qt 6 from Homebrew (found by its standard prefix), SQLite from the SDK
 cmake --build build -j$(( $(sysctl -n hw.ncpu) - 2 ))
+ctest --test-dir build                          # test_oadb, test_commands, test_mcp, the flow/SoC gates, engine_isolation
 ```
 
-### Windows
+The flow and SoC gates (`test_rtl_flow`, `test_firmware_on_silicon`, `test_soc_hello`) run the real tools from
+`~/eda` (`scripts/setup_eda_tools.sh`) and `datasets/`; without them they skip.
 
-```bash
-cmake -S . -B out/build/windows-msvc -G "Visual Studio 17 2022" -A x64 \
-  -DQt6_DIR="C:/Qt/6.x/msvc2022_64/lib/cmake/Qt6Core"
-cmake --build out/build/windows-msvc --config Release --target AcuteSim
-```
-
-### WebAssembly
-
-```bash
-emcmake cmake -S . -B out/build/wasm -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build out/build/wasm --target AcuteSim
-python3 scripts/serve.py   # serves at http://localhost:8080
-```
-
-## Testing
-
-```bash
-# Run all CTest-registered tests
-cd build && ctest --verbose
-
-# Run by speed label
-ctest -L quick    # fast unit tests (<5s)
-ctest -L heavy    # GUI/integration tests
-
-# Run a specific test binary directly
-./build/test_physics_kernels
-./build/test_hierarchy_headless
-./build/test_regression
-
-# Python gRPC parity validator
-python3 compute/orchestration/parity_harness.py
-```
-
-CI (`.github/workflows/ci.yml`) runs `ctest -LE gpu` on macOS, Linux and Windows. Some test binaries are built but
-not registered with CTest (`test_regression` among them): run those directly; CMakeLists.txt has the list.
-
-## Architecture
-
-### Dependency Order (strict — never violate)
+## Architecture (docs/rebuild.md)
 
 ```
-gui/ → ai_api/ → compute/ → components/ → acutesim_engine/ (TreeSPICE: netlist, physics, solvers, math, autodiff)
+tools (Qt 6 GUI, next) → cmd/ (command registry) → oadb/ (design database) → acutesim_engine/ (TreeSPICE)
+                              └── mcp/ (MCP server)          flow/ (backends), soc/
 ```
 
-Dependencies flow **downward only**. Lower layers must never import from higher layers. The engine layers below
-(autodiff, physics, the data model, tensors, math, solvers, infrastructure) live in the `acutesim_engine/` submodule;
-their rules still hold there.
-
-### autodiff/ — Dual Number Forward-Mode AD (engine)
-
-- `autodiff/dual.h` (header-only): `Dual<T>` carries `(val, grad)` through math ops.
-- Use **unqualified** `exp()`, `sin()`, etc. — NOT `std::exp()`. ADL must find the `Dual<T>` overloads.
-- Control flow may branch on `.val` only, never on `.grad`.
-
-### physics/ — Stateless MNA Device Models (engine)
-
-- `device_physics.h`: constitutive equations (BJT Ebers-Moll, MOSFET BSIM, diode IV). **Must remain completely stateless** — no static vars, no instance state.
-- `circuitsim.h`: MNA stampers + solver orchestrator (`solveDC()`, `stepTransient()`).
-- `pnjlim()` is the SPICE voltage limiter that prevents Newton-Raphson oscillations.
-- `calculatePhysicalResiduals` verifies KCL conservation (target: < 1 pA).
-
-### Circuit data model (engine: `acutesim_engine/netlist/`)
-
-- `circuit.h`: `TensorBlock` (immutable definition: R/L/C/topology), `BlockState` (mutable sim state), `TensorNetlist` (root container).
-- `graph_canonical.h`: BFS canonical topology hash (FNV-1a from Ground). Invariant to node numbering order.
-- **A `TensorBlock` change** is an engine change: update `graph_canonical.h` and `tensors/physics_tensors.h` there,
-  then bump the submodule here. `components/` holds the app's component library on top of it.
-
-### Engine layers (`acutesim_engine/`) and the app's `compute/`
-
-| Layer | Path | Role |
-|---|---|---|
-| Data | `acutesim_engine/tensors/` | SoA layout of the linear elements; device-model resolvers (`mos1Params`, `diodeModel`, `bjtModel`) |
-| Operations | `acutesim_engine/math/` | CSR, tensor-contraction direct solver |
-| Reliability | `acutesim_engine/infrastructure/` | Postproc engine, hardware capabilities |
-| Strategy | `acutesim_engine/solvers/` | NR loop, DC/transient/AC/noise, analysis registry |
-| Control | `compute/orchestration/` | gRPC to Yosys/OpenROAD/KLayout, batch runner, worker driver, WASM stubs |
-
-Simulation flow: AoS→SoA (`tensorizeBlock`, linear elements) → NR loop: devices (MOSFET, diode, BJT) evaluated per instance and stamped by `stampByDual` (exact Jacobian from Dual), tensor-contraction solver → KCL physical verification. GPU mode currently solves on the CPU path (Phase 4: GPU device evaluation + batched fronts).
-
-### ai_api/ — 6-Layer Cognitive Stack
-
-| # | Layer | Path | Role |
-|---|---|---|---|
-| 1 | Senses | `system/` | Circuit state for the AI context (`schema_api`), feedback loop |
-| 2 | Perception | `analysis/` | Topology analysis, failure classification |
-| 3 | Memory | `context/` | RAG vector store, context engine, context budget |
-| 4 | Imagination | `simulation/` | Speculative "what-if" simulation forks |
-| 5 | Action | `core/` | Dispatches JSON commands to workbench |
-| 6 | Conscience | `policy/` | Evidence-first protocols, citation validation |
-
-- Central truth: `CircuitState` in `introspection_api.h` (topology hash, node voltages, residual, convergence).
-- `adk/`: Google Agent Development Kit — tool registry, session manager, tool handlers.
-- **AI actions MUST go through `AiActionEnvelope`** — never touch `QGraphicsScene` directly.
-
-### gui/ — Qt6 IDE
-
-AI action flow: JSON from worker → `AiActionEnvelope` → Ghost preview → user approval → `AiActionHistory` push → `QGraphicsScene` commit.
+- **Every action is a command** (`cmd/registry.h`): a name (`[a-z][a-z0-9_]*`), a description, a JSON-schema
+  parameter object, a handler. Calls are validated fail-closed (an unknown key, a wrong type, a missing parameter is
+  an error result), logged, and undoable through the database. The GUI, the scripting console (embedded Python, a
+  venv per tool) and `openvlsi-mcp` all call `Registry::call`. A new GUI feature without a command is incomplete.
+- **oadb** (`oadb/oadb.h`): one SQLite file per library; cells, views, per-view JSON properties. `Library::change`
+  makes one undo group (trigger-logged inverse SQL; session-scoped history). A workspace file lists libraries
+  (`DEFINE <library> <path>`).
+- **Engine boundary:** the app uses TreeSPICE's public API only (`engine_api/`, `netlist/circuit.h`,
+  `netlist/spice_parser.h`); `tools/check_engine_isolation.py` (a ctest) enforces it for the app's directories.
 
 ## Critical Rules
 
 ### Floating-Point Determinism (mandatory)
 
-```cmake
-# GCC/Clang: -fno-fast-math -frounding-math -ffloat-store
-# MSVC: /fp:strict
-```
-`fpu_control.h` enforces `FE_TONEAREST` at runtime. Never flush subnormals to zero (no DAZ/FTZ). Target: 0-bit deviation across x86, ARM, WASM.
+`-fno-fast-math -frounding-math -ffp-contract=off` (MSVC `/fp:strict`), set in CMakeLists.txt. Never flush
+subnormals to zero.
 
-### WASM / gRPC Guard Pattern
+### Fail closed
 
-All gRPC/orchestration code must be wrapped:
-```cpp
-#ifdef ACUTESIM_ENABLE_ORCHESTRATION
-    // gRPC code
-#endif
-```
-WASM builds use `wasm_worker_client.cpp` and `wasm_stubs.cpp`. Many test targets are guarded with `if(NOT EMSCRIPTEN)` in CMakeLists.
-
-WASM requires a `statx` shim in `main.cpp` (Qt 6.9.3 calls `statx` but Emscripten doesn't provide it):
-```cpp
-#ifdef __EMSCRIPTEN__
-extern "C" int statx(int, const char*, int, unsigned int, struct statx*) { return -1; }
-#endif
-```
-
-### Qt MOC Gotchas (Qt 6.9)
-
-- MOC tracks `namespace` from `#include`d headers. If a header opens `namespace AIAPI {}`, MOC thinks any `Q_OBJECT` in the including `.cpp` is inside that namespace.
-- Fix: Wrap AIAPI includes with `#ifndef Q_MOC_RUN ... #endif` in test `.cpp` files.
-- `QHash<T,U>` requires `#include <QHash>` — `qcontainerfwd.h` only forward-declares it.
-- No `QJSEngine` (Qt::Qml unavailable) — use the hand-written recursive descent parser for expression evaluation.
-- Dual Homebrew Qt installs (qt 6.9.0 + qtbase 6.9.3) cause runtime crashes for GUI-linked tests. Guard with:
-  ```cpp
-  qputenv("QT_PLUGIN_PATH", "/opt/homebrew/opt/qt/share/qt/plugins");
-  ```
-- For Qt::Gui headers in non-GUI-linked targets: `$<TARGET_PROPERTY:Qt6::Gui,INTERFACE_INCLUDE_DIRECTORIES>`
-
-### CMakeLists Source Group Dependencies
-
-These `.cpp` files have transitive link dependencies and **must travel together** in any test target that includes them:
-
-- `simulation_workspace.cpp` requires: `variables_panel.cpp`, `calculator_widget.cpp`, `parametric_sweep_dialog.cpp`, `postproc_engine.cpp`, `simulation_context.cpp`
-- `editor_manager.cpp` requires: `editor_factory.cpp`, `storage_manager.cpp`, plus viewer `.cpp` files
-- `project_explorer.cpp` requires: `library_model.cpp`, `library_index.cpp`
-
-When updating test targets in CMakeLists.txt: use `replace_all: true` with 8-space-indented patterns (4-space = `ACUTESIM_SOURCES` block).
-
-The schematic editor's header is `gui/editors/schematic/schematic_editor.h` (no compat header at `gui/editors/`).
-
-### AI Layer Tests
-
-Use `tests/stubs/ai_api_test_stubs.cpp` to avoid pulling in GUI dependencies for AI-layer tests.
+An unsupported option, a missing report or a malformed value is an explicit error, never a silent default or a
+fake success (the 2026-10-24 review removed many of these).
 
 ## Engine = TreeSPICE submodule
 

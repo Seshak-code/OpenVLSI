@@ -3,7 +3,7 @@
 // IHP's maximal DRC deck and LVS, and checks the reports it reads back. Needs the tools of
 // RtlFlowTools::detect() (Roadmap Phase 6); without them it says what is missing and passes.
 // RTL_FLOW_DESIGN=<dir with .v> RTL_FLOW_TOP=<top> RTL_FLOW_PERIOD=<ns> runs another design.
-#include "compute/orchestration/drivers/rtl_flow.h"
+#include "flow/rtl_flow.h"
 
 #include <cstdio>
 #include <cstdlib>
