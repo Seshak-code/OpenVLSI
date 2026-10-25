@@ -27,8 +27,9 @@ should be as usable as Virtuoso + ADE Explorer + Spectre for the same circuit.
     circuit dataset (Masala-CHAI or similar) can sit on top of the API later.
 - **One design database.** Every tool reads and writes the same library/cell/view data (the OpenAccess role).
   Exchange formats are imports and exports, never a tool's private state.
-- **The engine is ours; the rest wraps open tools where they exist.**
-  - TreeSPICE is the Spectre role.
+- **TreeSPICE powers everything.** It is the suite's engine; where it does not yet cover a role, an open tool wraps in
+  behind the same commands until it does.
+  - TreeSPICE is the Spectre role today.
   - Yosys, OpenROAD, KLayout, Netgen, OpenRCX and OpenSTA sit under the digital and sign-off tools, behind the same
     commands and database.
 - **Fail closed.** An unsupported option, a missing report or a parse problem is an explicit error, never a silent
@@ -77,7 +78,7 @@ should be as usable as Virtuoso + ADE Explorer + Spectre for the same circuit.
 | Hierarchy Editor (config view) | Config editor: view binding per cell | oadb | M1 |
 | ADE Explorer | Test setup: analyses, outputs/expressions, sweeps, corners | TreeSPICE | M1 |
 | ViVA | Waveform viewer and calculator | TreeSPICE results | M1 |
-| Spectre core | TreeSPICE: DC/AC/tran/noise/sens/tf/pz, MC, `.options hier` arrays | ours | M1 (exists) |
+| Spectre core | TreeSPICE: DC/AC/tran/noise/sens/tf/pz, MC, `.options hier` arrays | TreeSPICE | M1 (exists) |
 | ADE Assembler | Multi-testbench, Monte Carlo/yield, specs and pass/fail | TreeSPICE | M2 |
 | Spectre RF | PSS, PAC, PNoise, HB, in TreeSPICE | ours | M2 |
 | Spectre X / FX | Multithreaded solve; FastSPICE memory (S3 quotient arrays) | ours | M2 |
@@ -138,22 +139,18 @@ should be as usable as Virtuoso + ADE Explorer + Spectre for the same circuit.
 netlister writes SPICE for TreeSPICE), and the WASM/web-specific code (stubs, storage manager, wasm worker
 client) until the web phase.
 
-## Decisions for the owner
+## Decisions (owner)
 
-Already decided (2026-10-24):
-- A new app that salvages parts.
+2026-10-24:
+- A new app that salvages working parts, built on a branch of OpenVLSI that starts by deleting the old app, so
+  history and CI carry over.
 - Qt 6 + C++.
-- Our own OA-style database.
+- Our own OA-style database, stored as one SQLite file per library, with a text export for diffs and review.
 - Milestone 1 is the analog loop.
-
-Open:
-1. **Repository:** a new repository, or a `v2/` tree in OpenVLSI with the old app deleted once M1's gate passes.
-   *Recommended:* a new branch of OpenVLSI that starts by deleting the old app, so history and CI stay.
-2. **oadb storage:** one SQLite file per library (transactions, crash safety, fast queries on large layouts), or a
-   directory per cell/view with text files (diffable in git).
-   - *Recommended:* SQLite per library, with a text export for diffs and review.
-3. **Scripting language** for the console and for CDF callbacks (the SKILL role): Python (embedded), Tcl (what
-   OpenROAD and KLayout speak), or only the command API with no embedded language at first.
-   - *Recommended:* embedded Python over the command API.
-4. **Engine priority beside M1:** keep TreeSPICE's work to what M1's gate needs (Monte Carlo from PDK statistics,
-   noise on the quotient, solver speed on the op-amp), with Spectre RF in M2.
+- **Scripting:** embedded Python over the command API. Each app (tool) can bring its own venv, so a tool's Python
+  dependencies never collide with another's or with the system's.
+- **TreeSPICE is the engine that powers everything:** the replacement for the Cadence suite's engines, through to
+  the OpenROAD roles.
+  - The open tools in the table above are interim backends behind the same commands and database; TreeSPICE takes
+    over their roles over time.
+  - Engine work is not limited to what M1 needs.
