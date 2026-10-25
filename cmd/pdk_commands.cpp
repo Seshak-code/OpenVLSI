@@ -37,7 +37,7 @@ Cell twoTerminal(const char* name, const char* prefix, const char* tmpl, QJsonOb
     c.shapes.push_back(line({{0, 100}, {0, 50}}, "pin"));
     c.shapes.push_back(line({{0, -50}, {0, -100}}, "pin"));
     c.shapes.push_back(label({50, 15}, "[@instanceName]"));
-    c.shapes.push_back(label({50, -15}, value, "upperLeft"));
+    if (*value) c.shapes.push_back(label({50, -15}, value, "upperLeft"));  // a cell with no value (iprobe) has no value label
     return c;
 }
 std::vector<oadb::Shape> source(std::vector<oadb::Shape> mark) {
@@ -57,6 +57,8 @@ std::vector<Cell> analogLib() {
                     "[@l]"),
         twoTerminal("vdc", "V", "[|PLUS] [|MINUS] dc [@vdc] [@acm:ac %]", {{"vdc", "0"}},
                     source({line({{-10, 25}, {10, 25}}), line({{0, 15}, {0, 35}}), line({{-10, -25}, {10, -25}})}), "[@vdc] [@acm]"),
+        // a 0 V source in a loop, + toward the loop's input: stb's probe (its element name: the instance's, V-prefixed)
+        twoTerminal("iprobe", "V", "[|PLUS] [|MINUS] dc 0", {}, {line({{0, 50}, {0, -50}}), line({{-10, 10}, {0, -5}, {10, 10}})}, ""),
         twoTerminal("idc", "I", "[|PLUS] [|MINUS] dc [@idc] [@acm:ac %]", {{"idc", "0"}},
                     source({line({{0, -30}, {0, 30}}), line({{-10, 15}, {0, 30}, {10, 15}})}), "[@idc] [@acm]"),
         twoTerminal("vpulse", "V", "[|PLUS] [|MINUS] dc [@v1] [@acm:ac %] pulse([@v1] [@v2] [@td] [@tr] [@tf] [@pw] [@per])",

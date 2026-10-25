@@ -261,7 +261,7 @@ private:
         while (i_ < s_.size() && (std::isalnum((unsigned char)s_[i_]) || s_[i_] == '_')) ++i_;
         const std::string name = s_.substr(start, i_ - start);
         expect('(');
-        static const std::set<std::string> access = {"VT", "VF", "VDC", "VOP", "IT", "IF", "IDC", "IOP", "VN", "VNTOT"};
+        static const std::set<std::string> access = {"VT", "VF", "VDC", "VOP", "IT", "IF", "IDC", "IOP", "VN", "VNTOT", "STB"};
         if (access.count(name)) {  // its argument is a name, taken as written
             const size_t e = s_.find(')', i_);
             if (e == std::string::npos) fail(name + "( has no ')'");
@@ -491,13 +491,15 @@ Wave access(const std::vector<Plot>& plots, const std::string& kind, const std::
     static const std::map<std::string, std::string> plotOf = {
         {"VT", "Transient Analysis"}, {"IT", "Transient Analysis"}, {"VF", "AC Analysis"}, {"IF", "AC Analysis"},
         {"VDC", "DC transfer characteristic"}, {"IDC", "DC transfer characteristic"}, {"VOP", "Operating Point"}, {"IOP", "Operating Point"},
-        {"VN", "Noise Spectral Density Curves"}, {"VNTOT", "Integrated Noise"}};
+        {"VN", "Noise Spectral Density Curves"}, {"VNTOT", "Integrated Noise"}, {"STB", "Stability Analysis"}};
     std::string a = arg;
     for (auto& c : a) c = (char)std::tolower((unsigned char)c);
     const Plot* p = plot(plots, plotOf.at(kind));
     if (!p) throw std::runtime_error("calculator: " + kind + "(" + arg + "): the test ran no " + plotOf.at(kind));
     std::string want;
-    if (kind == "VN" || kind == "VNTOT") {
+    if (kind == "STB") {
+        want = a;  // loopgain
+    } else if (kind == "VN" || kind == "VNTOT") {
         if (a != "out" && a != "in") throw std::runtime_error("calculator: " + kind + "(" + arg + "): out or in");
         want = std::string(1, a[0]) + (kind == "VN" ? "noise_spectrum" : "noise_total");  // onoise_spectrum, inoise_total, ...
     } else {

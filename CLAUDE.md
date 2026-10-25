@@ -22,6 +22,7 @@ open build/OpenVLSI.app                         # the CIW and Library Manager; `
 The flow and SoC gates (`test_rtl_flow`, `test_firmware_on_silicon`, `test_soc_hello`) run the real tools from
 `~/eda` (`scripts/setup_eda_tools.sh`) and `datasets/`; without them they skip.
 
+The M2 gate grows with M2's slices: `python3 tools/m2_gate.py --mcp build/openvlsi-mcp --pdk ... --osdi ...`.
 The M1 gate (docs/rebuild.md), through openvlsi-mcp alone, against ngspice:
 
 ```bash

@@ -15,6 +15,8 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <map>
+#include <tuple>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -328,6 +330,56 @@ int main() {
                   must("ade_summary", with(view, {{"history", plan[1].toObject()["name"]}})).toObject().contains("yield"),
               "a run plan runs corners, then Monte Carlo, each its own history; the Monte Carlo summary has its yield");
         must("ade_setup_set", with(view, {{"setup", setup}}));
+    }
+
+    // ── stb: a two-pole loop (an inverting gain of 1000, poles at 1 kHz and 100 kHz), its margins against the analytic ──
+    {
+        must("cell_create", {{"library", "sims"}, {"cell", "vcvs"}});
+        must("view_create", {{"library", "sims"}, {"cell", "vcvs"}, {"view", "symbol"}, {"type", "symbol"}});
+        for (auto [n, x, y] : {std::tuple{"PLUS", 0, 100}, std::tuple{"MINUS", 0, -100}, std::tuple{"NCP", -100, 50}, std::tuple{"NCN", -100, -50}})
+            must("pin_add", {{"library", "sims"}, {"cell", "vcvs"}, {"view", "symbol"}, {"name", n}, {"direction", "inputOutput"}, {"x", x}, {"y", y}});
+        must("cell_prop_set", {{"library", "sims"}, {"cell", "vcvs"}, {"key", "spice"}, {"value", QJsonObject{{"prefix", "E"}, {"template", "[|PLUS] [|MINUS] [|NCP] [|NCN] [@gain]"}}}});
+        must("cell_create", {{"library", "sims"}, {"cell", "loop2"}});
+        must("view_create", {{"library", "sims"}, {"cell", "loop2"}, {"view", "schematic"}, {"type", "schematic"}});
+        struct I { const char* name; const char* master; std::map<std::string, const char*> nets; QJsonObject params; };
+        const std::vector<I> parts = {
+            {"VPRB", "vdc", {{"PLUS", "x"}, {"MINUS", "y"}}, {{"dc", "0"}}},
+            {"E1", "vcvs", {{"PLUS", "a"}, {"MINUS", "gnd!"}, {"NCP", "gnd!"}, {"NCN", "x"}}, {{"gain", "1000"}}},
+            {"R1", "res", {{"PLUS", "a"}, {"MINUS", "b"}}, {{"r", "1k"}}},
+            {"C1", "cap", {{"PLUS", "b"}, {"MINUS", "gnd!"}}, {{"c", "159.155n"}}},
+            {"E2", "vcvs", {{"PLUS", "c"}, {"MINUS", "gnd!"}, {"NCP", "b"}, {"NCN", "gnd!"}}, {{"gain", "1"}}},
+            {"R2", "res", {{"PLUS", "c"}, {"MINUS", "y"}}, {{"r", "1k"}}},
+            {"C2", "cap", {{"PLUS", "y"}, {"MINUS", "gnd!"}}, {{"c", "1.59155n"}}}};
+        int x0 = 0;
+        for (const I& i : parts) {
+            must("instance_add", {{"library", "sims"}, {"cell", "loop2"}, {"view", "schematic"}, {"master_library", "sims"}, {"master_cell", i.master},
+                                  {"name", i.name}, {"x", x0}, {"y", 0}, {"params", i.params}});
+            for (const auto& p : must("view_get", {{"library", "sims"}, {"cell", i.master}, {"view", "symbol"}}).toObject()["pins"].toArray()) {
+                const QJsonArray at = p.toObject()["at"].toArray();
+                must("label_add", {{"library", "sims"}, {"cell", "loop2"}, {"view", "schematic"}, {"name", i.nets.at(p.toObject()["name"].toString().toStdString())},
+                                   {"x", x0 + at[0].toInt()}, {"y", at[1].toInt()}});
+            }
+            x0 += 500;
+        }
+        must("view_create", {{"library", "sims"}, {"cell", "loop2"}, {"view", "ade"}, {"type", "maestro"}});
+        const QJsonObject sv{{"library", "sims"}, {"cell", "loop2"}, {"view", "ade"}};
+        must("ade_setup_set", with(sv, {{"setup", QJsonObject{
+            {"tests", QJsonArray{QJsonObject{{"name", "loop"}, {"design", "sims/loop2/schematic"},
+                                             {"analyses", QJsonArray{QJsonObject{{"type", "stb"}, {"sweep", "dec"}, {"points", "200"}, {"start", "1"},
+                                                                                 {"stop", "1g"}, {"probe", "VPRB"}}}}}}},
+            {"outputs", QJsonArray{QJsonObject{{"name", "pm"}, {"test", "loop"}, {"expression", "phaseMargin(STB(loopgain))"}, {"min", "45"}},
+                                   QJsonObject{{"name", "ugf"}, {"test", "loop"}, {"expression", "ugf(STB(loopgain))"}},
+                                   QJsonObject{{"name", "dc"}, {"test", "loop"}, {"expression", "dB20(value(STB(loopgain), 1))"}}}}}}}));
+        const QJsonObject o = must("ade_run", sv).toObject()["points"].toArray()[0].toObject()["outputs"].toObject();
+        const double pm = o["pm"].toObject()["value"].toDouble(), ugf = o["ugf"].toObject()["value"].toDouble(), dc = o["dc"].toObject()["value"].toDouble();
+        check(near(dc, 60, 1e-4) && near(ugf, 308422.4, 1e-3) && std::abs(pm - 18.150) < 0.05 && !o["pm"].toObject()["pass"].toBool(),
+              "stb in ADE: the loop's 60 dB, its unity-gain 308.4 kHz and 18.15 deg phase margin (failing its 45 deg spec): " +
+                  std::to_string(dc) + " dB, " + std::to_string(ugf) + " Hz, " + std::to_string(pm) + " deg");
+        check(o["pm"].toObject()["steps"].toArray()[0].toString().startsWith("STB(loopgain) = a waveform of 1801 points over frequency"),
+              "and its derivation starts from the stb loop gain");
+        check(has(error("ade_setup_set", with(sv, {{"setup", QJsonObject{{"tests", QJsonArray{QJsonObject{{"name", "t"}, {"design", "sims/loop2/schematic"},
+                  {"analyses", QJsonArray{QJsonObject{{"type", "stb"}, {"sweep", "dec"}, {"points", "10"}, {"start", "1"}, {"stop", "1g"}}}}}}}}}})), "stb needs probe"),
+              "an stb without its probe is refused");
     }
 
     // ── malformed setups ──

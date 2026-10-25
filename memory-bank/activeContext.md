@@ -1,5 +1,22 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — M2 slice 2: stb**
+
+- **PRs, merge in order:** TreeSPICE **#27** (`mac/stb`), then OpenVLSI `rebuild/m2-s2` (it pins the engine at #27's
+  head; afterwards move the pointer to the merge commit).
+- **Engine:** `.stb dec n f1 f2 Vprobe`, by Middlebrook's double injection. It writes a "Stability Analysis" raw plot
+  and logs the margins.
+- **OpenVLSI:**
+  - ADE analysis `stb`;
+  - `STB(loopgain)` in the calculator;
+  - an `iprobe` cell in analogLib;
+  - `tools/m2_gate.py`: 6 of 6 checks.
+- **Lesson:** a loop broken at the non-inverting input is another path (through the mirror's pole), so break where
+  the loop closes.
+- **Next:** M2 slice 3, PSS (shooting Newton), checked against a long transient's last period and ngspice's `.pss`.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — M2 begins: ADE Assembler (M2 slice 1)**
 
 - **M2 plan:** in `docs/rebuild.md` (owner's order: Assembler, then RF in TreeSPICE, then Spectre X).
