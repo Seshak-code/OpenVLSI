@@ -34,16 +34,13 @@ FORBIDDEN_TYPES_IN_ENGINE = [
 
 # Engine files that are ALLOWED to use Qt (conditionally guarded, or transitional)
 ENGINE_QT_ALLOWLIST = {
-    # Qt-version of simulation_context — transitional, coexists with engine_api/ version
-    'compute/orchestration/simulation_context.h',
-    'compute/orchestration/simulation_context.cpp',
     # corner_config.h: Qt types are inside #if defined(QT_CORE_LIB) guards
     # Valid: engine builds without Qt define, GUI gets Qt helpers when linked with Qt
     'acutesim_engine/physics/corner_config.h',
 }
 
 # ─── Direction 2: GUI dirs must NOT include deep engine internals ───────────
-GUI_DIRS = ['gui']
+GUI_DIRS = ['oadb', 'cmd', 'mcp', 'flow', 'soc']  # the app's code: the engine's public API only
 
 # Patterns that flag a gui/ file bypassing the engine_api/ contract.
 # compute/orchestration/ (DTOs, drivers, gRPC client) is ALLOWED from GUI —
@@ -64,10 +61,7 @@ ENGINE_INTERNAL_INCLUDE_PATTERNS = [
 ]
 
 # Allowlist: files PERMITTED to include engine internals (adapter pattern).
-ENGINE_INTERNAL_ALLOWLIST = {
-    'gui/analysis/simulation_driver_adapter.h',
-    'gui/editors/schematic/schematic_editor_sync.cpp',
-}
+ENGINE_INTERNAL_ALLOWLIST = set()
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))

@@ -14,9 +14,9 @@
 #include <string>
 #include <algorithm>
 
-#include "compute/orchestration/drivers/yosys_log_parser.h"
-#include "compute/orchestration/drivers/openroad_report_parser.h"
-#include "compute/orchestration/drivers/klayout_report_parser.h"
+#include "flow/yosys_log_parser.h"
+#include "flow/openroad_report_parser.h"
+#include "flow/klayout_report_parser.h"
 
 using namespace acutesim::compute::orchestration;
 
@@ -24,7 +24,7 @@ using namespace acutesim::compute::orchestration;
 // HELPERS
 // ============================================================================
 
-#include "compute/orchestration/drivers/eda_types.h"
+#include "flow/eda_types.h"
 using acutesim::compute::orchestration::Point2D;
 using acutesim::compute::orchestration::Size2D;
 

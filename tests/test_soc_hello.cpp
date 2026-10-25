@@ -3,9 +3,9 @@
 // Needs datasets/pdk/ihp and datasets/osdi/psp103.osdi (acutesim_engine/tests/build_osdi.sh); without
 // them the SPICE parts are skipped and only the ISA checks run.
 #include <cstdint>
-#include "compute/soc/rv32i.h"
-#include "compute/soc/rv32i_asm.h"
-#include "compute/soc/soc.h"
+#include "soc/rv32i.h"
+#include "soc/rv32i_asm.h"
+#include "soc/soc.h"
 
 #include <algorithm>
 #include <cstdio>
