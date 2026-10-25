@@ -4,6 +4,7 @@
 //   access   VT(net) VF(net) VDC(net) VOP(net)  a node voltage in the tran, ac, dc or operating-point results
 //            IT(src) IF(src) IDC(src) IOP(src)  a source's current
 //            VN(out) VN(in)                     the output / input-referred noise density; VNTOT(out|in) its total
+//            STB(loopgain)                      the stb analysis' loop gain (phaseMargin(STB(loopgain)), ...)
 //   numbers  1.5k 10meg 2u 1e-9 (SPICE suffixes); + - * / ^, unary -, parentheses
 //   any      value(w, x)  mag(w)  dB20(w)  dB10(w)  phase(w) (degrees)  real(w)  imag(w)  abs(w)  sqrt(w)  log10(w)
 //   real w   ymax(w)  ymin(w)  average(w)  rms(w)  cross(w, level [, n [, "rising"|"falling"|"either"]])

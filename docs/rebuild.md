@@ -145,6 +145,10 @@ Owner's order (2026-10-25): ADE Assembler first, then the RF analyses in TreeSPI
    - a run plan of several runs.
 2. **stb** (TreeSPICE): loop gain and stability margins at a probe, without breaking the loop (Middlebrook/Tian, as
    Spectre's stb). Checked against breaking the loop by hand (the M1 gate's 1 GΩ/1 F trick) and analytic loops.
+   Done (2026-10-25): `tools/m2_gate.py` step 2. On the op-amp over 15 points, stb equals Middlebrook's two injections
+   done by hand to 8.6e-15. Its margins match the loop broken at the same node to 0.165°, and to 0.014° once the
+   output's gate load is buffered away. A loop broken at the other input (M1's `tb_ol`) is another path, through the
+   mirror's pole, about 0.5° away.
 3. **PSS** (TreeSPICE): periodic steady state by shooting Newton, driven and autonomous (oscillators). Checked
    against a long transient's last period, and ngspice's experimental .pss where it applies.
 4. **PAC and PNoise** (TreeSPICE): small signal and noise about the periodic steady state (conversion gain, phase
