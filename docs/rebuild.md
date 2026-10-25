@@ -27,11 +27,12 @@ should be as usable as Virtuoso + ADE Explorer + Spectre for the same circuit.
     circuit dataset (Masala-CHAI or similar) can sit on top of the API later.
 - **One design database.** Every tool reads and writes the same library/cell/view data (the OpenAccess role).
   Exchange formats are imports and exports, never a tool's private state.
-- **TreeSPICE powers everything.** It is the suite's engine; where it does not yet cover a role, an open tool wraps in
-  behind the same commands until it does.
-  - TreeSPICE is the Spectre role today.
-  - Yosys, OpenROAD, KLayout, Netgen, OpenRCX and OpenSTA sit under the digital and sign-off tools, behind the same
-    commands and database.
+- **TreeSPICE is the simulator for everything; the open tools stay.** Every simulation (analog, mixed-signal,
+  post-layout, arrays) runs on TreeSPICE.
+  - Yosys, OpenROAD, KLayout, Netgen, OpenRCX and OpenSTA are the implementation and sign-off backends, used as
+    they are, not reworked.
+  - OpenVLSI is the frontend that ties them together: one database, one command layer, Cadence-style tools over
+    them.
 - **Fail closed.** An unsupported option, a missing report or a parse problem is an explicit error, never a silent
   default (the review of 2026-10-24 found many of these in the current app).
 - **Measured, not assumed.** Each milestone has a gate that is run, and each Cadence-parity claim names the test that
@@ -149,8 +150,8 @@ client) until the web phase.
 - Milestone 1 is the analog loop.
 - **Scripting:** embedded Python over the command API. Each app (tool) can bring its own venv, so a tool's Python
   dependencies never collide with another's or with the system's.
-- **TreeSPICE is the engine that powers everything:** the replacement for the Cadence suite's engines, through to
-  the OpenROAD roles.
-  - The open tools in the table above are interim backends behind the same commands and database; TreeSPICE takes
-    over their roles over time.
-  - Engine work is not limited to what M1 needs.
+- **TreeSPICE is the simulation tool for everything:** analog, RF, mixed-signal, post-layout and large-array
+  simulation. Simulation work in TreeSPICE is not limited to what M1 needs.
+- **The other tools are not reworked.** OpenROAD, Yosys, KLayout, Netgen, OpenRCX and OpenSTA stay the backends for
+  synthesis, place and route, extraction, timing and physical verification. OpenVLSI is a convenient frontend that
+  ties everything together.
