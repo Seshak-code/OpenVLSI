@@ -13,6 +13,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <set>
 #include <stdexcept>
 
@@ -207,7 +208,8 @@ void validateSetup(const QJsonObject& setup) {
     for (int k = 0; k < ts.size(); ++k) {
         const QJsonObject t = ts[k].toObject();
         const std::string w = "tests[" + std::to_string(k) + "]";
-        keys(t, {"name", "design", "enabled", "analyses", "models", "options"}, w);
+        keys(t, {"name", "design", "enabled", "analyses", "models", "options", "variables"}, w);
+        validateWords(t["variables"], w + ".variables", true);
         if (!identifier(t["name"].toString()) || !tests.insert(t["name"].toString()).second) bad(w + ".name", "a unique name");
         if (t["design"].toString().split('/').size() != 3) bad(w + ".design", "\"lib/cell/view\"");
         flag(t, "enabled", w);
@@ -292,7 +294,10 @@ Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell
             QJsonArray modelsShown;
             for (const auto& m : models) modelsShown.append(q(m.section.empty() ? m.file : m.file + " (" + m.section + ")"));
             const QStringList temperatures = (corner.contains("temperature") ? corner["temperature"] : nominalTemp).toString().split(' ', Qt::SkipEmptyParts);
-            const auto combos = combinations(setup["variables"].toObject(), corner["variables"].toObject());
+            QJsonObject vars = setup["variables"].toObject();  // the test's own variables win over the setup's
+            const QJsonObject testVars = t["variables"].toObject();
+            for (auto it = testVars.begin(); it != testVars.end(); ++it) vars[it.key()] = it.value();
+            const auto combos = combinations(vars, corner["variables"].toObject());
             if (monteCarlo && (combos.size() != 1 || temperatures.size() != 1))
                 throw std::invalid_argument("setup: Monte Carlo runs one temperature and one value per variable (no sweeps)");
             for (const QString& temperature : temperatures)
@@ -415,6 +420,20 @@ QJsonObject execute(const Job& job, const std::string& simulator, std::chrono::s
     return history;
 }
 
+void abandon(const Job& job, const std::string& why) {
+    QJsonObject h = readHistory(job.dir);
+    QJsonArray points = h["points"].toArray();
+    for (auto&& p : points) {
+        QJsonObject o = p.toObject();
+        o["status"] = "stopped";
+        p = o;
+    }
+    h["points"] = points;
+    h["status"] = "stopped";
+    h["error"] = q(why);
+    write(job.dir, h);
+}
+
 QJsonObject readHistory(const std::string& dir) {
     std::ifstream f(fs::path(dir) / "history.json", std::ios::binary);
     if (!f) throw std::invalid_argument("no history at " + dir);
@@ -423,6 +442,122 @@ QJsonObject readHistory(const std::string& dir) {
     const QJsonDocument d = QJsonDocument::fromJson(QByteArray::fromStdString(b), &e);
     if (e.error != QJsonParseError::NoError || !d.isObject()) throw std::runtime_error("history " + dir + " is not readable: " + e.errorString().toStdString());
     return d.object();
+}
+
+namespace {
+// a point as Assembler shows it: what it ran with
+QJsonObject who(const QJsonObject& p) {
+    QJsonObject o{{"index", p["index"]}, {"test", p["test"]}, {"corner", p["corner"]}, {"temperature", p["temperature"]}, {"variables", p["variables"]}};
+    if (p.contains("sample")) o["sample"] = p["sample"], o["seed"] = p["seed"];
+    return o;
+}
+// how far x is inside its spec (negative: outside), and the spec's text; no spec: none
+std::optional<std::pair<double, std::string>> margin(const QJsonObject& output, double x) {
+    const std::string lo = s(output["min"]), hi = s(output["max"]);
+    if (lo.empty() && hi.empty()) return std::nullopt;
+    double m = HUGE_VAL;
+    std::string how;
+    if (!lo.empty()) m = x - siNumber(lo), how = si(x) + " - " + lo;
+    if (!hi.empty() && siNumber(hi) - x < m) m = siNumber(hi) - x, how = hi + " - " + si(x);
+    return std::make_pair(m, how);
+}
+}  // namespace
+
+QJsonObject summary(const QJsonObject& history) {
+    const QJsonObject setup = history["setup"].toObject();
+    const QJsonArray points = history["points"].toArray();
+    QJsonArray outs;
+    std::map<QString, std::pair<int, int>> testPass;  // test -> points passing every spec, points that ran
+    std::map<int, bool> samplePass;                   // Monte Carlo: sample -> every spec of every test passed
+    for (const auto& pv : points) {
+        const QJsonObject p = pv.toObject();
+        if (p["status"] != "done") continue;
+        bool all = true;
+        for (const auto& ov : setup["outputs"].toArray()) {
+            const QJsonObject o = ov.toObject();
+            if (o["test"] != p["test"] || (s(o["min"]).empty() && s(o["max"]).empty())) continue;
+            const QJsonObject r = p["outputs"].toObject()[o["name"].toString()].toObject();
+            all = all && r["pass"].toBool();  // an error is no pass
+        }
+        auto& [pass, ran] = testPass[p["test"].toString()];
+        pass += all, ++ran;
+        if (p.contains("sample")) samplePass.emplace(p["sample"].toInt(), true).first->second &= all;
+    }
+    for (const auto& ov : setup["outputs"].toArray()) {
+        const QJsonObject o = ov.toObject();
+        int n = 0, pass = 0, fail = 0, errors = 0;
+        double lo = HUGE_VAL, hi = -HUGE_VAL, worstMargin = HUGE_VAL;
+        QJsonObject minAt, maxAt, worst;
+        std::string worstHow;
+        for (const auto& pv : points) {
+            const QJsonObject p = pv.toObject();
+            if (p["test"] != o["test"] || p["status"] != "done") continue;
+            const QJsonObject r = p["outputs"].toObject()[o["name"].toString()].toObject();
+            if (!r["value"].isDouble()) { ++errors; continue; }
+            const double x = r["value"].toDouble();
+            ++n;
+            if (x < lo) lo = x, minAt = who(p);
+            if (x > hi) hi = x, maxAt = who(p);
+            if (r.contains("pass")) (r["pass"].toBool() ? pass : fail)++;
+            if (const auto m = margin(o, x); m && m->first < worstMargin) worstMargin = m->first, worstHow = m->second, worst = who(p), worst["value"] = x;
+        }
+        QJsonObject e{{"test", o["test"]}, {"output", o["name"]}, {"expression", o["expression"]}, {"n", n}, {"errors", errors}};
+        if (!s(o["min"]).empty()) e["min_spec"] = o["min"];
+        if (!s(o["max"]).empty()) e["max_spec"] = o["max"];
+        if (n) {
+            e["min"] = lo, e["max"] = hi, e["min_at"] = minAt, e["max_at"] = maxAt;
+            if (pass + fail) {
+                e["pass"] = pass, e["fail"] = fail, e["yield"] = (double)pass / (pass + fail);
+                worst["margin"] = worstMargin;
+                worst["derivation"] = q("margin = " + worstHow + " = " + si(worstMargin) + (worstMargin < 0 ? " (outside the spec)" : " (inside)"));
+                e["worst"] = worst;
+            }
+        }
+        outs.append(e);
+    }
+    QJsonObject tests;
+    for (const auto& [t, pr] : testPass) tests[t] = QJsonObject{{"pass", pr.first}, {"points", pr.second}};
+    QJsonObject out{{"name", history["name"]}, {"mode", history["mode"]}, {"outputs", outs}, {"tests", tests}};
+    if (!samplePass.empty()) {
+        int good = 0;
+        for (const auto& [k, ok] : samplePass) good += ok;
+        out["yield"] = QJsonObject{{"pass", good}, {"samples", (int)samplePass.size()}, {"yield", (double)good / (double)samplePass.size()},
+                                   {"derivation", q("a sample passes when every spec of every test passes for it: " + std::to_string(good) + " of " +
+                                                    std::to_string(samplePass.size()))}};
+    }
+    return out;
+}
+
+QJsonObject compare(const QJsonObject& a, const QJsonObject& b) {
+    auto key = [](const QJsonObject& p) {
+        return QString(QJsonDocument(QJsonObject{{"t", p["test"]}, {"c", p["corner"]}, {"T", p["temperature"]}, {"v", p["variables"]},
+                                                  {"s", p["sample"]}}).toJson(QJsonDocument::Compact));
+    };
+    std::map<QString, QJsonObject> inB;
+    for (const auto& pv : b["points"].toArray()) inB[key(pv.toObject())] = pv.toObject();
+    QJsonArray rows, onlyA, onlyB;
+    std::set<QString> matched;
+    for (const auto& pv : a["points"].toArray()) {
+        const QJsonObject pa = pv.toObject();
+        const auto it = inB.find(key(pa));
+        if (it == inB.end()) { onlyA.append(who(pa)); continue; }
+        matched.insert(it->first);
+        const QJsonObject oa = pa["outputs"].toObject(), ob = it->second["outputs"].toObject();
+        for (auto o = oa.begin(); o != oa.end(); ++o) {
+            const QJsonObject ra = o.value().toObject(), rb = ob[o.key()].toObject();
+            QJsonObject row{{"point", who(pa)}, {"output", o.key()}, {"a", ra["value"]}, {"b", rb["value"]}};
+            if (ra["value"].isDouble() && rb["value"].isDouble()) {
+                const double x = ra["value"].toDouble(), y = rb["value"].toDouble();
+                row["change"] = y - x;
+                if (x != 0) row["relative"] = (y - x) / std::abs(x);
+            }
+            if (ra.contains("pass") && rb.contains("pass") && ra["pass"] != rb["pass"])
+                row["spec"] = rb["pass"].toBool() ? "now passes" : "now fails";
+            rows.append(row);
+        }
+    }
+    for (const auto& [k, p] : inB) if (!matched.count(k)) onlyB.append(who(p));
+    return {{"a", a["name"]}, {"b", b["name"]}, {"rows", rows}, {"only_a", onlyA}, {"only_b", onlyB}};
 }
 
 Jobs::~Jobs() {

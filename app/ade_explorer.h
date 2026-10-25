@@ -39,9 +39,18 @@ public:
     QString derivation(int row, int column) const;
 
     QTableWidget* montecarlo() const { return mc_; }      // Samples, Seed, Temperature, Variables, Models (one row)
+    // Assembler's views of the shown history: its summary (Test, Output, Spec, n, Min, Max, Pass, Worst point, Margin;
+    // the worst point's derivation as its tooltip), and its comparison with another (Point, Output, This, Other, Change,
+    // Relative, Spec)
+    QTableWidget* summary() const { return summary_; }
+    QString yield() const;  // a Monte Carlo history's overall yield and its derivation
+    QTableWidget* comparison() const { return compare_; }
+    void compareWith(const QString& history);
+    void select(const QString& history);  // the history the results show (the History box)
 
 public slots:
     void run(const QString& mode = "corners");  // corners and sweeps, or montecarlo
+    void runPlan();                             // corners, then Monte Carlo when the setup has it
     void stop();
     void load();  // the setup, from the database
 
@@ -54,7 +63,10 @@ private:
 
     Session& session_;
     QString lib_, cell_, view_;
-    QTableWidget *tests_, *vars_, *corners_, *outputs_, *mc_;
+    QTableWidget *tests_, *vars_, *corners_, *outputs_, *mc_, *summary_, *compare_;
+    QLabel* yield_;
+    QComboBox* against_;
+    void showSummary(const QString& history);
     QLineEdit* temperature_;
     QCheckBox* nominal_;
     QComboBox* history_;
@@ -62,6 +74,7 @@ private:
     QPlainTextEdit* derivation_;
     QTimer* poll_;
     QString running_;
+    QStringList queue_;  // a run plan's runs still to start
     QJsonArray shownPoints_;  // the history the outputs table shows
     QJsonObject shownStats_;  // a Monte Carlo history's statistics (its columns), else empty
     QString shownMode_;

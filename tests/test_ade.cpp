@@ -265,6 +265,71 @@ int main() {
     must("edit_undo", {{"library", "sims"}});
     check(call("edit_undo", {{"library", "sims"}}).ok && must("ade_setup_get", view).toObject() == setup, "undo restores the previous setup");
 
+    // ── Assembler: the summary and its worst points, comparing histories, test variables, run plans ──
+    {
+        const QJsonObject sum = must("ade_summary", with(view, {{"history", "Interactive.1"}})).toObject();
+        auto entry = [&](const char* name) {
+            for (const auto& e : sum["outputs"].toArray()) if (e.toObject()["output"] == name) return e.toObject();
+            return QJsonObject();
+        };
+        const QJsonObject tr = entry("tr"), dc = entry("dc"), bw = entry("bw"), worst = tr["worst"].toObject();
+        check(tr["n"] == 4 && tr["pass"] == 3 && tr["fail"] == 1 && worst["margin"].toDouble() < 0 && worst["corner"] == "bigc" &&
+                  worst["variables"].toObject()["rval"] == "2k" && worst["derivation"].toString().startsWith("margin = 5u - 8.78"),
+              "the summary names the worst point and how far past its spec it is (" + worst["derivation"].toString().toStdString() + ")");
+        check(dc["pass"] == 4 && dc["worst"].toObject()["margin"].toDouble() > 0 && !bw.contains("worst") &&
+                  bw["min_at"].toObject()["corner"] == "bigc" && bw["min_at"].toObject()["variables"].toObject()["rval"] == "2k" &&
+                  bw["max_at"].toObject()["corner"] == "Nominal" && bw["max_at"].toObject()["variables"].toObject()["rval"] == "1k",
+              "a spec met everywhere has a positive worst margin; an output with no spec has its min and max points");
+        check(sum["tests"].toObject()["ac"] == QJsonObject{{"pass", 4}, {"points", 4}} && sum["tests"].toObject()["tran"] == QJsonObject{{"pass", 3}, {"points", 4}},
+              "per test, the points that pass every spec");
+
+        const QJsonObject same = must("ade_compare", with(view, {{"history", "Interactive.1"}, {"against", "Interactive.2"}})).toObject();
+        bool zero = !same["rows"].toArray().isEmpty();
+        for (const auto& r : same["rows"].toArray()) zero = zero && (!r.toObject().contains("change") || r.toObject()["change"].toDouble() == 0) && !r.toObject().contains("spec");
+        check(zero && same["only_a"].toArray().isEmpty() && same["only_b"].toArray().isEmpty(), "two runs of one setup compare equal, point by point");
+
+        must("instance_set_params", {{"library", "sims"}, {"cell", "step"}, {"view", "schematic"}, {"instance", "R0"}, {"params", QJsonObject{{"r", "{rval*1.5}"}}}});
+        const QString changed = must("ade_run", view).toObject()["name"].toString();
+        const QJsonObject diff = must("ade_compare", with(view, {{"history", "Interactive.1"}, {"against", changed}})).toObject();
+        int flips = 0;
+        bool scaled = true;
+        for (const auto& r : diff["rows"].toArray()) {
+            const QJsonObject row = r.toObject();
+            if (row["output"] == "tr") scaled = scaled && near(row["relative"].toDouble(), 0.5, 1e-2);
+            flips += row["spec"] == "now fails";
+        }
+        check(scaled && flips == 2, "after a 1.5x resistor the comparison shows each rise time 50% up and two specs now failing");
+        must("edit_undo", {{"library", "sims"}});
+
+        QJsonObject tv = setup;
+        QJsonArray ts = tv["tests"].toArray();
+        QJsonObject tran = ts[1].toObject();
+        tran["variables"] = QJsonObject{{"cval", "3n"}};
+        ts[1] = tran;
+        tv["tests"] = ts;
+        must("ade_setup_set", with(view, {{"setup", tv}}));
+        bool own = true;
+        for (const auto& pv : must("ade_run", view).toObject()["points"].toArray()) {
+            const QJsonObject p = pv.toObject();
+            const QString c = p["variables"].toObject()["cval"].toString();
+            own = own && (p["test"] == "tran" ? c == (p["corner"] == "bigc" ? "2n" : "3n") : c == (p["corner"] == "bigc" ? "2n" : "1n"));
+        }
+        check(own, "a test's own variables win over the setup's (and a corner's over both)");
+
+        check(has(error("ade_run_plan", with(view, {{"modes", QJsonArray{"corners", "montecarlo"}}})), "montecarlo section"), "a run plan with a run it cannot do is refused");
+        const QJsonArray names = must("ade_history_list", view).toArray();
+        const QJsonObject left = must("ade_history_get", with(view, {{"history", names.last()}})).toObject();
+        check(left["status"] == "stopped" && left["error"].toString().contains("run plan stopped"), "and the run it had prepared says it was stopped, and why");
+        tv["montecarlo"] = QJsonObject{{"samples", 4}, {"variables", QJsonObject{{"rval", "agauss(1k,100,1)"}}}};
+        must("ade_setup_set", with(view, {{"setup", tv}}));
+        const QJsonArray plan = must("ade_run_plan", with(view, {{"modes", QJsonArray{"corners", "montecarlo"}}})).toArray();
+        check(plan.size() == 2 && plan[0].toObject()["mode"] == "corners" && plan[1].toObject()["mode"] == "montecarlo" &&
+                  plan[0].toObject()["status"] == "done" && plan[1].toObject()["status"] == "done" &&
+                  must("ade_summary", with(view, {{"history", plan[1].toObject()["name"]}})).toObject().contains("yield"),
+              "a run plan runs corners, then Monte Carlo, each its own history; the Monte Carlo summary has its yield");
+        must("ade_setup_set", with(view, {{"setup", setup}}));
+    }
+
     // ── malformed setups ──
     auto refused = [&](const char* what, std::function<void(QJsonObject&)> spoil, const std::string& why) {
         QJsonObject s = setup;

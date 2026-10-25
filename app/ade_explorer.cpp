@@ -109,7 +109,7 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     : QMainWindow(parent, Qt::Window), session_(session), lib_(lib), cell_(cell), view_(view), poll_(new QTimer(this)) {
     setAttribute(Qt::WA_DeleteOnClose);
     setWindowTitle("ADE Explorer Editing: " + lib + " " + cell + " " + view);
-    tests_ = table({"On", "Name", "Design (lib/cell/view)", "Analyses", "Models (file:section)", "Options"}, this);
+    tests_ = table({"On", "Name", "Design (lib/cell/view)", "Analyses", "Models (file:section)", "Options", "Variables"}, this);
     vars_ = table({"Name", "Value (a list sweeps)"}, this);
     corners_ = table({"On", "Name", "Temperature", "Variables", "Models (file:section)"}, this);
     outputs_ = table({"Test", "Name", "Expression", "Min", "Max"}, this);
@@ -137,13 +137,35 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     derivation_->setPlaceholderText("Select a result to see how it was computed: its equation, the parameters its point ran with, each step.");
     auto* split = new QSplitter(Qt::Vertical, this);
     split->addWidget(setup);
-    split->addWidget(outputs_);
+    // the results: each point (Detail), Assembler's spec sheet (Summary), and a comparison with another history
+    summary_ = table({"Test", "Output", "Spec", "n", "Min", "Max", "Pass", "Worst point", "Margin"}, this);
+    compare_ = table({"Point", "Output", "This", "Other", "Change", "Relative", "Spec"}, this);
+    for (QTableWidget* t : {summary_, compare_}) t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    yield_ = new QLabel(this);
+    against_ = new QComboBox(this);
+    auto* results = new QTabWidget(this);
+    results->addTab(outputs_, "Detail");
+    auto* sumPage = new QWidget(this);
+    auto* sumLayout = new QVBoxLayout(sumPage);
+    sumLayout->addWidget(yield_);
+    sumLayout->addWidget(summary_);
+    results->addTab(sumPage, "Summary");
+    auto* cmpPage = new QWidget(this);
+    auto* cmpLayout = new QVBoxLayout(cmpPage);
+    auto* cmpRow = new QHBoxLayout;
+    cmpRow->addWidget(new QLabel("Compare with", this));
+    cmpRow->addWidget(against_, 1);
+    cmpLayout->addLayout(cmpRow);
+    cmpLayout->addWidget(compare_);
+    results->addTab(cmpPage, "Compare");
+    split->addWidget(results);
     split->addWidget(derivation_);
     setCentralWidget(split);
 
     QToolBar* bar = addToolBar("ADE");
     bar->addAction("Run", this, [this] { run(); });
     bar->addAction("Run Monte Carlo", this, [this] { run("montecarlo"); });
+    bar->addAction("Run Plan", this, &AdeExplorer::runPlan);
     bar->addAction("Stop", this, &AdeExplorer::stop);
     bar->addSeparator();
     bar->addWidget(new QLabel(" History ", this));
@@ -159,6 +181,10 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     connect(nominal_, &QCheckBox::toggled, this, [this] { if (!loading_) commit(); });
     connect(history_, &QComboBox::currentTextChanged, this, [this](const QString& h) { if (!loading_) showHistory(h); });
     connect(poll_, &QTimer::timeout, this, &AdeExplorer::poll);
+    connect(against_, &QComboBox::currentTextChanged, this, [this](const QString& h) { if (!loading_) compareWith(h); });
+    connect(summary_, &QTableWidget::currentCellChanged, this, [this](int row) {
+        if (row >= 0 && summary_->item(row, 8)) derivation_->setPlainText(summary_->item(row, 8)->toolTip());
+    });
     connect(outputs_, &QTableWidget::cellDoubleClicked, this, [this](int row, int col) { openResult(row, col); });
     connect(outputs_, &QTableWidget::currentCellChanged, this, [this](int row, int col) { derivation_->setPlainText(derivation(row, col)); });
     connect(&session_, &Session::changed, this, [this] { if (!loading_) load(); });
@@ -195,6 +221,7 @@ void AdeExplorer::load() {
         put(tests_, k, 3, analysesText(t["analyses"].toArray()));
         put(tests_, k, 4, modelsText(t["models"].toArray()));
         put(tests_, k, 5, pairs(t["options"].toObject()));
+        put(tests_, k, 6, pairs(t["variables"].toObject()));
     }
     vars_->setRowCount(0);
     vars_->setRowCount((int)vs.size() + 1);
@@ -242,6 +269,7 @@ QJsonObject AdeExplorer::collect(QString& error) const {
                       {"analyses", parseAnalyses(text(tests_, k, 3), error)}};
         if (const QJsonArray m = parseModels(text(tests_, k, 4)); !m.isEmpty()) t["models"] = m;
         if (const QJsonObject o = parsePairs(text(tests_, k, 5), error); !o.isEmpty()) t["options"] = o;
+        if (const QJsonObject v = parsePairs(text(tests_, k, 6), error); !v.isEmpty()) t["variables"] = v;
         tests.append(t);
     }
     QJsonObject vars;
@@ -430,10 +458,129 @@ void AdeExplorer::poll() {
         running_.clear();
         showHistory(done);  // as finished: a Monte Carlo run's statistics exist only now
         status_->setText(done + ": " + h["status"].toString());
+        if (!queue_.isEmpty()) {  // a run plan's next run (already started in the background): watched now
+            running_ = queue_.takeFirst();
+            loading_ = true;
+            history_->setCurrentText(running_);
+            loading_ = false;
+            poll_->start(300);
+        }
     }
 }
 
+void AdeExplorer::runPlan() {
+    if (running()) return;
+    QString error;
+    const QJsonArray modes = collect(error).contains("montecarlo") ? QJsonArray{"corners", "montecarlo"} : QJsonArray{"corners"};
+    QJsonObject a = args();
+    a["modes"] = modes;
+    a["wait"] = false;
+    const cmd::Result r = session_.call("ade_run_plan", a);
+    if (!r.ok) {
+        status_->setText("✗ " + r.error);
+        return;
+    }
+    queue_.clear();
+    loading_ = true;
+    for (const auto& h : r.value.toArray()) {
+        queue_ << h.toObject()["name"].toString();
+        history_->addItem(queue_.last());
+    }
+    running_ = queue_.takeFirst();  // watched in turn: poll() moves to the next when one is done
+    history_->setCurrentText(running_);
+    loading_ = false;
+    status_->setText("Running " + running_ + " (run plan)");
+    poll_->start(300);
+}
+
+QString AdeExplorer::yield() const { return yield_->text(); }
+
+void AdeExplorer::select(const QString& history) { history_->setCurrentText(history); }
+
+void AdeExplorer::showSummary(const QString& history) {
+    summary_->setRowCount(0);
+    yield_->clear();
+    if (history.isEmpty()) return;
+    QJsonObject a = args();
+    a["history"] = history;
+    const cmd::Result r = session_.call("ade_summary", a);
+    if (!r.ok) return;
+    const QJsonObject s = r.value.toObject();
+    auto num = [](const QJsonValue& v) { return QString::fromStdString(sim::si(v.toDouble())); };
+    auto point = [](const QJsonObject& p) {
+        QStringList vars;
+        const QJsonObject v = p["variables"].toObject();
+        for (auto it = v.begin(); it != v.end(); ++it) vars << it.key() + "=" + it.value().toString();
+        return p["corner"].toString() + " " + p["temperature"].toString() + "°C" + (vars.isEmpty() ? "" : " " + vars.join(" ")) +
+               (p.contains("sample") ? " sample " + QString::number(p["sample"].toInt()) : "");
+    };
+    const QJsonArray outs = s["outputs"].toArray();
+    summary_->setRowCount((int)outs.size());
+    for (int k = 0; k < outs.size(); ++k) {
+        const QJsonObject e = outs[k].toObject(), w = e["worst"].toObject();
+        const QString spec = (e.contains("min_spec") ? e["min_spec"].toString() + " <= " : "") + (e.contains("min_spec") || e.contains("max_spec") ? "x" : "") +
+                             (e.contains("max_spec") ? " <= " + e["max_spec"].toString() : "");
+        const QStringList cells = {e["test"].toString(), e["output"].toString(), spec, QString::number(e["n"].toInt()),
+                                   e.contains("min") ? num(e["min"]) : "", e.contains("max") ? num(e["max"]) : "",
+                                   e.contains("pass") ? QString("%1 / %2").arg(e["pass"].toInt()).arg(e["pass"].toInt() + e["fail"].toInt()) : "",
+                                   w.isEmpty() ? "" : point(w), w.isEmpty() ? "" : num(w["margin"])};
+        for (int c = 0; c < cells.size(); ++c) {
+            auto* item = new QTableWidgetItem(cells[c]);
+            if (c >= 6 && !w.isEmpty()) item->setForeground(w["margin"].toDouble() < 0 ? QColor(Qt::red) : QColor(0, 150, 0));
+            if (c == 8 && !w.isEmpty())
+                item->setToolTip(e["output"].toString() + " (" + e["expression"].toString() + "): worst at point " + QString::number(w["index"].toInt()) + ", " +
+                                 point(w) + ", value " + num(w["value"]) + "\n" + w["derivation"].toString());
+            summary_->setItem(k, c, item);
+        }
+    }
+    if (s.contains("yield")) {
+        const QJsonObject y = s["yield"].toObject();
+        yield_->setText(QString("Yield %1% — %2").arg(y["yield"].toDouble() * 100, 0, 'g', 4).arg(y["derivation"].toString()));
+    }
+    summary_->resizeColumnsToContents();
+}
+
+void AdeExplorer::compareWith(const QString& history) {
+    compare_->setRowCount(0);
+    const QString shown = history_->currentText();
+    if (history.isEmpty() || shown.isEmpty() || history == shown) return;
+    QJsonObject a = args();
+    a["history"] = shown;
+    a["against"] = history;
+    const cmd::Result r = session_.call("ade_compare", a);
+    if (!r.ok) return;
+    const QJsonArray rows = r.value.toObject()["rows"].toArray();
+    compare_->setRowCount((int)rows.size());
+    for (int k = 0; k < rows.size(); ++k) {
+        const QJsonObject row = rows[k].toObject(), p = row["point"].toObject();
+        QStringList vars;
+        const QJsonObject v = p["variables"].toObject();
+        for (auto it = v.begin(); it != v.end(); ++it) vars << it.key() + "=" + it.value().toString();
+        auto num = [](const QJsonValue& x) { return x.isDouble() ? QString::fromStdString(sim::si(x.toDouble())) : QString("—"); };
+        const QStringList cells = {p["test"].toString() + " · " + p["corner"].toString() + " " + p["temperature"].toString() + "°C " + vars.join(" "),
+                                   row["output"].toString(), num(row["a"]), num(row["b"]), num(row["change"]),
+                                   row.contains("relative") ? QString::number(row["relative"].toDouble() * 100, 'g', 4) + "%" : "", row["spec"].toString()};
+        for (int c = 0; c < cells.size(); ++c) {
+            auto* item = new QTableWidgetItem(cells[c]);
+            if (c == 6) item->setForeground(cells[c] == "now fails" ? QColor(Qt::red) : QColor(0, 150, 0));
+            compare_->setItem(k, c, item);
+        }
+    }
+    compare_->resizeColumnsToContents();
+}
+
 void AdeExplorer::showHistory(const QString& name) {
+    showSummary(name);
+    if (!loading_) {  // the histories to compare with: every other one
+        const QString keep = against_->currentText();
+        against_->blockSignals(true);
+        against_->clear();
+        against_->addItem("");
+        for (int k = 0; k < history_->count(); ++k) if (history_->itemText(k) != name) against_->addItem(history_->itemText(k));
+        against_->setCurrentText(keep);
+        against_->blockSignals(false);
+        compareWith(against_->currentText());
+    }
     outputs_->setColumnCount(5);
     if (name.isEmpty()) return;
     QJsonObject a = args();

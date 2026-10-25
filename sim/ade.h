@@ -6,7 +6,8 @@
 //
 // The setup:
 //   tests        [{name, design: "lib/cell/view" (a schematic or config), enabled (true), analyses: [{type, ...}],
-//                  models: [{file, section ("": .include)}], options: {reltol: "1e-4", ...}}]
+//                  models: [{file, section ("": .include)}], options: {reltol: "1e-4", ...}, variables: {...}}]
+//                  (a test's variables win over the setup's, sweeps included)
 //     analyses   op; dc {source, start, stop, step}; ac {sweep (dec|oct|lin), points, start, stop};
 //                tran {step, stop [, start, maxstep]}; noise {output, source, sweep, points, start, stop};
 //                tf {output, source}; sens {output}; pz {in1, in2, out1, out2, transfer (vol|cur), kind (pol|zer|pz)}
@@ -72,6 +73,17 @@ Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell
 QJsonObject execute(const Job& job, const std::string& simulator, std::chrono::seconds timeout, const std::atomic<bool>* cancel);
 
 QJsonObject readHistory(const std::string& dir);
+void abandon(const Job& job, const std::string& why);  // a prepared run that will not run: its history says stopped, and why
+
+// ADE Assembler's views of histories.
+// summary: per output of each test, over the points that ran: n, min, max, its spec's pass and fail counts, and the
+// worst point (the furthest past its spec, else the nearest to it; with no spec, the min and max points), each with
+// its parameters and the margin; per test, the points that passed every spec; for a Monte Carlo history the yields,
+// per spec and overall (a sample passes when every spec of its test does), across tests by sample.
+QJsonObject summary(const QJsonObject& history);
+// compare: two histories point by point (a point is its test, corner, temperature, variables and sample): each output
+// in both, the change, and a spec that passed in one and failed in the other; the points only one of them has.
+QJsonObject compare(const QJsonObject& a, const QJsonObject& b);
 
 // Background runs, one thread each, by history directory; destroying it stops every run and waits for it
 class Jobs {

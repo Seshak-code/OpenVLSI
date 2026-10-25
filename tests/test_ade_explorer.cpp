@@ -115,6 +115,25 @@ int main(int argc, char** argv) {
         check(md.contains("Monte Carlo over 8 samples (seeds 1 .. 8") && md.contains("σ    = √(Σ(x − mean)² / (n − 1))") &&
                   md.contains("yield = pass / (pass + fail)") && md.contains("variables    rval = agauss(1k,100,1)"),
               "its derivation: the samples and seeds, the parameters, each statistic's formula and value\n" + md.toStdString());
+        // Assembler: the summary of the corners run, a run plan, comparing with the first run
+        ade->select("Interactive.1");
+        QTableWidget* sum = ade->summary();
+        check(sum->rowCount() == 1 && cell(sum, 0, 1) == "vout" && cell(sum, 0, 6) == "1 / 2" && cell(sum, 0, 7).contains("rval=3k") &&
+                  cell(sum, 0, 8) == "-150m" && sum->item(0, 8)->toolTip().contains("margin = 0.6 - 750m"),
+              "the Summary: vout passes 1 of 2, its worst point rval=3k, 150m past its max, and the derivation (" + cell(sum, 0, 7).toStdString() + ")");
+        const int before = (int)ade->histories().size();
+        ade->runPlan();
+        t.restart();
+        while (ade->running() && t.elapsed() < 60000) qapp.processEvents(QEventLoop::AllEvents, 50);
+        check(ade->histories().size() == before + 2 && ade->yield().startsWith("Yield"),
+              "Run Plan runs corners, then Monte Carlo, and the Summary shows the yield (" + ade->yield().toStdString() + ")");
+        ade->select(ade->histories()[before]);
+        ade->compareWith("Interactive.1");
+        QTableWidget* cmp = ade->comparison();
+        // the first run swept rval 1k, 3k; the plan ran rval 1k (the sweep was undone): one point in common, unchanged
+        check(cmp->rowCount() == 1 && cell(cmp, 0, 0).contains("rval=1k") && cell(cmp, 0, 4) == "0",
+              "Compare: the plan's corners run against the first, the point they share unchanged");
+
     }
     fs::remove_all(dir);
     std::printf("%s (%d failure%s)\n", g_fail ? "FAILED" : "OK", g_fail, g_fail == 1 ? "" : "s");

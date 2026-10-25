@@ -101,6 +101,55 @@ void addAdeCommands(Registry& r) {
                return QJsonValue(out);
            },
            true});
+    r.add({"ade_run_plan", "Runs several runs in order (each its own history: corners, then montecarlo, say); waits and returns the "
+                           "histories, or with wait false runs them in the background and returns their names.",
+           object({{"library", kLib}, {"cell", kCell}, {"view", kView},
+                   {"modes", QJsonObject{{"type", "array"}, {"description", "the runs, in order"},
+                                         {"items", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"corners", "montecarlo"}}}}}}},
+                  {{"wait", param("boolean", "wait for the results (default true)")}, {"timeout", param("integer", "seconds per point (default 600)")}}),
+           [](Context& c, const QJsonObject& a) {
+               maestro(c, a);
+               const int timeout = a.contains("timeout") ? a["timeout"].toInt() : 600;
+               if (timeout <= 0) throw std::invalid_argument("timeout: a positive number of seconds");
+               if (a["modes"].toArray().isEmpty()) throw std::invalid_argument("modes: at least one run");
+               // every run prepared first (the database's thread), so a bad setup fails before anything runs
+               auto runs = std::make_shared<std::vector<sim::Job>>();
+               try {
+                   for (const auto& m : a["modes"].toArray())
+                       runs->push_back(sim::prepare(c.workspace, s(a, "library"), s(a, "cell"), s(a, "view"), root(c), m.toString().toStdString()));
+               } catch (const std::exception& e) {  // the runs already prepared will not run: their histories say so
+                   for (const auto& j : *runs) sim::abandon(j, std::string("the run plan stopped before it started: ") + e.what());
+                   throw;
+               }
+               QJsonArray out;
+               if (!a.contains("wait") || a["wait"].toBool()) {
+                   for (const auto& j : *runs) out.append(sim::execute(j, c.simulator, std::chrono::seconds(timeout), nullptr));
+                   return QJsonValue(out);
+               }
+               for (const auto& j : *runs) out.append(QJsonObject{{"name", j.name}, {"status", "running"}, {"points", (int)j.points.size()}});
+               jobs(c).start(runs->front().dir, [runs, sim = c.simulator, timeout](const std::atomic<bool>& cancel) {
+                   for (const auto& j : *runs) {
+                       try {
+                           sim::execute(j, sim, std::chrono::seconds(timeout), &cancel);
+                       } catch (const std::exception&) {  // a history it could not write: what is on disk stays the record
+                       }
+                   }
+               });
+               return QJsonValue(out);
+           },
+           true});
+    r.add({"ade_summary", "Assembler's summary of a history: per output its range, its spec's pass count and the worst point (with "
+                          "its parameters and margin); per test the points passing every spec; a Monte Carlo history's yields.",
+           object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"history", kHistory}}),
+           [](Context& c, const QJsonObject& a) { return QJsonValue(sim::summary(sim::readHistory(historyDir(c, a)))); }, true});
+    r.add({"ade_compare", "Compares two histories point by point: each output's change, specs that flipped, points only one has.",
+           object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"history", kHistory}, {"against", kHistory}}),
+           [](Context& c, const QJsonObject& a) {
+               QJsonObject other = a;
+               other["history"] = a["against"];
+               return QJsonValue(sim::compare(sim::readHistory(historyDir(c, a)), sim::readHistory(historyDir(c, other))));
+           },
+           true});
     r.add({"ade_history_get", "Returns a history: its status, and each point's corner, variables, status, run directory and outputs "
                               "(value, pass).",
            object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"history", kHistory}}),
