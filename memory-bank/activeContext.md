@@ -1,5 +1,22 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — M2 begins: ADE Assembler (M2 slice 1)**
+
+- **M2 plan:** in `docs/rebuild.md` (owner's order: Assembler, then RF in TreeSPICE, then Spectre X).
+  - Slices: stb → PSS → PAC/PNoise → HB → Spectre X.
+  - Gate: an LC VCO and a mixer on SG13G2; op-amp stb; Assembler yields; a measured Spectre X speedup.
+- **M1 step 5:** stands on the automated bundle check. The owner has no clean account or Developer ID, so the bundle is
+  signed ad hoc.
+- **`rebuild/m2-s1`:**
+  - New commands: `ade_summary` (worst point and margin with its derivation; yields), `ade_compare`, `ade_run_plan`
+    (a plan that fails to prepare marks its prepared runs stopped).
+  - Variables per test.
+  - ADE Explorer: Summary and Compare tabs, Run Plan.
+- **Next:** M2 slice 2, stb in TreeSPICE (Middlebrook/Tian loop gain at a probe), checked against the M1 op-amp's
+  loop broken by hand.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — the M1 gate passes whole**
 
 - **`rebuild/bundle`:** `tools/deploy_macos.sh` closes the bundle's dependencies that `macdeployqt` misses with

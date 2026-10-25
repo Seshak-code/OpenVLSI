@@ -116,8 +116,10 @@ should be as usable as Virtuoso + ADE Explorer + Spectre for the same circuit.
 - **Commands and MCP:** every M1 operation above, exposed and covered by command-level tests.
 - **macOS app:** a signed, notarized `.app` bundle that ships its own Qt plugins and engine; no Homebrew paths.
 
-**Gate (run, not claimed):** `tools/m1_gate.py --bundle` (2026-10-25: 28 of 28 checks pass; what remains of step 5 is
-the owner's run on a clean account, and a Developer ID signature for distribution).
+**Gate (run, not claimed):** `tools/m1_gate.py --bundle` (2026-10-25: 28 of 28 checks pass). Step 5 stands on the
+automated check: the bundle links nothing outside itself and the system, and the app and its simulator run in an empty
+environment. The owner has no clean account or Apple Developer ID, so the bundle is signed ad hoc: it runs here, and on
+another Mac it needs right-click → Open until a Developer ID signature and notarization are possible.
 1. From an empty workspace, build a two-stage Miller op-amp on SG13G2: schematic, symbol, and a testbench using
    the symbol.
 2. In ADE, run op, ac, tran (step response) and noise, over 5 corners and a temperature sweep, plus a 200-sample
@@ -128,6 +130,40 @@ the owner's run on a clean account, and a Developer ID signature for distributio
 4. All of steps 1–3 is driven once more through the MCP server alone, by a script, with the same results.
 5. The bundle runs on a clean macOS user account (`cmake --build build --target bundle`; the gate's `--bundle` checks it
    is self-contained and starts in an empty environment, and the owner runs it once on a clean account).
+
+## Milestone 2: assembler and RF
+
+Owner's order (2026-10-25): ADE Assembler first, then the RF analyses in TreeSPICE, then Spectre X.
+
+**Slices:**
+1. **ADE Assembler** (the app, on M1's ADE):
+   - a summary across a history: per output its range, its spec's pass count, and the worst point with its
+     parameters and margin;
+   - yield: per spec and overall, a sample passing only when every spec does;
+   - comparing two histories point by point;
+   - variables per test;
+   - a run plan of several runs.
+2. **stb** (TreeSPICE): loop gain and stability margins at a probe, without breaking the loop (Middlebrook/Tian, as
+   Spectre's stb). Checked against breaking the loop by hand (the M1 gate's 1 GΩ/1 F trick) and analytic loops.
+3. **PSS** (TreeSPICE): periodic steady state by shooting Newton, driven and autonomous (oscillators). Checked
+   against a long transient's last period, and ngspice's experimental .pss where it applies.
+4. **PAC and PNoise** (TreeSPICE): small signal and noise about the periodic steady state (conversion gain, phase
+   noise). Checked against analytic LPTV circuits and a transient with a small tone.
+5. **HB** (TreeSPICE): harmonic balance, for strongly nonlinear circuits with many tones. Checked against PSS on the
+   same circuits, and the Xyce gold outputs (datasets/xyce) that have HB.
+6. **Spectre X**: the multithreaded solve and the S3 quotient arrays, reachable from ADE.
+
+Each RF analysis gets an ADE analysis type, calculator access (harmonics, loop gain, conversion gain, phase noise) and
+a waveform view.
+
+**Gate (to be run):** through MCP alone, on SG13G2:
+1. An LC VCO and a mixer:
+   - PSS gives the frequency and harmonics, matching a long transient;
+   - PAC gives the conversion gain and PNoise the phase noise, matching their brute-force references;
+   - HB agrees with PSS.
+2. The M1 op-amp: stb's phase margin matches the loop broken by hand.
+3. Assembler: the yield over corners and a Monte Carlo, with the worst point named for every spec.
+4. Spectre X: a large array runs, and its speedup is measured and reported.
 
 ## Salvage and retirement
 
