@@ -49,7 +49,6 @@ CMakeLists.txt.user
 # ============================================
 # Local Project Exclusions
 # ============================================
-tests/
 **/CLAUDE.md
 CLAUDE.md
 ENGINE_HANDOFF.md
