@@ -28,7 +28,7 @@ void addCoreCommands(Registry& r) {
                QJsonArray out;
                for (const auto& n : c.workspace.libraries()) out.append(q(n));
                return QJsonValue(out);
-           }});
+           }, true});
     r.add({"library_create", "Creates a library file and defines it in the workspace.",
            params({{"library", kLib}, {"path", str("file path, relative to the workspace file")}}),
            [](Context& c, const QJsonObject& a) {
@@ -47,13 +47,13 @@ void addCoreCommands(Registry& r) {
                return QJsonValue(a["library"]);
            }});
     r.add({"library_export", "Returns the library as deterministic text (for diffs and review).", params({{"library", kLib}}),
-           [](Context& c, const QJsonObject& a) { return QJsonValue(q(lib(c, a).exportText())); }});
+           [](Context& c, const QJsonObject& a) { return QJsonValue(q(lib(c, a).exportText())); }, true});
 
     r.add({"cell_list", "Lists a library's cells.", params({{"library", kLib}}), [](Context& c, const QJsonObject& a) {
                QJsonArray out;
                for (const auto& n : lib(c, a).cells()) out.append(q(n));
                return QJsonValue(out);
-           }});
+           }, true});
     r.add({"cell_create", "Creates an empty cell.", params({{"library", kLib}, {"cell", kCell}}), [](Context& c, const QJsonObject& a) {
                lib(c, a).createCell(s(a, "cell"));
                return QJsonValue(a["cell"]);
@@ -74,7 +74,7 @@ void addCoreCommands(Registry& r) {
                QJsonArray out;
                for (const auto& v : lib(c, a).views(s(a, "cell"))) out.append(QJsonObject{{"view", q(v.name)}, {"type", q(v.type)}});
                return QJsonValue(out);
-           }});
+           }, true});
     r.add({"view_create", "Creates an empty view of a cell.",
            params({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"type", str("view type: schematic, symbol, layout, ...")}}),
            [](Context& c, const QJsonObject& a) {
@@ -105,7 +105,7 @@ void addCoreCommands(Registry& r) {
                if (!v) throw std::runtime_error("no property '" + s(a, "key") + "' on " + s(a, "cell") + "/" + s(a, "view"));
                const QByteArray wrapped = "[" + QByteArray::fromStdString(*v) + "]";
                return QJsonDocument::fromJson(wrapped).array().at(0);
-           }});
+           }, true});
 
     r.add({"edit_undo", "Undoes the library's last change; returns what it undid.", params({{"library", kLib}}),
            [](Context& c, const QJsonObject& a) {

@@ -26,6 +26,7 @@ struct Command {
     QString description;  // one sentence: what it does and returns
     QJsonObject params;   // a JSON schema, {"type":"object", "properties":{...}, "required":[...]}
     std::function<QJsonValue(Context&, const QJsonObject&)> run;
+    bool readOnly = false;  // reads the database only: no undo step, nothing for an editor to refresh
 };
 
 struct Result {

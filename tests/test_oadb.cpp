@@ -90,10 +90,12 @@ int main() {
         auto ws = oadb::Workspace::load((dir / "openvlsi.libs").string());
         ws.defineLibrary("analog", "analog.oalib");
         ws.createLibrary("digital", "digital.oalib");
+        fs::create_directories(dir / "with space");
+        ws.createLibrary("spaced", "with space/spaced.oalib");
         auto again = oadb::Workspace::load((dir / "openvlsi.libs").string());
-        check(again.libraries() == std::vector<std::string>{"analog", "digital"} &&
-                  again.library("analog").exportText() == after,
-              "a saved workspace reopens its libraries");
+        check(again.libraries() == std::vector<std::string>{"analog", "digital", "spaced"} &&
+                  again.library("analog").exportText() == after && again.library("spaced").cells().empty(),
+              "a saved workspace reopens its libraries (a path with a space too)");
         check(!thrown([&] { again.library("missing"); }).empty(), "an undefined library is an error");
         std::ofstream(dir / "bad.libs") << "DEFINE x\n";
         check(!thrown([&] { oadb::Workspace::load((dir / "bad.libs").string()); }).empty(), "a malformed workspace line is an error");

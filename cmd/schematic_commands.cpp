@@ -82,11 +82,11 @@ void addSchematicCommands(Registry& r) {
                const auto v = lib(c, a).cellProp(s(a, "cell"), s(a, "key"));
                if (!v) throw std::runtime_error("no property '" + s(a, "key") + "' on cell " + s(a, "cell"));
                return parsed(*v);
-           }});
+           }, true});
 
     r.add({"view_get", "Returns a schematic's or symbol's objects: pins, instances, wires, labels, shapes.",
            object({{"library", kLib}, {"cell", kCell}, {"view", kView}}),
-           [](Context& c, const QJsonObject& a) { return QJsonValue(viewJson(lib(c, a), s(a, "cell"), s(a, "view"))); }});
+           [](Context& c, const QJsonObject& a) { return QJsonValue(viewJson(lib(c, a), s(a, "cell"), s(a, "view"))); }, true});
     r.add({"shape_add", "Adds a drawing shape (line, rect, polygon, ellipse, label) to a symbol or schematic; returns its id.",
            object({{"library", kLib}, {"cell", kCell}, {"view", kView},
                    {"kind", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"line", "rect", "polygon", "ellipse", "label"}}, {"description", "shape kind"}}},
@@ -197,7 +197,7 @@ void addSchematicCommands(Registry& r) {
                for (const auto& e : k.errors) errors.append(q(e));
                for (const auto& w : k.warnings) warnings.append(q(w));
                return QJsonValue(QJsonObject{{"ok", k.ok()}, {"nets", nets}, {"errors", errors}, {"warnings", warnings}});
-           }});
+           }, true});
     r.add({"symbol_generate", "Creates a symbol view from a schematic's pins (inputs left, outputs right, inout on top).",
            object({{"library", kLib}, {"cell", kCell}},
                   {{"from", param("string", "schematic view (default schematic)")}, {"to", param("string", "new symbol view (default symbol)")}}),

@@ -50,7 +50,8 @@ std::optional<QByteArray> Server::handle(const QByteArray& in) {
     if (method == "tools/list") {
         QJsonArray tools;
         for (const auto* c : registry_.commands())
-            tools.append(QJsonObject{{"name", c->name}, {"description", c->description}, {"inputSchema", c->params}});
+            tools.append(QJsonObject{{"name", c->name}, {"description", c->description}, {"inputSchema", c->params},
+                                     {"annotations", QJsonObject{{"readOnlyHint", c->readOnly}}}});
         return line(result(id, {{"tools", tools}}));
     }
     if (method == "tools/call") {

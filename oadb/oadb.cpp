@@ -612,9 +612,12 @@ Workspace Workspace::load(const std::string& file) {
     std::string line;
     for (int n = 1; std::getline(in, line); ++n) {
         std::istringstream ls(line);
-        std::string word, name, path, rest;
+        std::string word, name, path;
         if (!(ls >> word) || word[0] == '#') continue;
-        if (word != "DEFINE" || !(ls >> name >> path) || (ls >> rest) || !validName(name))
+        ls >> name;
+        std::getline(ls >> std::ws, path);  // the rest of the line: a path may hold spaces
+        path.erase(path.find_last_not_of(" \t\r") + 1);
+        if (word != "DEFINE" || path.empty() || !validName(name))
             throw Error("oadb: " + file + ":" + std::to_string(n) + ": expected 'DEFINE <library> <path>'");
         if (!w.paths_.emplace(name, path).second)
             throw Error("oadb: " + file + ":" + std::to_string(n) + ": library " + name + " defined twice");
