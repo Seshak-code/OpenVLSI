@@ -2,6 +2,8 @@
 // that undo/redo replay exactly (a cascade delete included); a failed change leaves nothing behind.
 #include "oadb/oadb.h"
 
+#include <sqlite3.h>
+
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -99,6 +101,47 @@ int main() {
         check(!thrown([&] { again.library("missing"); }).empty(), "an undefined library is an error");
         std::ofstream(dir / "bad.libs") << "DEFINE x\n";
         check(!thrown([&] { oadb::Workspace::load((dir / "bad.libs").string()); }).empty(), "a malformed workspace line is an error");
+    }
+
+    // a schema-2 library (no label justification) opens upgraded
+    {
+        const std::string f = (dir / "old.oalib").string();
+        {
+            auto l = oadb::Library::create(f, "old");
+            l->createCell("c");
+            l->createView("c", "symbol", "symbol");
+            l->addShape("c", "symbol", {0, "label", "pin", {{0, 0}}, "A", "centerRight"});
+        }
+        sqlite3* db = nullptr;
+        sqlite3_open(f.c_str(), &db);
+        const int rc = sqlite3_exec(db, "ALTER TABLE shapes DROP COLUMN justify; UPDATE meta SET value = '2' WHERE key = 'schema'",
+                                    nullptr, nullptr, nullptr);
+        sqlite3_close(db);
+        std::string justify;
+        const std::string e = thrown([&] { justify = oadb::Library::open(f)->shapes("c", "symbol").at(0).justify; });
+        check(rc == SQLITE_OK && e.empty() && justify == "centerLeft", "a schema-2 library opens, its labels centerLeft (" + e + ")");
+        check(!thrown([&] {
+                  auto l = oadb::Library::open(f);
+                  l->addShape("c", "symbol", {0, "line", "pin", {{0, 0}, {1, 0}}, "", "centerLeft"});
+              }).empty(), "justification on a non-label is refused");
+    }
+
+    // objects move by an offset; a missing one is an error
+    {
+        auto l = oadb::Library::create((dir / "move.oalib").string(), "move");
+        l->createCell("c");
+        l->createView("c", "schematic", "schematic");
+        const int64_t w = l->addWire("c", "schematic", {0, {{0, 0}, {10, 0}}});
+        l->addPin("c", "schematic", {0, "A", "input", {0, 0}});
+        const int64_t p = l->pins("c", "schematic").at(0).id;
+        l->moveObject("c", "schematic", "wire", std::to_string(w), 5, -5);
+        l->moveObject("c", "schematic", "pin", std::to_string(p), 5, -5);
+        check(l->wires("c", "schematic").at(0).points == std::vector<oadb::Point>{{5, -5}, {15, -5}} &&
+                  l->pins("c", "schematic").at(0).at == oadb::Point{5, -5},
+              "moveObject shifts a wire's points and a pin");
+        check(!thrown([&] { l->moveObject("c", "schematic", "label", "42", 1, 1); }).empty() &&
+                  !thrown([&] { l->moveObject("c", "schematic", "wire", "x", 1, 1); }).empty(),
+              "moving a missing object, or one named by a non-id, is an error");
     }
 
     fs::remove_all(dir);

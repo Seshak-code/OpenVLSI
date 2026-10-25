@@ -183,25 +183,25 @@ void generateSymbol(oadb::Library& lib, const std::string& cell, const std::stri
     lib.change("generate " + cell + "/" + to + " from " + from, [&] {
         lib.createView(cell, to, "symbol");
         lib.addShape(cell, to, {0, "rect", "device", {{0, 0}, {width, height}}, ""});
-        auto side = [&](const std::vector<oadb::Pin>& ps, auto pinAt, auto stubEnd, auto textAt) {
+        auto side = [&](const std::vector<oadb::Pin>& ps, const char* justify, auto pinAt, auto stubEnd, auto textAt) {
             for (size_t k = 0; k < ps.size(); ++k) {
                 const oadb::Point p = pinAt((int64_t)k), e = stubEnd((int64_t)k);
                 lib.addShape(cell, to, {0, "line", "pin", {p, e}, ""});
-                lib.addShape(cell, to, {0, "label", "pin", {textAt((int64_t)k)}, ps[k].name});
+                lib.addShape(cell, to, {0, "label", "pin", {textAt((int64_t)k)}, ps[k].name, justify});
                 lib.addPin(cell, to, {0, ps[k].name, ps[k].direction, p});
             }
         };
-        side(left, [&](int64_t k) { return oadb::Point{-G, height - (2 * k + 2) * G}; },
+        side(left, "centerLeft", [&](int64_t k) { return oadb::Point{-G, height - (2 * k + 2) * G}; },
              [&](int64_t k) { return oadb::Point{0, height - (2 * k + 2) * G}; },
              [&](int64_t k) { return oadb::Point{G / 4, height - (2 * k + 2) * G}; });
-        side(right, [&](int64_t k) { return oadb::Point{width + G, height - (2 * k + 2) * G}; },
+        side(right, "centerRight", [&](int64_t k) { return oadb::Point{width + G, height - (2 * k + 2) * G}; },
              [&](int64_t k) { return oadb::Point{width, height - (2 * k + 2) * G}; },
              [&](int64_t k) { return oadb::Point{width - G / 4, height - (2 * k + 2) * G}; });
-        side(top, [&](int64_t k) { return oadb::Point{(2 * k + 2) * G, height + G}; },
+        side(top, "upperCenter", [&](int64_t k) { return oadb::Point{(2 * k + 2) * G, height + G}; },
              [&](int64_t k) { return oadb::Point{(2 * k + 2) * G, height}; },
              [&](int64_t k) { return oadb::Point{(2 * k + 2) * G, height - G / 4}; });
-        lib.addShape(cell, to, {0, "label", "annotate", {{0, height + 2 * G}}, "[@instanceName]"});
-        lib.addShape(cell, to, {0, "label", "annotate", {{width / 2, height / 2}}, "[@cellName]"});
+        lib.addShape(cell, to, {0, "label", "annotate", {{0, height + 2 * G}}, "[@instanceName]", "lowerLeft"});
+        lib.addShape(cell, to, {0, "label", "annotate", {{width / 2, height / 2}}, "[@cellName]", "centerCenter"});
     });
 }
 

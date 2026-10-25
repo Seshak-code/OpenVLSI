@@ -10,6 +10,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <unistd.h>
 
@@ -130,6 +131,11 @@ int main() {
               sp[1].toObject()["at"].toArray()[0].toDouble() > 0,
           "the symbol has A on the left (input) and Y on the right (output)");
     check(!call("symbol_generate", {{"library", "analog"}, {"cell", "inv"}}).ok, "generating over an existing symbol is an error");
+    std::map<QString, QString> just;
+    for (const auto& h : sym["shapes"].toArray())
+        if (h.toObject()["kind"] == "label") just[h.toObject()["text"].toString()] = h.toObject()["justify"].toString();
+    check(just["A"] == "centerLeft" && just["Y"] == "centerRight" && just["[@cellName]"] == "centerCenter",
+          "the generated labels are justified away from their pins");
 
     // a floating instance: auto-named by its prefix, four floating pins; then undone
     auto m = inst(nullptr, "nmos", 800, 800, "R90");
@@ -143,7 +149,7 @@ int main() {
 
     // an instance's parameters go and come back with it
     must("instance_set_params", with({{"instance", "MP"}, {"params", QJsonObject{{"w", "2u"}, {"l", "180n"}}}}));
-    must("object_delete", with({{"kind", "instance"}, {"key", "MP"}}));
+    must("objects_delete", with({{"objects", QJsonArray{QJsonObject{{"kind", "instance"}, {"key", "MP"}}}}}));
     const bool gone = must("view_get", sc).toObject()["instances"].toArray().size() == 1;
     must("edit_undo", {{"library", "analog"}});
     QJsonObject mp;
@@ -160,6 +166,27 @@ int main() {
     bool c1 = false, c2 = false;
     for (const auto& n : check3["nets"].toArray()) { c1 = c1 || n.toObject()["name"] == "c1"; c2 = c2 || n.toObject()["name"] == "c2"; }
     check(check3["ok"].toBool() && c1 && c2, "crossing wires stay two nets (c1, c2)");
+
+    // objects move together, as one undo step; a move naming a missing object moves nothing
+    {
+        auto exported = [&] { return must("library_export", {{"library", "analog"}}).toString().toStdString(); };
+        const std::string before = exported();
+        const auto v = must("view_get", sc).toObject();
+        QJsonArray objs;
+        for (const auto& w : v["wires"].toArray())
+            if (w.toObject()["points"].toArray()[0].toArray() == xy(400, -50)) objs.append(QJsonObject{{"kind", "wire"}, {"key", w.toObject()["id"]}});
+        for (const auto& l : v["labels"].toArray())
+            if (l.toObject()["name"] == "c1") objs.append(QJsonObject{{"kind", "label"}, {"key", l.toObject()["id"]}});
+        must("objects_move", with({{"objects", objs}, {"dx", 0.}, {"dy", -1000.}}));
+        const std::string moved = exported();
+        check(objs.size() == 2 && moved.find("wire (400 -1050) (600 -1050)") != std::string::npos &&
+                  moved.find("label c1 (450 -1050)") != std::string::npos && must("schematic_check", sc).toObject()["ok"].toBool(),
+              "objects_move moves a wire and its label together (the label still names it)");
+        objs.append(QJsonObject{{"kind", "wire"}, {"key", 99999}});
+        check(!call("objects_move", with({{"objects", objs}, {"dx", 5.}, {"dy", 0.}})).ok && exported() == moved,
+              "a move naming a missing object moves nothing");
+        check(call("edit_undo", {{"library", "analog"}}).ok && exported() == before, "one undo returns them all");
+    }
 
     // errors: a short, a label on nothing
     label("Y2", 200, 150);

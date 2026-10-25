@@ -12,7 +12,7 @@
 namespace oadb {
 namespace {
 
-constexpr int kSchema = 2;
+constexpr int kSchema = 3;
 
 // The tables, and for each its non-key columns: what the undo triggers restore
 const char* kTables =
@@ -25,14 +25,15 @@ const char* kTables =
     "CREATE TABLE props(id INTEGER PRIMARY KEY,"
     " view_id INTEGER NOT NULL REFERENCES views(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,"
     " key TEXT NOT NULL, value TEXT NOT NULL, UNIQUE(view_id, key));";
-// Schema 2: cell properties and the schematic / symbol objects (points: packed little-endian int64 pairs)
+// Schema 2: cell properties and the schematic / symbol objects (points: packed little-endian int64 pairs); schema 3
+// adds a label shape's justification
 const char* kTables2 =
     "CREATE TABLE cellprops(id INTEGER PRIMARY KEY,"
     " cell_id INTEGER NOT NULL REFERENCES cells(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,"
     " key TEXT NOT NULL, value TEXT NOT NULL, UNIQUE(cell_id, key));"
     "CREATE TABLE shapes(id INTEGER PRIMARY KEY,"
     " view_id INTEGER NOT NULL REFERENCES views(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,"
-    " kind TEXT NOT NULL, layer TEXT NOT NULL, points BLOB NOT NULL, text TEXT NOT NULL);"
+    " kind TEXT NOT NULL, layer TEXT NOT NULL, points BLOB NOT NULL, text TEXT NOT NULL, justify TEXT NOT NULL);"
     "CREATE TABLE pins(id INTEGER PRIMARY KEY,"
     " view_id INTEGER NOT NULL REFERENCES views(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,"
     " name TEXT NOT NULL, direction TEXT NOT NULL, x INTEGER NOT NULL, y INTEGER NOT NULL, UNIQUE(view_id, name));"
@@ -54,7 +55,7 @@ const std::vector<std::pair<std::string, std::vector<std::string>>> kLogged = {
     {"views", {"cell_id", "name", "type"}},
     {"props", {"view_id", "key", "value"}},
     {"cellprops", {"cell_id", "key", "value"}},
-    {"shapes", {"view_id", "kind", "layer", "points", "text"}},
+    {"shapes", {"view_id", "kind", "layer", "points", "text", "justify"}},
     {"pins", {"view_id", "name", "direction", "x", "y"}},
     {"instances", {"view_id", "name", "master_lib", "master_cell", "master_view", "x", "y", "orient"}},
     {"instparams", {"instance_id", "name", "value"}},
@@ -163,6 +164,13 @@ bool validOrient(const std::string& o) {
 
 bool validDirection(const std::string& d) { return d == "input" || d == "output" || d == "inputOutput"; }
 
+bool validJustify(const std::string& j) {
+    for (const char* v : {"upper", "center", "lower"})
+        for (const char* h : {"Left", "Center", "Right"})
+            if (j == std::string(v) + h) return true;
+    return false;
+}
+
 bool validName(const std::string& name) {
     if (name.empty() || name.size() > 255) return false;
     return std::none_of(name.begin(), name.end(), [](unsigned char c) { return std::isspace(c) || c == '/' || c < 0x20; });
@@ -202,6 +210,17 @@ std::unique_ptr<Library> Library::open(const std::string& path) {
     } catch (const Error&) {
         sqlite3_close(db);
         throw Error("oadb: " + path + " is not an OpenVLSI library");
+    }
+    if (schema == "2") {  // schema 3 only adds label justification: upgrade in place
+        try {
+            execOn(db, "BEGIN; ALTER TABLE shapes ADD COLUMN justify TEXT NOT NULL DEFAULT '';"
+                       "UPDATE shapes SET justify = 'centerLeft' WHERE kind = 'label';"
+                       "UPDATE meta SET value = '3' WHERE key = 'schema'; COMMIT;");
+        } catch (const Error&) {
+            sqlite3_close(db);
+            throw;
+        }
+        schema = "3";
     }
     if (schema != std::to_string(kSchema) || name.empty()) {
         sqlite3_close(db);
@@ -400,11 +419,15 @@ int64_t Library::addShape(const std::string& cell, const std::string& view, Shap
     need(ok, "oadb: a '" + sh.kind + "' shape with " + std::to_string(n) + " points is not valid "
              "(line >= 2, rect/ellipse 2 corners, polygon >= 3, label 1 point and text)");
     need(validName(sh.layer), "oadb: '" + sh.layer + "' is not a valid layer");
+    if (sh.kind == "label" && sh.justify.empty()) sh.justify = "centerLeft";
+    need(sh.kind == "label" ? validJustify(sh.justify) : sh.justify.empty(),
+         "oadb: justification '" + sh.justify + "' is not valid (labels only: lowerLeft ... upperRight)");
     int64_t id = 0;
     change("add " + sh.kind + " to " + cell + "/" + view, [&] {
         needIn(viewType(cell, view), {"symbol", "schematic"}, "shapes");
-        Stmt(db_, "INSERT INTO shapes(view_id, kind, layer, points, text) VALUES(?1, ?2, ?3, ?4, ?5)")
-            .bind(1, viewId(cell, view)).bind(2, sh.kind).bind(3, sh.layer).blob(4, pack(sh.points)).bind(5, sh.text).step();
+        Stmt(db_, "INSERT INTO shapes(view_id, kind, layer, points, text, justify) VALUES(?1, ?2, ?3, ?4, ?5, ?6)")
+            .bind(1, viewId(cell, view)).bind(2, sh.kind).bind(3, sh.layer).blob(4, pack(sh.points)).bind(5, sh.text)
+            .bind(6, sh.justify).step();
         id = sqlite3_last_insert_rowid(db_);
     });
     return id;
@@ -474,9 +497,9 @@ int64_t Library::addLabel(const std::string& cell, const std::string& view, Labe
 
 std::vector<Shape> Library::shapes(const std::string& cell, const std::string& view) const {
     std::vector<Shape> out;
-    Stmt s(db_, "SELECT id, kind, layer, points, text FROM shapes WHERE view_id = ?1 ORDER BY id");
+    Stmt s(db_, "SELECT id, kind, layer, points, text, justify FROM shapes WHERE view_id = ?1 ORDER BY id");
     s.bind(1, viewId(cell, view));
-    while (s.step()) out.push_back({s.integer(0), s.text(1), s.text(2), s.points(3), s.text(4)});
+    while (s.step()) out.push_back({s.integer(0), s.text(1), s.text(2), s.points(3), s.text(4), s.text(5)});
     return out;
 }
 
@@ -545,24 +568,59 @@ void Library::setInstanceParams(const std::string& cell, const std::string& view
     });
 }
 
-void Library::deleteObject(const std::string& cell, const std::string& view, const std::string& kind, const std::string& key) {
+namespace {
+// An object's table, and its key bound as ?2: an instance by name, the others by id
+std::string objectTable(const std::string& kind) {
     static const std::map<std::string, std::string> tables = {
         {"shape", "shapes"}, {"pin", "pins"}, {"instance", "instances"}, {"wire", "wires"}, {"label", "labels"}};
     const auto t = tables.find(kind);
     need(t != tables.end(), "oadb: no object kind '" + kind + "' (shape, pin, instance, wire, label)");
+    return t->second;
+}
+const char* keyColumn(const std::string& kind) { return kind == "instance" ? "name" : "id"; }
+void bindKey(Stmt& s, const std::string& kind, const std::string& key) {
+    if (kind == "instance") { s.bind(2, key); return; }
+    char* end = nullptr;
+    const long long id = std::strtoll(key.c_str(), &end, 10);
+    need(!key.empty() && *end == '\0', "oadb: a " + kind + " is named by its id, not '" + key + "'");
+    s.bind(2, (int64_t)id);
+}
+}  // namespace
+
+void Library::deleteObject(const std::string& cell, const std::string& view, const std::string& kind, const std::string& key) {
+    const std::string table = objectTable(kind);
     change("delete " + kind + " " + key + " from " + cell + "/" + view, [&] {
-        const bool byName = kind == "instance";
-        Stmt d(db_, "DELETE FROM " + t->second + " WHERE view_id = ?1 AND " + (byName ? "name" : "id") + " = ?2");
+        Stmt d(db_, "DELETE FROM " + table + " WHERE view_id = ?1 AND " + keyColumn(kind) + " = ?2");
         d.bind(1, viewId(cell, view));
-        if (byName) d.bind(2, key);
-        else {
-            char* end = nullptr;
-            const long long id = std::strtoll(key.c_str(), &end, 10);
-            need(!key.empty() && *end == '\0', "oadb: a " + kind + " is deleted by its id, not '" + key + "'");
-            d.bind(2, (int64_t)id);
-        }
+        bindKey(d, kind, key);
         d.step();
         need(sqlite3_changes(db_) == 1, "oadb: no " + kind + " " + key + " in " + cell + "/" + view);
+    });
+}
+
+void Library::moveObject(const std::string& cell, const std::string& view, const std::string& kind, const std::string& key,
+                         int64_t dx, int64_t dy) {
+    const std::string table = objectTable(kind);
+    change("move " + kind + " " + key + " in " + cell + "/" + view, [&] {
+        const int64_t v = viewId(cell, view);
+        if (kind == "shape" || kind == "wire") {
+            Stmt q(db_, "SELECT points FROM " + table + " WHERE view_id = ?1 AND id = ?2");
+            q.bind(1, v);
+            bindKey(q, kind, key);
+            need(q.step(), "oadb: no " + kind + " " + key + " in " + cell + "/" + view);
+            std::vector<Point> pts = q.points(0);
+            for (auto& p : pts) p = {p.x + dx, p.y + dy};
+            Stmt u(db_, "UPDATE " + table + " SET points = ?3 WHERE view_id = ?1 AND id = ?2");
+            u.bind(1, v);
+            bindKey(u, kind, key);
+            u.blob(3, pack(pts)).step();
+        } else {
+            Stmt u(db_, "UPDATE " + table + " SET x = x + ?3, y = y + ?4 WHERE view_id = ?1 AND " + keyColumn(kind) + " = ?2");
+            u.bind(1, v);
+            bindKey(u, kind, key);
+            u.bind(3, dx).bind(4, dy).step();
+            need(sqlite3_changes(db_) == 1, "oadb: no " + kind + " " + key + " in " + cell + "/" + view);
+        }
     });
 }
 
@@ -592,7 +650,8 @@ std::string Library::exportText() const {
             }
             // shapes, wires and labels have no names: their geometry orders them, so ids never show
             std::vector<std::string> rows;
-            for (const auto& sh : shapes(c, v.name)) rows.push_back("shape " + sh.kind + " " + sh.layer + pts(sh.points) + (sh.text.empty() ? "" : " \"" + sh.text + "\""));
+            for (const auto& sh : shapes(c, v.name))
+                rows.push_back("shape " + sh.kind + " " + sh.layer + pts(sh.points) + (sh.text.empty() ? "" : " \"" + sh.text + "\" " + sh.justify));
             for (const auto& w : wires(c, v.name)) rows.push_back("wire" + pts(w.points));
             for (const auto& l : labels(c, v.name)) rows.push_back("label " + l.name + pts({l.at}));
             std::sort(rows.begin(), rows.end());

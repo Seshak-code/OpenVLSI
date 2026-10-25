@@ -38,7 +38,7 @@ endif()
 add_subdirectory(acutesim_engine)
 
 # Homebrew's full qt first: a machine with both qt and a newer qtbase otherwise mixes the two's plugins
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets HINTS /opt/homebrew/opt/qt /usr/local/opt/qt)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets ShaderTools HINTS /opt/homebrew/opt/qt /usr/local/opt/qt)
 find_package(SQLite3 REQUIRED)
 # ponytail: Qt 6.9.0's FindWrapOpenGL links AGL, which the macOS 26 SDK no longer has; drop it (delete this once Homebrew's
 # Qt no longer links it)
@@ -70,8 +70,10 @@ target_link_libraries(openvlsi-mcp PRIVATE openvlsi_mcp)
 
 # ── The app: the CIW and the tools' windows, every action a command through app::Session ───────────────────────────
 set(CMAKE_AUTOMOC ON)
-add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp)
-target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets)
+add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp app/scene.cpp app/canvas.cpp
+            app/view_editor.cpp)
+target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
+qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
 target_link_libraries(OpenVLSI PRIVATE openvlsi_app)
 set_target_properties(OpenVLSI PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER org.openvlsi.OpenVLSI
@@ -88,7 +90,7 @@ target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp test_schematic test_library_manager)
+foreach(t test_oadb test_commands test_mcp test_schematic test_library_manager test_view_editor)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
@@ -97,8 +99,9 @@ target_link_libraries(test_commands PRIVATE openvlsi_cmd)
 target_link_libraries(test_schematic PRIVATE openvlsi_cmd)
 target_link_libraries(test_mcp PRIVATE openvlsi_mcp)
 target_link_libraries(test_library_manager PRIVATE openvlsi_app)
+target_link_libraries(test_view_editor PRIVATE openvlsi_app)
 # the plugins of the Qt this links (a machine with a second, stale Qt prefix otherwise finds no platform plugin)
-set_tests_properties(test_library_manager PROPERTIES ENVIRONMENT
+set_tests_properties(test_library_manager test_view_editor PROPERTIES ENVIRONMENT
                      "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>/..")
 target_compile_definitions(test_mcp PRIVATE OPENVLSI_MCP_EXE="$<TARGET_FILE:openvlsi-mcp>")
 

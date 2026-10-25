@@ -23,6 +23,13 @@ const QJsonObject kLib = param("string", "library name"), kCell = param("string"
 const QJsonObject kCoord = param("integer", "coordinate, in database units");
 const QJsonObject kPoints = {{"type", "array"}, {"description", "points [[x, y], ...], in database units"},
                              {"items", QJsonObject{{"type", "array"}, {"items", QJsonObject{{"type", "integer"}}}}}};
+// [{kind, key}]: an instance by name, the others by id
+const QJsonObject kObjects = {
+    {"type", "array"}, {"description", "objects: [{kind, key}], an instance's key its name, the others' their id"},
+    {"items", QJsonObject{{"type", "object"},
+                          {"properties", QJsonObject{{"kind", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"shape", "pin", "instance", "wire", "label"}}}},
+                                                     {"key", QJsonObject{{"description", "the instance's name, or the object's id"}}}}},
+                          {"required", QJsonArray{"kind", "key"}}}}};
 const QJsonObject kOrient = {{"type", "string"}, {"description", "orientation"},
                              {"enum", QJsonArray{"R0", "R90", "R180", "R270", "MX", "MY", "MXR90", "MYR90"}}};
 
@@ -34,6 +41,17 @@ oadb::Point point(const QJsonValue& v) {
 std::vector<oadb::Point> points(const QJsonValue& v) {
     std::vector<oadb::Point> out;
     for (const auto& p : v.toArray()) out.push_back(point(p));
+    return out;
+}
+std::vector<std::pair<std::string, std::string>> objects(const QJsonValue& v) {
+    std::vector<std::pair<std::string, std::string>> out;
+    for (const auto& o : v.toArray()) {
+        const QJsonValue k = o.toObject()["key"];
+        if (!k.isString() && !k.isDouble()) throw std::invalid_argument("an object's key is its name or its id");
+        out.emplace_back(o.toObject()["kind"].toString().toStdString(),
+                         k.isString() ? k.toString().toStdString() : std::to_string((long long)k.toDouble()));
+    }
+    if (out.empty()) throw std::invalid_argument("no objects given");
     return out;
 }
 QJsonArray json(const std::vector<oadb::Point>& ps) {
@@ -64,7 +82,8 @@ QJsonObject viewJson(oadb::Library& l, const std::string& cell, const std::strin
     for (const auto& b : l.labels(cell, view))
         labels.append(QJsonObject{{"id", (double)b.id}, {"name", q(b.name)}, {"at", json({b.at})[0]}});
     for (const auto& h : l.shapes(cell, view))
-        shapes.append(QJsonObject{{"id", (double)h.id}, {"kind", q(h.kind)}, {"layer", q(h.layer)}, {"points", json(h.points)}, {"text", q(h.text)}});
+        shapes.append(QJsonObject{{"id", (double)h.id}, {"kind", q(h.kind)}, {"layer", q(h.layer)}, {"points", json(h.points)}, {"text", q(h.text)},
+                                  {"justify", q(h.justify)}});
     return {{"type", q(l.viewType(cell, view))}, {"pins", pins}, {"instances", insts}, {"wires", wires}, {"labels", labels}, {"shapes", shapes}};
 }
 
@@ -91,10 +110,13 @@ void addSchematicCommands(Registry& r) {
            object({{"library", kLib}, {"cell", kCell}, {"view", kView},
                    {"kind", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"line", "rect", "polygon", "ellipse", "label"}}, {"description", "shape kind"}}},
                    {"points", kPoints}},
-                  {{"layer", param("string", "drawing layer (default device)")}, {"text", param("string", "a label's text")}}),
+                  {{"layer", param("string", "drawing layer (default device)")}, {"text", param("string", "a label's text")},
+                   {"justify", QJsonObject{{"type", "string"}, {"description", "a label's justification (default centerLeft)"},
+                                           {"enum", QJsonArray{"upperLeft", "upperCenter", "upperRight", "centerLeft", "centerCenter",
+                                                               "centerRight", "lowerLeft", "lowerCenter", "lowerRight"}}}}}),
            [](Context& c, const QJsonObject& a) {
                const std::string layer = a.contains("layer") ? s(a, "layer") : "device";
-               return QJsonValue((double)lib(c, a).addShape(s(a, "cell"), s(a, "view"), {0, s(a, "kind"), layer, points(a["points"]), s(a, "text")}));
+               return QJsonValue((double)lib(c, a).addShape(s(a, "cell"), s(a, "view"), {0, s(a, "kind"), layer, points(a["points"]), s(a, "text"), s(a, "justify")}));
            }});
     r.add({"pin_add", "Adds a pin (a symbol's terminal or a schematic's port); returns its id.",
            object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"name", param("string", "pin name")},
@@ -171,15 +193,26 @@ void addSchematicCommands(Registry& r) {
                return QJsonValue((double)lib(c, a).addLabel(s(a, "cell"), s(a, "view"),
                                                             {0, s(a, "name"), {(int64_t)a["x"].toDouble(), (int64_t)a["y"].toDouble()}}));
            }});
-    r.add({"object_delete", "Deletes a schematic/symbol object: an instance by name, a shape, pin, wire or label by id.",
-           object({{"library", kLib}, {"cell", kCell}, {"view", kView},
-                   {"kind", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"shape", "pin", "instance", "wire", "label"}}, {"description", "object kind"}}},
-                   {"key", param("", "the instance's name, or the object's id")}}),
+    r.add({"objects_delete", "Deletes schematic/symbol objects, as one undo step.",
+           object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"objects", kObjects}}), [](Context& c, const QJsonObject& a) {
+               auto& l = lib(c, a);
+               const auto objs = objects(a["objects"]);
+               l.change("delete " + std::to_string(objs.size()) + " object(s)", [&] {
+                   for (const auto& [kind, key] : objs) l.deleteObject(s(a, "cell"), s(a, "view"), kind, key);
+               });
+               return QJsonValue((double)objs.size());
+           }});
+    r.add({"objects_move", "Moves schematic/symbol objects by (dx, dy), as one undo step (instances keep their orientation).",
+           object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"objects", kObjects},
+                   {"dx", param("integer", "x offset, in database units")}, {"dy", param("integer", "y offset, in database units")}}),
            [](Context& c, const QJsonObject& a) {
-               const QJsonValue k = a["key"];
-               const std::string key = k.isString() ? k.toString().toStdString() : std::to_string((long long)k.toDouble());
-               lib(c, a).deleteObject(s(a, "cell"), s(a, "view"), s(a, "kind"), key);
-               return k;
+               auto& l = lib(c, a);
+               const auto objs = objects(a["objects"]);
+               const int64_t dx = (int64_t)a["dx"].toDouble(), dy = (int64_t)a["dy"].toDouble();
+               l.change("move " + std::to_string(objs.size()) + " object(s)", [&] {
+                   for (const auto& [kind, key] : objs) l.moveObject(s(a, "cell"), s(a, "view"), kind, key, dx, dy);
+               });
+               return QJsonValue((double)objs.size());
            }});
 
     r.add({"schematic_check", "Checks a schematic's connectivity: returns its nets (with each instance pin and port), errors "
