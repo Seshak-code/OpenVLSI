@@ -237,9 +237,12 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
     res.synth.cellCount = (int)num(lastMatch(stat, std::regex(R"(\n\s*(\d+)\s+\S+\s+\d+\s+\S+\s+cells\n)")));
     res.synth.success = res.synth.cellCount > 0;
 
+    // Sign-off reads its reports: a missing one is an error, never a clean zero
     const std::string finish = slurp(reports / "6_finish.rpt"), report = slurp(logs / "6_report.log");
     auto& pnr = res.pnr;
-    pnr.timing.wns = num(lastMatch(finish, std::regex(R"(\nwns max ([0-9.eE+-]+))")));
+    const std::string wns = lastMatch(finish, std::regex(R"(\nwns max ([0-9.eE+-]+))"));
+    if (wns.empty()) return fail("RTL flow: " + (reports / "6_finish.rpt").string() + " reports no wns (timing unknown)");
+    pnr.timing.wns = num(wns);
     pnr.timing.tns = num(lastMatch(finish, std::regex(R"(\ntns max ([0-9.eE+-]+))")));
     pnr.timing.timingClean = pnr.timing.wns >= 0.0;
     // The PnR dialog's units: power in mW, utilization as a fraction
@@ -253,9 +256,12 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
     pnr.placement.totalArea = num(lastMatch(report, std::regex(R"(Design area ([0-9.]+) um\^2)")));
     pnr.placement.utilization = num(lastMatch(report, std::regex(R"(Design area [0-9.]+ um\^2 ([0-9.]+)% utilization)"))) / 100.0;
     pnr.placement.instanceCount = res.synth.cellCount;
+    if (!fs::exists(reports / "5_route_drc.rpt")) return fail("RTL flow: no 5_route_drc.rpt (routing DRC unknown)");
     const std::string routeDrc = slurp(reports / "5_route_drc.rpt");
     for (size_t at = 0; (at = routeDrc.find("violation type", at)) != std::string::npos; ++at) ++pnr.routing.drcViolations;
-    pnr.routing.antennaViolations = (int)num(lastMatch(slurp(reports / "drt_antennas.log"), std::regex(R"(Found (\d+) net violations)")));
+    const std::string antenna = lastMatch(slurp(reports / "drt_antennas.log"), std::regex(R"(Found (\d+) net violations)"));
+    if (antenna.empty()) return fail("RTL flow: drt_antennas.log reports no antenna check");
+    pnr.routing.antennaViolations = (int)num(antenna);
     pnr.routing.drcClean = pnr.routing.drcViolations == 0 && pnr.routing.antennaViolations == 0;
     pnr.success = fs::exists(res.gds);
     if (!pnr.success) return fail("RTL flow: no GDS was written");

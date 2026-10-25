@@ -177,17 +177,9 @@ void CodeEditor::loadContent() {
 
     // Fallback: try StorageManager (WASM / virtual paths)
     auto& storage = acutesim::gui::core::StorageManager::instance();
-    QString project = storage.currentProject();
+    QString project;
+    const QString relPath = storagePath(&project);
     if (!project.isEmpty()) {
-        // Try to derive relative path from full path
-        QString projDir = storage.getProjectDirectory();
-        QString relPath = filePath_;
-        if (relPath.startsWith(projDir)) {
-            relPath = relPath.mid(projDir.length());
-            if (relPath.startsWith('/')) relPath = relPath.mid(1);
-            // Remove project name prefix if present
-            if (relPath.startsWith(project + '/')) relPath = relPath.mid(project.length() + 1);
-        }
         QByteArray data = storage.loadFile(project, relPath);
         if (!data.isEmpty()) {
             isDirty_ = false;
@@ -199,6 +191,32 @@ void CodeEditor::loadContent() {
     }
 
     qWarning() << "[CodeEditor] Could not load file:" << filePath_;
+}
+
+QString CodeEditor::storagePath(QString* project) const {
+    auto& storage = acutesim::gui::core::StorageManager::instance();
+    *project = storage.currentProject();
+    QString relPath = filePath_;
+    const QString projDir = storage.getProjectDirectory();
+    if (relPath.startsWith(projDir)) {
+        relPath = relPath.mid(projDir.length());
+        if (relPath.startsWith('/')) relPath = relPath.mid(1);
+        if (relPath.startsWith(*project + '/')) relPath = relPath.mid(project->length() + 1);  // the project's own name
+    }
+    return relPath;
+}
+
+bool CodeEditor::save() {
+    const QByteArray data = textEdit_->toPlainText().toUtf8();
+    QFile file(filePath_);
+    bool ok = file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(data) == data.size() && file.flush();
+    if (!ok) {  // WASM / virtual paths: the project storage, as loadContent reads it
+        QString project;
+        const QString relPath = storagePath(&project);
+        ok = !project.isEmpty() && acutesim::gui::core::StorageManager::instance().saveFile(project, relPath, data);
+    }
+    if (ok) isDirty_ = false;
+    return ok;
 }
 
 void CodeEditor::setContent(const QString& text) {

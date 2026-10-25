@@ -7,7 +7,6 @@ on:
       - 'acutesim_engine/**'
       - 'components/**'
       - 'compute/**'
-      - 'physics/**'
       - 'gui/**'
       - 'engine_api/**'
       - 'api/**'

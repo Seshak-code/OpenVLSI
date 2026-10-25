@@ -46,6 +46,7 @@ public:
     QString filePath() const override { return filePath_; }
     QString title() const override;
     bool isDirty() const override { return false; }
+    bool save() override { return true; }  // a viewer: nothing to write
     core::EditorCapabilities capabilities() const override { return {}; }
 
 private:

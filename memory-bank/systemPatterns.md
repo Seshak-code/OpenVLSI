@@ -12,8 +12,7 @@ gui/ → ai_api/ → compute/ → physics/ → autodiff/
 ```
 
 Dependencies flow **downward only**. Lower layers never import from higher
-layers. Verify with `python3 scripts/check_layering.py` and
-`python3 tools/check_engine_isolation.py`.
+layers. Verify with `python3 tools/check_engine_isolation.py`.
 
 ## Patterns that most often bite
 

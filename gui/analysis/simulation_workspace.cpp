@@ -422,7 +422,7 @@ void SimulationWorkspace::setSchematicEditor(SchematicEditor* editor) {
     
     // Populate Explorer
     if (explorer_) {
-        // explorer_->clear(); // TODO: Implement clear
+        explorer_->clearProfiles();  // a new editor: its profiles only
         for (const auto& p : profiles_) {
             explorer_->addProfile(p);
         }
@@ -442,9 +442,6 @@ void SimulationWorkspace::selectProfile(const QString& profileId) {
     updateProfileEditor();
     
     /* profileCombo_ removed */
-    
-    // Notify profile change (explorer removed - UI simplified)
-    // emit explorer_->profileSelected(profileId);
 }
 
 Simulation::SimulationProfile* SimulationWorkspace::currentProfile() {
@@ -602,7 +599,7 @@ QWidget* SimulationWorkspace::createComboParam(const QString& key, const QString
 void SimulationWorkspace::onTopologyChanged(size_t newHash) {
     if (newHash != currentTopologyHash_) {
         currentTopologyHash_ = newHash;
-        // explorer_->markAllStale(); // Explorer removed
+        if (explorer_) explorer_->markAllStale();
         // QuickAnalysis::invalidate(); // Invalidate hover preview cache
         appendLog(QString("[INFO] Topology changed (hash: 0x%1). Profiles marked stale.")
                   .arg(newHash, 8, 16, QChar('0')));
@@ -977,7 +974,7 @@ void SimulationWorkspace::finishSimulation() {
     currentRun_.solveTime_ms = currentRun_.startTime.msecsTo(currentRun_.endTime);
     
     // Add to history
-    // explorer_->addRun(currentRun_); // Explorer removed
+    if (explorer_) explorer_->addRun(currentRun_);
     runHistory_.prepend(currentRun_);
     
     // Update status

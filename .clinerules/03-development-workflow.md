@@ -23,7 +23,6 @@ Code) so both agents follow the same plan-first workflow.
    `test_numerical_intelligence`, `test_grpc_orchestrator`.
 2. `python3 acutesim_engine/tests/ngspice_diff/run_diff.py` — expect **82/83 PASS**; only
    `aac_10_bridge` fails (junction gmin, the queued next engine task).
-3. Layering touched? `python3 scripts/check_layering.py` and
-   `python3 tools/check_engine_isolation.py`.
+3. Layering touched? `python3 tools/check_engine_isolation.py`.
 4. Session end: follow `.clinerules/01-collab-handoff.md` (update §0 +
    `activeContext.md`, stamp, commit, push).

@@ -282,8 +282,6 @@ set(ACUTESIM_SOURCES
     gui/widgets/problems_panel.h
     gui/widgets/debug_suggestions_panel.cpp
     gui/widgets/debug_suggestions_panel.h
-    gui/analysis/logic_analyzer.cpp
-    gui/analysis/logic_analyzer.h
     gui/analysis/simulation_explorer.cpp
     gui/analysis/simulation_explorer.h
     gui/analysis/simulation_workspace.cpp
@@ -313,8 +311,6 @@ set(ACUTESIM_SOURCES
     ai_api/simulation/simulation_trace.cpp
     ai_api/simulation/simulation_trace.h
     ai_api/simulation/simulation_trace.h
-    ai_api/context/prompt_builder.cpp
-    ai_api/context/prompt_builder.h
     ai_api/context/rag_context.cpp
     ai_api/context/rag_context.h
     ai_api/analysis/topology_analyzer.cpp
@@ -324,10 +320,6 @@ set(ACUTESIM_SOURCES
     ai_api/system/feedback_loop.h
     ai_api/context/context_budget.cpp
     ai_api/context/context_budget.h
-    ai_api/adk/tool_registry.cpp
-    ai_api/adk/tool_registry.h
-    ai_api/adk/tool_handlers.cpp
-    ai_api/adk/tool_handlers.h
     ai_api/adk/session_manager.cpp
     ai_api/adk/session_manager.h
     ai_api/pipeline/rag_pipeline.cpp
@@ -336,8 +328,6 @@ set(ACUTESIM_SOURCES
     gui/orchestration/worker_manager.h
     gui/orchestration/pdk_manager.cpp
     gui/orchestration/pdk_manager.h
-    gui/orchestration/pdk_browser_panel.cpp
-    gui/orchestration/pdk_browser_panel.h
     gui/orchestration/worker_status_panel.cpp
     gui/orchestration/worker_status_panel.h
     gui/orchestration/rtl_pipeline_panel.cpp
@@ -402,15 +392,6 @@ set(ACUTESIM_SOURCES
 )
 
 # ============================================================================
-# ============================================================================
-# acutesim_math_core — Header-only math + autodiff INTERFACE library
-# No compiled sources; gives named CMake target to compute/math/ and autodiff/
-# ============================================================================
-add_library(acutesim_math_core INTERFACE)
-target_include_directories(acutesim_math_core INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/autodiff
-)
 
 # acutesim_compute_core — Components + Compute kernel STATIC library
 # Links acutesim_engine (canonical engine library)
@@ -540,15 +521,6 @@ endif()
 add_subdirectory(acutesim_engine)
 
 qt_add_executable(${PROJECT_NAME} main.cpp ${ACUTESIM_SOURCES})
-
-# Enforce strict GUI -> Physics layering via Python static check
-add_custom_target(check_layering
-    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_layering.py
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Enforcing GUI -> Physics layer decoupling"
-    VERBATIM
-)
-add_dependencies(${PROJECT_NAME} check_layering)
 
 # Enforce engine isolation (Qt-free engine + no GUI bypass of engine_api/)
 add_custom_target(check_engine_isolation
@@ -900,152 +872,6 @@ if(NOT EMSCRIPTEN)
     set_tests_properties(test_gpu_parity PROPERTIES LABELS "gpu;heavy")
 endif()
 
-# Auto-Validation Harness Test (ERC + AI API)
-if(NOT EMSCRIPTEN)
-    add_executable(test_auto_harness
-        tests/test_auto_harness.cpp
-        gui/components/visual_component.cpp
-        gui/components/probe_tip.cpp
-        gui/core/hierarchy_path.cpp
-        gui/widgets/breadcrumb_widget.cpp
-        gui/editors/schematic/schematic_editor.cpp
-        gui/editors/schematic/schematic_view.cpp
-        gui/editors/component_wizard.cpp
-        gui/editors/schematic/schematic_editor_api.cpp
-        gui/editors/schematic/schematic_editor_sync.cpp
-        gui/panels/ai_assistant_panel.cpp
-        gui/widgets/component_library.cpp
-        gui/widgets/design_flow.cpp
-        gui/analysis/system_inspector.cpp
-        gui/analysis/logic_analyzer.cpp
-        gui/editors/code_editor.cpp
-        gui/editors/json_viewer.cpp
-        gui/editors/image_viewer.cpp
-        gui/editors/hex_viewer.cpp
-        gui/core/editor_manager.cpp
-        gui/core/editor_factory.cpp
-        gui/core/sim_auto_detector.cpp
-        gui/core/mainwindow.cpp
-        gui/core/welcome_widget.cpp
-        gui/components/standard_cell_visualizer.cpp
-        gui/core/subcircuit_resolver.cpp
-        components/design_db.cpp
-        gui/analysis/pdk_manager.cpp
-        gui/orchestration/pdk_manager.cpp
-        gui/orchestration/pdk_browser_panel.cpp
-    gui/scripting/tcl_bridge.cpp
-    gui/analysis/pdk_compliance.cpp
-    gui/widgets/compliance_report_widget.cpp
-        components/netlist_export.cpp
-        ai_api/system/schema_api.cpp
-        ai_api/context/context_engine.cpp
-        ai_api/analysis/failure_classifier.cpp
-        ai_api/simulation/auto_harness.cpp
-        ai_api/simulation/speculative_runner.cpp
-        ai_api/context/prompt_builder.cpp
-        ai_api/context/rag_context.cpp
-        ai_api/analysis/topology_analyzer.cpp
-        ai_api/system/feedback_loop.cpp
-        ai_api/simulation/simulation_trace.cpp
-        ai_api/context/context_budget.cpp
-        ai_api/adk/tool_registry.cpp
-        ai_api/adk/tool_handlers.cpp
-        ai_api/adk/session_manager.cpp
-        ai_api/pipeline/rag_pipeline.cpp
-        gui/analysis/simulation_workspace.cpp
-        gui/analysis/simulation_driver_adapter.h
-        gui/widgets/engine_console.cpp
-        gui/widgets/engine_log_panel.cpp
-        gui/analysis/variables_panel.cpp
-        gui/analysis/variables_panel.h
-        gui/analysis/calculator_widget.cpp
-        gui/analysis/calculator_widget.h
-        gui/analysis/parametric_sweep_dialog.cpp
-        gui/analysis/parametric_sweep_dialog.h
-
-        gui/analysis/simulation_explorer.cpp
-        gui/analysis/corner_setup_widget.cpp
-        gui/widgets/problems_panel.cpp
-        gui/widgets/debug_suggestions_panel.cpp
-        gui/widgets/trust_badge_widget.cpp
-        gui/orchestration/worker_status_panel.cpp
-        gui/orchestration/worker_manager.cpp
-        gui/orchestration/rtl_pipeline_panel.cpp
-        gui/orchestration/synthesis_result_dialog.cpp
-        gui/orchestration/pnr_result_dialog.cpp
-        gui/orchestration/signoff_result_dialog.cpp
-        gui/editors/physical_overlay_item.cpp
-        gui/widgets/cell_pie_chart.h
-        gui/widgets/timing_indicator.h
-
-        compute/orchestration/grpc_worker_client.cpp
-        gui/analysis/statistical_dashboard.cpp
-        gui/analysis/monte_carlo_setup_widget.cpp
-        gui/styling/theme_manager.cpp
-        gui/core/layout_manager.cpp
-        gui/core/storage_manager.cpp
-        gui/core/docking_manager.cpp
-        gui/widgets/waveform_widget.cpp
-        gui/widgets/output_dock_widget.cpp
-        gui/widgets/terminal_widget.cpp
-        gui/core/platform_helper.cpp
-        gui/core/activity_bar.cpp
-        gui/core/activity_bar.h
-        gui/core/icon_provider.cpp
-        gui/core/icon_provider.h
-        resources/icons.qrc
-        gui/widgets/command_palette.cpp
-        gui/widgets/command_palette.h
-        gui/widgets/ghost_diff_viewer.cpp
-        gui/widgets/ghost_diff_viewer.h
-        gui/widgets/toast_manager.cpp
-        gui/widgets/toast_manager.h
-        gui/core/keybinding_manager.cpp
-        gui/core/keybinding_manager.h
-        gui/widgets/keybindings_dialog.cpp
-        gui/widgets/keybindings_dialog.h
-        gui/widgets/inline_dialog_types.h
-        gui/widgets/inline_dialog.cpp
-        gui/widgets/inline_dialog.h
-        gui/widgets/inline_progress.cpp
-        gui/widgets/inline_progress.h
-        gui/widgets/search_dock.cpp
-        gui/widgets/search_dock.h
-        gui/widgets/project_model.cpp
-        gui/widgets/project_model.h
-        gui/widgets/project_explorer.cpp
-        gui/widgets/project_explorer.h
-        gui/widgets/library_model.cpp
-        gui/widgets/library_model.h
-        gui/orchestration/library_index.cpp
-        gui/orchestration/library_index.h
-    )
-    target_include_directories(test_auto_harness PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
-        ${CMAKE_CURRENT_SOURCE_DIR}/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/components
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
-    )
-    target_link_libraries(test_auto_harness PRIVATE acutesim_orchestration Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test Qt6::Concurrent ${TCL_LIBRARY})
-    target_compile_features(test_auto_harness PUBLIC cxx_std_17)
-endif()
-
 # Copilot Integration Test
 if(NOT EMSCRIPTEN)
     add_executable(test_copilot_validate
@@ -1063,7 +889,6 @@ if(NOT EMSCRIPTEN)
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
-        gui/analysis/logic_analyzer.cpp
         gui/editors/code_editor.cpp
         gui/editors/json_viewer.cpp
         gui/editors/image_viewer.cpp
@@ -1081,21 +906,16 @@ if(NOT EMSCRIPTEN)
         components/design_db.cpp
         gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
-        gui/orchestration/pdk_browser_panel.cpp
         components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
-        ai_api/simulation/auto_harness.cpp
         ai_api/simulation/speculative_runner.cpp
-        ai_api/context/prompt_builder.cpp
         ai_api/context/rag_context.cpp
         ai_api/analysis/topology_analyzer.cpp
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
         ai_api/context/context_budget.cpp
-        ai_api/adk/tool_registry.cpp
-        ai_api/adk/tool_handlers.cpp
         ai_api/adk/session_manager.cpp
         ai_api/pipeline/rag_pipeline.cpp
         gui/analysis/simulation_workspace.cpp
@@ -1261,43 +1081,6 @@ target_include_directories(test_context_budget PRIVATE
 target_link_libraries(test_context_budget PRIVATE Qt6::Core Qt6::Test)
 target_compile_features(test_context_budget PUBLIC cxx_std_17)
 
-# Phase 1.26: ADK Tool Registry Tests
-add_executable(test_adk_tool_registry
-    tests/test_adk_tool_registry.cpp
-    tests/stubs/ai_api_test_stubs.cpp
-    ai_api/adk/tool_registry.cpp
-    ai_api/adk/tool_handlers.cpp
-    ai_api/adk/session_manager.cpp
-    ai_api/context/context_budget.cpp
-    ai_api/context/rag_context.cpp
-    ai_api/context/prompt_builder.cpp
-    ai_api/system/feedback_loop.cpp
-    ai_api/simulation/simulation_trace.cpp
-    ai_api/analysis/failure_classifier.cpp
-    ai_api/analysis/topology_analyzer.cpp
-    ai_api/pipeline/rag_pipeline.cpp
-)
-target_include_directories(test_adk_tool_registry PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
-    ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
-    ${CMAKE_CURRENT_SOURCE_DIR}/physics
-    ${CMAKE_CURRENT_SOURCE_DIR}/components
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-    ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-)
-target_include_directories(test_adk_tool_registry PRIVATE $<TARGET_PROPERTY:Qt6::Gui,INTERFACE_INCLUDE_DIRECTORIES>)
-target_link_libraries(test_adk_tool_registry PRIVATE Qt6::Core Qt6::Test)
-target_compile_features(test_adk_tool_registry PUBLIC cxx_std_17)
-
 # Phase 1.26: RAG Pipeline Tests
 add_executable(test_rag_pipeline
     tests/test_rag_pipeline.cpp
@@ -1305,7 +1088,6 @@ add_executable(test_rag_pipeline
     ai_api/pipeline/rag_pipeline.cpp
     ai_api/context/context_budget.cpp
     ai_api/context/rag_context.cpp
-    ai_api/context/prompt_builder.cpp
     ai_api/system/feedback_loop.cpp
     ai_api/simulation/simulation_trace.cpp
     ai_api/analysis/failure_classifier.cpp
@@ -1407,7 +1189,6 @@ add_executable(test_pdk_swap
     gui/core/icon_provider.cpp
     gui/orchestration/worker_manager.cpp
     gui/orchestration/pdk_manager.cpp
-    gui/orchestration/pdk_browser_panel.cpp
     compute/orchestration/grpc_worker_client.cpp
     gui/widgets/inline_dialog.cpp
     gui/widgets/inline_progress.cpp
@@ -1442,9 +1223,9 @@ if(EMSCRIPTEN)
     target_link_options(test_simulation PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     target_link_options(test_sensitivity PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
     target_link_options(test_erc_rules PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
-    # test_auto_harness and test_copilot_validate excluded from WASM due to threading
+    # test_copilot_validate excluded from WASM due to threading
     target_link_options(test_erc_rules PRIVATE ${EMSCRIPTEN_TEST_LINK_OPTIONS})
-    # test_auto_harness and test_copilot_validate excluded from WASM due to threading
+    # test_copilot_validate excluded from WASM due to threading
 endif()
 
 # Phase 1.5 PDK Compliance Test (GUI Integration)
@@ -1478,21 +1259,16 @@ if(NOT EMSCRIPTEN)
         components/design_db.cpp
         gui/analysis/pdk_manager.cpp
         gui/orchestration/pdk_manager.cpp
-        gui/orchestration/pdk_browser_panel.cpp
         components/netlist_export.cpp
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
-        ai_api/simulation/auto_harness.cpp
         ai_api/simulation/speculative_runner.cpp
-        ai_api/context/prompt_builder.cpp
         ai_api/context/rag_context.cpp
         ai_api/analysis/topology_analyzer.cpp
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
         ai_api/context/context_budget.cpp
-        ai_api/adk/tool_registry.cpp
-        ai_api/adk/tool_handlers.cpp
         ai_api/adk/session_manager.cpp
         ai_api/pipeline/rag_pipeline.cpp
         gui/analysis/simulation_workspace.cpp
@@ -1603,7 +1379,6 @@ if(NOT EMSCRIPTEN)
         gui/widgets/component_library.cpp
         gui/widgets/design_flow.cpp
         gui/analysis/system_inspector.cpp
-        gui/analysis/logic_analyzer.cpp
         gui/editors/code_editor.cpp
         gui/core/editor_manager.cpp
         gui/core/sim_auto_detector.cpp
@@ -1614,16 +1389,12 @@ if(NOT EMSCRIPTEN)
         ai_api/system/schema_api.cpp
         ai_api/context/context_engine.cpp
         ai_api/analysis/failure_classifier.cpp
-        ai_api/simulation/auto_harness.cpp
         ai_api/simulation/speculative_runner.cpp
-        ai_api/context/prompt_builder.cpp
         ai_api/context/rag_context.cpp
         ai_api/analysis/topology_analyzer.cpp
         ai_api/system/feedback_loop.cpp
         ai_api/simulation/simulation_trace.cpp
         ai_api/context/context_budget.cpp
-        ai_api/adk/tool_registry.cpp
-        ai_api/adk/tool_handlers.cpp
         ai_api/adk/session_manager.cpp
         ai_api/pipeline/rag_pipeline.cpp
         gui/analysis/simulation_workspace.cpp
@@ -1692,7 +1463,6 @@ if(NOT EMSCRIPTEN)
         gui/editors/hex_viewer.cpp
         gui/core/editor_factory.cpp
         gui/orchestration/pdk_manager.cpp
-        gui/orchestration/pdk_browser_panel.cpp
     )
     target_include_directories(test_hierarchical_sim PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
@@ -1741,7 +1511,6 @@ enable_testing()
 add_test(NAME test_safe_io COMMAND test_safe_io)
 add_test(NAME test_ai_simulation_intelligence COMMAND test_ai_simulation_intelligence)
 add_test(NAME test_context_budget COMMAND test_context_budget)
-add_test(NAME test_adk_tool_registry COMMAND test_adk_tool_registry)
 add_test(NAME test_rag_pipeline COMMAND test_rag_pipeline)
 add_test(NAME test_session_manager COMMAND test_session_manager)
 
@@ -1787,7 +1556,6 @@ if(NOT EMSCRIPTEN)
         gui/scripting/tcl_bridge.cpp
         gui/orchestration/worker_manager.cpp
         gui/orchestration/pdk_manager.cpp
-        gui/orchestration/pdk_browser_panel.cpp
         gui/orchestration/synthesis_result_dialog.cpp
         gui/orchestration/pnr_result_dialog.cpp
         gui/orchestration/signoff_result_dialog.cpp
@@ -2011,148 +1779,6 @@ if(NOT EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}
     )
 
-    # Validating introspection tests
-    add_executable(test_introspection
-        tests/test_introspection.cpp
-        gui/components/visual_component.cpp
-        gui/styling/theme_manager.cpp
-        gui/core/platform_helper.cpp
-        gui/components/probe_tip.cpp
-        gui/core/hierarchy_path.cpp
-        gui/widgets/breadcrumb_widget.cpp
-        gui/editors/schematic/schematic_editor.cpp
-        gui/editors/schematic/schematic_editor_api.cpp
-        gui/core/editor_manager.cpp
-        gui/components/visual_component.cpp
-        gui/components/probe_tip.cpp
-        gui/editors/schematic/schematic_editor.cpp
-        gui/editors/schematic/schematic_view.cpp
-        gui/editors/component_wizard.cpp
-        gui/editors/schematic/schematic_editor_api.cpp
-        gui/editors/schematic/schematic_editor_sync.cpp
-        gui/panels/ai_assistant_panel.cpp
-        gui/widgets/component_library.cpp
-        gui/widgets/design_flow.cpp
-        gui/analysis/system_inspector.cpp
-        gui/analysis/logic_analyzer.cpp
-        gui/editors/code_editor.cpp
-        gui/core/editor_manager.cpp
-        gui/core/sim_auto_detector.cpp
-        gui/components/standard_cell_visualizer.cpp
-        gui/core/subcircuit_resolver.cpp
-        gui/core/mainwindow.cpp
-        gui/core/welcome_widget.cpp
-        ai_api/system/schema_api.cpp
-        ai_api/context/context_engine.cpp
-        ai_api/analysis/failure_classifier.cpp
-        ai_api/simulation/auto_harness.cpp
-        ai_api/simulation/speculative_runner.cpp
-        ai_api/context/prompt_builder.cpp
-        ai_api/context/rag_context.cpp
-        ai_api/analysis/topology_analyzer.cpp
-        ai_api/system/feedback_loop.cpp
-        ai_api/simulation/simulation_trace.cpp
-        ai_api/context/context_budget.cpp
-        ai_api/adk/tool_registry.cpp
-        ai_api/adk/tool_handlers.cpp
-        ai_api/adk/session_manager.cpp
-        ai_api/pipeline/rag_pipeline.cpp
-        gui/analysis/simulation_workspace.cpp
-        gui/analysis/simulation_driver_adapter.h
-        gui/widgets/engine_console.cpp
-        gui/widgets/engine_log_panel.cpp
-        gui/analysis/variables_panel.cpp
-        gui/analysis/variables_panel.h
-        gui/analysis/calculator_widget.cpp
-        gui/analysis/calculator_widget.h
-        gui/analysis/parametric_sweep_dialog.cpp
-        gui/analysis/parametric_sweep_dialog.h
-
-        gui/analysis/simulation_explorer.cpp
-        gui/analysis/corner_setup_widget.cpp
-        gui/widgets/problems_panel.cpp
-        gui/widgets/debug_suggestions_panel.cpp
-        gui/widgets/trust_badge_widget.cpp
-        gui/orchestration/worker_status_panel.cpp
-        gui/orchestration/worker_manager.cpp
-        gui/orchestration/rtl_pipeline_panel.cpp
-        gui/orchestration/synthesis_result_dialog.cpp
-        gui/orchestration/pnr_result_dialog.cpp
-        gui/orchestration/signoff_result_dialog.cpp
-        gui/editors/physical_overlay_item.cpp
-        gui/widgets/cell_pie_chart.h
-        gui/widgets/timing_indicator.h
-
-        compute/orchestration/grpc_worker_client.cpp
-        gui/analysis/statistical_dashboard.cpp
-        gui/analysis/monte_carlo_setup_widget.cpp
-        gui/styling/theme_manager.cpp
-        gui/core/layout_manager.cpp
-        gui/core/storage_manager.cpp
-        gui/core/docking_manager.cpp
-        gui/widgets/waveform_widget.cpp
-        gui/widgets/output_dock_widget.cpp
-        gui/widgets/terminal_widget.cpp
-        gui/core/platform_helper.cpp
-        gui/core/activity_bar.cpp
-        gui/core/icon_provider.cpp
-        resources/icons.qrc
-        gui/analysis/pdk_compliance.cpp
-        gui/widgets/compliance_report_widget.cpp
-        gui/widgets/command_palette.cpp
-        gui/widgets/ghost_diff_viewer.cpp
-        gui/widgets/toast_manager.cpp
-        gui/core/keybinding_manager.cpp
-        gui/widgets/keybindings_dialog.cpp
-        gui/widgets/inline_dialog.cpp
-        gui/widgets/inline_progress.cpp
-        gui/widgets/search_dock.cpp
-        gui/widgets/project_model.cpp
-        gui/widgets/project_explorer.cpp
-        gui/widgets/project_explorer.h
-        gui/widgets/library_model.cpp
-        gui/widgets/library_model.h
-        gui/orchestration/library_index.cpp
-        gui/orchestration/library_index.h
-        components/design_db.cpp
-        gui/analysis/pdk_manager.cpp
-        components/netlist_export.cpp
-        gui/scripting/tcl_bridge.cpp
-        gui/editors/json_viewer.cpp
-        gui/editors/image_viewer.cpp
-        gui/editors/hex_viewer.cpp
-        gui/core/editor_factory.cpp
-        gui/orchestration/pdk_manager.cpp
-        gui/orchestration/pdk_browser_panel.cpp
-    )
-    target_include_directories(test_introspection PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/core
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/analysis
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/components
-        ${CMAKE_CURRENT_SOURCE_DIR}/physics
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/solvers
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/math
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/tensors
-        ${CMAKE_CURRENT_SOURCE_DIR}/compute/infrastructure
-        ${CMAKE_CURRENT_SOURCE_DIR}/components
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/simulation
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/system
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/adk
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/pipeline
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/context
-        ${CMAKE_CURRENT_SOURCE_DIR}/ai_api/analysis
-        ${TCL_INCLUDE_PATH}
-    )
-    target_link_libraries(test_introspection PRIVATE acutesim_orchestration Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Concurrent Qt6::Test ${TCL_LIBRARY})
-    target_include_directories(test_introspection PRIVATE 
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/editors
-        ${CMAKE_CURRENT_SOURCE_DIR}/gui/widgets
-    )
 endif()
 
 # [NEW] Worker Server Executable (Orchestration Backend)
@@ -2413,7 +2039,7 @@ endif()
 set(_quick_tests
     test_physics_kernels test_safe_io test_emulated_f64 test_dual_emulated
     test_fpu_determinism test_determinism
-    test_hierarchy_path test_context_budget test_adk_tool_registry
+    test_hierarchy_path test_context_budget
 )
 foreach(_t ${_quick_tests})
     if(TEST ${_t})
@@ -2522,8 +2148,8 @@ endif()
 
 # Targets compiling gui/core/mainwindow.cpp need what its Reference SoC action uses
 if(NOT EMSCRIPTEN)
-    foreach(t test_auto_harness test_copilot_validate test_pdk_compliance test_hierarchical_sim
-              test_introspection test_hierarchy_gui)
+    foreach(t test_copilot_validate test_pdk_compliance test_hierarchical_sim
+              test_hierarchy_gui)
         if(TARGET ${t})
             target_link_libraries(${t} PRIVATE acutesim_soc)
             target_compile_definitions(${t} PRIVATE SOC_DATASETS="${CMAKE_CURRENT_SOURCE_DIR}/datasets")

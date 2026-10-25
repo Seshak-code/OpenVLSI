@@ -30,6 +30,12 @@ main), then #21 `mac/scale`. Each branch's tip passed the full matrix.
 - **Next:** slot-indexed stamps, then S3: a hierarchical plan per cell type, shared factors, and
   class-compressed state.
 
+**Codebase review (2026-10-24):** TreeSPICE PR #25 (`mac/review`) and OpenVLSI PR #22 (`review/cleanup`, pins the
+engine at #25's head: merge #25 first, then move the pointer to its merge commit). Fixes: lost edits on save-on-close,
+fake New Project, ORFS sign-off reading missing reports as clean, corners/temperature silently dropped, singular
+solves returned as zeros, WorkerManager thread race. About 9,000 dead lines deleted across both repos. Open
+(decisions): AI actions bypass `AiActionEnvelope`; `ai_api` includes `gui/`; `parseSiValue` M = mega.
+
 **Results** (full matrix on every commit): run_diff 1234 PASS / 0 FAIL; Xyce 193 PASS (two LTRA cases time out,
 ngspice is as slow); cli_check 29 PASS; ctest 4/4.
 

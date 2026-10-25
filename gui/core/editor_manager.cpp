@@ -59,7 +59,14 @@ void EditorManager::closeEditor(int index) {
             DialogButton::Save | DialogButton::Discard | DialogButton::Cancel,
             [this, index, widget](const DialogResult& r) {
                 if (r.clickedButton == DialogButton::Cancel) return;
-                if (r.clickedButton == DialogButton::Save) saveCurrent();
+                if (r.clickedButton == DialogButton::Save) {
+                    IEditor* e = getEditor(index);
+                    if (!e || !e->save()) {  // the tab stays open: its changes are not on disk
+                        InlineDialog::critical(tabWidget_, "Save Failed",
+                            QString("Could not write %1; it stays open.").arg(e ? e->filePath() : QString()));
+                        return;
+                    }
+                }
                 doCloseEditor(index, widget);
             });
         return;
@@ -82,10 +89,6 @@ void EditorManager::closeAll() {
             break; 
         }
     }
-}
-
-void EditorManager::saveCurrent() {
-    // TODO: Implement save logic
 }
 
 IEditor* EditorManager::currentEditor() const {

@@ -4,7 +4,6 @@
 #include "../../widgets/compliance_report_widget.h"
 #include "../../widgets/breadcrumb_widget.h"
 #include "../../analysis/pdk_compliance.h"
-#include "../../../ai_api/system/crash_report.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsSceneContextMenuEvent>
@@ -2103,16 +2102,20 @@ void SchematicEditor::setQuickPreviewEnabled(bool enabled) {
 // HIERARCHICAL SCHEMATICS (Phase 2)
 // ============================================================================
 
+bool SchematicEditor::save() {
+    if (!saveToFile(filePath_)) return false;
+    modified_ = false;
+    return true;
+}
+
 bool SchematicEditor::saveToFile(const QString& filePath) {
     QFile saveFile(filePath);
     if (!saveFile.open(QIODevice::WriteOnly)) {
         qWarning() << "Could not open file for writing:" << filePath;
         return false;
     }
-    QJsonObject state = getCircuitState();
-    QJsonDocument saveDoc(state);
-    saveFile.write(saveDoc.toJson());
-    return true;
+    const QByteArray data = QJsonDocument(getCircuitState()).toJson();
+    return saveFile.write(data) == data.size() && saveFile.flush();
 }
 
 bool SchematicEditor::loadFromFile(const QString& filePath) {
