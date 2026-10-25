@@ -1,5 +1,22 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 4**
+
+- **PR #29** (`rebuild/m1-s4`, off main after #27/#28 merged): the schematic and symbol editors.
+  - `app/scene` builds the drawn items from `view_get`; `app/canvas` is a QRhiWidget (Metal) with a QPainter text
+    layer; `app/view_editor` holds the tools on Virtuoso's bindkeys.
+  - New commands `objects_move` and `objects_delete` (the latter replaces `object_delete`), plus the GUI-only
+    `editor_open`.
+  - oadb schema 3 (label justification); v2 libraries upgrade in place on open.
+- **Render check:** the canvas test skips under offscreen QPA (no RHI). Run it natively to really check it:
+  `QT_PLUGIN_PATH=/opt/homebrew/opt/qt/share/qt/plugins build/test_view_editor`. `OPENVLSI_GRAB=<png>` saves the
+  window.
+- **Next slice:** the netlister (schematic → SPICE through a config view) and simulation through TreeSPICE.
+  After that: ADE Explorer, waveforms, Python scripting, the M1 gate.
+- **Still to do:** buses, edit-in-place, inherited nets, CDF callbacks, stretch; Library Manager copy and locks.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 — OpenVLSI rebuild M1 (docs/rebuild.md), slice 3**
 
 - **PRs:** slice 1 #24 and the tests fix #25 are merged. Slice 2 #26 merged into `fix/missing-tests` by mistake, so
