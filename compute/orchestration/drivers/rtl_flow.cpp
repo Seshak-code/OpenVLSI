@@ -259,8 +259,10 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
     if (!fs::exists(reports / "5_route_drc.rpt")) return fail("RTL flow: no 5_route_drc.rpt (routing DRC unknown)");
     const std::string routeDrc = slurp(reports / "5_route_drc.rpt");
     for (size_t at = 0; (at = routeDrc.find("violation type", at)) != std::string::npos; ++at) ++pnr.routing.drcViolations;
-    const std::string antenna = lastMatch(slurp(reports / "drt_antennas.log"), std::regex(R"(Found (\d+) net violations)"));
-    if (antenna.empty()) return fail("RTL flow: drt_antennas.log reports no antenna check");
+    // check_antennas logs its count ("[INFO ANT-0002] Found N net violations.") to the route log; its report file
+    // (drt_antennas.log) lists violations only and is empty when there are none
+    const std::string antenna = lastMatch(slurp(logs / "5_2_route.log"), std::regex(R"(Found (\d+) net violations)"));
+    if (antenna.empty()) return fail("RTL flow: " + (logs / "5_2_route.log").string() + " reports no antenna check");
     pnr.routing.antennaViolations = (int)num(antenna);
     pnr.routing.drcClean = pnr.routing.drcViolations == 0 && pnr.routing.antennaViolations == 0;
     pnr.success = fs::exists(res.gds);
