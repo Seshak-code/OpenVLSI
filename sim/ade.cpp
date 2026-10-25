@@ -10,6 +10,7 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -39,6 +40,13 @@ std::string word(const QJsonValue& v, const std::string& where) {
 }
 void numeric(const QJsonValue& v, const std::string& where) {
     try { siNumber(word(v, where)); } catch (const std::runtime_error&) { bad(where, "'" + s(v) + "' is not a number"); }
+}
+// a temperature, or a space-separated list of them (a sweep)
+void temperatures(const QJsonValue& v, const std::string& where) {
+    if (v.isUndefined()) return;
+    const QStringList ts = v.toString().split(' ', Qt::SkipEmptyParts);
+    if (!v.isString() || ts.isEmpty()) bad(where, "a temperature, or a space-separated list of them");
+    for (const auto& t : ts) numeric(t, where);
 }
 bool flag(const QJsonObject& o, const char* key, const std::string& where) {
     if (!o.contains(key)) return true;
@@ -178,8 +186,20 @@ QJsonObject outputs(const QJsonObject& setup, const QString& test, const std::ve
 }  // namespace
 
 void validateSetup(const QJsonObject& setup) {
-    keys(setup, {"tests", "variables", "temperature", "nominal", "corners", "outputs"}, "setup");
-    if (setup.contains("temperature")) numeric(setup["temperature"], "temperature");
+    keys(setup, {"tests", "variables", "temperature", "nominal", "corners", "outputs", "montecarlo"}, "setup");
+    temperatures(setup["temperature"], "temperature");
+    if (setup.contains("montecarlo")) {
+        const QJsonObject mc = setup["montecarlo"].toObject();
+        keys(mc, {"samples", "seed", "temperature", "variables", "models"}, "montecarlo");
+        if (!mc["samples"].isDouble() || mc["samples"].toDouble() != std::floor(mc["samples"].toDouble()) || mc["samples"].toInt() < 1 ||
+            mc["samples"].toInt() > 100000)
+            bad("montecarlo.samples", "a whole number of samples, 1 .. 100000");
+        if (mc.contains("seed") && (!mc["seed"].isDouble() || mc["seed"].toInt() < 1 || mc["seed"].toDouble() != std::floor(mc["seed"].toDouble())))
+            bad("montecarlo.seed", "a positive whole number");
+        temperatures(mc["temperature"], "montecarlo.temperature");
+        validateWords(mc["variables"], "montecarlo.variables", false);
+        validateModels(mc["models"], "montecarlo.models");
+    }
     flag(setup, "nominal", "setup");
     validateWords(setup["variables"], "variables", true);
     std::set<QString> tests, corners, outs;
@@ -205,7 +225,7 @@ void validateSetup(const QJsonObject& setup) {
         if (!identifier(c["name"].toString()) || c["name"] == "Nominal" || !corners.insert(c["name"].toString()).second)
             bad(w + ".name", "a unique name (not Nominal)");
         flag(c, "enabled", w);
-        if (c.contains("temperature")) numeric(c["temperature"], w + ".temperature");
+        temperatures(c["temperature"], w + ".temperature");
         validateWords(c["variables"], w + ".variables", false);
         validateModels(c["models"], w + ".models");
     }
@@ -221,64 +241,82 @@ void validateSetup(const QJsonObject& setup) {
     }
 }
 
-Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, const std::string& root) {
+Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, const std::string& root,
+            const std::string& mode) {
     oadb::Library& l = ws.library(lib);
     if (l.viewType(cell, view) != "maestro") throw std::invalid_argument(lib + "/" + cell + "/" + view + " is not an ADE (maestro) view");
+    if (mode != "corners" && mode != "montecarlo") throw std::invalid_argument("a run's mode is corners or montecarlo, not " + mode);
     const auto text = l.prop(cell, view, "setup");
     const QJsonObject setup = text ? QJsonDocument::fromJson(QByteArray::fromStdString(*text)).object() : QJsonObject();
     validateSetup(setup);
     const fs::path wsDir = fs::absolute(fs::path(ws.file()).parent_path());
+    const QJsonObject mc = setup["montecarlo"].toObject();
+    const bool monteCarlo = mode == "montecarlo";
+    if (monteCarlo && mc.isEmpty()) throw std::invalid_argument("setup: a Monte Carlo run needs a montecarlo section");
 
     Job job;
     job.setup = setup;
+    job.mode = q(mode);
+    // what each point varies: a corner (Nominal, the enabled ones), or one Monte Carlo corner run once per sample
     std::vector<QJsonObject> corners;
-    if (flag(setup, "nominal", "setup"))
-        corners.push_back({{"name", "Nominal"}, {"temperature", setup.contains("temperature") ? setup["temperature"] : QJsonValue("27")}});
-    for (const auto& c : setup["corners"].toArray())
-        if (flag(c.toObject(), "enabled", "corner")) corners.push_back(c.toObject());
+    const QJsonValue nominalTemp = setup.contains("temperature") ? setup["temperature"] : QJsonValue("27");
+    if (monteCarlo)
+        corners.push_back({{"name", "MC"}, {"temperature", mc.contains("temperature") ? mc["temperature"] : nominalTemp},
+                           {"variables", mc["variables"]}, {"models", mc["models"]}});
+    else if (flag(setup, "nominal", "setup"))
+        corners.push_back({{"name", "Nominal"}, {"temperature", nominalTemp}});
+    if (!monteCarlo)
+        for (const auto& c : setup["corners"].toArray())
+            if (flag(c.toObject(), "enabled", "corner")) corners.push_back(c.toObject());
+    const int samples = monteCarlo ? mc["samples"].toInt() : 1, seed = monteCarlo ? mc["seed"].toInt(1) : 0;
+
     for (const auto& tv : setup["tests"].toArray()) {
         const QJsonObject t = tv.toObject();
         if (!flag(t, "enabled", "test")) continue;
         const QStringList d = t["design"].toString().split('/');
-        const std::string design = netlist(ws, d[0].toStdString(), d[1].toStdString(), d[2].toStdString());
+        const Deck design = deck(ws, d[0].toStdString(), d[1].toStdString(), d[2].toStdString());
         std::string cards;
         for (const auto& a : t["analyses"].toArray()) cards += card(a.toObject(), "analysis") + "\n";
-        std::string options;
         const QJsonObject opts = t["options"].toObject();
-        for (auto it = opts.begin(); it != opts.end(); ++it)
-            options += " " + it.key().toStdString() + "=" + s(it.value());
         for (const auto& corner : corners) {
-            // the corner's model file replaces the test's of the same file; relative files are the workspace's
-            std::vector<std::pair<std::string, std::string>> models;
+            // the primitives' models, then the test's and the corner's: one of the same file replaces its section
+            std::vector<Model> models = design.models;
             auto addModel = [&](const QJsonObject& m) {
                 const fs::path f = fs::path(s(m["file"])).is_absolute() ? fs::path(s(m["file"])) : wsDir / s(m["file"]);
                 if (!fs::is_regular_file(f)) throw std::invalid_argument("setup: model file " + f.string() + " does not exist");
-                for (auto& [file, section] : models) if (file == f.string()) { section = s(m["section"]); return; }
-                models.emplace_back(f.string(), s(m["section"]));
+                for (auto& x : models) if (x.file == f.string()) { x.section = s(m["section"]); return; }
+                models.push_back({f.string(), s(m["section"])});
             };
             for (const auto& m : t["models"].toArray()) addModel(m.toObject());
             for (const auto& m : corner["models"].toArray()) addModel(m.toObject());
-            const QString temperature = corner.contains("temperature") ? corner["temperature"].toString() : setup["temperature"].toString("27");
-            for (const auto& vars : combinations(setup["variables"].toObject(), corner["variables"].toObject())) {
-                std::string deck = design;
-                QJsonObject shown;
-                for (const auto& [n, v] : vars) {
-                    deck += ".param " + n + "=" + v + "\n";
-                    shown[q(n)] = q(v);
-                }
-                deck += ".temp " + temperature.toStdString() + "\n";
-                if (!options.empty()) deck += ".options" + options + "\n";
-                for (const auto& [file, section] : models)
-                    deck += section.empty() ? ".include \"" + file + "\"\n" : ".lib \"" + file + "\" " + section + "\n";
-                deck += cards + ".end\n";
-                const int index = (int)job.points.size() + 1;
-                QJsonArray modelsShown;
-                for (const auto& [file, section] : models) modelsShown.append(q(section.empty() ? file : file + " (" + section + ")"));
-                job.points.push_back({QJsonObject{{"index", index}, {"test", t["name"]}, {"design", t["design"]}, {"corner", corner["name"]},
-                                                  {"variables", shown}, {"temperature", temperature}, {"models", modelsShown},
-                                                  {"options", opts}, {"analyses", QString::fromStdString(cards).trimmed()}, {"status", "pending"}},
-                                      deck});
-            }
+            QJsonArray modelsShown;
+            for (const auto& m : models) modelsShown.append(q(m.section.empty() ? m.file : m.file + " (" + m.section + ")"));
+            const QStringList temperatures = (corner.contains("temperature") ? corner["temperature"] : nominalTemp).toString().split(' ', Qt::SkipEmptyParts);
+            const auto combos = combinations(setup["variables"].toObject(), corner["variables"].toObject());
+            if (monteCarlo && (combos.size() != 1 || temperatures.size() != 1))
+                throw std::invalid_argument("setup: Monte Carlo runs one temperature and one value per variable (no sweeps)");
+            for (const QString& temperature : temperatures)
+                for (const auto& vars : combos)
+                    for (int k = 1; k <= samples; ++k) {
+                        std::string text = design.text;
+                        std::map<std::string, std::string> params = design.globals;  // the primitives' defaults, then the variables
+                        QJsonObject shown, defaults;
+                        for (const auto& [n, v] : vars) params[n] = v, shown[q(n)] = q(v);
+                        for (const auto& [n, v] : design.globals) if (!vars.count(n)) defaults[q(n)] = q(v);
+                        for (const auto& [n, v] : params) text += ".param " + n + "=" + v + "\n";
+                        text += ".temp " + temperature.toStdString() + "\n";
+                        std::string options;
+                        for (auto it = opts.begin(); it != opts.end(); ++it) options += " " + it.key().toStdString() + "=" + s(it.value());
+                        if (monteCarlo) options += " seed=" + std::to_string(seed + k - 1);
+                        if (!options.empty()) text += ".options" + options + "\n";
+                        for (const auto& m : models) text += modelCard(m) + "\n";
+                        text += cards + ".end\n";
+                        QJsonObject info{{"index", (int)job.points.size() + 1}, {"test", t["name"]}, {"design", t["design"]}, {"corner", corner["name"]},
+                                         {"variables", shown}, {"defaults", defaults}, {"temperature", temperature}, {"models", modelsShown},
+                                         {"options", opts}, {"analyses", QString::fromStdString(cards).trimmed()}, {"status", "pending"}};
+                        if (monteCarlo) info["sample"] = k, info["seed"] = seed + k - 1;
+                        job.points.push_back({info, text});
+                    }
         }
     }
     if (job.points.empty()) throw std::invalid_argument("setup: nothing to run (no enabled test, or no corner)");
@@ -299,7 +337,7 @@ Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell
         p.info["dir"] = q(pd.string());
         points.append(p.info);
     }
-    write(job.dir, {{"name", job.name}, {"status", "running"}, {"started", QDateTime::currentDateTime().toString(Qt::ISODate)},
+    write(job.dir, {{"name", job.name}, {"mode", job.mode}, {"status", "running"}, {"started", QDateTime::currentDateTime().toString(Qt::ISODate)},
                     {"setup", setup}, {"points", points}});
     return job;
 }
@@ -343,6 +381,36 @@ QJsonObject execute(const Job& job, const std::string& simulator, std::chrono::s
     for (auto& t : threads) t.join();
     history["status"] = cancel && *cancel ? "stopped" : "done";
     history["finished"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+    if (job.mode == "montecarlo") {  // each output over the samples: its distribution, and its yield against the spec
+        QJsonObject stats;
+        for (const auto& ov : job.setup["outputs"].toArray()) {
+            const QString name = ov.toObject()["name"].toString();
+            std::vector<double> xs;
+            int pass = 0, fail = 0, errors = 0;
+            for (const auto& pv : points) {
+                const QJsonObject p = pv.toObject();
+                if (p["test"] != ov.toObject()["test"] || p["status"] != "done") continue;
+                const QJsonObject o = p["outputs"].toObject()[name].toObject();
+                if (!o["value"].isDouble()) { ++errors; continue; }
+                xs.push_back(o["value"].toDouble());
+                if (o.contains("pass")) (o["pass"].toBool() ? pass : fail)++;
+            }
+            if (xs.empty()) {
+                stats[name] = QJsonObject{{"n", 0}, {"errors", errors}};
+                continue;
+            }
+            double mean = 0, var = 0;
+            for (const double x : xs) mean += x;
+            mean /= (double)xs.size();
+            for (const double x : xs) var += (x - mean) * (x - mean);
+            const double sd = xs.size() > 1 ? std::sqrt(var / (double)(xs.size() - 1)) : 0;  // the sample standard deviation
+            QJsonObject st{{"n", (int)xs.size()}, {"mean", mean}, {"sd", sd}, {"min", *std::min_element(xs.begin(), xs.end())},
+                           {"max", *std::max_element(xs.begin(), xs.end())}, {"errors", errors}};
+            if (pass + fail) st["pass"] = pass, st["fail"] = fail, st["yield"] = (double)pass / (pass + fail);
+            stats[name] = st;
+        }
+        history["statistics"] = stats;
+    }
     write(job.dir, history);
     return history;
 }

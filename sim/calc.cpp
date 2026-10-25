@@ -499,7 +499,7 @@ Wave access(const std::vector<Plot>& plots, const std::string& kind, const std::
     std::string want;
     if (kind == "VN" || kind == "VNTOT") {
         if (a != "out" && a != "in") throw std::runtime_error("calculator: " + kind + "(" + arg + "): out or in");
-        want = kind == "VN" ? a + "oise_spectrum" : a + "oise_total";
+        want = std::string(1, a[0]) + (kind == "VN" ? "noise_spectrum" : "noise_total");  // onoise_spectrum, inoise_total, ...
     } else {
         want = std::string(kind[0] == 'V' ? "v(" : "i(") + a + ")";
     }

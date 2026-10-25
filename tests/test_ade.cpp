@@ -226,6 +226,43 @@ int main() {
     check(stopped && sth["status"] == "stopped" && stoppedPoints > 0, "ade_stop stops a background run (" + std::to_string(stoppedPoints) + " points stopped)");
     check(must("ade_history_list", view).toArray() == QJsonArray{"Interactive.1", "Interactive.2", "Interactive.3"}, "the histories, oldest first");
     check(has(error("ade_history_get", with(view, {{"history", "../../x"}})), "Interactive.N"), "a history name cannot leave the view's directory");
+    // ── Monte Carlo: the RC's resistor drawn per sample (agauss, as a PDK's statistics would), seeded ──
+    {
+        QJsonObject mcSetup = setup;
+        mcSetup["montecarlo"] = QJsonObject{{"samples", 60}, {"seed", 5}, {"variables", QJsonObject{{"rval", "agauss(1k,100,1)"}}}};
+        must("ade_setup_set", with(view, {{"setup", mcSetup}}));
+        const QJsonObject mc = must("ade_run", with(view, {{"mode", "montecarlo"}})).toObject();
+        const QJsonArray mp = mc["points"].toArray();
+        const QJsonObject bw = mc["statistics"].toObject()["bw"].toObject(), tr = mc["statistics"].toObject()["tr"].toObject();
+        bool seeds = mp.size() == 120;
+        for (const auto& pv : mp) {
+            const QJsonObject p = pv.toObject();
+            std::ifstream f(fs::path(p["dir"].toString().toStdString()) / "input.cir");
+            const std::string deck((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+            seeds = seeds && p["corner"] == "MC" && p["seed"].toInt() == 4 + p["sample"].toInt() && has(deck, "seed=" + std::to_string(p["seed"].toInt())) &&
+                    has(deck, ".param rval=agauss(1k,100,1)");
+        }
+        check(mc["mode"] == "montecarlo" && seeds, "a Monte Carlo run: 60 samples per test, each its own seed (5 .. 64) in its deck");
+        // bw = sqrt(10^0.3 - 1) / (2 pi R C) with R ~ N(1k, 100): mean near 158.8k, spread about 10%
+        const double bw0 = std::sqrt(std::pow(10, 0.3) - 1) / (2 * M_PI * 1e3 * 1e-9);
+        check(bw["n"].toInt() == 60 && near(bw["mean"].toDouble(), bw0, 0.05) && bw["sd"].toDouble() > 0.05 * bw0 && bw["sd"].toDouble() < 0.2 * bw0 &&
+                  bw["min"].toDouble() < bw["mean"].toDouble() && bw["max"].toDouble() > bw["mean"].toDouble(),
+              "statistics over the samples: the bandwidth's mean " + std::to_string(bw["mean"].toDouble()) + ", sd " + std::to_string(bw["sd"].toDouble()));
+        check(tr["n"].toInt() == 60 && tr["pass"].toInt() + tr["fail"].toInt() == 60 && tr["yield"].toDouble() == tr["pass"].toDouble() / 60,
+              "the rise time's yield against its spec (" + std::to_string(tr["pass"].toInt()) + " of 60 pass)");
+        const QJsonObject again = must("ade_run", with(view, {{"mode", "montecarlo"}})).toObject();
+        check(again["statistics"].toObject()["bw"].toObject()["mean"] == bw["mean"], "the same seed repeats the run exactly");
+        mcSetup["montecarlo"] = QJsonObject{{"samples", 0}};
+        check(has(error("ade_setup_set", with(view, {{"setup", mcSetup}})), "montecarlo.samples"), "zero samples are refused");
+        mcSetup["montecarlo"] = QJsonObject{{"samples", 3}};
+        must("ade_setup_set", with(view, {{"setup", mcSetup}}));
+        check(has(error("ade_run", with(view, {{"mode", "montecarlo"}})), "no sweeps"), "Monte Carlo over a swept variable (rval 1k 2k) is refused");
+        check(has(error("ade_run", with(view, {{"mode", "sideways"}})), "not one of"), "an unknown run mode is refused");
+    }
+    must("ade_setup_set", with(view, {{"setup", setup}}));
+    must("edit_undo", {{"library", "sims"}});  // the Monte Carlo setups, undone again
+    must("edit_undo", {{"library", "sims"}});
+    must("edit_undo", {{"library", "sims"}});
     check(call("edit_undo", {{"library", "sims"}}).ok && must("ade_setup_get", view).toObject() == setup, "undo restores the previous setup");
 
     // ── malformed setups ──

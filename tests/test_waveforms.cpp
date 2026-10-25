@@ -74,6 +74,17 @@ int main(int argc, char** argv) {
                   error("wave_eval", {{"run", QString::fromStdString(dir.string())}, {"expression", "1"}}).contains("no run"),
               "wave_eval refuses a malformed expression and a directory that is not a run");
 
+        // noise: the RC's output density at low frequency is the resistor's sqrt(4kTR); its total, sqrt(kT/C)
+        {
+            const QString nrun = must("simulate", {{"library", "l"}, {"cell", "rc"}, {"view", "schematic"},
+                                                   {"cards", QJsonArray{".noise v(out) V0 dec 20 10 100meg"}}})
+                                     .toObject()["run"].toString();
+            const double kT = 1.380649e-23 * 300.15, density = must("wave_eval", {{"run", nrun}, {"expression", "value(VN(out), 10)"}}).toDouble();
+            const double total = must("wave_eval", {{"run", nrun}, {"expression", "VNTOT(out)"}}).toDouble();
+            check(near(density, std::sqrt(4 * kT * 1e3), 1e-3) && near(total, std::sqrt(kT / 1e-9), 2e-2),
+                  "noise: VN(out) at 10 Hz = sqrt(4kTR) (" + QString::number(density, 'g', 6).toStdString() + "), VNTOT(out) ≈ sqrt(kT/C) (" + QString::number(total, 'g', 6).toStdString() + ")");
+        }
+
         // ── the viewer ──
         check(must("waveform_open", {{"run", run}}).toString() == "l/rc/schematic", "waveform_open knows the run's schematic");
         app::WaveformViewer* v = ciw.viewer(QString::fromStdString(fs::weakly_canonical(run.toStdString()).string()));

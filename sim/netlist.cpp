@@ -45,6 +45,8 @@ struct Netlister {
     std::string subckts;                       // definitions, each after the ones it uses
     std::map<std::string, std::string> names;  // SUBCKT NAME -> lib/cell/view
     std::vector<std::string> stack;            // the schematics being netlisted, outermost first
+    std::vector<Model> models;
+    std::map<std::string, std::string> params;  // the primitives' .param defaults
 
     // "spice" (a primitive) or the schematic view an instance of lib/cell descends into
     std::string switchView(const std::string& lib, const std::string& cell) {
@@ -158,6 +160,13 @@ struct Netlister {
                 if (prefix.empty() || !std::isalpha((unsigned char)prefix[0]) || tmpl.empty())
                     throw Error("netlist: " + i.lib + "/" + i.cell + ": its spice property needs a prefix (a letter) and a template");
                 const auto d = ws.library(i.lib).cellProp(i.cell, "params");
+                for (const auto& m : spice["models"].toArray()) {
+                    const Model md{m.toObject()["file"].toString().toStdString(), m.toObject()["section"].toString().toStdString()};
+                    if (md.file.empty()) throw Error("netlist: " + i.lib + "/" + i.cell + ": a spice model needs a file");
+                    if (std::none_of(models.begin(), models.end(), [&](const Model& x) { return x.file == md.file; })) models.push_back(md);
+                }
+                const QJsonObject g = spice["globals"].toObject();
+                for (auto it = g.begin(); it != g.end(); ++it) params[it.key().toStdString()] = str(it.value());
                 element = startsWith(i.name, prefix) ? i.name : prefix + i.name;
                 o << element << " " << expand(tmpl, i, nets, d ? parsed(*d).toObject() : QJsonObject(), where) << "\n";
             } else {
@@ -199,7 +208,21 @@ struct Netlister {
 
 }  // namespace
 
+std::string modelCard(const Model& m) {
+    const bool osdi = m.file.size() > 5 && m.file.compare(m.file.size() - 5, 5, ".osdi") == 0;
+    if (osdi) return ".osdi \"" + m.file + "\"";
+    return m.section.empty() ? ".include \"" + m.file + "\"" : ".lib \"" + m.file + "\" " + m.section;
+}
+
 std::string netlist(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {
+    const Deck d = deck(ws, lib, cell, view);
+    std::string out = d.text;
+    for (const auto& [k, v] : d.globals) out += ".param " + k + "=" + v + "\n";
+    for (const auto& m : d.models) out += modelCard(m) + "\n";
+    return out;
+}
+
+Deck deck(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {
     Netlister n{ws};
     std::string tl = lib, tc = cell, tv = view;
     const std::string type = ws.library(lib).viewType(cell, view);
@@ -231,7 +254,7 @@ std::string netlist(oadb::Workspace& ws, const std::string& lib, const std::stri
         for (const auto& g : n.globals) out += " " + g;
         out += "\n";
     }
-    return out + n.subckts + top;
+    return {out + n.subckts + top, n.models, n.params};
 }
 
 }  // namespace sim

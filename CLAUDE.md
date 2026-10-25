@@ -22,6 +22,13 @@ open build/OpenVLSI.app                         # the CIW and Library Manager; `
 The flow and SoC gates (`test_rtl_flow`, `test_firmware_on_silicon`, `test_soc_hello`) run the real tools from
 `~/eda` (`scripts/setup_eda_tools.sh`) and `datasets/`; without them they skip.
 
+The M1 gate (docs/rebuild.md), through openvlsi-mcp alone, against ngspice:
+
+```bash
+python3 tools/m1_gate.py --mcp build/openvlsi-mcp --pdk datasets/pdk/ihp/ihp-sg13g2 --osdi <psp103.osdi> [--bundle build/deploy/OpenVLSI.app]
+cmake --build build --target bundle   # build/deploy/OpenVLSI.app: Qt inside (tools/deploy_macos.sh)
+```
+
 ## Architecture (docs/rebuild.md)
 
 ```
@@ -40,7 +47,10 @@ app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi, ADE Explorer
   line each; anything else is refused. ADE (`sim/ade.h`): a maestro view's setup (tests, variables and sweeps,
   corners, outputs with specs) expands into points run in parallel, each output a calculator expression
   (`sim/calc.h`); runs are histories on disk (`simulation/<lib>/<cell>/<view>/Interactive.N`), in the background
-  through `ade_run` with `wait: false`. The waveform viewer (`app/waveform_viewer`) plots calculator expressions
+  through `ade_run` with `wait: false`; `mode: montecarlo` runs the setup's montecarlo section once per sample (its
+  own `.options seed`) and adds each output's statistics and yield. Every output records its equation, the parameters
+  its point ran with and the calculator's steps (its derivation). `pdk_install` builds analogLib and the SG13G2
+  device library (spice templates, defaults, the model files and corner sections they need). The waveform viewer (`app/waveform_viewer`) plots calculator expressions
   over one run; `wave_eval` is the calculator as a command; it cross-probes with the schematic both ways
   (`waveform_probe`, `editor_select_net`).
 - **oadb** (`oadb/oadb.h`): one SQLite file per library; cells, views, per-view JSON properties. `Library::change`

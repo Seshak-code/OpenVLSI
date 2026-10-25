@@ -3,6 +3,7 @@
 // table, specs coloured; an undo elsewhere redraws it.
 #include "app/ade_explorer.h"
 #include "app/ciw.h"
+#include "sim/calc.h"
 
 #include <QApplication>
 #include <QElapsedTimer>
@@ -96,6 +97,24 @@ int main(int argc, char** argv) {
               "a result's derivation: its equation, every parameter of its point, the steps, the spec's verdict\n" + d.toStdString());
         if (const char* to = std::getenv("OPENVLSI_GRAB")) ade->grab().save(to);  // to look at it
         check(session.call("edit_undo", {{"library", "l"}}).ok && cell(ade->variables(), 0, 1) == "1k", "an undo from anywhere redraws the setup");
+
+        // Monte Carlo: its tab, its run, a column per statistic, how each came about
+        ade->montecarlo()->item(0, 3)->setText("rval=agauss(1k,100,1)");
+        ade->montecarlo()->item(0, 0)->setText("8");
+        check(setup()["montecarlo"].toObject()["samples"].toInt() == 8 && setup()["montecarlo"].toObject()["variables"].toObject()["rval"] == "agauss(1k,100,1)",
+              "the Monte Carlo tab edits the setup's montecarlo section");
+        ade->run("montecarlo");
+        t.restart();
+        while (ade->running() && t.elapsed() < 60000) qapp.processEvents(QEventLoop::AllEvents, 50);
+        const QString meanHeader = o->horizontalHeaderItem(6) ? o->horizontalHeaderItem(6)->text() : QString();
+        const double mean = cell(o, 0, 6).isEmpty() ? 0 : sim::siNumber(cell(o, 0, 6).toStdString());
+        const QString md = ade->derivation(0, 6);
+        check(!ade->running() && o->columnCount() == 11 && meanHeader == "MC mean" && cell(o, 0, 5) == "8" && mean > 0.4 && mean < 0.6 &&
+                  cell(o, 0, 10).endsWith("%"),
+              "a Monte Carlo history shows n, mean, σ, min, max and yield (mean " + cell(o, 0, 6).toStdString() + ", yield " + cell(o, 0, 10).toStdString() + "; " + ade->status().toStdString() + ")");
+        check(md.contains("Monte Carlo over 8 samples (seeds 1 .. 8") && md.contains("σ    = √(Σ(x − mean)² / (n − 1))") &&
+                  md.contains("yield = pass / (pass + fail)") && md.contains("variables    rval = agauss(1k,100,1)"),
+              "its derivation: the samples and seeds, the parameters, each statistic's formula and value\n" + md.toStdString());
     }
     fs::remove_all(dir);
     std::printf("%s (%d failure%s)\n", g_fail ? "FAILED" : "OK", g_fail, g_fail == 1 ? "" : "s");

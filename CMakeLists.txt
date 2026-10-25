@@ -65,7 +65,7 @@ add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade
 target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
 
 add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp
-            cmd/ade_commands.cpp)
+            cmd/ade_commands.cpp cmd/pdk_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_cmd PUBLIC oadb openvlsi_sch openvlsi_sim Qt6::Core)
 
@@ -90,6 +90,18 @@ add_custom_command(TARGET OpenVLSI POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_i
 add_dependencies(OpenVLSI treespice)
 set_target_properties(OpenVLSI PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER org.openvlsi.OpenVLSI
                       MACOSX_BUNDLE_BUNDLE_NAME OpenVLSI MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
+
+# The deployable app (cmake --build build --target bundle): a copy in build/deploy with its Qt frameworks and plugins
+# inside, so it needs nothing from Homebrew (tools/deploy_macos.sh)
+find_program(MACDEPLOYQT macdeployqt HINTS /opt/homebrew/opt/qt/bin /usr/local/opt/qt/bin)
+if(APPLE AND MACDEPLOYQT)
+    add_custom_target(bundle
+        COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_BINARY_DIR}/deploy
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/deploy
+        COMMAND cp -R $<TARGET_BUNDLE_DIR:OpenVLSI> ${CMAKE_BINARY_DIR}/deploy/
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tools/deploy_macos.sh ${MACDEPLOYQT} ${CMAKE_BINARY_DIR}/deploy/OpenVLSI.app
+        DEPENDS OpenVLSI VERBATIM)
+endif()
 
 # ── Flow backends (Yosys / OpenROAD / KLayout drivers, report parsers) and the RV32I SoC ─────────────────────────
 add_library(openvlsi_flow STATIC flow/yosys_log_parser.cpp flow/openroad_report_parser.cpp

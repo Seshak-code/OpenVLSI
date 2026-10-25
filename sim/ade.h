@@ -12,14 +12,22 @@
 //                tf {output, source}; sens {output}; pz {in1, in2, out1, out2, transfer (vol|cur), kind (pol|zer|pz)}
 //   variables    {name: "1k"}; a space-separated list ("1k 2k 5k") is a parametric sweep. They are .params, so an
 //                instance parameter "{name}" uses one.
-//   temperature  "27" (the nominal corner's)
+//   temperature  "27" (the nominal corner's); a space-separated list ("-40 27 125") sweeps it, a corner's too
 //   nominal      true: run the nominal corner too
 //   corners      [{name, enabled (true), temperature, variables: {name: "value"}, models: [{file, section}]}]: a
 //                corner's model file replaces the test's of the same file
 //   outputs      [{name, test, expression (sim/calc.h), min, max}]: a spec passes when min <= value <= max
+//   montecarlo   {samples, seed (1), temperature, variables, models}: a Monte Carlo run's corner, run once per sample
+//                with .options seed = seed + sample - 1 (the PDK's statistical sections in models; its mismatch switch in
+//                variables, as mc_mismatch = 1). A run is in corners mode (the corners and sweeps) or montecarlo.
 //
-// history.json: {name, status (running, done, stopped), points: [...]}. A point records every parameter it ran with
-// (test, design, corner, variables, temperature, models, options, analyses; its deck is dir/input.cir), its status
+// Parameters: the design's primitives bring their model files and .param defaults (sim/netlist.h); a test's or a
+// corner's model of the same file replaces the section, the variables override the defaults.
+//
+// history.json: {name, mode, status (running, done, stopped), points: [...], statistics (montecarlo: per output n,
+// mean, sd, min, max, and pass / fail against its spec)}. A point records every parameter it ran with
+// (test, design, corner, variables, the primitives' defaults, temperature, models, options, analyses, a Monte Carlo
+// sample and seed; its deck is dir/input.cir), its status
 // (pending, running, done, error, stopped) and error, and its outputs: {name: {value | error, equation, steps, pass,
 // spec}}. An output's value is a number, {re, im}, or {wave: points}; its equation is the expression = the value, its
 // steps the calculator's derivation (sim/calc.h), its spec the comparison that passed or failed.
@@ -49,13 +57,15 @@ struct Point {
 struct Job {
     std::string dir;  // the history's directory
     QString name;     // Interactive.N
+    QString mode;     // corners or montecarlo
     QJsonObject setup;
     std::vector<Point> points;
 };
 
 // Netlists every point of lib/cell/view's setup (this reads the database: call it on the database's thread) into a
 // new history under root, and writes history.json (status running, every point pending)
-Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, const std::string& root);
+Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, const std::string& root,
+            const std::string& mode = "corners");
 
 // Runs the points, several at once (no database: any thread), evaluates their outputs, and rewrites history.json as
 // each finishes. A set `cancel` kills the runs in flight; what did not finish is "stopped". Returns the history.
