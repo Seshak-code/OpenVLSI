@@ -9,6 +9,7 @@
 #include <QString>
 
 #include <functional>
+#include <string>
 #include <map>
 #include <vector>
 
@@ -16,9 +17,11 @@ namespace oadb { class Workspace; }
 
 namespace cmd {
 
-// What a command acts on: the session's workspace (the open editors and simulation sessions join it later)
+// What a command acts on: the session's workspace, and the simulator it runs (TreeSPICE's treespice; "" when it has
+// none, so simulate fails)
 struct Context {
     oadb::Workspace& workspace;
+    std::string simulator;
 };
 
 struct Command {
@@ -60,5 +63,6 @@ QJsonObject object(std::initializer_list<std::pair<const char*, QJsonObject>> re
 
 void addCoreCommands(Registry& r);       // workspace, library, cell, view, property, undo/redo, export
 void addSchematicCommands(Registry& r);  // cell properties, shapes, pins, instances, wires, labels, check, symbols
+void addSimulationCommands(Registry& r);  // netlist, simulate, results_get
 
 }  // namespace cmd

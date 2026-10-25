@@ -1,4 +1,6 @@
 #include "subprocess.h"
+
+#include <cerrno>
 #ifdef _WIN32
 #include <windows.h>
 #include <thread>
@@ -204,6 +206,7 @@ SubprocessResult Subprocess::runWithStreaming(OutputCallback stdoutCb, OutputCal
     auto drain = [](int fd, std::string& all, const OutputCallback& cb) {
         char buffer[4096];
         const ssize_t n = read(fd, buffer, sizeof(buffer));
+        if (n < 0 && errno == EINTR) return true;  // a signal (a debugger's, say) is not the end of the output
         if (n <= 0) return false;
         all.append(buffer, n);
         if (cb) cb(std::string(buffer, n));
@@ -236,9 +239,11 @@ SubprocessResult Subprocess::runWithStreaming(OutputCallback stdoutCb, OutputCal
     close(pipe_out[0]);
     close(pipe_err[0]);
 
+    // retried when a signal interrupts it; a failed wait is no exit status (never a 0 that reads as success)
     int status = 0;
-    waitpid(pid, &status, 0);
-    result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    pid_t waited;
+    do waited = waitpid(pid, &status, 0); while (waited < 0 && errno == EINTR);
+    result.exit_code = waited == pid && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
     return result;
 }
 #endif

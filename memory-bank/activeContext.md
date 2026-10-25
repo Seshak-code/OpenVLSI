@@ -1,5 +1,21 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 5**
+
+- **PR #30** (`rebuild/m1-s5`): the netlister (`sim/netlist`) and simulation (`sim/run`).
+  - Primitives are netlisted through a `spice` cell property (prefix + template) with `params` defaults.
+  - A config view sets `top`, `viewList` and `bindings`.
+  - New commands: `netlist`, `simulate` and `results_get`.
+  - `simulate` runs the `treespice` copied beside each executable, and keeps each run in its own `simulation/.../runN` directory.
+- **Fixed in `flow/subprocess`:** an EINTR in `waitpid` read as exit 0, so a failing run looked like a success under lldb.
+- **Next slice:** ADE Explorer.
+  - Its state is a `maestro`-like view: tests, analyses, variables, corners and outputs.
+  - Runs happen in the background, with a results history.
+  - Waveforms follow.
+- **PDK:** the IHP SG13G2 primitives (with their `spice` templates) are still needed for the M1 gate.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 4**
 
 - **PR #29** (`rebuild/m1-s4`, off main after #27/#28 merged): the schematic and symbol editors.

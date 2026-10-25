@@ -1,6 +1,9 @@
-// openvlsi-mcp --workspace <file>: the command registry as an MCP server on stdin/stdout (diagnostics on stderr)
+// openvlsi-mcp --workspace <file>: the command registry as an MCP server on stdin/stdout (diagnostics on stderr). It
+// simulates with the treespice beside it.
 #include "mcp/server.h"
 #include "oadb/oadb.h"
+
+#include <QCoreApplication>
 
 #include <cstdio>
 #include <cstring>
@@ -9,6 +12,7 @@
 #include <string>
 
 int main(int argc, char** argv) {
+    QCoreApplication app(argc, argv);  // for its executable's directory
     if (argc != 3 || std::strcmp(argv[1], "--workspace") != 0) {
         std::fprintf(stderr, "usage: openvlsi-mcp --workspace <file>\n");
         return 2;
@@ -18,7 +22,8 @@ int main(int argc, char** argv) {
         cmd::Registry registry;
         cmd::addCoreCommands(registry);
         cmd::addSchematicCommands(registry);
-        cmd::Context ctx{ws};
+        cmd::addSimulationCommands(registry);
+        cmd::Context ctx{ws, (QCoreApplication::applicationDirPath() + "/treespice").toStdString()};
         mcp::Server server(registry, ctx);
         for (std::string in; std::getline(std::cin, in);) {
             if (in.empty()) continue;
