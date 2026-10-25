@@ -175,7 +175,14 @@ def bundle(app, ws):
                         foreign.append(f"{os.path.relpath(p, app)} rpath {rpath}")
     check(not foreign, "the bundle links nothing outside itself and the system (load paths and rpaths)" +
           (f" ({len(foreign)} leaks, first: {foreign[0]})" if foreign else ""))
-    check(os.path.exists(os.path.join(app, "Contents", "MacOS", "treespice")), "the bundle carries its simulator (treespice)")
+    sim = os.path.join(app, "Contents", "MacOS", "treespice")
+    deck = os.path.join(tempfile.mkdtemp(prefix="m1sim"), "d.cir")
+    open(deck, "w").write("* divider\nV1 a 0 dc 2\nR1 a b 1k\nR2 b 0 1k\n.op\n.end\n")
+    out = subprocess.run([sim, "-b", deck], capture_output=True, text=True, env={"HOME": tempfile.gettempdir(), "PATH": "/usr/bin:/bin"}).stdout \
+        if os.path.exists(sim) else ""
+    check(re.search(r"^\s*b\s+1\.0+e\+00", out, re.M), "the bundle's own simulator (treespice) runs a deck in an empty environment")
+    signed = subprocess.run(["codesign", "--verify", "--deep", "--strict", app], capture_output=True, text=True)
+    check(signed.returncode == 0, "the bundle's signature verifies (ad hoc)" + ("" if signed.returncode == 0 else f": {signed.stderr.strip()[-200:]}"))
     home = tempfile.mkdtemp(prefix="m1home")
     p = subprocess.Popen([os.path.join(app, "Contents", "MacOS", "OpenVLSI"), os.path.join(home, "openvlsi.libs")],
                          env={"HOME": home, "PATH": "/usr/bin:/bin"}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
