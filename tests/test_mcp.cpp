@@ -50,6 +50,11 @@ int main() {
         auto list = parse(s.handle(req(3, "tools/list")))["result"].toObject()["tools"].toArray();
         QJsonObject create;
         for (const auto& t : list) if (t.toObject()["name"] == "cell_create") create = t.toObject();
+        QJsonObject listCells;
+        for (const auto& t : list) if (t.toObject()["name"] == "cell_list") listCells = t.toObject();
+        check(listCells["annotations"].toObject()["readOnlyHint"].toBool() && create["annotations"].toObject().contains("readOnlyHint") &&
+                  !create["annotations"].toObject()["readOnlyHint"].toBool(),
+              "tools/list marks reads readOnlyHint (cell_list) and writes not (cell_create)");
         check(list.size() == (int)reg.commands().size() && create["inputSchema"].toObject()["required"].toArray().size() == 2,
               "tools/list describes every command with its schema (" + std::to_string(list.size()) + " tools)");
 

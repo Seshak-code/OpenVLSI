@@ -1,5 +1,26 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 — OpenVLSI rebuild M1 (docs/rebuild.md), slice 3**
+
+- **PRs:** slice 1 #24 and the tests fix #25 are merged. Slice 2 #26 merged into `fix/missing-tests` by mistake, so
+  **#27** lands it on main. **#28** (`rebuild/m1-s3`) is the Qt app shell: `OpenVLSI.app`, the CIW and the Library
+  Manager. Merge #27 first. Don't stack PRs.
+- **Slice 3 changes:**
+  - `Command::readOnly`: windows refresh only after writes, and MCP reports `readOnlyHint`.
+  - Workspace paths may contain spaces.
+  - The AGL link workaround for Qt 6.9.0 on the macOS 26 SDK.
+- **This machine:** `/opt/homebrew/share/qt/plugins` is stale (it has no `platforms/`). Run the app from the build
+  dir with `QT_PLUGIN_PATH=/opt/homebrew/opt/qt/share/qt/plugins`. The ctest sets this itself.
+- **Next slices:**
+  - the schematic and symbol editors (RHI canvas);
+  - the netlister and TreeSPICE simulation;
+  - ADE Explorer and waveforms;
+  - Python scripting with a venv per tool;
+  - the M1 gate.
+- **Also still to do:** Library Manager copy and locks.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-24 — TreeSPICE parity finished at the device level; scale track S1**
 
 **TreeSPICE PRs, merge in order (merge commits):** #19 `mac/parity` → main, then #20 `mac/parity3` (retarget to

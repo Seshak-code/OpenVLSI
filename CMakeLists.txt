@@ -38,8 +38,15 @@ endif()
 add_subdirectory(acutesim_engine)
 
 # Homebrew's full qt first: a machine with both qt and a newer qtbase otherwise mixes the two's plugins
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core HINTS /opt/homebrew/opt/qt /usr/local/opt/qt)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets HINTS /opt/homebrew/opt/qt /usr/local/opt/qt)
 find_package(SQLite3 REQUIRED)
+# ponytail: Qt 6.9.0's FindWrapOpenGL links AGL, which the macOS 26 SDK no longer has; drop it (delete this once Homebrew's
+# Qt no longer links it)
+if(TARGET WrapOpenGL::WrapOpenGL)
+    get_target_property(_gl WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    list(FILTER _gl EXCLUDE REGEX "AGL")
+    set_target_properties(WrapOpenGL::WrapOpenGL PROPERTIES INTERFACE_LINK_LIBRARIES "${_gl}")
+endif()
 
 # ── Design database: libraries (one SQLite file each), cells, views (docs/rebuild.md, oadb) ──────────────────────
 add_library(oadb STATIC oadb/oadb.cpp)
@@ -61,6 +68,15 @@ target_link_libraries(openvlsi_mcp PUBLIC openvlsi_cmd)
 add_executable(openvlsi-mcp mcp/main.cpp)
 target_link_libraries(openvlsi-mcp PRIVATE openvlsi_mcp)
 
+# ── The app: the CIW and the tools' windows, every action a command through app::Session ───────────────────────────
+set(CMAKE_AUTOMOC ON)
+add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp)
+target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets)
+add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
+target_link_libraries(OpenVLSI PRIVATE openvlsi_app)
+set_target_properties(OpenVLSI PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER org.openvlsi.OpenVLSI
+                      MACOSX_BUNDLE_BUNDLE_NAME OpenVLSI MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
+
 # ── Flow backends (Yosys / OpenROAD / KLayout drivers, report parsers) and the RV32I SoC ─────────────────────────
 add_library(openvlsi_flow STATIC flow/yosys_log_parser.cpp flow/openroad_report_parser.cpp
             flow/klayout_report_parser.cpp flow/def_parser.cpp flow/rtl_flow.cpp flow/subprocess.cpp)
@@ -72,7 +88,7 @@ target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp test_schematic)
+foreach(t test_oadb test_commands test_mcp test_schematic test_library_manager)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
@@ -80,6 +96,10 @@ target_link_libraries(test_oadb PRIVATE oadb)
 target_link_libraries(test_commands PRIVATE openvlsi_cmd)
 target_link_libraries(test_schematic PRIVATE openvlsi_cmd)
 target_link_libraries(test_mcp PRIVATE openvlsi_mcp)
+target_link_libraries(test_library_manager PRIVATE openvlsi_app)
+# the plugins of the Qt this links (a machine with a second, stale Qt prefix otherwise finds no platform plugin)
+set_tests_properties(test_library_manager PROPERTIES ENVIRONMENT
+                     "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>/..")
 target_compile_definitions(test_mcp PRIVATE OPENVLSI_MCP_EXE="$<TARGET_FILE:openvlsi-mcp>")
 
 # The flow and SoC gates skip (and pass) without their tools: ~/eda (scripts/setup_eda_tools.sh), datasets/
