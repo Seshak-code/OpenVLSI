@@ -3,6 +3,7 @@
 // the windows nor fill the CIW unless typed there; the CIW runs `command {json}` and reports what fails.
 #include "app/ciw.h"
 #include "app/library_manager.h"
+#include "app/view_editor.h"
 
 #include <QApplication>
 
@@ -74,6 +75,9 @@ int main(int argc, char** argv) {
         check(!ciw.runLine(R"(cell_list {"library": )") && ciw.logText().contains("not a JSON object"), "malformed JSON is reported");
         check(!ciw.runLine("format_disk") && ciw.logText().contains("format_disk"), "an unknown command is reported");
         check(!ciw.runLine(R"(cell_list {"library": "digital", "extra": 1})"), "invalid arguments fail");
+
+        lm.select("analog", "inverter", "schematic");
+        check(lm.openSelected() && ciw.editor("analog", "inverter", "schematic"), "opening a view (a double-click) opens its editor");
 
         {
             auto other = oadb::Workspace::load(ws.toStdString());  // another process writing the same library

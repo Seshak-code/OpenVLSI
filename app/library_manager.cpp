@@ -75,6 +75,7 @@ LibraryManager::LibraryManager(Session& session, QWidget* parent) : QWidget(pare
 
     connect(libs_, &QListWidget::currentTextChanged, this, [this] { if (!filling_) fillCells(); });
     connect(cells_, &QListWidget::currentTextChanged, this, [this] { if (!filling_) fillViews(); });
+    connect(views_, &QListWidget::itemDoubleClicked, this, [this] { openSelected(); });
     connect(&session_, &Session::changed, this, &LibraryManager::refresh);
     resize(640, 420);
     refresh();
@@ -191,6 +192,10 @@ bool LibraryManager::deleteSelected() {
     const QString lib = selectedLibrary(), cell = selectedCell(), view = selectedView();
     if (!view.isEmpty()) return session_.call("view_delete", {{"library", lib}, {"cell", cell}, {"view", view}}).ok;
     return session_.call("cell_delete", {{"library", lib}, {"cell", cell}}).ok;
+}
+
+bool LibraryManager::openSelected() {
+    return session_.call("editor_open", {{"library", selectedLibrary()}, {"cell", selectedCell()}, {"view", selectedView()}}).ok;
 }
 
 bool LibraryManager::undo() { return session_.call("edit_undo", {{"library", selectedLibrary()}}).ok; }

@@ -40,6 +40,7 @@ struct Shape {  // a symbol's (or a schematic's annotation) drawing
     std::string layer;  // device, pin, annotate, ...
     std::vector<Point> points;
     std::string text;   // label: its text (may hold [@name] substitutions)
+    std::string justify;  // label: where its point is on the text (lowerLeft ... upperRight; default centerLeft)
 };
 struct Pin {  // a symbol's terminal, or a schematic's port
     int64_t id = 0;
@@ -64,6 +65,7 @@ struct Label {  // names the net of the wire it sits on
 };
 bool validOrient(const std::string& o);
 bool validDirection(const std::string& d);
+bool validJustify(const std::string& j);  // {upper,center,lower}{Left,Center,Right}
 
 class Library {
 public:
@@ -113,6 +115,8 @@ public:
                            const std::map<std::string, std::string>& params);  // "" removes a parameter
     // kind: shape, pin, instance, wire, label; an instance by name, the others by id
     void deleteObject(const std::string& cell, const std::string& view, const std::string& kind, const std::string& key);
+    void moveObject(const std::string& cell, const std::string& view, const std::string& kind, const std::string& key,
+                    int64_t dx, int64_t dy);  // an instance keeps its orientation
 
     // One undoable change: body's statements commit together or not at all (an exception rolls back and leaves no
     // undo step). A change inside a change joins the outer one.

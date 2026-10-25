@@ -1,6 +1,7 @@
 #include "app/ciw.h"
 
 #include "app/library_manager.h"
+#include "app/view_editor.h"
 
 #include <QApplication>
 #include <QFileDialog>
@@ -43,6 +44,22 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                     : "<span style='color:#c0392b'>✗ " + r.error.toHtmlEscaped() + "</span>");
     });
 
+    session_.addCommand({"editor_open", "Opens the schematic or symbol editor on a view (the GUI's command); returns its type.",
+                         cmd::object({{"library", cmd::param("string", "library name")}, {"cell", cmd::param("string", "cell name")},
+                                      {"view", cmd::param("string", "view name")}}),
+                         [this](cmd::Context& c, const QJsonObject& a) {
+                             const QString lib = a["library"].toString(), cell = a["cell"].toString(), view = a["view"].toString();
+                             const std::string type = c.workspace.library(lib.toStdString()).viewType(cell.toStdString(), view.toStdString());
+                             if (type != "schematic" && type != "symbol")
+                                 throw std::runtime_error("no editor for a " + type + " view yet (schematic and symbol only)");
+                             QPointer<ViewEditor>& e = editors_[lib + "/" + cell + "/" + view];
+                             if (!e) e = new ViewEditor(session_, lib, cell, view, this);
+                             e->show();
+                             e->raise();
+                             return QJsonValue(QString::fromStdString(type));
+                         },
+                         true});
+
     QMenu* file = menuBar()->addMenu("&File");
     file->addAction("&Quit", QKeySequence::Quit, qApp, &QApplication::quit);
     QMenu* tools = menuBar()->addMenu("&Tools");
@@ -61,6 +78,11 @@ LibraryManager* Ciw::libraryManager() {
 void Ciw::append(const QString& html) { log_->appendHtml(html); }
 
 QString Ciw::logText() const { return log_->toPlainText(); }
+
+ViewEditor* Ciw::editor(const QString& lib, const QString& cell, const QString& view) const {
+    const auto it = editors_.find(lib + "/" + cell + "/" + view);
+    return it == editors_.end() ? nullptr : it->second.data();
+}
 
 bool Ciw::runLine(const QString& line) {
     const QString t = line.trimmed();

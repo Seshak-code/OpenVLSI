@@ -22,6 +22,7 @@ public:
     bool createView(const QString& name, const QString& type);    // in the selected cell
     bool renameCell(const QString& to);                           // the selected cell
     bool deleteSelected();                                        // the selected view, else the selected cell
+    bool openSelected();                                          // the selected view's editor (a double-click)
     bool undo();                                                  // in the selected library
     bool redo();
 

@@ -17,6 +17,7 @@ public:
     explicit Session(const QString& workspaceFile, QObject* parent = nullptr);
     cmd::Result call(const QString& name, const QJsonObject& args = {});
     const cmd::Registry& registry() const { return registry_; }
+    void addCommand(cmd::Command c) { registry_.add(std::move(c)); }  // the GUI's own (editor_open, ...)
     QString workspaceFile() const;
 
 signals:
