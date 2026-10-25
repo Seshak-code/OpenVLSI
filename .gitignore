@@ -235,3 +235,6 @@ graphify-out/
 
 # Downloaded golden datasets (IBM power grid, Xyce regression) — never committed
 datasets/
+
+# written by the app when an untitled schematic is saved
+/Untitled.sch

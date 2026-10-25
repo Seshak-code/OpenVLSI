@@ -21,6 +21,7 @@ public:
     
     // Profile management
     void addProfile(const Simulation::SimulationProfile& profile);
+    void clearProfiles();  // every category's profiles (the run history stays)
     void updateProfileStatus(const QString& profileId, Simulation::SimulationProfile::Status status);
     void markAllStale();
     

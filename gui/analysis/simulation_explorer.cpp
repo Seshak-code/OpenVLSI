@@ -72,6 +72,11 @@ void SimulationExplorer::addProfile(const Simulation::SimulationProfile& profile
         .arg(Simulation::analysisToString(profile.analysis)));
 }
 
+void SimulationExplorer::clearProfiles() {
+    for (QTreeWidgetItem* cat : {analysesNode_, sweepsNode_, cornersNode_})
+        while (cat->childCount() > 0) delete cat->takeChild(0);
+}
+
 void SimulationExplorer::updateProfileStatus(const QString& profileId, 
                                               Simulation::SimulationProfile::Status status) {
     // Find and update the item
@@ -150,13 +155,12 @@ void SimulationExplorer::showContextMenu(const QPoint& pos) {
     if (!item || !item->parent()) return;
     
     QString profileId = item->data(0, Qt::UserRole).toString();
-    QString tag = item->data(0, Qt::UserRole + 1).toString();
-    
+    if (item->data(0, Qt::UserRole + 1).toString() == "run") return;  // run history: no actions yet
+
     QMenu* menu = new QMenu(this);
     menu->setAttribute(Qt::WA_DeleteOnClose);
 
-    if (tag != "run") {
-        // Profile context menu
+    {   // Profile context menu
         QAction* runAction = menu->addAction("Run");
         connect(runAction, &QAction::triggered, this, [this, profileId]() {
             emit runRequested(profileId);
@@ -173,11 +177,6 @@ void SimulationExplorer::showContextMenu(const QPoint& pos) {
         connect(delAction, &QAction::triggered, this, [this, profileId]() {
             emit profileDeleteRequested(profileId);
         });
-    } else {
-        // Run history context menu
-        QAction* viewAction = menu->addAction("View Results");
-        // TODO: Connect to results viewer
-        Q_UNUSED(viewAction);
     }
 
     menu->popup(treeWidget_->mapToGlobal(pos));

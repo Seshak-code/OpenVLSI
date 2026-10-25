@@ -48,14 +48,21 @@ WorkerManager::~WorkerManager() {
 void WorkerManager::connectToWorker(const QString& target) {
     // In our design, WorkerClient instantiates immediately,
     // but the connection is logical.
-    m_client = std::make_unique<acutesim::worker::WorkerClient>(target.toStdString());
+    auto client = std::make_shared<acutesim::worker::WorkerClient>(target.toStdString());
+    std::lock_guard<std::mutex> l(m_mutex);
+    m_client = std::move(client);
     m_state.activeProvider = "Local (Docker)"; // Default for now
 }
 
 void WorkerManager::disconnect() {
-    m_client.reset();
-    m_state.isConnected = false;
-    emit statusChanged(m_state);
+    WorkerState s;
+    {
+        std::lock_guard<std::mutex> l(m_mutex);
+        m_client.reset();
+        m_state.isConnected = false;
+        s = m_state;
+    }
+    emit statusChanged(s);
 }
 
 void WorkerManager::pollStatus() {
@@ -82,26 +89,38 @@ void WorkerManager::pollStatus() {
     QTimer::singleShot(2000, this, &WorkerManager::pollStatus);
 #else
     while (m_running) {
-        if (!m_client) {
+        std::shared_ptr<acutesim::worker::WorkerClient> client;
+        WorkerState s;
+        {
+            std::lock_guard<std::mutex> l(m_mutex);
+            client = m_client;
+            s = m_state;
+        }
+        if (!client) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
 
-        try {
-            auto status = m_client->getStatus();
-            m_state.workerId = QString::fromStdString(status.workerId);
-            m_state.version = QString::fromStdString(status.version);
-            m_state.isConnected = status.ready;
-            m_state.cpuUsage = status.cpuUsage;
-            m_state.capabilities.clear();
+        try {  // the call runs unlocked: the GUI thread can connect or disconnect meanwhile
+            auto status = client->getStatus();
+            s.workerId = QString::fromStdString(status.workerId);
+            s.version = QString::fromStdString(status.version);
+            s.isConnected = status.ready;
+            s.cpuUsage = status.cpuUsage;
+            s.capabilities.clear();
             for (const auto& tool : status.supportedTools) {
-                m_state.capabilities << QString::fromStdString(tool);
+                s.capabilities << QString::fromStdString(tool);
             }
         } catch (const std::exception& e) {
-             m_state.isConnected = false;
+            s.isConnected = false;
+            s.workerId = QString("Unreachable: %1").arg(e.what());  // the reason, not just "disconnected"
         }
-
-        emit statusChanged(m_state);
+        {
+            std::lock_guard<std::mutex> l(m_mutex);
+            if (m_client != client) continue;  // replaced or dropped while polling: this status is stale
+            m_state = s;
+        }
+        emit statusChanged(s);  // queued to receivers on the GUI thread
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 #endif

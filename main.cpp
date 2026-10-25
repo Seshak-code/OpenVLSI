@@ -7,6 +7,7 @@
 #endif
 
 #include <QApplication>
+#include <QDir>
 #include <QScreen>
 #include <QTimer>
 
@@ -36,27 +37,21 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* dumpStorageFile(const char* projectN
 #endif
 
 int main(int argc, char *argv[]) {
-  printf("#############################################\n");
-  printf("### HELLO FROM VERY TOP OF MAIN.CPP!!!    ###\n");
-  printf("#############################################\n");
-  fflush(stdout);
-
   // Explicitly initialize Qt resources before QApplication
   Q_INIT_RESOURCE(icons);
 
-  // CLI Test hooks removed to preserve GUI -> Physics hermetic boundary
-
 #ifndef __EMSCRIPTEN__
-  // Force use of matching 6.9.0 plugins BEFORE QApplication constructor loads the platform plugin
-  qputenv("QT_PLUGIN_PATH", "/opt/homebrew/opt/qt/share/qt/plugins");
-  // Specifically force the platform plugin search path to avoid picking up qtbase 6.9.3's cocoa plugin
-  qputenv("QT_QPA_PLATFORM_PLUGIN_PATH", "/opt/homebrew/opt/qt/share/qt/plugins/platforms");
+  // Homebrew with both qt 6.9.0 and qtbase 6.9.3 installed: pick the matching plugins before QApplication loads the
+  // platform plugin (else qtbase's cocoa plugin crashes it). Only when unset and that install exists.
+  // ponytail: one machine's layout; a packaged build ships its own plugins
+  if (const char* qtPlugins = "/opt/homebrew/opt/qt/share/qt/plugins";
+      qEnvironmentVariableIsEmpty("QT_PLUGIN_PATH") && QDir(qtPlugins).exists()) {
+    qputenv("QT_PLUGIN_PATH", qtPlugins);
+    qputenv("QT_QPA_PLATFORM_PLUGIN_PATH", QByteArray(qtPlugins) + "/platforms");
+  }
 #endif
 
-  printf("### BEFORE QAPPLICATION ###\n"); fflush(stdout);
-  qputenv("QT_DEBUG_PLUGINS", "1");
   QApplication app(argc, argv);
-  printf("### AFTER QAPPLICATION ###\n"); fflush(stdout);
 
 #ifndef __EMSCRIPTEN__
   {
@@ -68,11 +63,6 @@ int main(int argc, char *argv[]) {
       std::cout << std::endl;
   }
 #endif
-  
-  // Explicit Version Log
-  qDebug() << "==========================================";
-  qDebug() << "   AcuteSim WASM - Build ID: 22264 (Fixed)";
-  qDebug() << "==========================================";
 
   // Qt styling
   app.setStyle("Fusion");
@@ -84,14 +74,12 @@ int main(int argc, char *argv[]) {
   QObject::connect(&tm, &acutesim::gui::styling::ThemeManager::themeChanged,
                    &app, [&]() { app.setStyleSheet(tm.getStyleSheet()); });
 
-  printf("### CREATING MAIN WINDOW ###\n"); fflush(stdout);
   MainWindow w;
 
 #ifdef __EMSCRIPTEN__
   // Wasm-specific: Force window to match screen interaction size
   // This allows the browser to handle scaling via the viewport
   auto screen = app.primaryScreen();
-  printf("### PRIMARY SCREEN: %p ###\n", (void*)screen); fflush(stdout);
   if (screen) {
     const QRect geometry = screen->availableGeometry();
     w.setGeometry(geometry);
@@ -117,8 +105,5 @@ int main(int argc, char *argv[]) {
   w.showMaximized();
 #endif
 
-  printf("### BEFORE APP.EXEC() ###\n"); fflush(stdout);
-  int ret = app.exec();
-  printf("### AFTER APP.EXEC(), RET: %d ###\n", ret); fflush(stdout);
-  return ret;
+  return app.exec();
 }

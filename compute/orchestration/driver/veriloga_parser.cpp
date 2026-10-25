@@ -64,11 +64,6 @@ static int parseNetName(const std::string& name) {
     return -1;
 }
 
-// Parse a double literal (handles scientific notation).
-static double parseDouble(const std::string& s) {
-    try { return std::stod(s); } catch (...) { return 0.0; }
-}
-
 // ============================================================================
 // Main parser
 // ============================================================================
@@ -112,7 +107,12 @@ VerilogAParseResult parseVerilogA(const std::string& source) {
             // Strip trailing semicolon
             if (!valStr.empty() && valStr.back() == ';') valStr.pop_back();
             valStr = trim(valStr);
-            params[ident] = parseDouble(valStr);
+            try { params[ident] = std::stod(valStr); }
+            catch (...) {  // a malformed value is an error, never 0
+                result.success = false;
+                result.errorDetail = "line " + std::to_string(lineNo) + ": parameter " + ident + " = '" + valStr + "' is not a number";
+                return result;
+            }
         }
     }
 

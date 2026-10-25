@@ -342,13 +342,11 @@ void MainWindow::setupDocks() {
     createProjectDock();
     addDockWidget(Qt::LeftDockWidgetArea, projectDock);
     projectDock->hide(); // Start hidden, controlled by Activity Bar
-    projectDock->setTitleBarWidget(new QWidget()); // No Title Bar
 
     // --- Component Library (Left) ---
     createLibraryDock();
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
     libraryDock->hide();
-    libraryDock->setTitleBarWidget(new QWidget()); // No Title Bar
 
     // --- Search Dock (Left) ---
     createSearchDock();
@@ -1289,10 +1287,7 @@ void MainWindow::runFirmwareOnCore() {
 }
 
 void MainWindow::newProject() {
-    // Create new schematic tab
-    // TODO: Create new schematic using EditorManager
-    // editorManager->openFile("untitled.sch");
-    statusBar()->showMessage("New schematic created", 3000);
+    editorManager->openFile("Untitled.sch", "Schematics");  // a new schematic tab, as at startup
 }
 
 void MainWindow::openProject() {

@@ -183,48 +183,4 @@ QJsonObject getFullCircuitState() {
     return state;
 }
 
-QRectF getComponentBounds(const QString&) {
-    return QRectF();
-}
-
-QString placeComponent(const PlacementParams&) { return "stub_comp"; }
-bool moveComponent(const QString&, double, double) { return true; }
-bool rotateComponent(const QString&, double) { return true; }
-bool deleteComponent(const QString&) { return true; }
-QString routeWire(const RoutingConstraints&) { return "stub_wire"; }
-QString routeWithPhysics(const RoutingConstraints&, const WirePhysics&) { return "stub_wire"; }
-bool optimizePlacement(const QString&) { return true; }
-
-QJsonObject validateComponent(const QString&, const QJsonObject&) {
-    QJsonObject result;
-    result["valid"] = true;
-    result["violations"] = QJsonArray();
-    return result;
-}
-
-QJsonObject getSimulationContext() { return QJsonObject(); }
-QJsonArray getConvergenceTrace() { return QJsonArray(); }
-QString analyzeFailure() { return ""; }
-QString autoRoute(const QString&, const QString&) { return ""; }
-bool validateWirePath(const QVector<QPointF>&) { return true; }
-QStringList getConnectedWires(const QString&) { return {}; }
-QStringList getComponentsInRegion(const QRectF&) { return {}; }
-bool checkIntersection(const QString&, const QString&) { return false; }
-QString findNearestComponent(const QPointF&, double) { return ""; }
-QPointF snapToGrid(const QPointF& p) { return p; }
-QString createBlock(const QString&, const QJsonObject&) { return ""; }
-QString instantiateBlock(const QString&, const QString&, double, double) { return ""; }
-QJsonObject getHierarchyTree() { return QJsonObject(); }
-QString addShape(const QString&, const QVector<QPointF>&) { return ""; }
-QVector<Shape3D> getShapesOnLayer(const QString&) { return {}; }
-bool checkVerticalIntersection(const QString&, const QString&) { return false; }
-QVector<DRCViolation> runDRC(const QVector<DRCRule>&) { return {}; }
-QString suggestDRCFix(const DRCViolation&) { return ""; }
-QJsonObject generateFloorplan(const QVector<FloorplanConstraint>&) { return QJsonObject(); }
-double estimateWirelength(const QJsonObject&) { return 0.0; }
-bool exportGDS(const QString&, const QJsonObject&) { return true; }
-QString exportSPICE() { return ""; }
-bool importLEF(const QString&) { return true; }
-void logAUDIT(const AIQueryResult&) {}
-
 } // namespace AIAPI

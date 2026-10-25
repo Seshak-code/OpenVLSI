@@ -64,54 +64,53 @@ ctest -L heavy    # GUI/integration tests
 ./build/test_regression
 
 # Python gRPC parity validator
-python3 tests/parity_harness.py
+python3 compute/orchestration/parity_harness.py
 ```
 
-Only `test_regression` runs in CI. All other tests are developer-run locally.
-
-Tests NOT registered with CTest (run binary directly): `test_regression`, `test_simulation`, `test_sensitivity`, `test_superposition`, `test_mode_ladder`, `test_dependent_simulation`, `test_noise_analysis`, `test_convergence_engine`, `test_ad_integration`, `test_erc_rules`, `test_std_cells`, and many others — see CMakeLists.txt for the full list.
+CI (`.github/workflows/ci.yml`) runs `ctest -LE gpu` on macOS, Linux and Windows. Some test binaries are built but
+not registered with CTest (`test_regression` among them): run those directly; CMakeLists.txt has the list.
 
 ## Architecture
 
 ### Dependency Order (strict — never violate)
 
 ```
-gui/ → ai_api/ → compute/ → physics/ → autodiff/
-                     ↓            ↓
-               components/ ←────┘
+gui/ → ai_api/ → compute/ → components/ → acutesim_engine/ (TreeSPICE: netlist, physics, solvers, math, autodiff)
 ```
 
-Dependencies flow **downward only**. Lower layers must never import from higher layers.
+Dependencies flow **downward only**. Lower layers must never import from higher layers. The engine layers below
+(autodiff, physics, the data model, tensors, math, solvers, infrastructure) live in the `acutesim_engine/` submodule;
+their rules still hold there.
 
-### autodiff/ — Dual Number Forward-Mode AD
+### autodiff/ — Dual Number Forward-Mode AD (engine)
 
 - `autodiff/dual.h` (header-only): `Dual<T>` carries `(val, grad)` through math ops.
 - Use **unqualified** `exp()`, `sin()`, etc. — NOT `std::exp()`. ADL must find the `Dual<T>` overloads.
 - Control flow may branch on `.val` only, never on `.grad`.
 
-### physics/ — Stateless MNA Device Models
+### physics/ — Stateless MNA Device Models (engine)
 
 - `device_physics.h`: constitutive equations (BJT Ebers-Moll, MOSFET BSIM, diode IV). **Must remain completely stateless** — no static vars, no instance state.
 - `circuitsim.h`: MNA stampers + solver orchestrator (`solveDC()`, `stepTransient()`).
 - `pnjlim()` is the SPICE voltage limiter that prevents Newton-Raphson oscillations.
 - `calculatePhysicalResiduals` verifies KCL conservation (target: < 1 pA).
 
-### components/ — Circuit Data Model
+### Circuit data model (engine: `acutesim_engine/netlist/`)
 
 - `circuit.h`: `TensorBlock` (immutable definition: R/L/C/topology), `BlockState` (mutable sim state), `TensorNetlist` (root container).
 - `graph_canonical.h`: BFS canonical topology hash (FNV-1a from Ground). Invariant to node numbering order.
-- `netlist_diff.h`: Semantic diffing — ADDED/REMOVED → `SimImpact::HIGH`, MODIFIED_PARAMETER → `MEDIUM`.
-- **Any `TensorBlock` change must update all three**: `graph_canonical.h`, `netlist_diff.h`, `physics_tensors.h`.
+- **A `TensorBlock` change** is an engine change: update `graph_canonical.h` and `tensors/physics_tensors.h` there,
+  then bump the submodule here. `components/` holds the app's component library on top of it.
 
-### compute/ — 5-Layer Execution Pipeline
+### Engine layers (`acutesim_engine/`) and the app's `compute/`
 
 | Layer | Path | Role |
 |---|---|---|
-| Data | `tensors/` | SoA layout of the linear elements; device-model resolvers (`mos1Params`, `diodeModel`, `bjtModel`) |
-| Operations | `math/` | CSR, tensor-contraction direct solver, `EmulatedF64` GPU precision, FPU control |
-| Reliability | `infrastructure/` | Postproc engine, hardware capabilities, subprocess sandbox |
-| Strategy | `solvers/` | NR loop, DC/transient/AC/noise, Dawn GPU backend |
-| Control | `orchestration/` | gRPC to Yosys/OpenROAD/KLayout, batch runner, WASM stubs |
+| Data | `acutesim_engine/tensors/` | SoA layout of the linear elements; device-model resolvers (`mos1Params`, `diodeModel`, `bjtModel`) |
+| Operations | `acutesim_engine/math/` | CSR, tensor-contraction direct solver |
+| Reliability | `acutesim_engine/infrastructure/` | Postproc engine, hardware capabilities |
+| Strategy | `acutesim_engine/solvers/` | NR loop, DC/transient/AC/noise, analysis registry |
+| Control | `compute/orchestration/` | gRPC to Yosys/OpenROAD/KLayout, batch runner, worker driver, WASM stubs |
 
 Simulation flow: AoS→SoA (`tensorizeBlock`, linear elements) → NR loop: devices (MOSFET, diode, BJT) evaluated per instance and stamped by `stampByDual` (exact Jacobian from Dual), tensor-contraction solver → KCL physical verification. GPU mode currently solves on the CPU path (Phase 4: GPU device evaluation + batched fronts).
 
@@ -119,9 +118,9 @@ Simulation flow: AoS→SoA (`tensorizeBlock`, linear elements) → NR loop: devi
 
 | # | Layer | Path | Role |
 |---|---|---|---|
-| 1 | Senses | `system/` | Geometric manipulation, crash feedback |
+| 1 | Senses | `system/` | Circuit state for the AI context (`schema_api`), feedback loop |
 | 2 | Perception | `analysis/` | Topology analysis, failure classification |
-| 3 | Memory | `context/` | RAG vector store, prompt builder, context budget |
+| 3 | Memory | `context/` | RAG vector store, context engine, context budget |
 | 4 | Imagination | `simulation/` | Speculative "what-if" simulation forks |
 | 5 | Action | `core/` | Dispatches JSON commands to workbench |
 | 6 | Conscience | `policy/` | Evidence-first protocols, citation validation |
@@ -183,7 +182,7 @@ These `.cpp` files have transitive link dependencies and **must travel together*
 
 When updating test targets in CMakeLists.txt: use `replace_all: true` with 8-space-indented patterns (4-space = `ACUTESIM_SOURCES` block).
 
-The compat header `gui/editors/schematic_editor.h` exists because the real header is in `gui/editors/schematic/`.
+The schematic editor's header is `gui/editors/schematic/schematic_editor.h` (no compat header at `gui/editors/`).
 
 ### AI Layer Tests
 
@@ -198,7 +197,7 @@ Use `tests/stubs/ai_api_test_stubs.cpp` to avoid pulling in GUI dependencies for
   ngspice/Xyce/IBM harnesses, `acutesim_engine/ENGINE_HANDOFF.md` §3); integration suites stay here.
 - Public engine API: `acutesim_engine/engine_api/` + the netlist data model (`netlist/circuit.h`,
   `netlist/spice_parser.h`). App-side orchestration headers stay in this repo's `engine_api/`
-  (drivers, job manager, results DB). Do not grow new app dependencies on other engine internals.
+  (drivers). Do not grow new app dependencies on other engine internals.
 
 ## Cross-Agent Collaboration (Claude Code ⇄ Cline)
 
@@ -208,7 +207,7 @@ other through git, the handoff docs, and the memory bank:
 - **Session start:** read `acutesim_engine/ENGINE_HANDOFF.md` §0, then run the sweep:
   `git status --short` (if dirty and you didn't make it dirty, another agent may
   be mid-flight — stop and check), `git worktree list --porcelain`, and
-  `git log --no-merges origin/engine/spice-correctness..HEAD`. Background tasks
+  `git log --no-merges origin/main..HEAD`. Background tasks
   are **not** reliably worktree-isolated (a 2026-10-12 background task edited this
   very checkout).
 - **Session end:** update `acutesim_engine/ENGINE_HANDOFF.md` §0 and
@@ -218,8 +217,7 @@ other through git, the handoff docs, and the memory bank:
   the other agent.
 - **Merges:** record every branch/worktree merge in `acutesim_engine/ENGINE_HANDOFF.md` §0 with
   the commit hash and which agent did it.
-- **Delegation:** focused tasks can be delegated to Cline headlessly via the
-  `/cline` command (`.claude/commands/cline.md`).
+- **Delegation:** QA goes to Cline/Gemini through `memory-bank/qa-queue.md`.
 - `.clinerules/` (00–05) carries the collaboration protocol, gotchas, workflow
   and memory-bank instructions for Cline; the same rules apply to Claude Code by
   symmetry.

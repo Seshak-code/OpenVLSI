@@ -57,7 +57,20 @@ static double parseUnitValue(const std::string& str, double defaultVal = 0.0) {
     }
 
     try { return std::stod(s); } catch (...) {}
-    return defaultVal;
+    throw std::invalid_argument("not a number: '" + str + "'");  // a typo is an error, never the default
+}
+
+// The corner the GUI path can run: TT at the netlist's 27 C (parseVerilogA resolves no temperature), the supply as
+// a scale of a 1.8 V nominal. Returns why it cannot run, or "".
+// ponytail: nominal supply 1.8 V (the DTO's default); per-corner temperature needs a reparse at that temperature
+static std::string applyDriverCorner(CircuitSim& sim, TensorNetlist& nl, const CornerParametersDTO& c) {
+    if (c.temperature != 27.0)
+        return "corner temperature " + std::to_string(c.temperature) + " C: the GUI path simulates at 27 C only";
+    acutesim::physics::CornerConfig corner;
+    corner.name = c.processCorner;
+    corner.temperatureC = c.temperature;
+    corner.voltageScale = c.supplyVoltage / 1.8;
+    return sim.applyCorner(nl, corner);
 }
 
 struct LocalWorkerDriver::Impl {
@@ -346,11 +359,10 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runDC(
 
     // Apply corner
     TensorNetlist runNetlist = netlist;  // Deep copy for corner application
-    acutesim::physics::CornerConfig corner;
-    corner.name = req.corner.processCorner;
-    corner.temperatureC = req.corner.temperature;
-    corner.voltageScale = req.corner.supplyVoltage / 1.8; // Assume 1.8V nominal for now
-    sim.applyCorner(runNetlist, corner);
+    if (const std::string e = applyDriverCorner(sim, runNetlist, req.corner); !e.empty()) {
+        resp.errorDetail = e;
+        return resp;
+    }
 
     auto t0 = std::chrono::steady_clock::now();
     SolverStep result = sim.solveDC(runNetlist);
@@ -413,11 +425,10 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runTransient(
     resp.topologyHash = req.topologyHash;
 
     TensorNetlist runNetlist = netlist;
-    acutesim::physics::CornerConfig corner;
-    corner.name = req.corner.processCorner;
-    corner.temperatureC = req.corner.temperature;
-    corner.voltageScale = req.corner.supplyVoltage / 1.8;
-    sim.applyCorner(runNetlist, corner);
+    if (const std::string e = applyDriverCorner(sim, runNetlist, req.corner); !e.empty()) {
+        resp.errorDetail = e;
+        return resp;
+    }
 
     // Extract parameters
     double stopTime = 1e-3; // default 1ms
@@ -494,11 +505,10 @@ SimulationResponseDTO LocalWorkerDriver::Impl::runAC(
 
     // Apply corner for AC too
     TensorNetlist runNetlist = netlist;
-    acutesim::physics::CornerConfig corner;
-    corner.name = req.corner.processCorner;
-    corner.temperatureC = req.corner.temperature;
-    corner.voltageScale = req.corner.supplyVoltage / 1.8;
-    sim.applyCorner(runNetlist, corner);
+    if (const std::string e = applyDriverCorner(sim, runNetlist, req.corner); !e.empty()) {
+        resp.errorDetail = e;
+        return resp;
+    }
 
     SolverStep dcResult = sim.solveDC(runNetlist);
     if (!dcResult.stats.converged) {

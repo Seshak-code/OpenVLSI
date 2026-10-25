@@ -10,7 +10,7 @@ are not obvious from it.
 cmake -B build -S . -DFETCHCONTENT_UPDATES_DISCONNECTED=ON   # after deletions/additions
 cmake --build build -j10
 cd build && ctest
-python3 ../tests/ngspice_diff/run_diff.py   # expect 82/83; only aac_10_bridge fails
+# engine checks live in the submodule: acutesim_engine/ENGINE_HANDOFF.md section 3 (run_diff: 1234 PASS, 0 FAIL)
 ```
 
 ## Traps

@@ -2,7 +2,6 @@
 #include <optional>
 #include "context_engine.h"
 #include "schema_api.h"
-#include "crash_report.h"
 #include "../analysis/topology_analyzer.h"
 #include "gui/core/mainwindow.h"
 #include "gui/editors/schematic/schematic_editor.h"
@@ -72,14 +71,6 @@ QString ContextEngine::generateSystemPrompt() {
     prompt += "- Directions: Right, Left, Above, Below\n";
     prompt += "- Canvas uses a 20px grid. Bounding boxes are ~60x60.\n";
     prompt += "- If a placement fails, the area is likely occupied.\n";
-    
-    // 5. Include recent crash context if available (for debugging assistance)
-    QString crashContext = DebugLog::loadLatestCrashContext();
-    if (!crashContext.isEmpty()) {
-        prompt += "\n=== RECENT CRASH/ERROR CONTEXT ===\n";
-        prompt += crashContext;
-        prompt += "\nAnalyze this crash context and consider it when assisting the user.\n";
-    }
     
     // 6. Phase 1.26 Step 4: AI Context Representation Layer
     prompt += "\n=== STRUCTURED CONTEXT (Step 4) ===\n";

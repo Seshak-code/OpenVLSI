@@ -28,6 +28,7 @@ public:
     virtual QString filePath() const = 0;
     virtual QString title() const = 0;
     virtual bool isDirty() const = 0;
+    virtual bool save() = 0;  // writes the document to filePath(); false: nothing was written
     virtual EditorCapabilities capabilities() const = 0;
     
     // Unique ID for tracking this editor instance
@@ -50,7 +51,6 @@ public:
     void openFile(const QString& path, const QString& typeHint = "");
     void closeEditor(int index);
     void closeAll();
-    void saveCurrent();
     
     // Editor Access
     IEditor* currentEditor() const;

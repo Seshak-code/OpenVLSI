@@ -50,5 +50,6 @@ void SchematicEditor::onSnappingToggled(bool) {}
 void SchematicEditor::onBreadcrumbNavigation(int) {}
 acutesim::gui::core::EditorCapabilities SchematicEditor::capabilities() const { return {}; }
 QString SchematicEditor::title() const { return "Stub"; }
+bool SchematicEditor::save() { return false; }
 
 

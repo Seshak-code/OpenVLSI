@@ -29,7 +29,6 @@ namespace acutesim::components { struct BusProbe; }
 #include "gui_types.h"
 #include "../../analysis/erc_engine.h"
 #include "../../analysis/erc_autofix.h"
-#include "../../analysis/erc_autofix.h"
 #include "../../analysis/simulation_profile.h"
 #include "../../../components/design_db.h"
 
@@ -269,6 +268,7 @@ public:
     QString filePath() const override { return filePath_; }
     QString title() const override;
     bool isDirty() const override { return modified_; }
+    bool save() override;
     acutesim::gui::core::EditorCapabilities capabilities() const override;
 
     // Quick Preview

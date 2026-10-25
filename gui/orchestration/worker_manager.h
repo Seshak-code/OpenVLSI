@@ -10,6 +10,7 @@
 #include <thread>
 #include <atomic>
 #include <map>
+#include <mutex>
 
 #include "compute/orchestration/grpc_worker_client.h"
 #include "compute/orchestration/drivers/rtl_flow.h"
@@ -59,8 +60,8 @@ public:
     void detectLocalTools();
     ToolInventory toolInventory() const { return m_inventory; }
 
-    WorkerState currentState() const { return m_state; }
-    bool isConnected() const { return m_state.isConnected; }
+    WorkerState currentState() const { std::lock_guard<std::mutex> l(m_mutex); return m_state; }
+    bool isConnected() const { std::lock_guard<std::mutex> l(m_mutex); return m_state.isConnected; }
 
     // RTL -> GDS (Roadmap Phase 6) runs locally, on a background thread: OpenROAD-flow-scripts,
     // then the PDK's DRC and LVS decks. Progress 0..1 arrives as jobProgress; the results as
@@ -90,7 +91,10 @@ signals:
 private:
     void pollStatus(); // Periodic health check
 
-    std::unique_ptr<acutesim::worker::WorkerClient> m_client;
+    // The poll thread reads both while the GUI thread connects or disconnects: guarded by m_mutex; a poll holds its
+    // own reference to the client, so a disconnect mid-call cannot free it
+    mutable std::mutex m_mutex;
+    std::shared_ptr<acutesim::worker::WorkerClient> m_client;
     WorkerState m_state;
     ToolInventory m_inventory;
     std::atomic<bool> m_running { false };

@@ -72,6 +72,7 @@ public:
     QString filePath() const override { return filePath_; }
     QString title() const override;
     bool isDirty() const override;
+    bool save() override;
     core::EditorCapabilities capabilities() const override;
 
     // Specific Methods
@@ -91,6 +92,7 @@ private slots:
     void onTextUtilsChanged();
 
 private:
+    QString storagePath(QString* project) const;  // filePath_ relative to the StorageManager project (WASM)
     QString filePath_;
     bool isDirty_ = false;
     
