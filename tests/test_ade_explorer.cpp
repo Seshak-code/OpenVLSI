@@ -89,6 +89,11 @@ int main(int argc, char** argv) {
               "Run in the background: one column per point, 0.5 passes, 0.75 fails its max (" + cell(o, 0, 5).toStdString() + ", " +
                   cell(o, 0, 6).toStdString() + ", " + ade->status().toStdString() + ")");
 
+        o->setCurrentCell(0, 6);
+        const QString d = ade->derivation(0, 6);
+        check(d.contains("Equation    VOP(out) = 750m") && d.contains("variables    rval = 3k") && d.contains("corner       Nominal, temperature 27") &&
+                  d.contains("analyses     .op") && d.contains("input.cir") && d.contains("1. VOP(out) = 750m") && d.contains("Spec        0.4 <= 750m <= 0.6: fail"),
+              "a result's derivation: its equation, every parameter of its point, the steps, the spec's verdict\n" + d.toStdString());
         if (const char* to = std::getenv("OPENVLSI_GRAB")) ade->grab().save(to);  // to look at it
         check(session.call("edit_undo", {{"library", "l"}}).ok && cell(ade->variables(), 0, 1) == "1k", "an undo from anywhere redraws the setup");
     }

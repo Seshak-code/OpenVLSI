@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -12,7 +13,15 @@ namespace sim {
 namespace {
 
 using cplx = std::complex<double>;
+using Notes = std::vector<std::string>*;  // where a step's explanation goes (null: nowhere)
 [[noreturn]] void fail(const std::string& what) { throw std::runtime_error("calculator: " + what); }
+void note(Notes n, const std::string& text) { if (n) n->push_back(text); }
+
+std::string num(cplx v) {
+    if (v.imag() == 0) return si(v.real());
+    return si(v.real()) + (v.imag() < 0 ? " - j" : " + j") + si(std::abs(v.imag()));
+}
+std::string pt(double x, double y) { return "(" + si(x) + ", " + si(y) + ")"; }
 
 struct Val {  // an argument: a number or waveform, or a string ("rising")
     Wave w;
@@ -51,31 +60,43 @@ double real(const Val& v, const std::string& fn) {
     return w.y[0].real();
 }
 
-// y at x, linear between the points around it (the scale may run either way, a dc sweep down)
-cplx at(const Wave& w, double x, const std::string& fn) {
+// y at x, linear between the points around it (the scale may run either way, a dc sweep down); `how` says which
+cplx at(const Wave& w, double x, const std::string& fn, std::string* how = nullptr) {
     for (size_t k = 1; k < w.x.size(); ++k) {
         const double a = w.x[k - 1], b = w.x[k];
         if ((x - a) * (x - b) > 0) continue;
         const double t = a == b ? 0 : (x - a) / (b - a);
+        if (how) *how = t == 0 ? "the point at " + si(a) : t == 1 ? "the point at " + si(b)
+                      : "linear between " + si(a) + " (" + num(w.y[k - 1]) + ") and " + si(b) + " (" + num(w.y[k]) + ")";
         return w.y[k - 1] + t * (w.y[k] - w.y[k - 1]);
     }
     fail(fn + ": " + std::to_string(x) + " is outside the waveform (" + std::to_string(w.x.front()) + " .. " + std::to_string(w.x.back()) + ")");
 }
 
-// where y crosses level: edge +1 rising, -1 falling, 0 either
-std::vector<double> crossings(const std::vector<double>& x, const std::vector<double>& y, double level, int edge) {
-    std::vector<double> out;
+// where y crosses level (edge +1 rising, -1 falling, 0 either): x, interpolated between points k-1 and k
+struct Cross { double x; size_t k; };
+std::vector<Cross> crossings(const std::vector<double>& x, const std::vector<double>& y, double level, int edge) {
+    std::vector<Cross> out;
     for (size_t k = 1; k < y.size(); ++k) {
         const double a = y[k - 1] - level, b = y[k] - level;
         const bool rising = a < 0 && b >= 0, falling = a > 0 && b <= 0;
-        if ((rising && edge >= 0) || (falling && edge <= 0)) out.push_back(x[k - 1] + (x[k] - x[k - 1]) * a / (a - b));
+        if ((rising && edge >= 0) || (falling && edge <= 0)) out.push_back({x[k - 1] + (x[k] - x[k - 1]) * a / (a - b), k});
     }
     return out;
 }
-double firstCross(const Wave& w, double level, int edge, const std::string& fn, double after = -HUGE_VAL) {
-    for (const double c : crossings(w.x, realY(w, fn), level, edge))
-        if (c >= after) return c;
-    fail(fn + ": the waveform never crosses " + std::to_string(level));
+std::string crossed(const Wave& w, const std::vector<double>& y, double level, const Cross& c) {
+    return "crosses " + si(level) + " between " + pt(w.x[c.k - 1], y[c.k - 1]) + " and " + pt(w.x[c.k], y[c.k]) +
+           ", linearly at " + si(c.x);
+}
+double firstCross(const Wave& w, double level, int edge, const std::string& fn, Notes n = nullptr, const std::string& what = "",
+                  double after = -HUGE_VAL) {
+    const std::vector<double> y = realY(w, fn);
+    for (const Cross& c : crossings(w.x, y, level, edge))
+        if (c.x >= after) {
+            note(n, "  " + what + (what.empty() ? "" : ": ") + crossed(w, y, level, c));
+            return c.x;
+        }
+    fail(fn + ": the waveform never crosses " + si(level) + (edge > 0 ? " rising" : edge < 0 ? " falling" : ""));
 }
 
 double integral(const std::vector<double>& x, const std::vector<double>& y) {
@@ -109,17 +130,30 @@ Transition transition(const Wave& w, const std::string& fn) {
     if (y.front() == y.back()) fail(fn + ": the waveform ends where it starts: no transition");
     return {y.front(), y.back()};
 }
-double between(const Wave& w, double lo, double hi, int need, const std::string& fn) {
+double between(const Wave& w, double lo, double hi, int need, const std::string& fn, Notes n) {
     const Transition t = transition(w, fn);
     const int dir = t.final > t.initial ? 1 : -1;
     if (need && dir != need) fail(fn + ": the waveform " + (dir > 0 ? "rises" : "falls"));
-    const double a = firstCross(w, t.initial + lo / 100 * (t.final - t.initial), dir, fn);
-    return firstCross(w, t.initial + hi / 100 * (t.final - t.initial), dir, fn, a) - a;
+    note(n, "  initial " + si(t.initial) + " (the first point), final " + si(t.final) + " (the last): it " + (dir > 0 ? "rises" : "falls") +
+                " by " + si(std::abs(t.final - t.initial)));
+    const double a = firstCross(w, t.initial + lo / 100 * (t.final - t.initial), dir, fn, n, si(lo) + "% of the transition");
+    const double b = firstCross(w, t.initial + hi / 100 * (t.final - t.initial), dir, fn, n, si(hi) + "% of the transition", a);
+    note(n, "  " + si(b) + " - " + si(a) + " = " + si(b - a));
+    return b - a;
+}
+
+// what a value is, for a step: a number, or a waveform's extent
+std::string describe(const Wave& w) {
+    if (w.scalar()) return num(w.y[0]);
+    bool complex = false;
+    for (const cplx v : w.y) complex = complex || v.imag() != 0;
+    return "a waveform of " + std::to_string(w.x.size()) + " points over " + (w.scale.empty() ? "x" : w.scale) + " " + si(w.x.front()) + " .. " +
+           si(w.x.back()) + (complex ? " (complex)" : "");
 }
 
 class Parser {
 public:
-    Parser(const std::string& text, const Lookup& lookup) : s_(text), lookup_(lookup) {}
+    Parser(const std::string& text, const Lookup& lookup, Notes notes) : s_(text), lookup_(lookup), n_(notes) {}
     Wave parse() {
         Val v = expr();
         skip();
@@ -131,6 +165,7 @@ public:
 private:
     const std::string& s_;
     const Lookup& lookup_;
+    Notes n_;
     size_t i_ = 0;
 
     void skip() { while (i_ < s_.size() && std::isspace((unsigned char)s_[i_])) ++i_; }
@@ -161,8 +196,15 @@ private:
         for (size_t k = 0; k < n; ++k) o.y.push_back(f(a.y[a.scalar() ? 0 : k], b.y[b.scalar() ? 0 : k]));
         return o;
     }
-    Val arith(const Val& a, const Val& b, char op) {
-        return {combine(wave(a, std::string(1, op)), wave(b, std::string(1, op)), op), "", false};
+    Val arith(const Val& a, const Val& b, char op, bool negate = false) {
+        const Wave& x = wave(a, std::string(1, op));
+        const Wave& y = wave(b, std::string(1, op));
+        Wave r = combine(x, y, op);
+        if (negate) note(n_, "-(" + describe(y) + ") = " + describe(r));
+        else if (r.scalar()) note(n_, num(x.y[0]) + " " + op + " " + num(y.y[0]) + " = " + num(r.y[0]));
+        else note(n_, (x.scalar() ? num(x.y[0]) : "the waveform") + std::string(" ") + op + " " + (y.scalar() ? num(y.y[0]) : "the waveform") +
+                          ", point by point: " + describe(r));
+        return {r, "", false};
     }
 
     Val expr() {
@@ -182,7 +224,7 @@ private:
         }
     }
     Val unary() {
-        if (eat('-')) return arith({number(0), "", false}, unary(), '-');
+        if (eat('-')) return arith({number(0), "", false}, unary(), '-', true);
         Val v = primary();
         if (eat('^')) v = arith(v, unary(), '^');
         return v;
@@ -228,24 +270,52 @@ private:
             arg.erase(0, arg.find_first_not_of(" \t\""));
             arg.erase(arg.find_last_not_of(" \t\"") + 1);
             if (arg.empty()) fail(name + "() names nothing");
-            return {lookup_(name, arg), "", false};
+            Wave w = lookup_(name, arg);
+            note(n_, name + "(" + arg + ") = " + describe(w));
+            return {std::move(w), "", false};
         }
         std::vector<Val> args;
+        std::vector<std::string> texts;  // each argument as written, for its step
         if (!eat(')')) {
-            do args.push_back(expr());
-            while (eat(','));
+            do {
+                skip();
+                const size_t from = i_;
+                args.push_back(expr());
+                std::string t = s_.substr(from, i_ - from);
+                t.erase(t.find_last_not_of(" \t") + 1);
+                texts.push_back(t);
+            } while (eat(','));
             expect(')');
         }
-        return {call(name, args), "", false};
+        return {call(name, args, texts), "", false};
     }
 
-    static Wave call(const std::string& fn, const std::vector<Val>& a) {
+    // a function's value, and its step: what it computed from, and how
+    Wave call(const std::string& fn, const std::vector<Val>& a, const std::vector<std::string>& texts) {
+        std::vector<std::string> how;
+        Wave r = compute(fn, a, n_ ? &how : nullptr);
+        std::string args;
+        for (size_t k = 0; k < texts.size(); ++k) args += (k ? ", " : "") + texts[k];
+        note(n_, fn + "(" + args + ") = " + describe(r));
+        if (n_) n_->insert(n_->end(), how.begin(), how.end());
+        return r;
+    }
+
+    static Wave compute(const std::string& fn, const std::vector<Val>& a, Notes n) {
         auto arity = [&](size_t lo, size_t hi) {
             if (a.size() < lo || a.size() > hi)
                 fail(fn + " takes " + (lo == hi ? std::to_string(lo) : std::to_string(lo) + " to " + std::to_string(hi)) + " argument(s)");
         };
         auto opt = [&](size_t k, double dflt) { return k < a.size() ? real(a[k], fn) : dflt; };
-        auto pointwise = [&](const std::function<cplx(cplx)>& f) { arity(1, 1); return map(wave(a[0], fn), f); };
+        auto pointwise = [&](const std::function<cplx(cplx)>& f) {
+            arity(1, 1);
+            static const std::map<std::string, std::string> what = {
+                {"mag", "|y|"}, {"abs", "|y|"}, {"real", "Re y"}, {"imag", "Im y"}, {"phase", "arg y in degrees (−180 .. 180)"},
+                {"sqrt", "√y"}, {"dB20", "20·log10|y|"}, {"dB10", "10·log10|y|"}, {"log10", "log10 y"}};
+            const Wave& w = wave(a[0], fn);
+            note(n, "  " + what.at(fn) + (w.scalar() ? " of " + num(w.y[0]) : " at each of its " + std::to_string(w.y.size()) + " points"));
+            return map(w, f);
+        };
         if (fn == "mag" || fn == "abs") return pointwise([](cplx v) { return cplx(std::abs(v)); });
         if (fn == "real") return pointwise([](cplx v) { return cplx(v.real()); });
         if (fn == "imag") return pointwise([](cplx v) { return cplx(v.imag()); });
@@ -259,12 +329,19 @@ private:
             });
         if (fn == "value") {
             arity(2, 2);
-            return number(at(waveform(a[0], fn), real(a[1], fn), fn));
+            std::string how;
+            const cplx v = at(waveform(a[0], fn), real(a[1], fn), fn, &how);
+            note(n, "  at " + si(real(a[1], fn)) + ": " + how);
+            return number(v);
         }
         if (fn == "ymax" || fn == "ymin") {
             arity(1, 1);
-            const auto y = realY(waveform(a[0], fn), fn);
-            return number(fn == "ymax" ? *std::max_element(y.begin(), y.end()) : *std::min_element(y.begin(), y.end()));
+            const Wave& w = waveform(a[0], fn);
+            const auto y = realY(w, fn);
+            const auto it = fn == "ymax" ? std::max_element(y.begin(), y.end()) : std::min_element(y.begin(), y.end());
+            note(n, std::string("  the ") + (fn == "ymax" ? "largest" : "smallest") + " of its " + std::to_string(y.size()) + " points, at " +
+                        si(w.x[(size_t)(it - y.begin())]));
+            return number(*it);
         }
         if (fn == "average" || fn == "rms") {
             arity(1, 1);
@@ -272,29 +349,35 @@ private:
             std::vector<double> y = realY(w, fn);
             if (fn == "rms") for (double& v : y) v *= v;
             const double m = integral(w.x, y) / (w.x.back() - w.x.front());
+            note(n, "  the trapezoidal integral of " + std::string(fn == "rms" ? "y²" : "y") + " over " + si(w.x.front()) + " .. " + si(w.x.back()) +
+                        ", divided by its span " + si(w.x.back() - w.x.front()) + (fn == "rms" ? " = " + si(m) + ", then its square root" : ""));
             return number(fn == "rms" ? std::sqrt(m) : m);
         }
         if (fn == "cross") {
             arity(2, 4);
             const Wave& w = waveform(a[0], fn);
-            const int n = (int)opt(2, 1);
+            const int k = (int)opt(2, 1);
             const std::string edge = a.size() > 3 ? a[3].s : "either";
             if (a.size() > 3 && (!a[3].isString || (edge != "rising" && edge != "falling" && edge != "either")))
                 fail("cross: the edge is \"rising\", \"falling\" or \"either\"");
-            const auto c = crossings(w.x, realY(w, fn), real(a[1], fn), edge == "rising" ? 1 : edge == "falling" ? -1 : 0);
-            if (n < 1 || (size_t)n > c.size()) fail("cross: no crossing " + std::to_string(n) + " (there are " + std::to_string(c.size()) + ")");
-            return number(c[(size_t)n - 1]);
+            const auto y = realY(w, fn);
+            const auto c = crossings(w.x, y, real(a[1], fn), edge == "rising" ? 1 : edge == "falling" ? -1 : 0);
+            if (k < 1 || (size_t)k > c.size()) fail("cross: no crossing " + std::to_string(k) + " (there are " + std::to_string(c.size()) + ")");
+            note(n, "  crossing " + std::to_string(k) + " of " + std::to_string(c.size()) + " (" + edge + "): " + crossed(w, y, real(a[1], fn), c[(size_t)k - 1]));
+            return number(c[(size_t)k - 1].x);
         }
         if (fn == "riseTime" || fn == "fallTime") {
             arity(1, 3);
-            return number(between(waveform(a[0], fn), opt(1, 10), opt(2, 90), fn == "riseTime" ? 1 : -1, fn));
+            return number(between(waveform(a[0], fn), opt(1, 10), opt(2, 90), fn == "riseTime" ? 1 : -1, fn, n));
         }
         if (fn == "slewRate") {
             arity(1, 3);
             const Wave& w = waveform(a[0], fn);
             const double lo = opt(1, 10), hi = opt(2, 90);
             const Transition t = transition(w, fn);
-            return number((hi - lo) / 100 * std::abs(t.final - t.initial) / between(w, lo, hi, 0, fn));
+            const double dt = between(w, lo, hi, 0, fn, n), dv = (hi - lo) / 100 * std::abs(t.final - t.initial);
+            note(n, "  " + si(hi - lo) + "% of the transition, " + si(dv) + ", over " + si(dt));
+            return number(dv / dt);
         }
         if (fn == "overshoot") {
             arity(1, 1);
@@ -302,6 +385,8 @@ private:
             const Transition t = transition(w, fn);
             const auto y = realY(w, fn);
             const double peak = t.final > t.initial ? *std::max_element(y.begin(), y.end()) : *std::min_element(y.begin(), y.end());
+            note(n, "  initial " + si(t.initial) + ", final " + si(t.final) + ", peak " + si(peak) + ": (" + si(peak) + " - " + si(t.final) + ") / (" +
+                        si(t.final) + " - " + si(t.initial) + ") · 100, at least 0");
             return number(std::max(0.0, (peak - t.final) / (t.final - t.initial) * 100));
         }
         if (fn == "settlingTime") {
@@ -314,11 +399,18 @@ private:
             while (k-- > 0 && std::abs(y[k] - t.final) <= band) {}
             if (k + 1 >= y.size()) fail("settlingTime: the waveform has not settled by its end");
             const double e0 = std::abs(y[k] - t.final) - band, e1 = std::abs(y[k + 1] - t.final) - band;
-            return number(w.x[k] + (w.x[k + 1] - w.x[k]) * e0 / (e0 - e1) - w.x.front());
+            const double x = w.x[k] + (w.x[k + 1] - w.x[k]) * e0 / (e0 - e1);
+            note(n, "  final " + si(t.final) + ", band ±" + si(band) + " (" + si(opt(1, 1)) + "% of the " + si(std::abs(t.final - t.initial)) +
+                        " transition); it last leaves the band between " + pt(w.x[k], y[k]) + " and " + pt(w.x[k + 1], y[k + 1]) + ", at " + si(x) +
+                        "; minus the start " + si(w.x.front()));
+            return number(x - w.x.front());
         }
         if (fn == "delay") {
             arity(4, 4);
-            return number(firstCross(waveform(a[2], fn), real(a[3], fn), 0, fn) - firstCross(waveform(a[0], fn), real(a[1], fn), 0, fn));
+            const double t1 = firstCross(waveform(a[0], fn), real(a[1], fn), 0, fn, n, "the first waveform");
+            const double t2 = firstCross(waveform(a[2], fn), real(a[3], fn), 0, fn, n, "the second");
+            note(n, "  " + si(t2) + " - " + si(t1));
+            return number(t2 - t1);
         }
         if (fn == "bandwidth" || fn == "ugf" || fn == "phaseMargin" || fn == "gainMargin") {
             fn == "bandwidth" ? arity(1, 2) : arity(1, 1);
@@ -326,15 +418,27 @@ private:
             const Wave m{w.x, {}};
             Wave mdb = m;
             for (const double d : db20(w, fn)) mdb.y.push_back(d);
-            if (fn == "bandwidth") return number(firstCross(mdb, mdb.y[0].real() - opt(1, 3), -1, fn));
+            if (fn == "bandwidth") {
+                note(n, "  20·log10|y| at the first point (" + si(w.x[0]) + ") is " + si(mdb.y[0].real()) + " dB; " + si(opt(1, 3)) + " dB below is " +
+                            si(mdb.y[0].real() - opt(1, 3)) + " dB");
+                return number(firstCross(mdb, mdb.y[0].real() - opt(1, 3), -1, fn, n, "the gain in dB"));
+            }
             Wave ph = m;
             for (const double p : unwrappedPhase(w)) ph.y.push_back(p);
             if (fn == "gainMargin") {
-                const double f180 = firstCross(ph, ph.y[0].real() > -180 ? -180 : 180, 0, fn);
-                return number(-at(mdb, f180, fn).real());
+                const double target = ph.y[0].real() > -180 ? -180 : 180;
+                const double f180 = firstCross(ph, target, 0, fn, n, "the phase (unwrapped, degrees)");
+                std::string how;
+                const double g = at(mdb, f180, fn, &how).real();
+                note(n, "  the gain there: " + si(g) + " dB (" + how + "); the margin is its negative");
+                return number(-g);
             }
-            const double u = firstCross(mdb, 0, 0, fn);
-            return fn == "ugf" ? number(u) : number(180 + at(ph, u, fn).real());
+            const double u = firstCross(mdb, 0, 0, fn, n, "the gain in dB (unity gain)");
+            if (fn == "ugf") return number(u);
+            std::string how;
+            const double p = at(ph, u, fn, &how).real();
+            note(n, "  the phase there (unwrapped): " + si(p) + "° (" + how + "); 180 + " + si(p));
+            return number(180 + p);
         }
         fail("no function " + fn + "()");
     }
@@ -358,7 +462,24 @@ double siNumber(const std::string& text) {
     return v;
 }
 
-Wave evaluate(const std::string& expression, const Lookup& lookup) { return Parser(expression, lookup).parse(); }
+Wave evaluate(const std::string& expression, const Lookup& lookup, std::vector<std::string>* steps) {
+    return Parser(expression, lookup, steps).parse();
+}
+
+std::string si(double v, int digits) {
+    if (v == 0 || !std::isfinite(v)) return v == 0 ? "0" : std::to_string(v);
+    static const std::pair<double, const char*> prefixes[] = {{1e12, "T"}, {1e9, "G"}, {1e6, "M"}, {1e3, "k"}, {1, ""}, {1e-3, "m"},
+                                                              {1e-6, "u"}, {1e-9, "n"}, {1e-12, "p"}, {1e-15, "f"}, {1e-18, "a"}};
+    for (const auto& [m, p] : prefixes)
+        if (std::abs(v) >= m * 0.9999999) {
+            char b[64];
+            std::snprintf(b, sizeof b, "%.*g%s", digits, v / m, p);
+            return b;
+        }
+    char b[64];
+    std::snprintf(b, sizeof b, "%.*g", digits, v);
+    return b;
+}
 
 namespace {
 const Plot* plot(const std::vector<Plot>& plots, const std::string& name) {

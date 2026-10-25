@@ -1,5 +1,7 @@
 #include "app/plot.h"
 
+#include "sim/calc.h"
+
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -11,14 +13,7 @@
 
 namespace app {
 
-QString si(double v, int digits) {
-    if (v == 0 || !std::isfinite(v)) return QString::number(v);
-    static const std::pair<double, const char*> prefixes[] = {{1e12, "T"}, {1e9, "G"}, {1e6, "M"}, {1e3, "k"}, {1, ""}, {1e-3, "m"},
-                                                              {1e-6, "u"}, {1e-9, "n"}, {1e-12, "p"}, {1e-15, "f"}, {1e-18, "a"}};
-    for (const auto& [m, p] : prefixes)
-        if (std::abs(v) >= m * 0.9999999) return QString::number(v / m, 'g', digits) + p;
-    return QString::number(v, 'g', digits);
-}
+QString si(double v, int digits) { return QString::fromStdString(sim::si(v, digits)); }
 
 namespace {
 // ticks a "nice" step apart (1, 2 or 5 times a power of ten) across [lo, hi]

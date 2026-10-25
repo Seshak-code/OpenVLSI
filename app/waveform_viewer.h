@@ -12,6 +12,7 @@
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QPlainTextEdit;
 class QTableWidget;
 
 namespace app {
@@ -32,6 +33,7 @@ public:
     Plot* plot() const { return plot_; }
     QTableWidget* readout() const { return readout_; }  // x, then each trace: at A, at B, B − A
     QString status() const;
+    QString derivation() const;  // the calculator line's last derivation (its steps)
 
 private:
     void redraw();
@@ -47,6 +49,7 @@ private:
     QTableWidget* readout_;
     QLineEdit* calc_;
     QLabel* status_;
+    QPlainTextEdit* derivation_;
 };
 
 }  // namespace app

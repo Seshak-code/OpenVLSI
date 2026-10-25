@@ -18,9 +18,11 @@
 //                corner's model file replaces the test's of the same file
 //   outputs      [{name, test, expression (sim/calc.h), min, max}]: a spec passes when min <= value <= max
 //
-// history.json: {name, status (running, done, stopped), points: [{index, test, corner, variables, temperature, dir,
-// status (pending, running, done, error, stopped), error, outputs: {name: {value | error, pass}}}]}; an output's
-// value is a number, {re, im}, or {wave: points} for a waveform.
+// history.json: {name, status (running, done, stopped), points: [...]}. A point records every parameter it ran with
+// (test, design, corner, variables, temperature, models, options, analyses; its deck is dir/input.cir), its status
+// (pending, running, done, error, stopped) and error, and its outputs: {name: {value | error, equation, steps, pass,
+// spec}}. An output's value is a number, {re, im}, or {wave: points}; its equation is the expression = the value, its
+// steps the calculator's derivation (sim/calc.h), its spec the comparison that passed or failed.
 #include "oadb/oadb.h"
 
 #include <QJsonObject>

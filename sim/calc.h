@@ -35,7 +35,12 @@ double siNumber(const std::string& s);  // "1.5k", "10meg", "2u", "1e-9"; anythi
 // kind is the access function's name (VT, VF, ...) and name its argument; it throws when the results lack it
 using Lookup = std::function<Wave(const std::string& kind, const std::string& name)>;
 
-Wave evaluate(const std::string& expression, const Lookup& lookup);
+// steps, when given, receives the derivation in evaluation order: each vector read (its points and range), each
+// operation with its operands, each function's result and how it got there (the points a crossing fell between and
+// the interpolation, the levels a rise time measured between, the reference a bandwidth fell from, ...)
+Wave evaluate(const std::string& expression, const Lookup& lookup, std::vector<std::string>* steps = nullptr);
+
+std::string si(double v, int digits = 5);  // 1.5k, 10u, -3.2m
 
 // The access functions over a run's results (plots is read, not copied: it outlives the lookup). VT/IT the transient,
 // VF/IF the AC, VDC/IDC the DC sweep, VOP/IOP the operating point, VN/VNTOT the noise; names ignore case.

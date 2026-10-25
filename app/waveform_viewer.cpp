@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPlainTextEdit>
 #include <QRegularExpression>
 #include <QStatusBar>
 #include <QTableWidget>
@@ -30,7 +31,7 @@ QString number(std::complex<double> v) {
 
 WaveformViewer::WaveformViewer(Session& session, const QString& run, QWidget* parent)
     : QMainWindow(parent, Qt::Window), session_(session), run_(run), plot_(new Plot(this)), list_(new QListWidget(this)),
-      readout_(new QTableWidget(0, 4, this)), calc_(new QLineEdit(this)), status_(new QLabel(this)) {
+      readout_(new QTableWidget(0, 4, this)), calc_(new QLineEdit(this)), status_(new QLabel(this)), derivation_(new QPlainTextEdit(this)) {
     namespace fs = std::filesystem;
     setAttribute(Qt::WA_DeleteOnClose);
     results_ = sim::readRaw((fs::path(run.toStdString()) / "out.raw").string());
@@ -49,6 +50,11 @@ WaveformViewer::WaveformViewer(Session& session, const QString& run, QWidget* pa
     calc_->setPlaceholderText("riseTime(VT(out)), dB20(VF(out)), bandwidth(VF(out)), ...");
     calcRow->addWidget(calc_, 1);
     layout->addLayout(calcRow);
+    derivation_->setReadOnly(true);
+    derivation_->setFont(QFont("Menlo"));
+    derivation_->setMaximumHeight(120);
+    derivation_->setPlaceholderText("The calculator's steps: each vector read, each function and how it got its value.");
+    layout->addWidget(derivation_);
     readout_->setHorizontalHeaderLabels({"Trace", "A", "B", "B − A"});
     readout_->horizontalHeader()->setStretchLastSection(true);
     readout_->verticalHeader()->hide();
@@ -137,13 +143,23 @@ void WaveformViewer::clear() {
     redraw();
 }
 
+QString WaveformViewer::derivation() const { return derivation_->toPlainText(); }
+
 QString WaveformViewer::calculate(const QString& expression) {
+    std::vector<std::string> steps;
+    auto show = [&] {
+        QStringList lines;
+        for (const auto& s : steps) lines << QString::fromStdString(s);
+        derivation_->setPlainText(lines.join('\n'));
+    };
     try {
-        const sim::Wave w = sim::evaluate(expression.toStdString(), sim::resultsLookup(results_));
+        const sim::Wave w = sim::evaluate(expression.toStdString(), sim::resultsLookup(results_), &steps);
+        show();
         if (!w.scalar()) return add(expression) ? "plotted" : status_->text();
         status_->setText(expression + " = " + number(w.y[0]));
         return number(w.y[0]);
     } catch (const std::exception& e) {
+        show();  // as far as it got
         status_->setText("✗ " + QString::fromUtf8(e.what()));
         return status_->text();
     }

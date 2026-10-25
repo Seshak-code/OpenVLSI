@@ -92,6 +92,12 @@ int main(int argc, char** argv) {
               "cursors A and B: the readout shows x, each trace there and the difference (v(out) at 1u = 1 − e⁻¹)");
         const QString rise = v->calculate("riseTime(VT(out))");
         check(rise.endsWith("u") && near(rise.chopped(1).toDouble(), std::log(9.0) * tau * 1e6, 1e-2), "the calculator line evaluates a number (" + rise.toStdString() + ")");
+        check(v->derivation().contains("riseTime(VT(out)) = 2.197") && v->derivation().contains("10% of the transition: crosses 100m between"),
+              "and shows its derivation\n" + v->derivation().toStdString());
+        const QJsonObject explained = must("wave_eval", {{"run", run}, {"expression", "bandwidth(VF(out))"}, {"explain", true}}).toObject();
+        check(explained["value"].isDouble() && explained["steps"].toArray().size() >= 3 &&
+                  explained["steps"].toArray()[1].toString().startsWith("bandwidth(VF(out)) = "),
+              "wave_eval explains when asked: {value, steps}");
         if (const char* to = std::getenv("OPENVLSI_GRAB")) v->grab().save(to);  // to look at it
         check(v->calculate("VT(in)") == "plotted" && v->expressions().size() == 2, "the calculator line plots a waveform");
         p->resize(800, 400);

@@ -142,21 +142,34 @@ QJsonObject outputs(const QJsonObject& setup, const QString& test, const std::ve
         const QJsonObject o = v.toObject();
         if (o["test"].toString() != test) continue;
         QJsonObject r;
+        std::vector<std::string> steps;
+        auto stepsJson = [&] {
+            QJsonArray a;
+            for (const auto& t : steps) a.append(q(t));
+            return a;
+        };
         try {
-            const Wave w = evaluate(s(o["expression"]), resultsLookup(plots));
+            const Wave w = evaluate(s(o["expression"]), resultsLookup(plots), &steps);
             const bool number = w.scalar(), real = number && w.y[0].imag() == 0;
             r["value"] = !number ? QJsonValue(QJsonObject{{"wave", (int)w.x.size()}})
                          : real  ? QJsonValue(w.y[0].real())
                                  : QJsonValue(QJsonObject{{"re", w.y[0].real()}, {"im", w.y[0].imag()}});
+            r["equation"] = q(s(o["expression"]) + " = " + (number ? (real ? si(w.y[0].real()) : si(w.y[0].real()) + (w.y[0].imag() < 0 ? " - j" : " + j") +
+                                                                                    si(std::abs(w.y[0].imag())))
+                                                                : "a waveform of " + std::to_string(w.x.size()) + " points"));
             const bool spec = !s(o["min"]).empty() || !s(o["max"]).empty();
             if (spec && !real) throw std::runtime_error("a spec needs a real number, and " + s(o["expression"]) + " is not one");
             if (spec) {
                 const double x = w.y[0].real();
-                r["pass"] = (s(o["min"]).empty() || x >= siNumber(s(o["min"]))) && (s(o["max"]).empty() || x <= siNumber(s(o["max"])));
+                const bool pass = (s(o["min"]).empty() || x >= siNumber(s(o["min"]))) && (s(o["max"]).empty() || x <= siNumber(s(o["max"])));
+                r["pass"] = pass;
+                r["spec"] = q((s(o["min"]).empty() ? "" : s(o["min"]) + " <= ") + si(x) + (s(o["max"]).empty() ? "" : " <= " + s(o["max"])) +
+                              (pass ? ": pass" : ": fail"));
             }
         } catch (const std::exception& e) {
             r = QJsonObject{{"error", QString::fromUtf8(e.what())}};
         }
+        r["steps"] = stepsJson();
         out[o["name"].toString()] = r;
     }
     return out;
@@ -259,8 +272,11 @@ Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell
                     deck += section.empty() ? ".include \"" + file + "\"\n" : ".lib \"" + file + "\" " + section + "\n";
                 deck += cards + ".end\n";
                 const int index = (int)job.points.size() + 1;
-                job.points.push_back({QJsonObject{{"index", index}, {"test", t["name"]}, {"corner", corner["name"]}, {"variables", shown},
-                                                  {"temperature", temperature}, {"status", "pending"}},
+                QJsonArray modelsShown;
+                for (const auto& [file, section] : models) modelsShown.append(q(section.empty() ? file : file + " (" + section + ")"));
+                job.points.push_back({QJsonObject{{"index", index}, {"test", t["name"]}, {"design", t["design"]}, {"corner", corner["name"]},
+                                                  {"variables", shown}, {"temperature", temperature}, {"models", modelsShown},
+                                                  {"options", opts}, {"analyses", QString::fromStdString(cards).trimmed()}, {"status", "pending"}},
                                       deck});
             }
         }

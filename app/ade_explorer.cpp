@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -125,9 +126,14 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     cornerLayout->addWidget(nominal_);
     cornerLayout->addWidget(corners_);
     setup->addTab(cornerPage, "Corners");
+    derivation_ = new QPlainTextEdit(this);
+    derivation_->setReadOnly(true);
+    derivation_->setFont(QFont("Menlo"));
+    derivation_->setPlaceholderText("Select a result to see how it was computed: its equation, the parameters its point ran with, each step.");
     auto* split = new QSplitter(Qt::Vertical, this);
     split->addWidget(setup);
     split->addWidget(outputs_);
+    split->addWidget(derivation_);
     setCentralWidget(split);
 
     QToolBar* bar = addToolBar("ADE");
@@ -148,6 +154,7 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     connect(history_, &QComboBox::currentTextChanged, this, [this](const QString& h) { if (!loading_) showHistory(h); });
     connect(poll_, &QTimer::timeout, this, &AdeExplorer::poll);
     connect(outputs_, &QTableWidget::cellDoubleClicked, this, [this](int row, int col) { openResult(row, col); });
+    connect(outputs_, &QTableWidget::currentCellChanged, this, [this](int row, int col) { derivation_->setPlainText(derivation(row, col)); });
     connect(&session_, &Session::changed, this, [this] { if (!loading_) load(); });
     load();
     resize(1100, 700);
@@ -265,6 +272,43 @@ void AdeExplorer::commit() {
     } else {
         status_->setText("Setup saved");
     }
+}
+
+QString AdeExplorer::derivation(int row, int column) const {
+    const int p = column - 5;
+    if (row < 0 || p < 0 || p >= shownPoints_.size() || text(outputs_, row, 0) != shownPoints_[p].toObject()["test"].toString()) return {};
+    const QJsonObject pt = shownPoints_[p].toObject(), o = pt["outputs"].toObject()[text(outputs_, row, 1)].toObject();
+    QStringList out;
+    out << text(outputs_, row, 1) + " — test " + pt["test"].toString() + ", point " + QString::number(pt["index"].toInt()) + " (" + pt["status"].toString() + ")";
+    out << "Equation    " + (o.contains("equation") ? o["equation"].toString() : text(outputs_, row, 2));
+    out << "";
+    out << "Parameters";
+    out << "  design       " + pt["design"].toString();
+    out << "  corner       " + pt["corner"].toString() + ", temperature " + pt["temperature"].toString() + " °C";
+    QStringList vars;
+    const QJsonObject v = pt["variables"].toObject();
+    for (auto it = v.begin(); it != v.end(); ++it) vars << it.key() + " = " + it.value().toString();
+    out << "  variables    " + (vars.isEmpty() ? "none" : vars.join(", "));
+    QStringList models;
+    for (const auto& m : pt["models"].toArray()) models << m.toString();
+    out << "  models       " + (models.isEmpty() ? "none" : models.join("\n               "));
+    QStringList opts;
+    const QJsonObject op = pt["options"].toObject();
+    for (auto it = op.begin(); it != op.end(); ++it) opts << it.key() + "=" + it.value().toString();
+    out << "  options      " + (opts.isEmpty() ? "none" : opts.join(" "));
+    out << "  analyses     " + pt["analyses"].toString().replace('\n', "; ");
+    out << "  netlist      " + pt["dir"].toString() + "/input.cir";
+    out << "";
+    if (o.contains("error")) out << "Error       " + o["error"].toString();
+    else if (pt["status"] != "done") out << "Status      " + pt["status"].toString() + (pt["error"].toString().isEmpty() ? "" : ": " + pt["error"].toString());
+    if (!o["steps"].toArray().isEmpty()) {
+        out << "Steps";
+        int n = 0;
+        for (const auto& s : o["steps"].toArray())
+            out << (s.toString().startsWith("  ") ? "      " + s.toString().trimmed() : QString("  %1. ").arg(++n) + s.toString());
+    }
+    if (o.contains("spec")) out << "" << "Spec        " + o["spec"].toString();
+    return out.join('\n');
 }
 
 bool AdeExplorer::openResult(int row, int column) {

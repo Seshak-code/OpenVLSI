@@ -14,6 +14,7 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QPlainTextEdit;
 class QTableWidget;
 class QTimer;
 
@@ -32,6 +33,9 @@ public:
     bool running() const { return !running_.isEmpty(); }
     QStringList histories() const;
     bool openResult(int row, int column);  // a result's point in the waveform viewer, its waveform plotted (a double-click)
+    // a result's derivation: the output's equation and value, every parameter its point ran with, the calculator's
+    // steps, the spec's verdict (the Derivation pane shows the selected result's)
+    QString derivation(int row, int column) const;
 
 public slots:
     void run();
@@ -52,6 +56,7 @@ private:
     QCheckBox* nominal_;
     QComboBox* history_;
     QLabel* status_;
+    QPlainTextEdit* derivation_;
     QTimer* poll_;
     QString running_;
     QJsonArray shownPoints_;  // the history the outputs table shows
