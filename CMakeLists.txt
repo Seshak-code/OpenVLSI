@@ -47,9 +47,13 @@ target_include_directories(oadb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(oadb PUBLIC SQLite::SQLite3)
 
 # ── Command layer: every action a typed, validated, undoable command ─────────────────────────────────────────────
-add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp)
+# ── Schematic semantics: placement, connectivity, symbol generation ────────────────────────────────────────────
+add_library(openvlsi_sch STATIC sch/schematic.cpp)
+target_link_libraries(openvlsi_sch PUBLIC oadb)
+
+add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(openvlsi_cmd PUBLIC oadb Qt6::Core)
+target_link_libraries(openvlsi_cmd PUBLIC oadb openvlsi_sch Qt6::Core)
 
 # ── MCP server: the command registry over stdio JSON-RPC ─────────────────────────────────────────────────────────
 add_library(openvlsi_mcp STATIC mcp/server.cpp)
@@ -68,12 +72,13 @@ target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp)
+foreach(t test_oadb test_commands test_mcp test_schematic)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
 target_link_libraries(test_oadb PRIVATE oadb)
 target_link_libraries(test_commands PRIVATE openvlsi_cmd)
+target_link_libraries(test_schematic PRIVATE openvlsi_cmd)
 target_link_libraries(test_mcp PRIVATE openvlsi_mcp)
 target_compile_definitions(test_mcp PRIVATE OPENVLSI_MCP_EXE="$<TARGET_FILE:openvlsi-mcp>")
 

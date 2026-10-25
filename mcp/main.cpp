@@ -17,6 +17,7 @@ int main(int argc, char** argv) {
         auto ws = oadb::Workspace::load(argv[2]);
         cmd::Registry registry;
         cmd::addCoreCommands(registry);
+        cmd::addSchematicCommands(registry);
         cmd::Context ctx{ws};
         mcp::Server server(registry, ctx);
         for (std::string in; std::getline(std::cin, in);) {
