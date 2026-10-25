@@ -28,6 +28,43 @@ struct ViewInfo {
     std::string name, type;
 };
 
+// Schematic and symbol objects (schema 2). Coordinates are integer database units; the GUI picks the grid.
+struct Point {
+    int64_t x = 0, y = 0;
+    bool operator==(const Point& o) const { return x == o.x && y == o.y; }
+    bool operator<(const Point& o) const { return x < o.x || (x == o.x && y < o.y); }
+};
+struct Shape {  // a symbol's (or a schematic's annotation) drawing
+    int64_t id = 0;
+    std::string kind;   // line, rect, polygon, ellipse, label
+    std::string layer;  // device, pin, annotate, ...
+    std::vector<Point> points;
+    std::string text;   // label: its text (may hold [@name] substitutions)
+};
+struct Pin {  // a symbol's terminal, or a schematic's port
+    int64_t id = 0;
+    std::string name, direction;  // input, output, inputOutput
+    Point at;
+};
+struct Instance {
+    int64_t id = 0;
+    std::string name, lib, cell, view;  // the master: lib/cell/view (a symbol)
+    Point at;
+    std::string orient = "R0";  // R0 R90 R180 R270 MX MY MXR90 MYR90 (Cadence's)
+    std::map<std::string, std::string> params;
+};
+struct Wire {
+    int64_t id = 0;
+    std::vector<Point> points;  // a polyline: at least two points
+};
+struct Label {  // names the net of the wire it sits on
+    int64_t id = 0;
+    std::string name;
+    Point at;
+};
+bool validOrient(const std::string& o);
+bool validDirection(const std::string& d);
+
 class Library {
 public:
     static std::unique_ptr<Library> create(const std::string& path, const std::string& name);
@@ -52,6 +89,30 @@ public:
     void setProp(const std::string& cell, const std::string& view, const std::string& key, const std::string& json);
     std::optional<std::string> prop(const std::string& cell, const std::string& view, const std::string& key) const;
     std::map<std::string, std::string> props(const std::string& cell, const std::string& view) const;
+
+    // Cell properties (JSON text): the cell's CDF parameters, simulator info, instance-name prefix, ...
+    void setCellProp(const std::string& cell, const std::string& key, const std::string& json);
+    std::optional<std::string> cellProp(const std::string& cell, const std::string& key) const;
+
+    std::string viewType(const std::string& cell, const std::string& view) const;
+
+    // Schematic and symbol objects; each add returns the object's id (unique per kind and view). A schematic holds
+    // instances, wires, labels and pins; a symbol shapes and pins; either may hold annotation shapes.
+    int64_t addShape(const std::string& cell, const std::string& view, Shape s);
+    int64_t addPin(const std::string& cell, const std::string& view, Pin p);
+    int64_t addInstance(const std::string& cell, const std::string& view, Instance i);
+    int64_t addWire(const std::string& cell, const std::string& view, Wire w);
+    int64_t addLabel(const std::string& cell, const std::string& view, Label l);
+    std::vector<Shape> shapes(const std::string& cell, const std::string& view) const;
+    std::vector<Pin> pins(const std::string& cell, const std::string& view) const;  // sorted by name
+    std::vector<Instance> instances(const std::string& cell, const std::string& view) const;  // sorted by name
+    std::vector<Wire> wires(const std::string& cell, const std::string& view) const;
+    std::vector<Label> labels(const std::string& cell, const std::string& view) const;
+    void moveInstance(const std::string& cell, const std::string& view, const std::string& name, Point at, const std::string& orient);
+    void setInstanceParams(const std::string& cell, const std::string& view, const std::string& name,
+                           const std::map<std::string, std::string>& params);  // "" removes a parameter
+    // kind: shape, pin, instance, wire, label; an instance by name, the others by id
+    void deleteObject(const std::string& cell, const std::string& view, const std::string& kind, const std::string& key);
 
     // One undoable change: body's statements commit together or not at all (an exception rolls back and leaves no
     // undo step). A change inside a change joins the outer one.

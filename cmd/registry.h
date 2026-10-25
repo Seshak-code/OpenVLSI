@@ -48,9 +48,16 @@ private:
 };
 
 // value against the schema subset commands use: type (object, string, integer, number, boolean, array; absent: any),
-// properties (no others allowed), required, enum, items. Returns "" or the first violation, with its path.
+// properties (no others allowed; none listed: a free-form map), required, enum, items. Returns "" or the first violation, with its path.
 QString validate(const QJsonObject& schema, const QJsonValue& value, const QString& path = "params");
 
-void addCoreCommands(Registry& r);  // workspace, library, cell, view, property, undo/redo, export
+// Schema builders for commands: a typed, described property; an object schema whose `required` properties must be
+// given and whose `optional` ones may be
+QJsonObject param(const QString& type, const QString& description);
+QJsonObject object(std::initializer_list<std::pair<const char*, QJsonObject>> required,
+                   std::initializer_list<std::pair<const char*, QJsonObject>> optional = {});
+
+void addCoreCommands(Registry& r);       // workspace, library, cell, view, property, undo/redo, export
+void addSchematicCommands(Registry& r);  // cell properties, shapes, pins, instances, wires, labels, check, symbols
 
 }  // namespace cmd

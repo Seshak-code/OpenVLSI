@@ -35,6 +35,7 @@ int main() {
         auto ws = oadb::Workspace::load((dir / "a.libs").string());
         cmd::Registry reg;
         cmd::addCoreCommands(reg);
+        cmd::addSchematicCommands(reg);
         cmd::Context ctx{ws};
         mcp::Server s(reg, ctx);
 

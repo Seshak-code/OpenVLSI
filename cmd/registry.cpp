@@ -46,7 +46,9 @@ QString validate(const QJsonObject& schema, const QJsonValue& value, const QStri
         const QJsonObject o = value.toObject(), props = schema["properties"].toObject();
         for (const auto& r : schema["required"].toArray())
             if (!o.contains(r.toString())) return path + "." + r.toString() + ": required";
+        const bool closed = schema.contains("properties");  // an object without listed properties is a free-form map
         for (auto it = o.begin(); it != o.end(); ++it) {
+            if (!closed) continue;
             if (!props.contains(it.key())) return path + "." + it.key() + ": unknown parameter";
             if (QString e = validate(props[it.key()].toObject(), it.value(), path + "." + it.key()); !e.isEmpty()) return e;
         }
@@ -57,6 +59,23 @@ QString validate(const QJsonObject& schema, const QJsonValue& value, const QStri
             if (QString e = validate(schema["items"].toObject(), a[i], path + "[" + QString::number(i) + "]"); !e.isEmpty()) return e;
     }
     return "";
+}
+
+QJsonObject param(const QString& type, const QString& description) {
+    QJsonObject p{{"description", description}};
+    if (!type.isEmpty()) p["type"] = type;
+    return p;
+}
+
+QJsonObject object(std::initializer_list<std::pair<const char*, QJsonObject>> required,
+                   std::initializer_list<std::pair<const char*, QJsonObject>> optional) {
+    QJsonObject p;
+    QJsonArray req;
+    for (const auto& [k, s] : required) { p[k] = s; req.append(k); }
+    for (const auto& [k, s] : optional) p[k] = s;
+    QJsonObject o{{"type", "object"}, {"properties", p}};
+    if (!req.isEmpty()) o["required"] = req;
+    return o;
 }
 
 void Registry::add(Command c) {
