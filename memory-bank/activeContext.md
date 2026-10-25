@@ -1,5 +1,20 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 7**
+
+- **PR #32** (`rebuild/m1-s7`): the waveform viewer.
+  - `app/plot` and `app/waveform_viewer` draw the traces, with cursors and a calculator line.
+  - `wave_eval` is the calculator as a command.
+  - Cross-probing works both ways: `waveform_probe` (Plot Net) and `editor_select_net`.
+  - ADE results open in the viewer on a double-click.
+- **Next:** slice 8.
+  - SG13G2 primitives: `spice` templates on the IHP models.
+  - Monte Carlo: process and mismatch from the PDK.
+  - The M1 gate: a two-stage Miller op-amp (op/ac/tran/noise over 5 corners plus a temperature sweep, and a
+    200-sample Monte Carlo) matched against ngspice, driven once through MCP alone; the bundle on a clean account.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 6**
 
 - **PR #31** (`rebuild/m1-s6`): ADE Explorer.
