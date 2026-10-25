@@ -1,5 +1,17 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — the M1 gate passes whole**
+
+- **`rebuild/bundle`:** `tools/deploy_macos.sh` closes the bundle's dependencies that `macdeployqt` misses with
+  Homebrew's Qt: `@rpath` ones such as QtDBus and libbrotlicommon, and absolute Homebrew ones such as libpng. It strips
+  rpaths that leave the bundle and signs ad hoc.
+- **The gate's bundle step** now also runs the bundled treespice and verifies the signature.
+- **Result:** `tools/m1_gate.py --bundle` passes 28 of 28 checks.
+- **The owner's part:** run the bundle on a clean account; Developer ID signing and notarization.
+- **This Mac:** Homebrew's Qt plugin links were repaired with `brew unlink qt && brew link qt`.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 8: the M1 gate runs**
 
 - **PRs, merge in order:** TreeSPICE **#26** (`mac/mc`), then OpenVLSI **#33** (`rebuild/m1-s8`). #33 pins the engine at

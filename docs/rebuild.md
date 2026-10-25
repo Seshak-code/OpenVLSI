@@ -116,8 +116,8 @@ should be as usable as Virtuoso + ADE Explorer + Spectre for the same circuit.
 - **Commands and MCP:** every M1 operation above, exposed and covered by command-level tests.
 - **macOS app:** a signed, notarized `.app` bundle that ships its own Qt plugins and engine; no Homebrew paths.
 
-**Gate (run, not claimed):** `tools/m1_gate.py` (2026-10-25: steps 1–4 pass, 24 of 24 checks; step 5 waits on this
-machine's Homebrew Qt, see below).
+**Gate (run, not claimed):** `tools/m1_gate.py --bundle` (2026-10-25: 28 of 28 checks pass; what remains of step 5 is
+the owner's run on a clean account, and a Developer ID signature for distribution).
 1. From an empty workspace, build a two-stage Miller op-amp on SG13G2: schematic, symbol, and a testbench using
    the symbol.
 2. In ADE, run op, ac, tran (step response) and noise, over 5 corners and a temperature sweep, plus a 200-sample
