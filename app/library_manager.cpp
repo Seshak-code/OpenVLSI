@@ -58,7 +58,7 @@ LibraryManager::LibraryManager(Session& session, QWidget* parent) : QWidget(pare
         const QString name = QInputDialog::getText(this, "New View", "View name:", QLineEdit::Normal, "schematic");
         if (name.isEmpty()) return;
         bool ok = false;
-        const QString type = QInputDialog::getItem(this, "New View", "Type:", {"schematic", "symbol"}, 0, false, &ok);
+        const QString type = QInputDialog::getItem(this, "New View", "Type:", {"schematic", "symbol", "config", "maestro"}, 0, false, &ok);
         if (ok) createView(name, type);
     });
     bar->addAction("Rename…", this, [this] {

@@ -1,5 +1,22 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 6**
+
+- **PR #31** (`rebuild/m1-s6`): ADE Explorer.
+  - `sim/calc`: the Cadence-style calculator.
+  - `sim/ade`: the setup, its points, prepare/execute, and the `Jobs` that run in the background.
+  - New commands: `ade_setup_get/set`, `ade_run` (`wait: false` runs it in the background), `ade_stop`,
+    `ade_history_list/get`.
+  - `app/ade_explorer`: the window, reached by `editor_open` on a maestro view.
+  - Each run is a history on disk: `simulation/<lib>/<cell>/<view>/Interactive.N`.
+- **Changed:** simulations run `--cpu` (double precision). `Subprocess` is fork-safe for parallel runs.
+- **Next:**
+  - slice 7, the waveform viewer (plots, cursors, the calculator UI, cross-probing);
+  - then slice 8: SG13G2 primitives, Monte Carlo, and the M1 gate (a two-stage Miller op-amp, matched against
+    ngspice, driven once through MCP).
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — rebuild M1 slice 5**
 
 - **PR #30** (`rebuild/m1-s5`): the netlister (`sim/netlist`) and simulation (`sim/run`).

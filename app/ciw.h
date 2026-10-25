@@ -16,6 +16,7 @@ namespace app {
 
 class LibraryManager;
 class ViewEditor;
+class AdeExplorer;
 
 class Ciw : public QMainWindow {
     Q_OBJECT
@@ -26,6 +27,7 @@ public:
     QString logText() const;
     LibraryManager* libraryManager();  // opened on first use
     ViewEditor* editor(const QString& lib, const QString& cell, const QString& view) const;  // open, or null
+    AdeExplorer* explorer(const QString& lib, const QString& cell, const QString& view) const;
 
 private:
     void append(const QString& html);
@@ -33,7 +35,7 @@ private:
     QPlainTextEdit* log_;
     QLineEdit* input_;
     LibraryManager* libraryManager_ = nullptr;
-    std::map<QString, QPointer<ViewEditor>> editors_;  // "lib/cell/view"
+    std::map<QString, QPointer<QWidget>> editors_;  // "lib/cell/view": a ViewEditor or an AdeExplorer
     bool typed_ = false;  // the call in progress came from the input line (reads are echoed only then)
 };
 

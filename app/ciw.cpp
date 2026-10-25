@@ -1,6 +1,7 @@
 #include "app/ciw.h"
 
 #include "app/library_manager.h"
+#include "app/ade_explorer.h"
 #include "app/view_editor.h"
 
 #include <QApplication>
@@ -44,16 +45,18 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                     : "<span style='color:#c0392b'>✗ " + r.error.toHtmlEscaped() + "</span>");
     });
 
-    session_.addCommand({"editor_open", "Opens the schematic or symbol editor on a view (the GUI's command); returns its type.",
+    session_.addCommand({"editor_open", "Opens a view's tool (the GUI's command): the schematic or symbol editor, or ADE Explorer on a "
+                                        "maestro view; returns the view's type.",
                          cmd::object({{"library", cmd::param("string", "library name")}, {"cell", cmd::param("string", "cell name")},
                                       {"view", cmd::param("string", "view name")}}),
                          [this](cmd::Context& c, const QJsonObject& a) {
                              const QString lib = a["library"].toString(), cell = a["cell"].toString(), view = a["view"].toString();
                              const std::string type = c.workspace.library(lib.toStdString()).viewType(cell.toStdString(), view.toStdString());
-                             if (type != "schematic" && type != "symbol")
-                                 throw std::runtime_error("no editor for a " + type + " view yet (schematic and symbol only)");
-                             QPointer<ViewEditor>& e = editors_[lib + "/" + cell + "/" + view];
-                             if (!e) e = new ViewEditor(session_, lib, cell, view, this);
+                             if (type != "schematic" && type != "symbol" && type != "maestro")
+                                 throw std::runtime_error("no tool for a " + type + " view yet (schematic, symbol and maestro)");
+                             QPointer<QWidget>& e = editors_[lib + "/" + cell + "/" + view];
+                             if (!e && type == "maestro") e = new AdeExplorer(session_, lib, cell, view, this);
+                             else if (!e) e = new ViewEditor(session_, lib, cell, view, this);
                              e->show();
                              e->raise();
                              return QJsonValue(QString::fromStdString(type));
@@ -81,7 +84,12 @@ QString Ciw::logText() const { return log_->toPlainText(); }
 
 ViewEditor* Ciw::editor(const QString& lib, const QString& cell, const QString& view) const {
     const auto it = editors_.find(lib + "/" + cell + "/" + view);
-    return it == editors_.end() ? nullptr : it->second.data();
+    return it == editors_.end() ? nullptr : qobject_cast<ViewEditor*>(it->second.data());
+}
+
+AdeExplorer* Ciw::explorer(const QString& lib, const QString& cell, const QString& view) const {
+    const auto it = editors_.find(lib + "/" + cell + "/" + view);
+    return it == editors_.end() ? nullptr : qobject_cast<AdeExplorer*>(it->second.data());
 }
 
 bool Ciw::runLine(const QString& line) {

@@ -9,19 +9,22 @@
 #include <QString>
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <map>
 #include <vector>
 
 namespace oadb { class Workspace; }
+namespace sim { class Jobs; }
 
 namespace cmd {
 
-// What a command acts on: the session's workspace, and the simulator it runs (TreeSPICE's treespice; "" when it has
-// none, so simulate fails)
+// What a command acts on: the session's workspace, the simulator it runs (TreeSPICE's treespice; "" when it has none,
+// so simulate fails), and its background runs (made on first use; destroyed with it, stopping them)
 struct Context {
     oadb::Workspace& workspace;
     std::string simulator;
+    std::shared_ptr<sim::Jobs> jobs;
 };
 
 struct Command {
@@ -64,5 +67,6 @@ QJsonObject object(std::initializer_list<std::pair<const char*, QJsonObject>> re
 void addCoreCommands(Registry& r);       // workspace, library, cell, view, property, undo/redo, export
 void addSchematicCommands(Registry& r);  // cell properties, shapes, pins, instances, wires, labels, check, symbols
 void addSimulationCommands(Registry& r);  // netlist, simulate, results_get
+void addAdeCommands(Registry& r);         // ade_setup_get/set, ade_run, ade_stop, ade_history_list/get
 
 }  // namespace cmd
