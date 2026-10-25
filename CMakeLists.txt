@@ -61,10 +61,11 @@ target_link_libraries(openvlsi_sch PUBLIC oadb)
 # ── Worker processes (a process group with a watchdog), and simulation: netlister, TreeSPICE runs, raw files ─────
 add_library(openvlsi_proc STATIC flow/subprocess.cpp)
 target_include_directories(openvlsi_proc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp)
+add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade.cpp)
 target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
 
-add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp)
+add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp
+            cmd/ade_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_cmd PUBLIC oadb openvlsi_sch openvlsi_sim Qt6::Core)
 
@@ -80,7 +81,7 @@ add_dependencies(openvlsi-mcp treespice)
 # ── The app: the CIW and the tools' windows, every action a command through app::Session ───────────────────────────
 set(CMAKE_AUTOMOC ON)
 add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp app/scene.cpp app/canvas.cpp
-            app/view_editor.cpp)
+            app/view_editor.cpp app/ade_explorer.cpp)
 target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
@@ -101,21 +102,26 @@ target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_library_manager test_view_editor)
+foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
 target_link_libraries(test_oadb PRIVATE oadb)
 target_link_libraries(test_commands PRIVATE openvlsi_cmd)
 target_link_libraries(test_schematic PRIVATE openvlsi_cmd)
-target_link_libraries(test_simulation PRIVATE openvlsi_cmd)
-target_compile_definitions(test_simulation PRIVATE OPENVLSI_TREESPICE="$<TARGET_FILE:treespice>")
-add_dependencies(test_simulation treespice)
+foreach(t test_simulation test_ade)
+    target_link_libraries(${t} PRIVATE openvlsi_cmd)
+    target_compile_definitions(${t} PRIVATE OPENVLSI_TREESPICE="$<TARGET_FILE:treespice>")
+    add_dependencies(${t} treespice)
+endforeach()
 target_link_libraries(test_mcp PRIVATE openvlsi_mcp)
 target_link_libraries(test_library_manager PRIVATE openvlsi_app)
 target_link_libraries(test_view_editor PRIVATE openvlsi_app)
+target_link_libraries(test_ade_explorer PRIVATE openvlsi_app)
+add_custom_command(TARGET test_ade_explorer POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:treespice> $<TARGET_FILE_DIR:test_ade_explorer>)
+add_dependencies(test_ade_explorer treespice)
 # the plugins of the Qt this links (a machine with a second, stale Qt prefix otherwise finds no platform plugin)
-set_tests_properties(test_library_manager test_view_editor PROPERTIES ENVIRONMENT
+set_tests_properties(test_library_manager test_view_editor test_ade_explorer PROPERTIES ENVIRONMENT
                      "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>/..")
 target_compile_definitions(test_mcp PRIVATE OPENVLSI_MCP_EXE="$<TARGET_FILE:openvlsi-mcp>")
 

@@ -72,7 +72,8 @@ std::vector<Plot> readRaw(const std::string& path) {
     return plots;
 }
 
-Run simulate(const std::string& simulator, const std::string& dir, const std::string& netlist, std::chrono::seconds timeout) {
+Run simulate(const std::string& simulator, const std::string& dir, const std::string& netlist, std::chrono::seconds timeout,
+             const std::atomic<bool>* cancel) {
     namespace fs = std::filesystem;
     if (simulator.empty() || !fs::exists(simulator)) throw std::runtime_error("no simulator: treespice is not at '" + simulator + "'");
     const fs::path d(dir);
@@ -80,12 +81,16 @@ Run simulate(const std::string& simulator, const std::string& dir, const std::st
         std::ofstream f(d / "input.cir");
         if (!(f << netlist) || !f.flush()) throw std::runtime_error("cannot write " + (d / "input.cir").string());
     }
-    acutesim::orchestration::Subprocess p(simulator, {"-b", "-r", (d / "out.raw").string(), (d / "input.cir").string()});
+    // ponytail: double precision on the CPU, the results ngspice is compared with; the GPU fronts' mixed precision
+    // once its accuracy against ngspice is shown
+    acutesim::orchestration::Subprocess p(simulator, {"-b", "--cpu", "-r", (d / "out.raw").string(), (d / "input.cir").string()});
     p.setWorkingDirectory(dir);
     p.setTimeout(timeout);
+    p.setCancelFlag(cancel);
     const auto r = p.run();
     Run run{dir, r.stdout_output + r.stderr_output, {}};
     std::ofstream(d / "log.txt") << run.log;
+    if (r.cancelled) throw std::runtime_error("the simulation was stopped (" + dir + ")");
     if (r.timed_out) throw std::runtime_error("the simulation timed out after " + std::to_string(timeout.count()) + " s (" + dir + ")" + tail(run.log, 5));
     if (r.exit_code != 0)
         throw std::runtime_error("the simulation failed (treespice exit " + std::to_string(r.exit_code) + ", " + dir + "):" + tail(run.log, 8));

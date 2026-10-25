@@ -15,7 +15,7 @@ that ties them together. Platform order: macOS, other desktops, then web. Engine
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # Qt 6 from Homebrew (found by its standard prefix), SQLite from the SDK
 cmake --build build -j$(( $(sysctl -n hw.ncpu) - 2 ))
-ctest --test-dir build                          # oadb, commands, mcp, schematic, simulation, library_manager + view_editor (offscreen), flow/SoC gates, engine_isolation
+ctest --test-dir build                          # oadb, commands, mcp, schematic, simulation, ade, library_manager + view_editor + ade_explorer (offscreen), flow/SoC, isolation
 open build/OpenVLSI.app                         # the CIW and Library Manager; `OpenVLSI <workspace.libs>`, default ~/OpenVLSI/openvlsi.libs
 ```
 
@@ -25,7 +25,7 @@ The flow and SoC gates (`test_rtl_flow`, `test_firmware_on_silicon`, `test_soc_h
 ## Architecture (docs/rebuild.md)
 
 ```
-app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi) → cmd/ (command registry) → oadb/ (design database)
+app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi, ADE Explorer) → cmd/ (command registry) → oadb/ (design database)
                               ├── mcp/ (MCP server)          sim/ (netlister; treespice runs) → acutesim_engine/ (TreeSPICE)
                               └── flow/ (backends), soc/
 ```
@@ -37,7 +37,10 @@ app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi) → cmd/ (co
 - **Simulation** (`sim/`): the netlister writes a schematic's hierarchy (a config view's view list and bindings
   switch cells between `spice` primitives and schematics) as SPICE; `simulate` runs the `treespice` beside the
   executable (copied there at build) in a worker process and reads its raw file. Cards are one analysis or control
-  line each; anything else is refused.
+  line each; anything else is refused. ADE (`sim/ade.h`): a maestro view's setup (tests, variables and sweeps,
+  corners, outputs with specs) expands into points run in parallel, each output a calculator expression
+  (`sim/calc.h`); runs are histories on disk (`simulation/<lib>/<cell>/<view>/Interactive.N`), in the background
+  through `ade_run` with `wait: false`.
 - **oadb** (`oadb/oadb.h`): one SQLite file per library; cells, views, per-view JSON properties. `Library::change`
   makes one undo group (trigger-logged inverse SQL; session-scoped history). A workspace file lists libraries
   (`DEFINE <library> <path>`).

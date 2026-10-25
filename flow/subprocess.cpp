@@ -11,6 +11,7 @@
 #include <sys/select.h>
 #include <fcntl.h>
 #include <signal.h>
+extern char** environ;  // POSIX: declared by no header on macOS
 #endif
 #include <iostream>
 #include <array>
@@ -167,6 +168,27 @@ SubprocessResult Subprocess::runWithStreaming(OutputCallback stdoutCb, OutputCal
         return r;
     }
 
+    // argv and the environment are built before fork: a child of a multithreaded parent (parallel simulation runs)
+    // must not allocate, another thread may have held the allocator's lock when it forked
+    std::vector<char*> c_args;
+    c_args.push_back(const_cast<char*>(command_.c_str()));
+    for (const auto& arg : args_) c_args.push_back(const_cast<char*>(arg.c_str()));
+    c_args.push_back(nullptr);
+    std::vector<std::string> envStrings;
+    std::vector<char*> envp;
+    if (!env_.empty()) {
+        std::map<std::string, std::string> all;
+        for (char** e = environ; *e; ++e) {
+            const std::string kv(*e);
+            const size_t eq = kv.find('=');
+            if (eq != std::string::npos) all[kv.substr(0, eq)] = kv.substr(eq + 1);
+        }
+        for (const auto& [k, v] : env_) all[k] = v;
+        for (const auto& [k, v] : all) envStrings.push_back(k + "=" + v);
+        for (auto& e : envStrings) envp.push_back(e.data());
+        envp.push_back(nullptr);
+    }
+
     const auto start_time = std::chrono::steady_clock::now();
     const pid_t pid = fork();
 
@@ -180,11 +202,7 @@ SubprocessResult Subprocess::runWithStreaming(OutputCallback stdoutCb, OutputCal
             perror("chdir failed");
             _exit(127);
         }
-        for (const auto& [k, v] : env_) setenv(k.c_str(), v.c_str(), 1);
-        std::vector<char*> c_args;
-        c_args.push_back(const_cast<char*>(command_.c_str()));
-        for (const auto& arg : args_) c_args.push_back(const_cast<char*>(arg.c_str()));
-        c_args.push_back(nullptr);
+        if (!envp.empty()) environ = envp.data();  // execvp searches PATH in it and passes it on
         execvp(command_.c_str(), c_args.data());
         perror("execvp failed");
         _exit(127);

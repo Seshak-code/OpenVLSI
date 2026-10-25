@@ -2,6 +2,7 @@
 // A simulation run: a netlist given to TreeSPICE's `treespice` in a worker process (a crash or a hang never takes the
 // caller down), its ngspice raw file read back. Each run keeps its files in its own directory: input.cir, out.raw,
 // log.txt.
+#include <atomic>
 #include <chrono>
 #include <complex>
 #include <string>
@@ -24,8 +25,10 @@ struct Run {
     std::vector<Plot> plots;
 };
 
-// Writes dir/input.cir (dir must exist) and runs `simulator -b -r out.raw input.cir` there. A simulator that fails,
-// times out or writes no results is an error whose text ends with the log's last lines.
-Run simulate(const std::string& simulator, const std::string& dir, const std::string& netlist, std::chrono::seconds timeout);
+// Writes dir/input.cir (dir must exist) and runs `simulator -b --cpu -r out.raw input.cir` there. A simulator that
+// fails, times out, is cancelled (a set `cancel` kills it) or writes no results is an error whose text ends with the
+// log's last lines.
+Run simulate(const std::string& simulator, const std::string& dir, const std::string& netlist, std::chrono::seconds timeout,
+             const std::atomic<bool>* cancel = nullptr);
 
 }  // namespace sim
