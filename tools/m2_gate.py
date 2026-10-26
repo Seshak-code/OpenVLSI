@@ -3,13 +3,20 @@
 
     python3 tools/m2_gate.py --mcp build/openvlsi-mcp --pdk <ihp-sg13g2> --osdi <psp103.osdi> [--keep DIR]
 
-Now stb, on the M1 op-amp (tools/m1_gate.py builds it) as a follower with an iprobe in its feedback, over the five MOS
+    python3 tools/m2_gate.py ... [--ngspice ngspice]
+
+stb, on the M1 op-amp (tools/m1_gate.py builds it) as a follower with an iprobe in its feedback, over the five MOS
 corners and three temperatures: its loop gain equals Middlebrook's two injections done by hand as ordinary AC runs, at
 every frequency (exact: the same loop); and its phase margin and unity-gain frequency agree with the open loop broken
 by the 1 GOhm / 1 F trick (close, not equal: that break leaves out the loading the follower's output carries).
+
+PSS, against long transients' last periods on TreeSPICE and on ngspice (ngspice's own .pss is no reference: it treats
+every circuit as an oscillator and, on an LC oscillator, reports convergence 20 % off its frequency): the follower
+driven by a large 1 MHz sine, its harmonics over the corners and temperatures; and a cross-coupled LC VCO on SG13G2, its
+frequency and amplitude over its tank capacitance and three corners.
 Exit 0 when every check passes.
 """
-import argparse, os, sys, tempfile
+import argparse, cmath, math, os, shutil, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import m1_gate as m1  # the MCP client, the op-amp and its test benches
@@ -56,6 +63,60 @@ def broken_bench(m):
     m1.place(m, "design", "tb_broken", "VAC", "analogLib", "vdc", 3000, 0, {"PLUS": "acin", "MINUS": "gnd!"}, {"vdc": "0", "acm": "1"})
 
 
+def pss_bench(m):
+    """The follower driven by a 0.6 V +- 0.3 V sine at 1 MHz: slewing and the input pair's swing make harmonics."""
+    m("cell_create", library="design", cell="tb_pss")
+    m("view_create", library="design", cell="tb_pss", view="schematic", type="schematic")
+    m1.place(m, "design", "tb_pss", "I0", "design", "opamp", 0, 0, {"inp": "inp", "inn": "out", "ibias": "nb", "out": "out", "vdd": "vdd", "vss": "gnd!"})
+    m1.place(m, "design", "tb_pss", "VDD", "analogLib", "vdc", -1500, 0, {"PLUS": "vdd", "MINUS": "gnd!"}, {"vdc": "1.2"})
+    m1.place(m, "design", "tb_pss", "IB", "analogLib", "idc", -2000, 0, {"PLUS": "vdd", "MINUS": "nb"}, {"idc": "10u"})
+    m1.place(m, "design", "tb_pss", "CL", "analogLib", "cap", 1500, 0, {"PLUS": "out", "MINUS": "gnd!"}, {"c": "1p"})
+    m1.place(m, "design", "tb_pss", "VIN", "analogLib", "vsin", -2500, 0, {"PLUS": "inp", "MINUS": "gnd!"}, {"vdc": "0.6", "va": "0.3", "freq": "1meg"})
+
+
+def vco_bench(m):
+    """A cross-coupled NMOS LC VCO: 2 nH and {ct} per side with 300 Ohm of tank loss, a 3 mA tail. A 0.2 V pulse under
+    one tank capacitor kicks it at 0.1 ns (its period 1 s: still while the oscillator is shot)."""
+    m("cell_create", library="design", cell="tb_vco")
+    m("view_create", library="design", cell="tb_vco", view="schematic", type="schematic")
+    parts = [("VDD", "analogLib", "vdc", {"PLUS": "vdd", "MINUS": "gnd!"}, {"vdc": "1.2"}),
+             ("L1", "analogLib", "ind", {"PLUS": "vdd", "MINUS": "outp"}, {"l": "2n"}),
+             ("L2", "analogLib", "ind", {"PLUS": "vdd", "MINUS": "outn"}, {"l": "2n"}),
+             ("R1", "analogLib", "res", {"PLUS": "vdd", "MINUS": "outp"}, {"r": "300"}),
+             ("R2", "analogLib", "res", {"PLUS": "vdd", "MINUS": "outn"}, {"r": "300"}),
+             ("C1", "analogLib", "cap", {"PLUS": "outp", "MINUS": "gnd!"}, {"c": "{ct}"}),
+             ("C2", "analogLib", "cap", {"PLUS": "outn", "MINUS": "kick"}, {"c": "{ct}"}),
+             ("VK", "analogLib", "vpulse", {"PLUS": "kick", "MINUS": "gnd!"},
+              {"v1": "0", "v2": "0.2", "td": "0.1n", "tr": "20p", "tf": "20p", "pw": "0.1n", "per": "1"}),
+             ("M1", "sg13g2", "sg13_lv_nmos", {"D": "outp", "G": "outn", "S": "tail", "B": "gnd!"}, {"w": "20u", "l": "0.13u"}),
+             ("M2", "sg13g2", "sg13_lv_nmos", {"D": "outn", "G": "outp", "S": "tail", "B": "gnd!"}, {"w": "20u", "l": "0.13u"}),
+             ("IT", "analogLib", "idc", {"PLUS": "tail", "MINUS": "gnd!"}, {"idc": "3m"})]
+    for k, (name, lib, master, nets, params) in enumerate(parts):
+        m1.place(m, "design", "tb_vco", name, lib, master, 600 * (k % 6), -600 * (k // 6), nets, params)
+
+
+def last_period(x, y, T, n=1000):
+    """A transient's last period, [x_end - T, x_end), on n equal ticks (linear between its points)"""
+    out, k, t0 = [], 1, x[-1] - T
+    for i in range(n):
+        t = t0 + i * T / n
+        while k + 1 < len(x) and x[k] < t: k += 1
+        out.append(y[k - 1] + (t - x[k - 1]) / (x[k] - x[k - 1]) * (y[k] - y[k - 1]))
+    return out
+
+
+def harmonics(samples, harms):
+    """The peak phasors of a period's equal ticks, V_0 the mean (as TreeSPICE's PSS Harmonics)"""
+    n = len(samples)
+    return [sum(v * cmath.exp(-2j * math.pi * k * i / n) for i, v in enumerate(samples)) * ((1 if k == 0 else 2) / n) for k in range(harms + 1)]
+
+
+def frequency(x, y, periods=20):
+    """From a transient's last `periods` rising crossings of its mean (over those periods)"""
+    rises = [x[k - 1] + (0 - y[k - 1]) / (y[k] - y[k - 1]) * (x[k] - x[k - 1]) for k in range(1, len(x)) if y[k - 1] < 0 <= y[k]]
+    return periods / (rises[-1] - rises[-1 - periods])
+
+
 def wave(m, run, expression):
     """A complex waveform from wave_eval: (x, [complex])"""
     w = m("wave_eval", run=run, expression=expression)
@@ -67,21 +128,28 @@ def main():
     ap.add_argument("--mcp", required=True)
     ap.add_argument("--pdk", required=True, help="the ihp-sg13g2 directory")
     ap.add_argument("--osdi", required=True, help="psp103.osdi")
+    ap.add_argument("--ngspice", default="ngspice")
     ap.add_argument("--keep", help="build the workspace here (kept) instead of a temporary directory")
     a = ap.parse_args()
+    osdi_dir = tempfile.mkdtemp(prefix="m2osdi")  # ngspice's osdi command takes no path with spaces
+    osdi_copy = os.path.join(osdi_dir, "psp103.osdi")
+    shutil.copy(a.osdi, osdi_copy)
     ws = a.keep or tempfile.mkdtemp(prefix="m2 gate ")
     os.makedirs(ws, exist_ok=True)
     m = m1.Mcp(os.path.abspath(a.mcp), os.path.join(ws, "openvlsi.libs"))
     print(f"workspace: {ws}")
 
     print("1. the op-amp, its open-loop bench and a follower with a probe in its loop")
-    pdk = m("pdk_install", pdk="ihp-sg13g2", root=a.pdk, osdi=a.osdi)
+    pdk = m("pdk_install", pdk="ihp-sg13g2", root=os.path.abspath(a.pdk), osdi=os.path.abspath(a.osdi))
     m1.build(m)
     for cell, inj in (("tb_stb", None), ("tb_injv", "v"), ("tb_inji", "i"), ("tb_stbbuf", "buffered")):
         stb_bench(m, cell, inj)
     broken_bench(m)
-    check(all(m("schematic_check", library="design", cell=c, view="schematic")["ok"] for c in ("tb_stb", "tb_injv", "tb_inji", "tb_stbbuf", "tb_broken")),
-          "the stb bench and the two injection benches check clean")
+    pss_bench(m)
+    vco_bench(m)
+    benches = ("tb_stb", "tb_injv", "tb_inji", "tb_stbbuf", "tb_broken", "tb_pss", "tb_vco")
+    check(all(m("schematic_check", library="design", cell=c, view="schematic")["ok"] for c in benches),
+          "the stb, injection, driven PSS and VCO benches check clean")
 
     print("2. stb against the loop broken by hand, over five corners and three temperatures")
     lv = pdk["models"]["mos_lv"]
@@ -145,6 +213,82 @@ def main():
         if d >= worst_b[0]: worst_b = (d, key, t["buf"]["pm_buf"]["value"], t["ol"]["pm"]["value"])
     check(worst_b[0] <= 0.02, f"buffered so the output carries no gate load, stb matches the broken loop to {worst_b[0]:.4f} deg / % "
                               f"(worst {worst_b[2]:.4f} vs {worst_b[3]:.4f} deg, {worst_b[1][0]} {worst_b[1][1]} C): the difference above is loading")
+
+    print("3. PSS: the follower driven at 1 MHz, over five corners and three temperatures, against long transients")
+    m("cell_create", library="design", cell="pssbench")
+    m("view_create", library="design", cell="pssbench", view="ade", type="maestro")
+    view = dict(library="design", cell="pssbench", view="ade")
+    H = 5
+    m("ade_setup_set", setup={
+        "tests": [{"name": "pss", "design": "design/tb_pss/schematic",
+                   "analyses": [{"type": "pss", "fund": "1meg", "tstab": "5u", "oscnode": "0", "points": "1000", "harms": str(H)}]},
+                  {"name": "tran", "design": "design/tb_pss/schematic", "analyses": [{"type": "tran", "step": "1n", "stop": "30u", "start": "0", "maxstep": "1n"}]}],
+        "temperature": "-40 27 125",
+        "corners": [{"name": c, "models": [{"file": lv, "section": "mos_" + c}]} for c in ("ss", "ff", "sf", "fs")],
+        "outputs": [{"name": "h1", "test": "pss", "expression": "mag(harmonic(VH(out), 1))"},
+                    {"name": "thd", "test": "pss", "expression": "thd(VH(out))"}]}, **view)
+    h = m("ade_run", **view)
+    pts = h["points"]
+    check(h["status"] == "done" and len(pts) == 2 * 15 and all(p["status"] == "done" for p in pts), f"{len(pts)} points ran")
+    dirs = {}
+    for p in pts:
+        dirs.setdefault((p["corner"], p["temperature"]), {})[p["test"]] = p
+    worst = {"ts": (0, None), "ng": (0, None)}
+    thds = []
+    for key, d in dirs.items():
+        _, vh = wave(m, d["pss"]["dir"], "VH(out)")
+        thds.append(d["pss"]["outputs"]["thd"]["value"])
+        refs = {"ts": d["tran"]["dir"], "ng": m1.ngspice(d["tran"]["dir"], osdi_copy, a.ngspice)}
+        for who, run in refs.items():
+            x, y = wave(m, run, "VT(out)")
+            ref = harmonics(last_period(x, [v.real for v in y], 1e-6), H)
+            err = max(abs(vh[k] - ref[k]) for k in range(H + 1)) / abs(ref[1])  # every harmonic, against the first
+            if err >= worst[who][0]: worst[who] = (err, key)
+    check(min(thds) > 0.1, f"the drive distorts (thd {min(thds):.3g} .. {max(thds):.3g} %): the harmonics are worth comparing")
+    for who, name in (("ts", "TreeSPICE's"), ("ng", "ngspice's")):
+        err, key = worst[who]
+        check(err <= 1e-3, f"PSS harmonics 0 .. {H} match {name} 30 us transient's last period to {err:.2e} of the first ({key[0]} {key[1]} C at worst)")
+
+    print("4. PSS: an LC VCO on SG13G2, its period an unknown, over its tank capacitance and three corners")
+    m("cell_create", library="design", cell="vcobench")
+    m("view_create", library="design", cell="vcobench", view="ade", type="maestro")
+    view = dict(library="design", cell="vcobench", view="ade")
+    m("ade_setup_set", setup={
+        "variables": {"ct": "0.5p 1p"},
+        "tests": [{"name": "pss", "design": "design/tb_vco/schematic",
+                   "analyses": [{"type": "pss", "fund": "3G", "tstab": "20n", "oscnode": "outp", "points": "400", "harms": "5"}]},
+                  {"name": "tran", "design": "design/tb_vco/schematic", "analyses": [{"type": "tran", "step": "1p", "stop": "40n", "start": "0", "maxstep": "1p"}]}],
+        "temperature": "27",
+        "corners": [{"name": c, "models": [{"file": lv, "section": "mos_" + c}]} for c in ("ss", "ff")],
+        "outputs": [{"name": "f", "test": "pss", "expression": "fundamental(VH(outp))"},
+                    {"name": "swing", "test": "pss", "expression": "ymax(VPSS(outp) - VPSS(outn))"}]}, **view)
+    h = m("ade_run", **view)
+    pts = h["points"]
+    check(h["status"] == "done" and len(pts) == 2 * 3 * 2 and all(p["status"] == "done" for p in pts), f"{len(pts)} points ran")
+    dirs = {}
+    for p in pts:
+        dirs.setdefault((p["corner"], p["variables"]["ct"]), {})[p["test"]] = p
+    worst = {"ts": (0, None, 0, 0), "ng": (0, None, 0, 0)}
+    # ngspice's swing is first order in its step here: 0.95, 0.61, 0.27 mV above TreeSPICE's at 1, 0.5 and 0.25 ps
+    # (nominal, ct 0.5p; both settled), TreeSPICE's own moving 8 uV. Its looser bound is that step error, not PSS's
+    tol_swing = {"ts": 1e-3, "ng": 2e-3}
+    fs = []
+    for key, d in dirs.items():
+        f, swing = d["pss"]["outputs"]["f"]["value"], d["pss"]["outputs"]["swing"]["value"]
+        fs.append(f)
+        refs = {"ts": d["tran"]["dir"], "ng": m1.ngspice(d["tran"]["dir"], osdi_copy, a.ngspice)}
+        for who, run in refs.items():
+            x, y = wave(m, run, "VT(outp) - VT(outn)")
+            y = [v.real for v in y]
+            ft = frequency(x, y)
+            amp = max(v for t, v in zip(x, y) if t > x[-1] - 20 / ft)
+            err = max(abs(f / ft - 1) / 1e-4, abs(swing / amp - 1) / tol_swing[who])  # in tolerances
+            if err >= worst[who][0]: worst[who] = (err, key, f / ft - 1, swing / amp - 1)
+    check(max(fs) / min(fs) > 1.2, f"the tank capacitance tunes it: {min(fs) / 1e9:.4g} .. {max(fs) / 1e9:.4g} GHz")
+    for who, name in (("ts", "TreeSPICE's"), ("ng", "ngspice's")):
+        err, key, df, da = worst[who]
+        check(err <= 1, f"the VCO's PSS frequency and swing match {name} 40 ns transient's last 20 periods to 1e-4 and "
+                        f"{tol_swing[who]:g} (worst {df:+.2e} / {da:+.2e}, {key[0]}, ct {key[1]})")
     m.close()
     failed = [w for ok, w in m1.CHECKS if not ok]
     print(f"\n{'PASSED' if not failed else 'FAILED'}: {len(m1.CHECKS) - len(failed)} of {len(m1.CHECKS)} checks")

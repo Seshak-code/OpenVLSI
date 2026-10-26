@@ -13,6 +13,9 @@
 //                tf {output, source}; sens {output}; pz {in1, in2, out1, out2, transfer (vol|cur), kind (pol|zer|pz)};
 //                stb {sweep, points, start, stop, probe}: the loop gain at probe, a 0 V source in the loop (+ toward the
 //                loop's input; analogLib's iprobe), its element name
+//                pss {fund, tstab, oscnode, points, harms [, maxiter]}: the periodic steady state by shooting Newton;
+//                oscnode "0" for a circuit its sources drive at fund (the period from the first multiple of 1/fund at
+//                or after tstab), else an oscillator's node (fund its guess, tstab its start-up); points per period
 //   variables    {name: "1k"}; a space-separated list ("1k 2k 5k") is a parametric sweep. They are .params, so an
 //                instance parameter "{name}" uses one.
 //   temperature  "27" (the nominal corner's); a space-separated list ("-40 27 125") sweeps it, a corner's too

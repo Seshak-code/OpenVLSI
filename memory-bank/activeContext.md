@@ -1,5 +1,25 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — M2 slice 3: PSS**
+
+- **PRs, merge in order:** TreeSPICE **#28** (`mac/pss`), then OpenVLSI `rebuild/m2-s3`. The latter pins the engine at
+  #28's head; afterwards, move the pointer to #28's merge commit.
+- **Engine:** `.pss fund tstab oscnob points harms [sciter]`, by shooting Newton.
+  - `oscnob` 0: a driven circuit. A node: an oscillator, its period an unknown.
+  - Writes "Periodic Steady State" and "PSS Harmonics" raw plots.
+  - `advanceTo` no longer leaves sliver steps before a stop.
+- **OpenVLSI:**
+  - ADE analysis `pss`;
+  - the calculator's `VPSS`/`IPSS`, `VH`/`IH`, `harmonic`, `thd`, `fundamental`;
+  - Plot Net on a PSS run uses `VPSS` (or `VH`);
+  - `tools/m2_gate.py` passes 14 of 14 checks, with its PDK paths made absolute.
+- **Lesson:** ngspice's own `.pss` is no reference. It treats every circuit as an oscillator and converges at a wrong
+  frequency, so long transients are the reference.
+- **Also seen:** on the GHz VCO, ngspice's transient swing is first order in its step (0.95 mV high at 1 ps).
+- **Next:** M2 slice 4, PAC and PNoise about the PSS.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — M2 slice 2: stb**
 
 - **PRs, merge in order:** TreeSPICE **#27** (`mac/stb`), then OpenVLSI `rebuild/m2-s2` (it pins the engine at #27's

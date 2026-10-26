@@ -382,6 +382,38 @@ int main() {
               "an stb without its probe is refused");
     }
 
+    // ── pss: a 1 MHz sine into RC = 1 us, its first harmonic against H = 1/(1 + jwRC) ──
+    {
+        primitive("vsin", "V", "[|PLUS] [|MINUS] sin(0 [@va] [@freq])", {{"va", "1"}, {"freq", "1meg"}});
+        rc("rcsin", "vsin", {});
+        must("view_create", {{"library", "sims"}, {"cell", "rcsin"}, {"view", "ade"}, {"type", "maestro"}});
+        const QJsonObject sv{{"library", "sims"}, {"cell", "rcsin"}, {"view", "ade"}};
+        const QJsonObject pss{{"type", "pss"}, {"fund", "1meg"}, {"tstab", "0"}, {"oscnode", "0"}, {"points", "1000"}, {"harms", "5"}};
+        must("ade_setup_set", with(sv, {{"setup", QJsonObject{
+            {"variables", QJsonObject{{"rval", "1k"}, {"cval", "1n"}}},
+            {"tests", QJsonArray{QJsonObject{{"name", "pss"}, {"design", "sims/rcsin/schematic"}, {"analyses", QJsonArray{pss}}}}},
+            {"outputs", QJsonArray{QJsonObject{{"name", "mag"}, {"test", "pss"}, {"expression", "mag(harmonic(VH(out), 1))"}},
+                                   QJsonObject{{"name", "ph"}, {"test", "pss"}, {"expression", "phase(harmonic(VH(out), 1))"}},
+                                   QJsonObject{{"name", "f"}, {"test", "pss"}, {"expression", "fundamental(VH(out))"}},
+                                   QJsonObject{{"name", "thd"}, {"test", "pss"}, {"expression", "thd(VH(out))"}, {"max", "0.01"}},
+                                   QJsonObject{{"name", "swing"}, {"test", "pss"}, {"expression", "ymax(VPSS(out)) - ymin(VPSS(out))"}}}}}}}));
+        const QJsonObject o = must("ade_run", sv).toObject()["points"].toArray()[0].toObject()["outputs"].toObject();
+        auto val = [&](const char* k) { return o[k].toObject()["value"].toDouble(); };
+        const double h = 1 / std::sqrt(1 + 4 * M_PI * M_PI), ph = -90 - std::atan(2 * M_PI) * 180 / M_PI;
+        check(near(val("mag"), h, 1e-5) && std::abs(val("ph") - ph) < 1e-3 && near(val("f"), 1e6, 1e-12) && val("thd") < 1e-3 &&
+                  near(val("swing"), 2 * h, 1e-4) && o["thd"].toObject()["pass"].toBool(),
+              "pss in ADE: an RC's first harmonic |H| " + std::to_string(val("mag")) + " at " + std::to_string(val("ph")) + " deg (" +
+                  std::to_string(h) + ", " + std::to_string(ph) + "), fundamental " + std::to_string(val("f")) + " Hz, thd " +
+                  std::to_string(val("thd")) + " %");
+        check(o["mag"].toObject()["steps"].toArray()[0].toString().startsWith("VH(out) = a waveform of 6 points over frequency"),
+              "and its derivation starts from the PSS harmonics: " + o["mag"].toObject()["steps"].toArray()[0].toString().toStdString());
+        QJsonObject noOsc = pss;
+        noOsc.remove("oscnode");
+        check(has(error("ade_setup_set", with(sv, {{"setup", QJsonObject{{"tests", QJsonArray{QJsonObject{{"name", "t"}, {"design", "sims/rcsin/schematic"},
+                  {"analyses", QJsonArray{noOsc}}}}}}}})), "pss needs oscnode"),
+              "a pss without its oscnode is refused");
+    }
+
     // ── malformed setups ──
     auto refused = [&](const char* what, std::function<void(QJsonObject&)> spoil, const std::string& why) {
         QJsonObject s = setup;

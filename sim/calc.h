@@ -5,6 +5,8 @@
 //            IT(src) IF(src) IDC(src) IOP(src)  a source's current
 //            VN(out) VN(in)                     the output / input-referred noise density; VNTOT(out|in) its total
 //            STB(loopgain)                      the stb analysis' loop gain (phaseMargin(STB(loopgain)), ...)
+//            VPSS(net) IPSS(src)                the pss steady period over time; VH(net) IH(src) its harmonics (the
+//                                               peak phasors at k fund, k = 0 .. harms)
 //   numbers  1.5k 10meg 2u 1e-9 (SPICE suffixes); + - * / ^, unary -, parentheses
 //   any      value(w, x)  mag(w)  dB20(w)  dB10(w)  phase(w) (degrees)  real(w)  imag(w)  abs(w)  sqrt(w)  log10(w)
 //   real w   ymax(w)  ymin(w)  average(w)  rms(w)  cross(w, level [, n [, "rising"|"falling"|"either"]])
@@ -12,6 +14,7 @@
 //            overshoot(w)
 //            settlingTime(w [, percent])  delay(w1, level1, w2, level2)
 //   ac w     bandwidth(w [, dB])  ugf(w)  phaseMargin(w)  gainMargin(w)
+//   pss      harmonic(VH(net), k)  thd(VH(net)) (percent, harmonics 2 .. harms against the first)  fundamental(VH(net))
 //
 // Waveforms combine pointwise when they share a scale; a number combines with anything. Every failure (an unknown
 // function or vector, no crossing, a complex waveform where a real one is needed) is an error, never a NaN.

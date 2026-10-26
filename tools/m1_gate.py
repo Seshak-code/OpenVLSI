@@ -235,7 +235,7 @@ def main():
     print(f"workspace: {ws}")
 
     print("1. the design, from an empty workspace")
-    pdk = m("pdk_install", pdk="ihp-sg13g2", root=a.pdk, osdi=a.osdi)
+    pdk = m("pdk_install", pdk="ihp-sg13g2", root=os.path.abspath(a.pdk), osdi=os.path.abspath(a.osdi))
     check(pdk["libraries"] == ["analogLib", "sg13g2"], "pdk_install: analogLib and sg13g2")
     build(m)
     check(all(m("schematic_check", library="design", cell=c, view="schematic")["ok"] for c in ("opamp", "tb_ol", "tb_cl")),

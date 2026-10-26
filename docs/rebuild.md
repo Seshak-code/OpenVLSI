@@ -150,7 +150,15 @@ Owner's order (2026-10-25): ADE Assembler first, then the RF analyses in TreeSPI
    output's gate load is buffered away. A loop broken at the other input (M1's `tb_ol`) is another path, through the
    mirror's pole, about 0.5° away.
 3. **PSS** (TreeSPICE): periodic steady state by shooting Newton, driven and autonomous (oscillators). Checked
-   against a long transient's last period, and ngspice's experimental .pss where it applies.
+   against a long transient's last period (TreeSPICE's and ngspice's).
+   Done (2026-10-25): `tools/m2_gate.py` steps 3 and 4.
+   - The op-amp follower driven by a 0.3 V, 1 MHz sine over 15 points (THD 1.0 to 6.8 %): harmonics 0 to 5 match both
+     transients' last period to 4e-6 of the first.
+   - A cross-coupled LC VCO on SG13G2, tuned 3.42 to 4.69 GHz over three corners: frequency to 5e-5 of both
+     transients, swing to 4e-5 of TreeSPICE's. ngspice's swing is first order in its step (0.95 mV high at 1 ps,
+     0.27 mV at 0.25 ps).
+   - ngspice's own `.pss` is no reference. It treats every circuit as an oscillator, so a driven RC came out at
+     600 kHz instead of 1 MHz. On an LC oscillator it reported convergence at 4.03 MHz; the oscillator runs at 5.03 MHz.
 4. **PAC and PNoise** (TreeSPICE): small signal and noise about the periodic steady state (conversion gain, phase
    noise). Checked against analytic LPTV circuits and a transient with a small tone.
 5. **HB** (TreeSPICE): harmonic balance, for strongly nonlinear circuits with many tones. Checked against PSS on the

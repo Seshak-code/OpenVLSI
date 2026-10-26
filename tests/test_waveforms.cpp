@@ -137,6 +137,14 @@ int main(int argc, char** argv) {
         check(error("waveform_probe", {{"library", "l"}, {"cell", "res"}, {"view", "symbol"}, {"net", "x"}}).contains("no waveform viewer") &&
                   error("editor_select_net", {{"library", "l"}, {"cell", "rc"}, {"view", "schematic"}, {"net", "nope"}}).contains("no wire or label"),
               "probing a design no viewer shows, or a net the schematic lacks, is an error");
+        // a PSS run: Plot Net reads its period (VPSS), or its harmonics once the plot shows frequency (VH)
+        const QString prun = must("simulate", {{"library", "l"}, {"cell", "rc"}, {"view", "schematic"}, {"cards", QJsonArray{".pss 1meg 30u 0 100 5"}}})
+                                 .toObject()["run"].toString();
+        must("waveform_open", {{"run", prun}});
+        app::WaveformViewer* sv = ciw.viewer(QString::fromStdString(fs::weakly_canonical(prun.toStdString()).string()));
+        const QString empty = sv ? sv->defaultAccess() : "";
+        must("waveform_add", {{"run", prun}, {"expression", "mag(VH(out))"}});
+        check(sv && empty == "VPSS" && sv->defaultAccess() == "VH", "a PSS run's nets plot as VPSS, or VH on a frequency plot (" + empty.toStdString() + ")");
 
         // ── an ADE result opens in the viewer ──
         must("view_create", {{"library", "l"}, {"cell", "rc"}, {"view", "ade"}, {"type", "maestro"}});
