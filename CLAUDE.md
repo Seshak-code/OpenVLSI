@@ -49,7 +49,9 @@ app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi, ADE Explorer
   corners, outputs with specs) expands into points run in parallel, each output a calculator expression
   (`sim/calc.h`); runs are histories on disk (`simulation/<lib>/<cell>/<view>/Interactive.N`), in the background
   through `ade_run` with `wait: false`; `mode: montecarlo` runs the setup's montecarlo section once per sample (its
-  own `.options seed`) and adds each output's statistics and yield. Every output records its equation, the parameters
+  own `.options seed`) and adds each output's statistics and yield. RF analyses: `stb` (the loop gain at an `iprobe`)
+  and `pss` (shooting Newton; `oscnode` "0" driven, else an oscillator's node), read by `STB(loopgain)`, `VPSS`/`VH`,
+  `harmonic`, `thd` and `fundamental`. Every output records its equation, the parameters
   its point ran with and the calculator's steps (its derivation). ADE Assembler: `ade_summary` (each spec's
   worst point and margin, yields), `ade_compare` (two histories point by point), `ade_run_plan` (several runs in order);
   tests may carry their own variables. `pdk_install` builds analogLib and the SG13G2

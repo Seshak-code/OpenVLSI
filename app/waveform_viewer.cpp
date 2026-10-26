@@ -96,11 +96,15 @@ WaveformViewer::WaveformViewer(Session& session, const QString& run, QWidget* pa
 QString WaveformViewer::status() const { return status_->text(); }
 
 QString WaveformViewer::defaultAccess() const {
-    if (scale_ == "time") return "VT";  // what the plot already shows
-    if (scale_ == "frequency") return "VF";
-    if (!scale_.isEmpty()) return "VDC";
-    for (const auto& [plot, access] : {std::pair{"Transient Analysis", "VT"}, std::pair{"AC Analysis", "VF"}, std::pair{"DC transfer characteristic", "VDC"}})
-        for (const auto& p : results_) if (p.name == plot) return access;
+    // the first analysis the run has whose scale the plot already shows (any scale when it is empty); a sweep's
+    // scale (v-sweep, i-sweep, temp) is the dc's
+    struct A { const char *plot, *access, *scale; };
+    static const A order[] = {{"Transient Analysis", "VT", "time"}, {"Periodic Steady State", "VPSS", "time"}, {"AC Analysis", "VF", "frequency"},
+                              {"PSS Harmonics", "VH", "frequency"}, {"DC transfer characteristic", "VDC", ""}};
+    const bool sweep = !scale_.isEmpty() && scale_ != "time" && scale_ != "frequency";
+    for (const A& a : order)
+        if (scale_.isEmpty() || scale_ == a.scale || (sweep && !*a.scale))
+            for (const auto& p : results_) if (p.name == a.plot) return a.access;
     return {};
 }
 

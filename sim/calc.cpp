@@ -261,7 +261,7 @@ private:
         while (i_ < s_.size() && (std::isalnum((unsigned char)s_[i_]) || s_[i_] == '_')) ++i_;
         const std::string name = s_.substr(start, i_ - start);
         expect('(');
-        static const std::set<std::string> access = {"VT", "VF", "VDC", "VOP", "IT", "IF", "IDC", "IOP", "VN", "VNTOT", "STB"};
+        static const std::set<std::string> access = {"VT", "VF", "VDC", "VOP", "IT", "IF", "IDC", "IOP", "VN", "VNTOT", "STB", "VPSS", "IPSS", "VH", "IH"};
         if (access.count(name)) {  // its argument is a name, taken as written
             const size_t e = s_.find(')', i_);
             if (e == std::string::npos) fail(name + "( has no ')'");
@@ -333,6 +333,31 @@ private:
             const cplx v = at(waveform(a[0], fn), real(a[1], fn), fn, &how);
             note(n, "  at " + si(real(a[1], fn)) + ": " + how);
             return number(v);
+        }
+        if (fn == "harmonic") {  // a PSS harmonics waveform's k-th point: the phasor at k fund
+            arity(2, 2);
+            const Wave& w = waveform(a[0], fn);
+            const double k = real(a[1], fn);
+            if (k != std::floor(k) || k < 0 || k >= (double)w.y.size()) fail("harmonic: k is a whole number 0 .. " + std::to_string(w.y.size() - 1));
+            note(n, "  harmonic " + num(k) + " of " + std::to_string(w.y.size() - 1) + ", at " + si(w.x[(size_t)k]) + " " + w.scale);
+            return number(w.y[(size_t)k]);
+        }
+        if (fn == "fundamental") {  // a PSS harmonics waveform's first harmonic frequency (an oscillator's, found)
+            arity(1, 1);
+            const Wave& w = waveform(a[0], fn);
+            if (w.x.size() < 2) fail("fundamental needs a harmonics waveform (VH or IH)");
+            note(n, "  the frequency of harmonic 1: " + si(w.x[1]) + " " + w.scale);
+            return number(w.x[1]);
+        }
+        if (fn == "thd") {  // percent: the harmonics above the first against the first
+            arity(1, 1);
+            const Wave& w = waveform(a[0], fn);
+            if (w.y.size() < 3 || std::abs(w.y[1]) == 0) fail("thd needs harmonics 0 .. 2 at least and a first harmonic");
+            double sum = 0;
+            for (size_t k = 2; k < w.y.size(); ++k) sum += std::norm(w.y[k]);
+            const double t = 100 * std::sqrt(sum) / std::abs(w.y[1]);
+            note(n, "  100·√(Σ |V_k|², k = 2 .. " + std::to_string(w.y.size() - 1) + ") / |V_1| = 100·" + si(std::sqrt(sum)) + " / " + si(std::abs(w.y[1])));
+            return number(t);
         }
         if (fn == "ymax" || fn == "ymin") {
             arity(1, 1);
@@ -491,7 +516,8 @@ Wave access(const std::vector<Plot>& plots, const std::string& kind, const std::
     static const std::map<std::string, std::string> plotOf = {
         {"VT", "Transient Analysis"}, {"IT", "Transient Analysis"}, {"VF", "AC Analysis"}, {"IF", "AC Analysis"},
         {"VDC", "DC transfer characteristic"}, {"IDC", "DC transfer characteristic"}, {"VOP", "Operating Point"}, {"IOP", "Operating Point"},
-        {"VN", "Noise Spectral Density Curves"}, {"VNTOT", "Integrated Noise"}, {"STB", "Stability Analysis"}};
+        {"VN", "Noise Spectral Density Curves"}, {"VNTOT", "Integrated Noise"}, {"STB", "Stability Analysis"},
+        {"VPSS", "Periodic Steady State"}, {"IPSS", "Periodic Steady State"}, {"VH", "PSS Harmonics"}, {"IH", "PSS Harmonics"}};
     std::string a = arg;
     for (auto& c : a) c = (char)std::tolower((unsigned char)c);
     const Plot* p = plot(plots, plotOf.at(kind));
