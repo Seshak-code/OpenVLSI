@@ -16,6 +16,9 @@
 //                pss {fund, tstab, oscnode, points, harms [, maxiter]}: the periodic steady state by shooting Newton;
 //                oscnode "0" for a circuit its sources drive at fund (the period from the first multiple of 1/fund at
 //                or after tstab), else an oscillator's node (fund its guess, tstab its start-up); points per period
+//                pac {sweep, points, start, stop, sidebands}: the sources' AC as a small signal about the test's pss;
+//                pnoise {output, sweep, points, start, stop, sidebands [, relharm]}: noise about it, relharm 1 sweeping
+//                the offset from the carrier (an oscillator's phase noise)
 //   variables    {name: "1k"}; a space-separated list ("1k 2k 5k") is a parametric sweep. They are .params, so an
 //                instance parameter "{name}" uses one.
 //   temperature  "27" (the nominal corner's); a space-separated list ("-40 27 125") sweeps it, a corner's too

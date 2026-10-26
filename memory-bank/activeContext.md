@@ -1,5 +1,30 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-25 (cont.) — M2 slice 4: PAC and PNoise**
+
+- **PRs, merge in order:**
+  1. TreeSPICE **#28** (`mac/pss`; still open);
+  2. TreeSPICE `mac/pac` (it builds on #28; its PR opens once #28 merges, no stacking);
+  3. OpenVLSI `rebuild/m2-s4` (it pins the engine at `mac/pac`'s head).
+- **Engine:**
+  - `.pac dec n f1 f2 maxsideband` and `.pnoise v(out[,ref]) dec n f1 f2 maxsideband [relharm]`, about the deck's
+    `.pss`, by the conversion matrix.
+  - PSS fixes:
+    - the Jacobian runs only columns that hold state (charge or flux);
+    - replays keep the base run's steps;
+    - a mode beyond what one period resolves is refused;
+    - the cold start stamps sources at its true time.
+- **OpenVLSI:**
+  - ADE analyses `pac` and `pnoise`;
+  - the calculator's `VPAC(net, m)` and `VPN(out)`;
+  - `tools/m2_gate.py` passes 24 of 24 checks.
+  - CMake: `treespice` beside each executable is now copied on every build. As a POST_BUILD step it went stale on
+    engine-only changes.
+- **Next:** M2 slice 5, FinFET devices (ASAP7, ASAP5; PR #40's renumbering), then slice 6, HB, on the same conversion
+  matrix. A brute-force phase-noise reference needs TRNOISE.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — M2 slice 3: PSS**
 
 - **PRs, merge in order:** TreeSPICE **#28** (`mac/pss`), then OpenVLSI `rebuild/m2-s3`. The latter pins the engine at

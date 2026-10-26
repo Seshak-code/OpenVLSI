@@ -74,9 +74,14 @@ add_library(openvlsi_mcp STATIC mcp/server.cpp)
 target_link_libraries(openvlsi_mcp PUBLIC openvlsi_cmd)
 add_executable(openvlsi-mcp mcp/main.cpp)
 target_link_libraries(openvlsi-mcp PRIVATE openvlsi_mcp)
-# each executable that simulates finds treespice beside it
-add_custom_command(TARGET openvlsi-mcp POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:treespice> $<TARGET_FILE_DIR:openvlsi-mcp>)
-add_dependencies(openvlsi-mcp treespice)
+# each executable that simulates finds treespice beside it, copied on every build: as the executable's POST_BUILD the
+# copy ran only when it relinked, and an engine-only change left a stale treespice there
+function(treespice_beside target)
+    add_custom_target(${target}_treespice COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:treespice> $<TARGET_FILE_DIR:${target}>)
+    add_dependencies(${target}_treespice treespice)
+    add_dependencies(${target} ${target}_treespice)
+endfunction()
+treespice_beside(openvlsi-mcp)
 
 # ── The app: the CIW and the tools' windows, every action a command through app::Session ───────────────────────────
 set(CMAKE_AUTOMOC ON)
@@ -86,8 +91,7 @@ target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets PRIVATE Qt6:
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
 target_link_libraries(OpenVLSI PRIVATE openvlsi_app)
-add_custom_command(TARGET OpenVLSI POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:treespice> $<TARGET_FILE_DIR:OpenVLSI>)
-add_dependencies(OpenVLSI treespice)
+treespice_beside(OpenVLSI)
 set_target_properties(OpenVLSI PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER org.openvlsi.OpenVLSI
                       MACOSX_BUNDLE_BUNDLE_NAME OpenVLSI MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
 
@@ -131,10 +135,8 @@ target_link_libraries(test_library_manager PRIVATE openvlsi_app)
 target_link_libraries(test_view_editor PRIVATE openvlsi_app)
 target_link_libraries(test_ade_explorer PRIVATE openvlsi_app)
 target_link_libraries(test_waveforms PRIVATE openvlsi_app)
-add_custom_command(TARGET test_waveforms POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:treespice> $<TARGET_FILE_DIR:test_waveforms>)
-add_dependencies(test_waveforms treespice)
-add_custom_command(TARGET test_ade_explorer POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:treespice> $<TARGET_FILE_DIR:test_ade_explorer>)
-add_dependencies(test_ade_explorer treespice)
+treespice_beside(test_waveforms)
+treespice_beside(test_ade_explorer)
 # the plugins of the Qt this links (a machine with a second, stale Qt prefix otherwise finds no platform plugin)
 set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms PROPERTIES ENVIRONMENT
                      "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>/..")

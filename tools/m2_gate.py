@@ -14,6 +14,11 @@ PSS, against long transients' last periods on TreeSPICE and on ngspice (ngspice'
 every circuit as an oscillator and, on an LC oscillator, reports convergence 20 % off its frequency): the follower
 driven by a large 1 MHz sine, its harmonics over the corners and temperatures; and a cross-coupled LC VCO on SG13G2, its
 frequency and amplitude over its tank capacitance and three corners.
+
+PAC on an NMOS passive mixer (LO 100 MHz, RF 110 MHz) over three corners: its sidebands -1, 0, +1 against TreeSPICE's
+and ngspice's transients carrying a 1 mV tone. PNoise: with nothing periodic, the op-amp's equals .noise over five
+corners (PSP103's noise through the periodic path); the VCO's phase noise falls at 20 dB/decade in its 1/df^2 region and
+is converged in its sidebands. (No brute-force phase-noise reference yet: TreeSPICE has no transient noise sources.)
 Exit 0 when every check passes.
 """
 import argparse, cmath, math, os, shutil, sys, tempfile
@@ -95,6 +100,38 @@ def vco_bench(m):
         m1.place(m, "design", "tb_vco", name, lib, master, 600 * (k % 6), -600 * (k // 6), nets, params)
 
 
+def mixer_bench(m):
+    """An NMOS passive mixer: RF through 50 Ohm into the drain, the IF at the source on 1 kOhm || 1 pF, the gate driven
+    0.6 V +- 0.6 V at 100 MHz. The RF source: AC 1 (pac) and a {rfa} sine at 110 MHz (the transients' tone)."""
+    m("cell_create", library="design", cell="tb_mix")
+    m("view_create", library="design", cell="tb_mix", view="schematic", type="schematic")
+    parts = [("VLO", "analogLib", "vsin", {"PLUS": "lo", "MINUS": "gnd!"}, {"vdc": "0.6", "va": "0.6", "freq": "100meg"}),
+             ("VRF", "analogLib", "vsin", {"PLUS": "rfs", "MINUS": "gnd!"}, {"vdc": "0", "va": "{rfa}", "freq": "110meg", "acm": "1"}),
+             ("RS", "analogLib", "res", {"PLUS": "rfs", "MINUS": "rf"}, {"r": "50"}),
+             ("M1", "sg13g2", "sg13_lv_nmos", {"D": "rf", "G": "lo", "S": "if", "B": "gnd!"}, {"w": "10u", "l": "0.13u"}),
+             ("RL", "analogLib", "res", {"PLUS": "if", "MINUS": "gnd!"}, {"r": "1k"}),
+             ("CL", "analogLib", "cap", {"PLUS": "if", "MINUS": "gnd!"}, {"c": "1p"})]
+    for k, (name, lib, master, nets, params) in enumerate(parts):
+        m1.place(m, "design", "tb_mix", name, lib, master, 600 * k, 0, nets, params)
+
+
+def follower_bench(m):
+    """The op-amp as a follower at 0.6 V, its input AC 1: every mode fast (tb_ol's 1 GOhm / 1 F is a 1e9 s mode)."""
+    m("cell_create", library="design", cell="tb_fol")
+    m("view_create", library="design", cell="tb_fol", view="schematic", type="schematic")
+    m1.place(m, "design", "tb_fol", "I0", "design", "opamp", 0, 0, {"inp": "inp", "inn": "out", "ibias": "nb", "out": "out", "vdd": "vdd", "vss": "gnd!"})
+    m1.place(m, "design", "tb_fol", "VDD", "analogLib", "vdc", -1500, 0, {"PLUS": "vdd", "MINUS": "gnd!"}, {"vdc": "1.2"})
+    m1.place(m, "design", "tb_fol", "IB", "analogLib", "idc", -2000, 0, {"PLUS": "vdd", "MINUS": "nb"}, {"idc": "10u"})
+    m1.place(m, "design", "tb_fol", "CL", "analogLib", "cap", 1500, 0, {"PLUS": "out", "MINUS": "gnd!"}, {"c": "1p"})
+    m1.place(m, "design", "tb_fol", "VIN", "analogLib", "vdc", -2500, 0, {"PLUS": "inp", "MINUS": "gnd!"}, {"vdc": "0.6", "acm": "1"})
+
+
+def tone(x, y, f, T):
+    """The phasor at f of a transient's last T (a whole number of f's periods), on 4000 equal ticks"""
+    s = last_period(x, y, T, 4000)
+    return sum(v * cmath.exp(-2j * math.pi * f * (x[-1] - T + i * T / 4000)) for i, v in enumerate(s)) * 2 / 4000
+
+
 def last_period(x, y, T, n=1000):
     """A transient's last period, [x_end - T, x_end), on n equal ticks (linear between its points)"""
     out, k, t0 = [], 1, x[-1] - T
@@ -147,9 +184,11 @@ def main():
     broken_bench(m)
     pss_bench(m)
     vco_bench(m)
-    benches = ("tb_stb", "tb_injv", "tb_inji", "tb_stbbuf", "tb_broken", "tb_pss", "tb_vco")
+    mixer_bench(m)
+    follower_bench(m)
+    benches = ("tb_stb", "tb_injv", "tb_inji", "tb_stbbuf", "tb_broken", "tb_pss", "tb_vco", "tb_mix", "tb_fol")
     check(all(m("schematic_check", library="design", cell=c, view="schematic")["ok"] for c in benches),
-          "the stb, injection, driven PSS and VCO benches check clean")
+          "the stb, injection, driven PSS, VCO, mixer and follower benches check clean")
 
     print("2. stb against the loop broken by hand, over five corners and three temperatures")
     lv = pdk["models"]["mos_lv"]
@@ -285,10 +324,109 @@ def main():
             err = max(abs(f / ft - 1) / 1e-4, abs(swing / amp - 1) / tol_swing[who])  # in tolerances
             if err >= worst[who][0]: worst[who] = (err, key, f / ft - 1, swing / amp - 1)
     check(max(fs) / min(fs) > 1.2, f"the tank capacitance tunes it: {min(fs) / 1e9:.4g} .. {max(fs) / 1e9:.4g} GHz")
+    vco_dirs = dirs
     for who, name in (("ts", "TreeSPICE's"), ("ng", "ngspice's")):
         err, key, df, da = worst[who]
         check(err <= 1, f"the VCO's PSS frequency and swing match {name} 40 ns transient's last 20 periods to 1e-4 and "
                         f"{tol_swing[who]:g} (worst {df:+.2e} / {da:+.2e}, {key[0]}, ct {key[1]})")
+
+    print("5. PAC: an NMOS passive mixer, against transients with a 1 mV tone, over three corners")
+    m("cell_create", library="design", cell="mixbench")
+    m("view_create", library="design", cell="mixbench", view="ade", type="maestro")
+    view = dict(library="design", cell="mixbench", view="ade")
+    tran = {"type": "tran", "step": "10p", "stop": "300n", "start": "0", "maxstep": "10p"}
+    m("ade_setup_set", setup={
+        "variables": {"rfa": "0"},
+        "tests": [{"name": "pac", "design": "design/tb_mix/schematic",
+                   "analyses": [{"type": "pss", "fund": "100meg", "tstab": "0", "oscnode": "0", "points": "400", "harms": "5"},
+                                {"type": "pac", "sweep": "lin", "points": "3", "start": "100meg", "stop": "120meg", "sidebands": "20"}]},
+                  {"name": "tone", "design": "design/tb_mix/schematic", "variables": {"rfa": "1m"}, "analyses": [tran]},
+                  {"name": "lo", "design": "design/tb_mix/schematic", "analyses": [tran]}],
+        "temperature": "27",
+        "corners": [{"name": c, "models": [{"file": lv, "section": "mos_" + c}]} for c in ("ss", "ff")],
+        "outputs": [{"name": "gc", "test": "pac", "expression": "dB20(value(VPAC(if, -1), 110meg))"}]}, **view)
+    h = m("ade_run", **view)
+    pts = h["points"]
+    check(h["status"] == "done" and len(pts) == 3 * 3 and all(p["status"] == "done" for p in pts), f"{len(pts)} points ran")
+    dirs = {}
+    for p in pts:
+        dirs.setdefault(p["corner"], {})[p["test"]] = p
+    worst = {"ts": (0, None), "ng": (0, None)}
+    gains = []
+    for corner, d in dirs.items():
+        gains.append(d["pac"]["outputs"]["gc"]["value"])
+        refs = {"ts": (d["tone"]["dir"], d["lo"]["dir"]),
+                "ng": (m1.ngspice(d["tone"]["dir"], osdi_copy, a.ngspice), m1.ngspice(d["lo"]["dir"], osdi_copy, a.ngspice))}
+        for sb in (-1, 0, 1):
+            fx, pac = wave(m, d["pac"]["dir"], f"VPAC(if, {sb})")
+            want = pac[fx.index(min(fx, key=lambda f: abs(f - 110e6)))] * -1j  # the tone is a sine: -j times the cosine phasor
+            f = 110e6 + sb * 100e6
+            for who, (run, lo_run) in refs.items():
+                x, y = wave(m, run, "VT(if)")
+                xl, yl = wave(m, lo_run, "VT(if)")
+                got = (tone(x, [v.real for v in y], f, 100e-9) - tone(xl, [v.real for v in yl], f, 100e-9)) / 1e-3
+                err = abs(got / want - 1)
+                if err >= worst[who][0]: worst[who] = (err, (corner, sb))
+    check(all(-20 < g < 0 for g in gains), f"a conversion loss: {min(gains):.3f} .. {max(gains):.3f} dB to the 10 MHz IF")
+    for who, name in (("ts", "TreeSPICE's"), ("ng", "ngspice's")):
+        err, key = worst[who]
+        check(err <= 2e-3, f"PAC's sidebands -1, 0, +1 match {name} transient with the tone to {err:.2e} ({key[0]}, sideband {key[1]} at worst)")
+
+    print("6. PNoise: nothing periodic is .noise (the op-amp, five corners); the VCO's phase noise")
+    m("cell_create", library="design", cell="pnbench")
+    m("view_create", library="design", cell="pnbench", view="ade", type="maestro")
+    view = dict(library="design", cell="pnbench", view="ade")
+    nsweep = {"sweep": "dec", "points": "5", "start": "1k", "stop": "100meg"}
+    m("ade_setup_set", setup={
+        "tests": [{"name": "pn", "design": "design/tb_fol/schematic",
+                   "analyses": [{"type": "pss", "fund": "1meg", "tstab": "0", "oscnode": "0", "points": "64", "harms": "5"},
+                                dict({"type": "pnoise", "output": "v(out)", "sidebands": "3"}, **nsweep)]},
+                  {"name": "nz", "design": "design/tb_fol/schematic", "analyses": [{"type": "op"}, dict({"type": "noise", "output": "v(out)", "source": "VIN"}, **nsweep)]},
+                  {"name": "slow", "design": "design/tb_ol/schematic",
+                   "analyses": [{"type": "pss", "fund": "1meg", "tstab": "0", "oscnode": "0", "points": "64", "harms": "5"}]}],
+        "temperature": "27",
+        "corners": [{"name": c, "models": [{"file": lv, "section": "mos_" + c}]} for c in ("ss", "ff", "sf", "fs")],
+        "outputs": []}, **view)
+    h = m("ade_run", **view)
+    pts = h["points"]
+    slow = [p for p in pts if p["test"] == "slow"]
+    pts = [p for p in pts if p["test"] != "slow"]
+    check(h["status"] == "done" and len(pts) == 10 and all(p["status"] == "done" for p in pts), f"{len(pts)} points ran")
+    check(slow and all(p["status"] == "error" and "a mode far slower than the period" in p["error"] for p in slow),
+          "the open-loop bench's 1 GOhm / 1 F mode (1e9 s against a 1 us period) is refused with its reason, not shot through")
+    dirs = {}
+    for p in pts:
+        dirs.setdefault(p["corner"], {})[p["test"]] = p["dir"]
+    worst = (0, None)
+    for corner, d in dirs.items():
+        _, pn = wave(m, d["pn"], "VPN(out)")
+        _, nz = wave(m, d["nz"], "VN(out)")
+        err = max(abs(a_ / b_ - 1) for a_, b_ in zip(pn, nz))
+        if err >= worst[0]: worst = (err, corner)
+    # PNoise linearises about the PSS's state, the DC operating point to Newton's tolerance (a linear RC's is exact)
+    check(worst[0] <= 1e-4, f"the op-amp's PNoise with nothing periodic is its .noise at every frequency (worst {worst[0]:.1e}, {worst[1]})")
+    m("cell_create", library="design", cell="vcopn")
+    m("view_create", library="design", cell="vcopn", view="ade", type="maestro")
+    view = dict(library="design", cell="vcopn", view="ade")
+    pss = {"type": "pss", "fund": "3G", "tstab": "20n", "oscnode": "outp", "points": "400", "harms": "5"}
+    psweep = {"type": "pnoise", "output": "v(outp)", "sweep": "dec", "points": "1", "start": "1meg", "stop": "10meg", "relharm": "1"}
+    pn_db = "dB20(VPN(out) / (mag(harmonic(VH(outp), 1)) / sqrt(2)))"  # dBc/Hz against the carrier's power
+    m("ade_setup_set", setup={
+        "variables": {"ct": "1p"},
+        "tests": [{"name": k, "design": "design/tb_vco/schematic", "analyses": [pss, dict(psweep, sidebands=str(sb))]} for k, sb in (("k20", 20), ("k40", 40))],
+        "temperature": "27",
+        "outputs": [{"name": f"{k}_{f}", "test": k, "expression": f"value({pn_db}, {f})"} for k in ("k20", "k40") for f in ("1meg", "10meg")]}, **view)
+    h = m("ade_run", **view)
+    o = {}
+    for p in h["points"]:
+        o.update({n: v.get("value") for n, v in p.get("outputs", {}).items()})
+    names = [f"{k}_{f}" for k in ("k20", "k40") for f in ("1meg", "10meg")]
+    check(h["status"] == "done" and all(isinstance(o.get(n), float) for n in names), "the VCO's phase noise ran at 20 and 40 sidebands")
+    conv = max(abs(o[f"k40_{f}"] - o[f"k20_{f}"]) for f in ("1meg", "10meg"))
+    check(conv <= 0.2, f"converged in its sidebands: 20 and 40 agree to {conv:.3f} dB ({o['k40_1meg']:.2f} dBc/Hz at 1 MHz, "
+                       f"{o['k40_10meg']:.2f} at 10 MHz)")
+    slope = o["k40_1meg"] - o["k40_10meg"]
+    check(abs(slope - 20) <= 1.5, f"in its 1/df^2 region: {slope:.2f} dB per decade from 1 to 10 MHz")
     m.close()
     failed = [w for ok, w in m1.CHECKS if not ok]
     print(f"\n{'PASSED' if not failed else 'FAILED'}: {len(m1.CHECKS) - len(failed)} of {len(m1.CHECKS)} checks")
