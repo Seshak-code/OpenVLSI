@@ -194,6 +194,25 @@ Owner's order (2026-10-25): ADE Assembler first, then the RF analyses in TreeSPI
      ORFS has no asap5 platform.
    - PDKs: `datasets/pdk/asap7/asap7_pdk_r1p7` and `datasets/pdk/asap5/asap5` (blobless clones of
      The-OpenROAD-Project's repositories, BSD-3).
+   Done (2026-10-26), with one change from the plan, by the owner's choice: the cards run on **BSIM-CMG 107** (their
+   own version), not 111.
+   - **Why 107:** 111 lacks five of the cards' parameters (CAPMOD, COREMOD, NSEG; ASAP5's K1SI, LRSD). On one card
+     the two versions differ by up to 12 % (Xyce's 107 and 111 gold outputs).
+   - **The 107 model:** compiled from the BSIM team's 107.0.0 Verilog-A as Xyce carries it (`tests/build_osdi.sh`,
+     `BSIMCMG107_DIR`; the attribute syntax made standard). It matches Xyce's native 107 to 3e-9 in DC current and
+     2.5e-4 in AC.
+   - **Routing:** VERSION 107 runs on it and 111 on `bsimcmg.osdi`; another VERSION, or none, is an error.
+   - **Card fixes, both explicit:**
+     - ASAP5's `LRSD = 0` goes only where nothing reads it (RGEOMOD 0, CGEOMOD != 2);
+     - 107's EOTACC bound is written as the 1e-10 the cards give (`0.1n` was a hair above it in floating point).
+   - **Checks:**
+     - parity: 12 new cases (inverters at every corner, ring oscillators, the SRAM read inverter) match ngspice on
+       the same cards through OSDI to 1e-3; matrix 629 PASS;
+     - `tools/m2_gate.py` step 7, in ADE: chain delay to print precision, ring frequency to 1.6e-4 (ASAP7
+       27–36 GHz, ASAP5 52–76 GHz).
+   - **ASAP5's L:** its cards' 14 nm (its cells are Cadence views).
+   - **Open:** Xyce's 107 inverter-chain transient switches up to 4.3 ns (of a 1 µs period) from ours, while
+     111's matches to µV. Not understood yet.
 6. **HB** (TreeSPICE): harmonic balance, for strongly nonlinear circuits with many tones. Checked against PSS on the
    same circuits, and the Xyce gold outputs (datasets/xyce) that have HB.
 7. **Spectre X**: the multithreaded solve and the S3 quotient arrays, reachable from ADE.

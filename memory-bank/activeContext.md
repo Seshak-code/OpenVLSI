@@ -1,5 +1,23 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-26 — M2 slice 5: FinFET devices (ASAP7, ASAP5)**
+
+- **PRs, merge in order:** TreeSPICE `mac/finfet`, then OpenVLSI `rebuild/m2-s5`. The latter pins the engine at
+  `mac/finfet`'s head; afterwards, move the pointer to its merge commit.
+- **Owner's choice:** the PDKs' BSIM-CMG 107 cards run on a BSIM-CMG 107 OSDI, not 111.
+  - It is built from Xyce's copy of the 107.0.0 Verilog-A (downloaded with permission; `BSIMCMG107_DIR` in
+    `tests/build_osdi.sh`).
+  - `bsimcmg107.osdi` is in `datasets/osdi` (git-ignored).
+- **Engine:** LEVEL 72 routes by VERSION (107 and 111; else an error). NFIN must be whole; a CDL W must equal
+  NFIN × FPITCH. The harness hands ngspice the cards as OSDI models.
+- **OpenVLSI:**
+  - `pdk_install asap7|asap5`: corner sections in `<pdk>.lib`; `analogLib` shared across PDKs.
+  - `tools/m2_gate.py` step 7: 32 of 32.
+- **Open:** Xyce's 107 inverter transient differs by 4.3 ns in its switching time; not understood.
+- **Next:** M2 slice 6, HB, on the conversion matrix.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-25 (cont.) — M2 slice 4: PAC and PNoise**
 
 - **PRs, merge in order:**

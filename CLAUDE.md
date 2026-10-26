@@ -56,7 +56,9 @@ app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi, ADE Explorer
   its point ran with and the calculator's steps (its derivation). ADE Assembler: `ade_summary` (each spec's
   worst point and margin, yields), `ade_compare` (two histories point by point), `ade_run_plan` (several runs in order);
   tests may carry their own variables. `pdk_install` builds analogLib and the SG13G2
-  device library (spice templates, defaults, the model files and corner sections they need). The waveform viewer (`app/waveform_viewer`) plots calculator expressions
+  device library (spice templates, defaults, the model files and corner sections they need), or the FinFET PDKs'
+  (`asap7`, `asap5`: BSIM-CMG 107 cards on `bsimcmg107.osdi`, built by TreeSPICE's `tests/build_osdi.sh` with
+  `BSIMCMG107_DIR`). The waveform viewer (`app/waveform_viewer`) plots calculator expressions
   over one run; `wave_eval` is the calculator as a command; it cross-probes with the schematic both ways
   (`waveform_probe`, `editor_select_net`).
 - **oadb** (`oadb/oadb.h`): one SQLite file per library; cells, views, per-view JSON properties. `Library::change`

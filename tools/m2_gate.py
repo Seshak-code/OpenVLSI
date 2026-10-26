@@ -19,12 +19,20 @@ PAC on an NMOS passive mixer (LO 100 MHz, RF 110 MHz) over three corners: its si
 and ngspice's transients carrying a 1 mV tone. PNoise: with nothing periodic, the op-amp's equals .noise over five
 corners (PSP103's noise through the periodic path); the VCO's phase noise falls at 20 dB/decade in its 1/df^2 region and
 is converged in its sidebands. (No brute-force phase-noise reference yet: TreeSPICE has no transient noise sources.)
+
+FinFET: on ASAP7 (fins) and ASAP5 (nanowires), their BSIM-CMG 107 cards on bsimcmg107.osdi, an inverter chain's delay and
+a ring oscillator's frequency over each PDK's corners in ADE, against ngspice running the same cards through OSDI.
 Exit 0 when every check passes.
 """
-import argparse, cmath, math, os, shutil, sys, tempfile
+import argparse, cmath, math, os, re, shutil, subprocess, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import m1_gate as m1  # the MCP client, the op-amp and its test benches
+import importlib.util
+_spec = importlib.util.spec_from_file_location("run_diff", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "acutesim_engine",
+                                                                        "tests", "ngspice_diff", "run_diff.py"))
+rd = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(rd)  # its LEVEL 72 cards made ngspice OSDI models (cmg_inline)
 
 check = m1.check
 
@@ -126,6 +134,43 @@ def follower_bench(m):
     m1.place(m, "design", "tb_fol", "VIN", "analogLib", "vdc", -2500, 0, {"PLUS": "inp", "MINUS": "gnd!"}, {"vdc": "0.6", "acm": "1"})
 
 
+def fin_benches(m, lib):
+    """On a FinFET PDK library: a chain of three rvt inverters (2 fins, 0.2 fF loads) driven by a 5 ps edge, and a
+    five-stage ring kicked at 2 ps through 0.2 fF (both simulators start it alike)."""
+    inv = lambda cell, name, a, y, x: [
+        m1.place(m, "design", cell, "MP" + name, lib, "pmos_rvt", x, 300, {"D": y, "G": a, "S": "vdd", "B": "vdd"}),
+        m1.place(m, "design", cell, "MN" + name, lib, "nmos_rvt", x, -300, {"D": y, "G": a, "S": "gnd!", "B": "gnd!"})]
+    for cell in (f"tb_{lib}_chain", f"tb_{lib}_ring"):
+        m("cell_create", library="design", cell=cell)
+        m("view_create", library="design", cell=cell, view="schematic", type="schematic")
+        m1.place(m, "design", cell, "VDD", "analogLib", "vdc", -1000, 0, {"PLUS": "vdd", "MINUS": "gnd!"}, {"vdc": "0.7"})
+    c = f"tb_{lib}_chain"
+    m1.place(m, "design", c, "VIN", "analogLib", "vpulse", -1500, 0, {"PLUS": "in", "MINUS": "gnd!"},
+             {"v1": "0", "v2": "0.7", "td": "10p", "tr": "5p", "tf": "5p", "pw": "50p", "per": "120p"})
+    for k, (a, y) in enumerate((("in", "a"), ("a", "b"), ("b", "out"))):
+        inv(c, str(k), a, y, 600 * k)
+        m1.place(m, "design", c, f"CL{k}", "analogLib", "cap", 600 * k + 300, -800, {"PLUS": y, "MINUS": "gnd!"}, {"c": "0.2f"})
+    c = f"tb_{lib}_ring"
+    nodes = [f"n{k}" for k in range(1, 6)]
+    for k in range(5): inv(c, str(k), nodes[k], nodes[(k + 1) % 5], 600 * k)
+    m1.place(m, "design", c, "VK", "analogLib", "vpulse", -1500, 0, {"PLUS": "kick", "MINUS": "gnd!"},
+             {"v1": "0", "v2": "0.7", "td": "2p", "tr": "1p", "tf": "1p", "pw": "3p", "per": "1"})
+    m1.place(m, "design", c, "CK", "analogLib", "cap", -1200, -800, {"PLUS": "kick", "MINUS": "n1"}, {"c": "0.2f"})
+
+
+def ngspice_cmg(point_dir, osdi_copy, exe):
+    """m1.ngspice for a deck of BSIM-CMG LEVEL 72 cards: ngspice has none, so the cards become OSDI models first"""
+    deck = open(os.path.join(point_dir, "input.cir")).read()
+    d = os.path.join(point_dir, "ngspice")
+    os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, "cmg.cir"), "w").write(rd.cmg_inline(re.sub(r"(?im)^\s*\.osdi\b.*\n?", "", deck), point_dir))
+    open(os.path.join(d, ".spiceinit"), "w").write(f"osdi {osdi_copy}\n")
+    p = subprocess.run([exe, "-b", "-r", "out.raw", "cmg.cir"], cwd=d, capture_output=True, text=True, timeout=600)
+    if p.returncode != 0 or not os.path.exists(os.path.join(d, "out.raw")):
+        raise RuntimeError(f"ngspice failed in {d}: " + " | ".join((p.stdout + p.stderr).strip().splitlines()[-4:]))
+    return d
+
+
 def tone(x, y, f, T):
     """The phasor at f of a transient's last T (a whole number of f's periods), on 4000 equal ticks"""
     s = last_period(x, y, T, 4000)
@@ -166,6 +211,9 @@ def main():
     ap.add_argument("--pdk", required=True, help="the ihp-sg13g2 directory")
     ap.add_argument("--osdi", required=True, help="psp103.osdi")
     ap.add_argument("--ngspice", default="ngspice")
+    ap.add_argument("--asap7", default="datasets/pdk/asap7/asap7_pdk_r1p7", help="the ASAP7 PDK (holding models/hspice)")
+    ap.add_argument("--asap5", default="datasets/pdk/asap5/asap5/asap5PDK_r0p4", help="the ASAP5 PDK (holding models/hspice)")
+    ap.add_argument("--cmg107", help="bsimcmg107.osdi (tests/build_osdi.sh; default: beside --osdi)")
     ap.add_argument("--keep", help="build the workspace here (kept) instead of a temporary directory")
     a = ap.parse_args()
     osdi_dir = tempfile.mkdtemp(prefix="m2osdi")  # ngspice's osdi command takes no path with spaces
@@ -427,6 +475,53 @@ def main():
                        f"{o['k40_10meg']:.2f} at 10 MHz)")
     slope = o["k40_1meg"] - o["k40_10meg"]
     check(abs(slope - 20) <= 1.5, f"in its 1/df^2 region: {slope:.2f} dB per decade from 1 to 10 MHz")
+
+    print("7. FinFET: ASAP7 and ASAP5 (BSIM-CMG 107), an inverter chain and a ring oscillator over their corners, against ngspice")
+    cmg107 = os.path.abspath(a.cmg107 or os.path.join(os.path.dirname(a.osdi), "bsimcmg107.osdi"))
+    cmg_copy = os.path.join(osdi_dir, "bsimcmg107.osdi")
+    shutil.copy(cmg107, cmg_copy)
+    for lib, root in (("asap7", a.asap7), ("asap5", a.asap5)):
+        fin = m("pdk_install", pdk=lib, root=os.path.abspath(root), osdi=cmg107)
+        fin_benches(m, lib)
+        check(fin["libraries"] == [lib] and all(m("schematic_check", library="design", cell=f"tb_{lib}_{b}", view="schematic")["ok"] for b in ("chain", "ring")),
+              f"pdk_install {lib}: its FinFET library; the chain and ring benches check clean")
+        m("cell_create", library="design", cell=f"{lib}bench")
+        m("view_create", library="design", cell=f"{lib}bench", view="ade", type="maestro")
+        view = dict(library="design", cell=f"{lib}bench", view="ade")
+        corners = [c for c in fin["models"]["corners"] if c != "tt"]
+        m("ade_setup_set", setup={
+            "tests": [{"name": "chain", "design": f"design/tb_{lib}_chain/schematic",
+                       "analyses": [{"type": "tran", "step": "0.1p", "stop": "120p", "start": "0", "maxstep": "0.1p"}]},
+                      {"name": "ring", "design": f"design/tb_{lib}_ring/schematic",
+                       "analyses": [{"type": "tran", "step": "0.1p", "stop": "300p", "start": "0", "maxstep": "0.1p"}]}],
+            "temperature": "27",
+            "corners": [{"name": c, "models": [{"file": fin["models"]["mos"], "section": c}]} for c in corners],
+            "outputs": [{"name": "delay", "test": "chain", "expression": "delay(VT(in), 0.35, VT(out), 0.35)"}]}, **view)
+        h = m("ade_run", **view)
+        pts = h["points"]
+        check(h["status"] == "done" and len(pts) == 2 * (1 + len(corners)) and all(p["status"] == "done" for p in pts),
+              f"{lib}: {len(pts)} points ran ({', '.join(['tt'] + corners)})")
+        worst_d, worst_f, delays, freqs = (0, None), (0, None), [], []
+        for p in pts:
+            ng = ngspice_cmg(p["dir"], cmg_copy, a.ngspice)
+            if p["test"] == "chain":
+                ref = m1.value(m, ng, "delay(VT(in), 0.35, VT(out), 0.35)")
+                got = p["outputs"]["delay"]["value"]
+                delays.append(got)
+                e = abs(got / ref - 1)
+                if e >= worst_d[0]: worst_d = (e, p["corner"], got, ref)
+            else:
+                fs = []
+                for run in (p["dir"], ng):
+                    x, y = wave(m, run, "VT(n1)")
+                    fs.append(frequency(x, [v.real - 0.35 for v in y], 5))
+                freqs.append(fs[0])
+                e = abs(fs[0] / fs[1] - 1)
+                if e >= worst_f[0]: worst_f = (e, p["corner"], fs[0], fs[1])
+        check(worst_d[0] <= 5e-3, f"{lib}: the chain's delay matches ngspice at every corner to {worst_d[0]:.1e} (worst {worst_d[2] * 1e12:.4g} vs "
+                                  f"{worst_d[3] * 1e12:.4g} ps, {worst_d[1]}; {min(delays) * 1e12:.3g} .. {max(delays) * 1e12:.3g} ps)")
+        check(worst_f[0] <= 5e-3, f"{lib}: the ring's frequency matches ngspice at every corner to {worst_f[0]:.1e} (worst {worst_f[2] / 1e9:.5g} vs "
+                                  f"{worst_f[3] / 1e9:.5g} GHz, {worst_f[1]}; {min(freqs) / 1e9:.4g} .. {max(freqs) / 1e9:.4g} GHz)")
     m.close()
     failed = [w for ok, w in m1.CHECKS if not ok]
     print(f"\n{'PASSED' if not failed else 'FAILED'}: {len(m1.CHECKS) - len(failed)} of {len(m1.CHECKS)} checks")
