@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <complex>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -412,6 +413,66 @@ int main() {
         check(has(error("ade_setup_set", with(sv, {{"setup", QJsonObject{{"tests", QJsonArray{QJsonObject{{"name", "t"}, {"design", "sims/rcsin/schematic"},
                   {"analyses", QJsonArray{noOsc}}}}}}}})), "pss needs oscnode"),
               "a pss without its oscnode is refused");
+    }
+
+    // ── pac and pnoise: an ideal multiplier's conversion; with nothing periodic, pnoise is noise ──
+    {
+        must("cell_create", {{"library", "sims"}, {"cell", "bmul"}});
+        must("view_create", {{"library", "sims"}, {"cell", "bmul"}, {"view", "symbol"}, {"type", "symbol"}});
+        for (auto [n, x, y] : {std::tuple{"PLUS", 0, 100}, std::tuple{"MINUS", 0, -100}, std::tuple{"A", -100, 50}, std::tuple{"B", -100, -50}})
+            must("pin_add", {{"library", "sims"}, {"cell", "bmul"}, {"view", "symbol"}, {"name", n}, {"direction", "inputOutput"}, {"x", x}, {"y", y}});
+        must("cell_prop_set", {{"library", "sims"}, {"cell", "bmul"}, {"key", "spice"}, {"value", QJsonObject{{"prefix", "B"}, {"template", "[|PLUS] [|MINUS] V=v([|A])*v([|B])"}}}});
+        must("cell_create", {{"library", "sims"}, {"cell", "mixer"}});
+        must("view_create", {{"library", "sims"}, {"cell", "mixer"}, {"view", "schematic"}, {"type", "schematic"}});
+        struct I { const char* name; const char* master; std::map<std::string, const char*> nets; QJsonObject params; };
+        const std::vector<I> parts = {
+            {"VLO", "vsin", {{"PLUS", "lo"}, {"MINUS", "gnd!"}}, {{"va", "1"}, {"freq", "1meg"}}},
+            {"VRF", "vdc", {{"PLUS", "rf"}, {"MINUS", "gnd!"}}, {{"dc", "0"}, {"ac", "1"}}},
+            {"B1", "bmul", {{"PLUS", "out"}, {"MINUS", "gnd!"}, {"A", "rf"}, {"B", "lo"}}, {}},
+            {"R1", "res", {{"PLUS", "out"}, {"MINUS", "gnd!"}}, {{"r", "1k"}}}};
+        int x0 = 0;
+        for (const I& i : parts) {
+            must("instance_add", {{"library", "sims"}, {"cell", "mixer"}, {"view", "schematic"}, {"master_library", "sims"}, {"master_cell", i.master},
+                                  {"name", i.name}, {"x", x0}, {"y", 0}, {"params", i.params}});
+            for (const auto& p : must("view_get", {{"library", "sims"}, {"cell", i.master}, {"view", "symbol"}}).toObject()["pins"].toArray()) {
+                const QJsonArray at = p.toObject()["at"].toArray();
+                must("label_add", {{"library", "sims"}, {"cell", "mixer"}, {"view", "schematic"}, {"name", i.nets.at(p.toObject()["name"].toString().toStdString())},
+                                   {"x", x0 + at[0].toInt()}, {"y", at[1].toInt()}});
+            }
+            x0 += 500;
+        }
+        must("view_create", {{"library", "sims"}, {"cell", "mixer"}, {"view", "ade"}, {"type", "maestro"}});
+        const QJsonObject sv{{"library", "sims"}, {"cell", "mixer"}, {"view", "ade"}};
+        const QJsonObject pss{{"type", "pss"}, {"fund", "1meg"}, {"tstab", "0"}, {"oscnode", "0"}, {"points", "64"}, {"harms", "5"}};
+        const QJsonObject sweep{{"sweep", "lin"}, {"points", "3"}, {"start", "50k"}, {"stop", "150k"}, {"sidebands", "2"}};
+        QJsonObject pac = sweep, pn = sweep, nz{{"type", "noise"}, {"output", "v(out)"}, {"source", "V0"}, {"sweep", "lin"}, {"points", "3"}, {"start", "50k"}, {"stop", "150k"}};
+        pac["type"] = "pac";
+        pn["type"] = "pnoise";
+        pn["output"] = "v(out)";
+        must("ade_setup_set", with(sv, {{"setup", QJsonObject{
+            {"variables", QJsonObject{{"rval", "1k"}, {"cval", "1n"}}},
+            {"tests", QJsonArray{QJsonObject{{"name", "mix"}, {"design", "sims/mixer/schematic"}, {"analyses", QJsonArray{pss, pac}}},
+                                 QJsonObject{{"name", "pn"}, {"design", "sims/rc/schematic"}, {"analyses", QJsonArray{pss, pn}}},
+                                 QJsonObject{{"name", "nz"}, {"design", "sims/rc/schematic"}, {"analyses", QJsonArray{QJsonObject{{"type", "op"}}, nz}}}}},
+            {"outputs", QJsonArray{QJsonObject{{"name", "down"}, {"test", "mix"}, {"expression", "value(VPAC(out, -1), 100k)"}},
+                                   QJsonObject{{"name", "up"}, {"test", "mix"}, {"expression", "value(VPAC(out, 1), 100k)"}},
+                                   QJsonObject{{"name", "same"}, {"test", "mix"}, {"expression", "mag(value(VPAC(out, 0), 100k))"}},
+                                   QJsonObject{{"name", "pn"}, {"test", "pn"}, {"expression", "value(VPN(out), 100k)"}},
+                                   QJsonObject{{"name", "nz"}, {"test", "nz"}, {"expression", "value(VN(out), 100k)"}}}}}}}));
+        std::map<std::string, QJsonObject> o;
+        for (const auto& pt : must("ade_run", sv).toObject()["points"].toArray()) {
+            const QJsonObject outs = pt.toObject()["outputs"].toObject();
+            for (auto it = outs.begin(); it != outs.end(); ++it) o[it.key().toStdString()] = it.value().toObject();
+        }
+        auto cplx = [&](const char* k) {
+            const QJsonObject v = o[k]["value"].toObject();
+            return std::complex<double>(v["re"].toDouble(), v["im"].toDouble());
+        };
+        const double pnv = o["pn"]["value"].toDouble(), nzv = o["nz"]["value"].toDouble();
+        check(o.size() == 5 && std::abs(cplx("down") - std::complex<double>(0, 0.5)) < 1e-9 && std::abs(cplx("up") - std::complex<double>(0, -0.5)) < 1e-9 &&
+                  o["same"]["value"].toDouble() < 1e-12 && nzv > 0 && std::abs(pnv / nzv - 1) < 1e-9,
+              "pac in ADE: an ideal multiplier by sin converts by +-j/2 to f -+ f0 (" + o["down"]["equation"].toString().toStdString() +
+                  "); pnoise with nothing periodic is noise (" + QString::number(pnv, 'g', 7).toStdString() + " V/sqrt(Hz))");
     }
 
     // ── malformed setups ──

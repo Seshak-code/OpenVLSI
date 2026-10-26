@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <map>
+#include <regex>
 #include <set>
 #include <stdexcept>
 
@@ -261,7 +262,7 @@ private:
         while (i_ < s_.size() && (std::isalnum((unsigned char)s_[i_]) || s_[i_] == '_')) ++i_;
         const std::string name = s_.substr(start, i_ - start);
         expect('(');
-        static const std::set<std::string> access = {"VT", "VF", "VDC", "VOP", "IT", "IF", "IDC", "IOP", "VN", "VNTOT", "STB", "VPSS", "IPSS", "VH", "IH"};
+        static const std::set<std::string> access = {"VT", "VF", "VDC", "VOP", "IT", "IF", "IDC", "IOP", "VN", "VNTOT", "STB", "VPSS", "IPSS", "VH", "IH", "VPAC", "IPAC", "VPN"};
         if (access.count(name)) {  // its argument is a name, taken as written
             const size_t e = s_.find(')', i_);
             if (e == std::string::npos) fail(name + "( has no ')'");
@@ -517,14 +518,30 @@ Wave access(const std::vector<Plot>& plots, const std::string& kind, const std::
         {"VT", "Transient Analysis"}, {"IT", "Transient Analysis"}, {"VF", "AC Analysis"}, {"IF", "AC Analysis"},
         {"VDC", "DC transfer characteristic"}, {"IDC", "DC transfer characteristic"}, {"VOP", "Operating Point"}, {"IOP", "Operating Point"},
         {"VN", "Noise Spectral Density Curves"}, {"VNTOT", "Integrated Noise"}, {"STB", "Stability Analysis"},
-        {"VPSS", "Periodic Steady State"}, {"IPSS", "Periodic Steady State"}, {"VH", "PSS Harmonics"}, {"IH", "PSS Harmonics"}};
+        {"VPSS", "Periodic Steady State"}, {"IPSS", "Periodic Steady State"}, {"VH", "PSS Harmonics"}, {"IH", "PSS Harmonics"},
+        {"VPN", "Periodic Noise"}};
     std::string a = arg;
     for (auto& c : a) c = (char)std::tolower((unsigned char)c);
-    const Plot* p = plot(plots, plotOf.at(kind));
-    if (!p) throw std::runtime_error("calculator: " + kind + "(" + arg + "): the test ran no " + plotOf.at(kind));
+    std::string plotName = plotOf.count(kind) ? plotOf.at(kind) : "";
+    if (kind == "VPAC" || kind == "IPAC") {  // VPAC(net, m): the pac sideband m, at f + m fund
+        const size_t comma = a.find(',');
+        std::string m = comma == std::string::npos ? "" : a.substr(comma + 1);
+        m.erase(0, m.find_first_not_of(" \t"));
+        m.erase(m.find_last_not_of(" \t") + 1);
+        static const std::regex whole("^[+-]?[0-9]+$");
+        if (!std::regex_match(m, whole)) throw std::runtime_error("calculator: " + kind + "(" + arg + "): a net and a sideband number");
+        a = a.substr(0, comma);
+        a.erase(a.find_last_not_of(" \t") + 1);
+        plotName = "PAC Sideband " + std::to_string(std::stoi(m));
+    }
+    const Plot* p = plot(plots, plotName);
+    if (!p) throw std::runtime_error("calculator: " + kind + "(" + arg + "): the test ran no " + plotName);
     std::string want;
     if (kind == "STB") {
         want = a;  // loopgain
+    } else if (kind == "VPN") {
+        if (a != "out") throw std::runtime_error("calculator: VPN(" + arg + "): out (the pnoise output's density)");
+        want = "onoise_spectrum";
     } else if (kind == "VN" || kind == "VNTOT") {
         if (a != "out" && a != "in") throw std::runtime_error("calculator: " + kind + "(" + arg + "): out or in");
         want = std::string(1, a[0]) + (kind == "VN" ? "noise_spectrum" : "noise_total");  // onoise_spectrum, inoise_total, ...

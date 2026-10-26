@@ -68,6 +68,8 @@ const std::map<std::string, Fields> kAnalyses = {
     {"pz", {{"in1", "in2", "out1", "out2", "transfer", "kind"}, {}}},
     {"stb", {{"sweep", "points", "start", "stop", "probe"}, {}}},
     {"pss", {{"fund", "tstab", "oscnode", "points", "harms"}, {"maxiter"}}},  // oscnode 0: driven at fund
+    {"pac", {{"sweep", "points", "start", "stop", "sidebands"}, {}}},
+    {"pnoise", {{"output", "sweep", "points", "start", "stop", "sidebands"}, {"relharm"}}},
 };
 const std::map<std::string, Strings> kChoices = {{"sweep", {"dec", "oct", "lin"}}, {"transfer", {"vol", "cur"}}, {"kind", {"pol", "zer", "pz"}}};
 
@@ -75,7 +77,7 @@ const std::map<std::string, Strings> kChoices = {{"sweep", {"dec", "oct", "lin"}
 std::string card(const QJsonObject& a, const std::string& where) {
     const std::string type = s(a["type"]);
     const auto f = kAnalyses.find(type);
-    if (f == kAnalyses.end()) bad(where, "type '" + type + "' is not op, dc, ac, tran, noise, tf, sens, pz, stb or pss");
+    if (f == kAnalyses.end()) bad(where, "type '" + type + "' is not op, dc, ac, tran, noise, tf, sens, pz, stb, pss, pac or pnoise");
     Strings all = {"type"};
     all.insert(all.end(), f->second.required.begin(), f->second.required.end());
     all.insert(all.end(), f->second.optional.begin(), f->second.optional.end());
