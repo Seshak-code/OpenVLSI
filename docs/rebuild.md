@@ -161,6 +161,23 @@ Owner's order (2026-10-25): ADE Assembler first, then the RF analyses in TreeSPI
      600 kHz instead of 1 MHz. On an LC oscillator it reported convergence at 4.03 MHz; the oscillator runs at 5.03 MHz.
 4. **PAC and PNoise** (TreeSPICE): small signal and noise about the periodic steady state (conversion gain, phase
    noise). Checked against analytic LPTV circuits and a transient with a small tone.
+   Done (2026-10-25): the conversion matrix. G(t) and C(t) at the PSS's ticks become harmonics; the sideband system
+   is Y_ml = G_(m-l) + j(w + m w0) C_(m-l). It is also HB's Jacobian. `tools/m2_gate.py` steps 5 and 6.
+   - **Analytic and LTI checks:**
+     - an ideal multiplier converts by exactly ±j/2;
+     - with nothing periodic, PAC equals .ac and PNoise equals .noise;
+     - a switched RC's noise integrates to kT/C (0.9985 extrapolated);
+     - an LC oscillator's phase noise matches linear theory to 0.9 %.
+   - **On SG13G2:**
+     - an NMOS passive mixer's sidebands −1, 0 and +1 match TreeSPICE's and ngspice's transients with a 1 mV tone
+       to 2e-5;
+     - the op-amp's PNoise with nothing periodic equals .noise to 8.5e-6;
+     - the VCO reads −120.3 dBc/Hz at 1 MHz, 20.06 dB/decade, converged in its sidebands to 0.11 dB.
+   - **Limits:**
+     - hard switching converges in sidebands as 1/K;
+     - near an oscillator's carrier the cut-off sidebands move the carrier: use 40 or more;
+     - a mode far slower than the period (a 1 GΩ / 1 F feedback) is refused.
+   - **Open:** a brute-force phase-noise reference needs transient noise sources (TRNOISE) in TreeSPICE.
 5. **HB** (TreeSPICE): harmonic balance, for strongly nonlinear circuits with many tones. Checked against PSS on the
    same circuits, and the Xyce gold outputs (datasets/xyce) that have HB.
 6. **Spectre X**: the multithreaded solve and the S3 quotient arrays, reachable from ADE.
