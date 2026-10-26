@@ -83,6 +83,7 @@ should be as usable as Virtuoso + ADE Explorer + Spectre for the same circuit.
 | ADE Assembler | Multi-testbench, Monte Carlo/yield, specs and pass/fail | TreeSPICE | M2 |
 | Spectre RF | PSS, PAC, PNoise, HB, in TreeSPICE | ours | M2 |
 | Spectre X / FX | Multithreaded solve; FastSPICE memory (S3 quotient arrays) | ours | M2 |
+| PDKs | IHP SG13G2 (M1); FinFET and GAA: ASAP7, ASAP5 (devices M2, layout and LVS M3, digital flow M5) | the PDKs' BSIM-CMG cards; ORFS's asap7 platform | M1–M5 |
 | Virtuoso Layout L/XL/GXL | Layout editor: connectivity-driven, Pcells, pins, guard rings; MPT later | oadb, KLayout | M3 |
 | Pegasus DRC/LVS/ERC | Sign-off views | KLayout, Netgen | M3 |
 | Quantus | Extraction to a post-layout netlist / SPEF | OpenRCX, KLayout | M3 |
@@ -178,9 +179,24 @@ Owner's order (2026-10-25): ADE Assembler first, then the RF analyses in TreeSPI
      - near an oscillator's carrier the cut-off sidebands move the carrier: use 40 or more;
      - a mode far slower than the period (a 1 GΩ / 1 F feedback) is refused.
    - **Open:** a brute-force phase-noise reference needs transient noise sources (TRNOISE) in TreeSPICE.
-5. **HB** (TreeSPICE): harmonic balance, for strongly nonlinear circuits with many tones. Checked against PSS on the
+5. **FinFET devices** (TreeSPICE and the app), for the predictive FinFET and GAA PDKs OpenROAD supports. Both use
+   BSIM-CMG (their HSPICE cards are `level = 72`, version 107). ASAP7 has fins (`geomod = 1`), ASAP5 nanowires
+   (`geomod = 3`).
+   - TreeSPICE routes a `level = 72` card to its BSIM-CMG (OSDI, CMC 111.0), as it routes BSIM4 to its OSDI model.
+     Each v107 parameter the 111 model does not know is an error, not a drop. The instance takes `nfin`, `nrs` and
+     `nrd`; a CDL `w` (ASAP7: `w=81n nfin=3`) only when it equals nfin times the fin pitch.
+   - Checked against ngspice running the same cards through OSDI: inverters, a ring oscillator and the 6T SRAM cell
+     of each PDK, over its corners; the cases join the parity matrix.
+   - `pdk_install asap7` and `pdk_install asap5`: `nmos`/`pmos` × `slvt`/`lvt`/`rvt`/`sram` cells. `nfin` is a whole
+     number of at least 1, `l` the PDK's drawn length (ASAP7's CDL: 20 nm; ASAP5's to be read from its cells). The
+     TT/SS/FF model files (ASAP5 also FS, SF) are ADE corners.
+   - ASAP5 is analog only: it ships no LEF or Liberty and four standard cells, its Calibre decks are unreleased, and
+     ORFS has no asap5 platform.
+   - PDKs: `datasets/pdk/asap7/asap7_pdk_r1p7` and `datasets/pdk/asap5/asap5` (blobless clones of
+     The-OpenROAD-Project's repositories, BSD-3).
+6. **HB** (TreeSPICE): harmonic balance, for strongly nonlinear circuits with many tones. Checked against PSS on the
    same circuits, and the Xyce gold outputs (datasets/xyce) that have HB.
-6. **Spectre X**: the multithreaded solve and the S3 quotient arrays, reachable from ADE.
+7. **Spectre X**: the multithreaded solve and the S3 quotient arrays, reachable from ADE.
 
 Each RF analysis gets an ADE analysis type, calculator access (harmonics, loop gain, conversion gain, phase noise) and
 a waveform view.
@@ -193,6 +209,21 @@ a waveform view.
 2. The M1 op-amp: stb's phase margin matches the loop broken by hand.
 3. Assembler: the yield over corners and a Monte Carlo, with the worst point named for every spec.
 4. Spectre X: a large array runs, and its speedup is measured and reported.
+5. FinFET: on ASAP7 and ASAP5, an inverter chain and a ring oscillator over the PDKs' corners in ADE match ngspice
+   (the same BSIM-CMG cards through OSDI).
+
+**FinFET after M2:**
+- **M3 (layout):**
+  - snapping to the fin and gate-pitch grids;
+  - the ASAP7 layer technology (ORFS's `asap7.lyt`);
+  - a FinFET PCell (fins, gate, active, contacts), from the public design-rule manual;
+  - DRC through ORFS's KLayout deck (`asap7.lydrc`).
+  - **LVS:** no open ASAP7 deck exists (ORFS, the PDK and `lambdapdk` have none; the PDK's own is Calibre). M3 writes
+    a KLayout LVS deck that recognises FinFETs and counts their fins. It is the one piece of new groundwork here.
+- **M5 (digital):** `rtl_flow` reads a platform description instead of IHP's paths (DRC and LVS decks, Liberty, cell
+  models, `setRC`). ASAP7 runs ORFS from synthesis to GDS, with KLayout DRC and OpenRCX extraction. Until M3's deck
+  lands, its LVS step reports that no open deck exists, rather than passing. ORFS's `gt2n` (2 nm nanosheets) follows
+  the same path once its models are checked.
 
 ## Salvage and retirement
 
@@ -224,3 +255,8 @@ client) until the web phase.
 - **The other tools are not reworked.** OpenROAD, Yosys, KLayout, Netgen, OpenRCX and OpenSTA stay the backends for
   synthesis, place and route, extraction, timing and physical verification. OpenVLSI is a convenient frontend that
   ties everything together.
+
+2026-10-25:
+- The Cadence suite is a comparison target, not a replication list. Open-source groundwork is reused, and OpenVLSI
+  builds the seams between tools.
+- FinFET PDKs, as OpenROAD supports them: ASAP7 and ASAP5 (M2 slice 5, then M3 and M5).

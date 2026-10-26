@@ -20,7 +20,8 @@
   - `tools/m2_gate.py` passes 24 of 24 checks.
   - CMake: `treespice` beside each executable is now copied on every build. As a POST_BUILD step it went stale on
     engine-only changes.
-- **Next:** M2 slice 5, HB, on the same conversion matrix. A brute-force phase-noise reference needs TRNOISE.
+- **Next:** M2 slice 5, FinFET devices (ASAP7, ASAP5; PR #40's renumbering), then slice 6, HB, on the same conversion
+  matrix. A brute-force phase-noise reference needs TRNOISE.
 
 ---
 

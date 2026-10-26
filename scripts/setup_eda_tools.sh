@@ -7,7 +7,7 @@
 #   Homebrew: yosys, verilator, icarus-verilog (SDF simulation), make (GNU make 4; ORFS),
 #             ruby (KLayout's DRC engine), bazelisk
 #   git: OpenROAD (2.2 GB with submodules), KLayout v0.30.12 (380 MB),
-#        OpenROAD-flow-scripts, sparse: flow scripts + the IHP SG13G2 platform (115 MB)
+#        OpenROAD-flow-scripts, sparse: flow scripts + the IHP SG13G2 (115 MB) and ASAP7 (230 MB) platforms
 set -euo pipefail
 EDA="$HOME/eda"
 mkdir -p "$EDA/bin"
@@ -53,10 +53,12 @@ printf ' total    %12sK\n' "$(ps -o rss= -p "$1" | tr -d ' ')"
 EOF
 chmod +x "$EDA/bin/klayout" "$EDA/bin/pmap"
 
-# OpenROAD-flow-scripts: the flow and the IHP SG13G2 platform (LEF, Liberty, GDS, DRC/LVS decks)
+# OpenROAD-flow-scripts: the flow and the IHP SG13G2 platform (LEF, Liberty, GDS, DRC/LVS decks), and the ASAP7
+# FinFET platform (LEF, Liberty, GDS, KLayout DRC, OpenRCX rules; no LVS deck)
 [ -d orfs ] || git clone --depth 1 --filter=blob:none --sparse https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git orfs
 (cd orfs && git sparse-checkout set --no-cone /flow/Makefile '/flow/scripts/' '/flow/util/' '/flow/platforms/common/' \
-  '/flow/platforms/ihp-sg13g2/' '/flow/designs/ihp-sg13g2/' '/flow/designs/src/gcd/' '/flow/designs/src/riscv32i/')
+  '/flow/platforms/ihp-sg13g2/' '/flow/designs/ihp-sg13g2/' '/flow/designs/src/gcd/' '/flow/designs/src/riscv32i/' \
+  '/flow/platforms/asap7/' '/flow/designs/asap7/')
 
 # IHP's standard-cell Verilog models (with specify blocks) for SDF gate-level simulation in Icarus
 mkdir -p "$EDA/ihp-verilog"
