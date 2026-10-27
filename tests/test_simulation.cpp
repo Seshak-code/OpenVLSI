@@ -12,6 +12,7 @@
 #include <complex>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <string>
 #include <unistd.h>
@@ -32,6 +33,7 @@ int main() {
     cmd::addCoreCommands(r);
     cmd::addSchematicCommands(r);
     cmd::addSimulationCommands(r);
+    cmd::addPdkCommands(r);
     auto ws = oadb::Workspace::load((dir / "openvlsi.libs").string());
     cmd::Context ctx{ws, OPENVLSI_TREESPICE};
     auto call = [&](const char* name, QJsonObject a) { return r.call(ctx, name, a); };
@@ -191,6 +193,38 @@ int main() {
     }
     must("prop_set", {{"library", "sims"}, {"cell", "cfgtb"}, {"view", "bound"}, {"key", "bindings"}, {"value", QJsonObject{{"sims/rload", "layout"}}}});
     check(has(error("netlist", sc("cfgtb", "bound")), "bound to 'layout'"), "a binding to a view the cell lacks is an error");
+
+    // ── pdk_install of a FinFET PDK (a stand-in ASAP7 tree): M primitives on the cards, corners as sections ──
+    {
+        const fs::path a7 = dir / "asap7", cards = a7 / "models" / "hspice";
+        fs::create_directories(cards);
+        for (const char* c : {"TT", "SS", "FF"}) std::ofstream(cards / ("7nm_" + std::string(c) + "_160803.pm")) << "* " << c << "\n";
+        std::ofstream(dir / "bsimcmg107.osdi") << "stand-in";
+        const QJsonObject args{{"pdk", "asap7"}, {"root", QString::fromStdString(a7.string())}, {"osdi", QString::fromStdString((dir / "bsimcmg107.osdi").string())}};
+        const QJsonObject got = must("pdk_install", args).toObject();
+        const QJsonArray libs = got["libraries"].toArray();
+        const std::string lib = got["models"].toObject()["mos"].toString().toStdString();
+        std::ifstream li(lib);
+        const std::string text((std::istreambuf_iterator<char>(li)), std::istreambuf_iterator<char>());
+        check(libs == QJsonArray{"analogLib", "asap7"} && got["models"].toObject()["corners"].toArray() == QJsonArray{"tt", "ss", "ff"} &&
+                  has(text, ".LIB ss\n.include \"" + (cards / "7nm_SS_160803.pm").string() + "\"\n.ENDL ss"),
+              "pdk_install asap7: analogLib and asap7, the corners tt/ss/ff as sections of asap7.lib over the PDK's files");
+        schematic("fin");
+        inst("fin", "MN0", "nmos_lvt", 0, 0, {"gnd!", "out", "in", "gnd!"}, {{"nfin", "3"}}, "asap7");  // B, D, G, S
+        const std::string fin = must("netlist", sc("fin")).toString().toStdString();
+        check(has(fin, "MN0 out in 0 0 nmos_lvt nfin=3 l=20n m=1") && has(fin, ".lib \"" + lib + "\" tt") && has(fin, ".osdi"),
+              "an ASAP7 device netlists as the card's MOSFET (nfin, drawn l), its OSDI model and the tt section");
+        const fs::path a5 = dir / "asap5", c5 = a5 / "models" / "hspice";
+        fs::create_directories(c5);
+        for (const char* c : {"tt", "ss", "ff", "fs"}) std::ofstream(c5 / ("asap5_" + std::string(c) + ".pm")) << "*\n";
+        QJsonObject five = args;
+        five["pdk"] = "asap5";
+        five["root"] = QString::fromStdString(a5.string());
+        check(has(error("pdk_install", five), "asap5_sf.pm"), "a FinFET PDK missing a corner's file is refused");
+        std::ofstream(c5 / "asap5_sf.pm") << "*\n";
+        check(must("pdk_install", five).toObject()["libraries"].toArray() == QJsonArray{"asap5"},
+              "a second PDK in the workspace shares its analogLib");
+    }
 
     // ── what would make a wrong netlist is an error ──
     auto refused = [&](const char* cell, std::function<void()> build, const std::string& why, const char* what) {

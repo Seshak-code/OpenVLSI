@@ -5,6 +5,7 @@
 
 #include <QJsonDocument>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -166,6 +167,44 @@ std::vector<Cell> sg13g2(const fs::path& models, const std::string& osdi, const 
     return out;
 }
 
+// The FinFET and GAA PDKs OpenROAD supports (BSIM-CMG LEVEL 72 VERSION 107 cards, run on bsimcmg107.osdi): ASAP7's fins,
+// ASAP5's nanowires. Their cards ship as one file per corner; OpenVLSI's <pdk>.lib makes each corner a section (tt, ss,
+// ...), so a primitive names the tt section and an ADE corner swaps it, as with SG13G2.
+struct FinPdk {
+    const char* name;
+    std::vector<std::pair<std::string, std::string>> corners;  // section, the PDK's model file under models/hspice
+    const char* length;                                       // the drawn L a cell defaults to
+};
+const FinPdk& finPdk(const std::string& name) {
+    static const FinPdk asap7{"asap7", {{"tt", "7nm_TT_160803.pm"}, {"ss", "7nm_SS_160803.pm"}, {"ff", "7nm_FF_160803.pm"}}, "20n"},
+        asap5{"asap5", {{"tt", "asap5_tt.pm"}, {"ss", "asap5_ss.pm"}, {"ff", "asap5_ff.pm"}, {"fs", "asap5_fs.pm"}, {"sf", "asap5_sf.pm"}}, "14n"};
+    return name == "asap7" ? asap7 : asap5;
+}
+
+// nmos / pmos x slvt / lvt / rvt / sram: the card's own MOSFET (an M primitive), NFIN fins of drawn length L
+std::vector<Cell> finfets(const FinPdk& pdk, const std::string& osdi, const fs::path& lib) {
+    std::vector<Cell> out;
+    for (const char* t : {"nmos", "pmos"})
+        for (const char* vt : {"slvt", "lvt", "rvt", "sram"}) {
+            const std::string name = std::string(t) + "_" + vt;
+            Cell c = mos(name, t[0] == 'p', name, {QJsonObject{{"file", QString::fromStdString(osdi)}},
+                                                  QJsonObject{{"file", QString::fromStdString(lib.string())}, {"section", "tt"}}});
+            c.prefix = "M";
+            c.tmpl = "[|D] [|G] [|S] [|B] " + name + " nfin=[@nfin] l=[@l] m=[@m]";
+            c.params = {{"nfin", "2"}, {"l", pdk.length}, {"m", "1"}};
+            for (auto& sh : c.shapes) if (sh.text == "[@w] [@l]") sh.text = "nfin=[@nfin] [@l]";
+            out.push_back(c);
+        }
+    return out;
+}
+
+void writeFinCorners(const FinPdk& pdk, const fs::path& models, const fs::path& out) {
+    std::ofstream o(out);
+    o << "* OpenVLSI: " << pdk.name << " corners over " << models.string() << " (BSIM-CMG LEVEL 72 VERSION 107 cards)\n";
+    for (const auto& [sec, file] : pdk.corners) o << ".LIB " << sec << "\n.include \"" << (models / file).string() << "\"\n.ENDL " << sec << "\n";
+    if (!o.flush()) throw std::runtime_error("pdk_install: cannot write " + out.string());
+}
+
 QString install(Context& c, const std::string& name, const std::vector<Cell>& cells, const QJsonObject& globals) {
     const fs::path path = fs::path(c.workspace.file()).parent_path() / (name + ".oalib");
     oadb::Library& l = c.workspace.createLibrary(name, path.string());
@@ -190,18 +229,46 @@ QString install(Context& c, const std::string& name, const std::vector<Cell>& ce
     return QString::fromStdString(name);
 }
 
+// analogLib, unless an earlier pdk_install made it (a workspace with SG13G2 and a FinFET PDK shares one)
+QJsonArray withAnalogLib(Context& c) {
+    const auto libs = c.workspace.libraries();
+    if (std::find(libs.begin(), libs.end(), "analogLib") != libs.end()) return {};
+    return {install(c, "analogLib", analogLib(), {})};
+}
+
 }  // namespace
 
 void addPdkCommands(Registry& r) {
     r.add({"pdk_install", "Creates the libraries analogLib (ideal sources and passives) and a PDK's device library (sg13g2 for "
-                          "IHP SG13G2: lv/hv MOS, MIM cap, poly resistors), each cell a symbol with its spice template, defaults "
-                          "and model files; returns the libraries and the PDK's model files for corners and Monte Carlo.",
-           object({{"pdk", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"ihp-sg13g2"}}, {"description", "the PDK"}}},
-                   {"root", param("string", "the PDK's directory (ihp-sg13g2, holding libs.tech)")},
-                   {"osdi", param("string", "the compiled PSP103 model (psp103.osdi) the MOS devices load")}}),
+                          "IHP SG13G2: lv/hv MOS, MIM cap, poly resistors; asap7 / asap5 for the FinFET and nanowire PDKs: "
+                          "nmos/pmos x slvt/lvt/rvt/sram), each cell a symbol with its spice template, defaults and model files; "
+                          "returns the libraries and the PDK's model files for corners (and SG13G2's for Monte Carlo).",
+           object({{"pdk", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"ihp-sg13g2", "asap7", "asap5"}}, {"description", "the PDK"}}},
+                   {"root", param("string", "the PDK's directory: ihp-sg13g2 (holding libs.tech), asap7_pdk_r1p7 or asap5PDK_r0p4 "
+                                            "(holding models/hspice)")},
+                   {"osdi", param("string", "the compiled model the MOS devices load: psp103.osdi (SG13G2), bsimcmg107.osdi "
+                                            "(ASAP7, ASAP5: tests/build_osdi.sh)")}}),
            [](Context& c, const QJsonObject& a) {
                const fs::path root(a["root"].toString().toStdString()), models = root / "libs.tech" / "ngspice" / "models";
                const std::string osdi = fs::absolute(a["osdi"].toString().toStdString()).string();
+               const std::string kind = a["pdk"].toString().toStdString();
+               if (kind != "ihp-sg13g2") {
+                   const FinPdk& pdk = finPdk(kind);
+                   const fs::path cards = root / "models" / "hspice";
+                   for (const auto& [sec, file] : pdk.corners)
+                       if (!fs::is_regular_file(cards / file))
+                           throw std::invalid_argument("pdk_install: no " + (cards / file).string() + " (is root the " + kind + " PDK's directory?)");
+                   if (!fs::is_regular_file(osdi)) throw std::invalid_argument("pdk_install: no OSDI model at " + osdi);
+                   const fs::path lib = fs::absolute(fs::path(c.workspace.file()).parent_path()) / (kind + ".lib");
+                   writeFinCorners(pdk, cards, lib);
+                   QJsonArray libs = withAnalogLib(c);
+                   libs.append(install(c, kind, finfets(pdk, osdi, lib), {}));
+                   QJsonArray corners;
+                   for (const auto& [sec, file] : pdk.corners) corners.append(QString::fromStdString(sec));
+                   c.workspace.save();
+                   return QJsonValue(QJsonObject{{"libraries", libs}, {"models", QJsonObject{{"osdi", QString::fromStdString(osdi)},
+                                                 {"mos", QString::fromStdString(lib.string())}, {"corners", corners}}}});
+               }
                for (const char* f : {"cornerMOSlv.lib", "cornerMOShv.lib", "cornerRES.lib", "cornerCAP.lib"})
                    if (!fs::is_regular_file(models / f)) throw std::invalid_argument("pdk_install: no " + (models / f).string() + " (is root the ihp-sg13g2 directory?)");
                if (!fs::is_regular_file(osdi)) throw std::invalid_argument("pdk_install: no OSDI model at " + osdi);
@@ -209,7 +276,8 @@ void addPdkCommands(Registry& r) {
                const fs::path lv = dir / "sg13g2_lv.lib", hv = dir / "sg13g2_hv.lib";
                writeMosCorners(models, "lv", lv);
                writeMosCorners(models, "hv", hv);
-               QJsonArray libs{install(c, "analogLib", analogLib(), {}), install(c, "sg13g2", sg13g2(models, osdi, lv, hv), {{"mc_mismatch", "0"}})};
+               QJsonArray libs = withAnalogLib(c);
+               libs.append(install(c, "sg13g2", sg13g2(models, osdi, lv, hv), {{"mc_mismatch", "0"}}));
                auto path = [](const fs::path& f) { return QString::fromStdString(f.string()); };
                // what a corner or a Monte Carlo run selects: a section of these files, and the mismatch switch
                const QJsonObject pdkModels{{"osdi", QString::fromStdString(osdi)}, {"mos_lv", path(lv)}, {"mos_hv", path(hv)},
