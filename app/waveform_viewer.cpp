@@ -100,7 +100,8 @@ QString WaveformViewer::defaultAccess() const {
     // scale (v-sweep, i-sweep, temp) is the dc's
     struct A { const char *plot, *access, *scale; };
     static const A order[] = {{"Transient Analysis", "VT", "time"}, {"Periodic Steady State", "VPSS", "time"}, {"AC Analysis", "VF", "frequency"},
-                              {"PSS Harmonics", "VH", "frequency"}, {"DC transfer characteristic", "VDC", ""}};
+                              {"PSS Harmonics", "VH", "frequency"}, {"HB Time", "VHBT", "time"}, {"HB Spectrum", "VHB", "frequency"},
+                              {"DC transfer characteristic", "VDC", ""}};
     const bool sweep = !scale_.isEmpty() && scale_ != "time" && scale_ != "frequency";
     for (const A& a : order)
         if (scale_.isEmpty() || scale_ == a.scale || (sweep && !*a.scale))

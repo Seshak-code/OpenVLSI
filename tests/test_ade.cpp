@@ -415,6 +415,30 @@ int main() {
               "a pss without its oscnode is refused");
     }
 
+    // ── hb: the same RC by harmonic balance; its spectrum and its period ──
+    {
+        must("view_create", {{"library", "sims"}, {"cell", "rcsin"}, {"view", "hb"}, {"type", "maestro"}});
+        const QJsonObject sv{{"library", "sims"}, {"cell", "rcsin"}, {"view", "hb"}};
+        const QJsonObject hb{{"type", "hb"}, {"tones", "1meg"}, {"harms", "5"}};
+        must("ade_setup_set", with(sv, {{"setup", QJsonObject{
+            {"variables", QJsonObject{{"rval", "1k"}, {"cval", "1n"}}},
+            {"tests", QJsonArray{QJsonObject{{"name", "hb"}, {"design", "sims/rcsin/schematic"}, {"analyses", QJsonArray{hb}}}}},
+            {"outputs", QJsonArray{QJsonObject{{"name", "mag"}, {"test", "hb"}, {"expression", "mag(value(VHB(out), 1meg))"}},
+                                   QJsonObject{{"name", "ph"}, {"test", "hb"}, {"expression", "phase(harmonic(VHB(out), 1))"}},
+                                   QJsonObject{{"name", "swing"}, {"test", "hb"}, {"expression", "ymax(VHBT(out)) - ymin(VHBT(out))"}}}}}}}));
+        const QJsonObject o = must("ade_run", sv).toObject()["points"].toArray()[0].toObject()["outputs"].toObject();
+        auto val = [&](const char* k) { return o[k].toObject()["value"].toDouble(); };
+        const double h = 1 / std::sqrt(1 + 4 * M_PI * M_PI), ph = -90 - std::atan(2 * M_PI) * 180 / M_PI;
+        double hi = -1, lo = 1;  // h cos(wt + ph) at the 11 ticks
+        for (int j = 0; j < 11; ++j) hi = std::max(hi, h * std::cos(2 * M_PI * j / 11 + ph * M_PI / 180)), lo = std::min(lo, h * std::cos(2 * M_PI * j / 11 + ph * M_PI / 180));
+        check(near(val("mag"), h, 1e-9) && std::abs(val("ph") - ph) < 1e-6 && near(val("swing"), hi - lo, 1e-9),
+              "hb in ADE: an RC's fundamental |H| " + std::to_string(val("mag")) + " at " + std::to_string(val("ph")) + " deg (" +
+                  std::to_string(h) + ", " + std::to_string(ph) + "), swing over its 11 ticks " + std::to_string(val("swing")));
+        check(has(error("ade_setup_set", with(sv, {{"setup", QJsonObject{{"tests", QJsonArray{QJsonObject{{"name", "t"}, {"design", "sims/rcsin/schematic"},
+                  {"analyses", QJsonArray{QJsonObject{{"type", "hb"}, {"tones", "1meg 2meg"}, {"harms", "3 3 3"}}}}}}}}}})), "one per tone"),
+              "an hb with more harmonic counts than tones is refused");
+    }
+
     // ── pac and pnoise: an ideal multiplier's conversion; with nothing periodic, pnoise is noise ──
     {
         must("cell_create", {{"library", "sims"}, {"cell", "bmul"}});
@@ -490,7 +514,7 @@ int main() {
         s["tests"] = ts;
     };
     refused("an unknown key", [](QJsonObject& s) { s["colour"] = "red"; }, "unknown key 'colour'");
-    refused("an unknown analysis", [&](QJsonObject& s) { test0(s, [](QJsonObject& t) { t["analyses"] = QJsonArray{QJsonObject{{"type", "hb"}}}; }); }, "type 'hb'");
+    refused("an unknown analysis", [&](QJsonObject& s) { test0(s, [](QJsonObject& t) { t["analyses"] = QJsonArray{QJsonObject{{"type", "qpss"}}}; }); }, "type 'qpss'");
     refused("a tran without its stop", [&](QJsonObject& s) { test0(s, [](QJsonObject& t) { t["analyses"] = QJsonArray{QJsonObject{{"type", "tran"}, {"step", "1n"}}}; }); },
             "tran needs stop");
     refused("an ac sweep that is not dec/oct/lin", [&](QJsonObject& s) {

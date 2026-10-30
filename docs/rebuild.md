@@ -215,6 +215,23 @@ Owner's order (2026-10-25): ADE Assembler first, then the RF analyses in TreeSPI
      111's matches to µV. Not understood yet.
 6. **HB** (TreeSPICE): harmonic balance, for strongly nonlinear circuits with many tones. Checked against PSS on the
    same circuits, and the Xyce gold outputs (datasets/xyce) that have HB.
+   Done (2026-10-30): Xyce's cards, `.hb f1 [f2 ...]` with `.options hbint numfreq=k1[,k2 ...] [selectharms=diamond
+   intmodmax=n]`; ADE analysis `hb {tones, harms [, intmodmax]}`, the calculator's `VHB`/`IHB` (spectrum) and
+   `VHBT`/`IHBT` (one tone's period).
+   - **Method:** Newton on the harmonics, its Jacobian PAC's conversion matrix (`lptv`), so HB and PAC share one
+     linearisation. Several tones fold into one artificial period by the frequency map (box truncation, or a diamond).
+     Residual from each tick's static stamp (sources off) and charges q(x); the sources' spectra (one tone: any
+     waveform repeating at 1/f1, sampled; several: DC and SIN).
+   - **Checks:** 12 Xyce HB golds pass to 2.3e-5 of each column's peak (BJT amplifiers, a PULSE-driven RTL inverter,
+     diode clippers, the RC exactly); a rectifier's harmonics converge to its PSS (1.2e-4 V at 40 harmonics, 4.5e-7 at
+     80); two tones 10k + 11k converge to one tone at their 1 kHz GCD (1e-9 V at 13 harmonics each).
+   - **M2 gate step 8 (SG13G2, PSP; nominal, ss, ff):** the follower's harmonics 0..5 at 16 harmonics match its PSS
+     to 1.0e-6 of the first; the passive mixer's LO (100 MHz, 20 harmonics) and a 1 mV RF (110 MHz) as two tones give
+     a 10 MHz IF matching PAC's conversion to 2.1e-4 (-10.9 .. -10.4 dB). Gate: 35 of 35.
+   - **Refused (explicit):** MOS levels 1–3 with Meyer capacitances (no charge function: Xyce's invert_hb), BJT
+     excess phase (gilbert_cell_hb), transmission lines, XSPICE, time-dependent B sources, switch hysteresis.
+   - **Limits:** dense DFTs and a direct solve of the conversion matrix: two tones of 13 harmonics on 8 unknowns take
+     11 s. Oscillator HB (an unknown frequency) is not done; PSS covers oscillators.
 7. **Spectre X**: the multithreaded solve and the S3 quotient arrays, reachable from ADE.
 
 Each RF analysis gets an ADE analysis type, calculator access (harmonics, loop gain, conversion gain, phase noise) and

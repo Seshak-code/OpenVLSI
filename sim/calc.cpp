@@ -262,7 +262,7 @@ private:
         while (i_ < s_.size() && (std::isalnum((unsigned char)s_[i_]) || s_[i_] == '_')) ++i_;
         const std::string name = s_.substr(start, i_ - start);
         expect('(');
-        static const std::set<std::string> access = {"VT", "VF", "VDC", "VOP", "IT", "IF", "IDC", "IOP", "VN", "VNTOT", "STB", "VPSS", "IPSS", "VH", "IH", "VPAC", "IPAC", "VPN"};
+        static const std::set<std::string> access = {"VT", "VF", "VDC", "VOP", "IT", "IF", "IDC", "IOP", "VN", "VNTOT", "STB", "VPSS", "IPSS", "VH", "IH", "VPAC", "IPAC", "VPN", "VHB", "IHB", "VHBT", "IHBT"};
         if (access.count(name)) {  // its argument is a name, taken as written
             const size_t e = s_.find(')', i_);
             if (e == std::string::npos) fail(name + "( has no ')'");
@@ -519,7 +519,7 @@ Wave access(const std::vector<Plot>& plots, const std::string& kind, const std::
         {"VDC", "DC transfer characteristic"}, {"IDC", "DC transfer characteristic"}, {"VOP", "Operating Point"}, {"IOP", "Operating Point"},
         {"VN", "Noise Spectral Density Curves"}, {"VNTOT", "Integrated Noise"}, {"STB", "Stability Analysis"},
         {"VPSS", "Periodic Steady State"}, {"IPSS", "Periodic Steady State"}, {"VH", "PSS Harmonics"}, {"IH", "PSS Harmonics"},
-        {"VPN", "Periodic Noise"}};
+        {"VPN", "Periodic Noise"}, {"VHB", "HB Spectrum"}, {"IHB", "HB Spectrum"}, {"VHBT", "HB Time"}, {"IHBT", "HB Time"}};
     std::string a = arg;
     for (auto& c : a) c = (char)std::tolower((unsigned char)c);
     std::string plotName = plotOf.count(kind) ? plotOf.at(kind) : "";
