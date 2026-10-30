@@ -26,8 +26,8 @@ const QJsonObject kLib = param("string", "library name"), kCell = param("string"
 // The cards a test bench may add after the netlist: analyses and their controls, one card each; `analysis` is set
 // when it is one
 std::string card(const QJsonValue& v, bool& analysis) {
-    static const std::set<std::string> analyses = {".op", ".dc", ".ac", ".tran", ".noise", ".pz", ".sens", ".tf", ".stb", ".pss", ".pac", ".pnoise"};
-    static const std::set<std::string> allowed = {".op", ".dc", ".ac", ".tran", ".noise", ".pz", ".sens", ".tf", ".stb", ".pss", ".pac", ".pnoise", ".options", ".option",
+    static const std::set<std::string> analyses = {".op", ".dc", ".ac", ".tran", ".noise", ".pz", ".sens", ".tf", ".stb", ".pss", ".pac", ".pnoise", ".hb"};
+    static const std::set<std::string> allowed = {".op", ".dc", ".ac", ".tran", ".noise", ".pz", ".sens", ".tf", ".stb", ".pss", ".pac", ".pnoise", ".hb", ".options", ".option",
                                                   ".temp", ".param", ".ic", ".nodeset", ".save", ".include", ".lib", ".model", ".meas", ".measure"};
     const std::string c = v.toString().toStdString();
     std::string kw = c.substr(0, c.find_first_of(" \t"));

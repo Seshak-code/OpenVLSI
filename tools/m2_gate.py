@@ -22,6 +22,10 @@ is converged in its sidebands. (No brute-force phase-noise reference yet: TreeSP
 
 FinFET: on ASAP7 (fins) and ASAP5 (nanowires), their BSIM-CMG 107 cards on bsimcmg107.osdi, an inverter chain's delay and
 a ring oscillator's frequency over each PDK's corners in ADE, against ngspice running the same cards through OSDI.
+
+HB, over three corners: the driven follower's harmonics against its PSS (one tone); the passive mixer's LO and a 1 mV RF
+tone as two tones, its 10 MHz IF against PAC's conversion of the same tone (the frequency map against the conversion
+matrix about the LO's PSS).
 Exit 0 when every check passes.
 """
 import argparse, cmath, math, os, re, shutil, subprocess, sys, tempfile
@@ -522,6 +526,46 @@ def main():
                                   f"{worst_d[3] * 1e12:.4g} ps, {worst_d[1]}; {min(delays) * 1e12:.3g} .. {max(delays) * 1e12:.3g} ps)")
         check(worst_f[0] <= 5e-3, f"{lib}: the ring's frequency matches ngspice at every corner to {worst_f[0]:.1e} (worst {worst_f[2] / 1e9:.5g} vs "
                                   f"{worst_f[3] / 1e9:.5g} GHz, {worst_f[1]}; {min(freqs) / 1e9:.4g} .. {max(freqs) / 1e9:.4g} GHz)")
+    print("8. HB: the follower's harmonics against its PSS; the mixer's LO and RF tones against PAC, over three corners")
+    m("cell_create", library="design", cell="hbbench")
+    m("view_create", library="design", cell="hbbench", view="ade", type="maestro")
+    view = dict(library="design", cell="hbbench", view="ade")
+    m("ade_setup_set", setup={
+        "variables": {"rfa": "0"},
+        "tests": [{"name": "pss", "design": "design/tb_pss/schematic",
+                   "analyses": [{"type": "pss", "fund": "1meg", "tstab": "5u", "oscnode": "0", "points": "1000", "harms": "5"}]},
+                  {"name": "hb", "design": "design/tb_pss/schematic", "analyses": [{"type": "hb", "tones": "1meg", "harms": "16"}]},
+                  {"name": "pac", "design": "design/tb_mix/schematic",
+                   "analyses": [{"type": "pss", "fund": "100meg", "tstab": "0", "oscnode": "0", "points": "400", "harms": "5"},
+                                {"type": "pac", "sweep": "lin", "points": "3", "start": "100meg", "stop": "120meg", "sidebands": "20"}]},
+                  {"name": "hb2", "design": "design/tb_mix/schematic", "variables": {"rfa": "1m"},
+                   "analyses": [{"type": "hb", "tones": "100meg 110meg", "harms": "20 1"}]}],
+        "temperature": "27",
+        "corners": [{"name": c, "models": [{"file": lv, "section": "mos_" + c}]} for c in ("ss", "ff")],
+        "outputs": [{"name": "if_hb", "test": "hb2", "expression": "dB20(value(VHB(if), 10meg) / 1m)"}]}, **view)
+    h = m("ade_run", **view)
+    pts = h["points"]
+    check(h["status"] == "done" and len(pts) == 4 * 3 and all(p["status"] == "done" for p in pts),
+          f"{len(pts)} points ran" + "".join(f"; {p['test']} {p['corner']}: {p.get('error', '')}" for p in pts if p["status"] != "done"))
+    dirs = {}
+    for p in pts:
+        dirs.setdefault(p["corner"], {})[p["test"]] = p["dir"]
+    worst_h, worst_c, gains = (0, None), (0, None), []
+    for corner, d in dirs.items():
+        _, vh = wave(m, d["pss"], "VH(out)")
+        _, vhb = wave(m, d["hb"], "VHB(out)")
+        e = max(abs(vhb[k] - vh[k]) for k in range(6)) / abs(vh[1])
+        if e >= worst_h[0]: worst_h = (e, corner)
+        fx, pac = wave(m, d["pac"], "VPAC(if, -1)")
+        want = 1e-3 * -1j * pac[fx.index(min(fx, key=lambda f: abs(f - 110e6)))]  # the RF is a sine: -j times the cosine phasor
+        fh, vif = wave(m, d["hb2"], "VHB(if)")
+        got = vif[fh.index(min(fh, key=lambda f: abs(f - 10e6)))]
+        e = abs(got / want - 1)
+        gains.append(20 * math.log10(abs(got) / 1e-3))
+        if e >= worst_c[0]: worst_c = (e, corner)
+    check(worst_h[0] <= 1e-3, f"HB's harmonics 0 .. 5 of the follower (16 harmonics) match its PSS to {worst_h[0]:.2e} of the first ({worst_h[1]} at worst)")
+    check(worst_c[0] <= 2e-3, f"two-tone HB's 10 MHz IF matches PAC's conversion of the 1 mV RF to {worst_c[0]:.2e} ({worst_c[1]} at worst; "
+                              f"{min(gains):.3f} .. {max(gains):.3f} dB)")
     m.close()
     failed = [w for ok, w in m1.CHECKS if not ok]
     print(f"\n{'PASSED' if not failed else 'FAILED'}: {len(m1.CHECKS) - len(failed)} of {len(m1.CHECKS)} checks")

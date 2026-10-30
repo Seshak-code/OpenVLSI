@@ -70,14 +70,44 @@ const std::map<std::string, Fields> kAnalyses = {
     {"pss", {{"fund", "tstab", "oscnode", "points", "harms"}, {"maxiter"}}},  // oscnode 0: driven at fund
     {"pac", {{"sweep", "points", "start", "stop", "sidebands"}, {}}},
     {"pnoise", {{"output", "sweep", "points", "start", "stop", "sidebands"}, {"relharm"}}},
+    {"hb", {{"tones", "harms"}, {"intmodmax"}}},  // lists: built by hbCard
 };
 const std::map<std::string, Strings> kChoices = {{"sweep", {"dec", "oct", "lin"}}, {"transfer", {"vol", "cur"}}, {"kind", {"pol", "zer", "pz"}}};
+
+// hb: ".hb f1 [f2 ...]" and its ".options hbint numfreq=k1[,k2 ...] [selectharms=diamond intmodmax=n]" (TreeSPICE
+// takes Xyce's cards); tones and harms are space-separated lists, harms one value or one per tone
+std::string hbCard(const QJsonObject& a, const std::string& where) {
+    keys(a, {"type", "tones", "harms", "intmodmax"}, where);
+    auto list = [&](const char* k) {
+        if (!a.contains(k) || !a[k].isString()) bad(where, std::string("hb needs ") + k + ", a space-separated list");
+        const QStringList items = a[k].toString().split(' ', Qt::SkipEmptyParts);
+        if (items.isEmpty()) bad(where + "." + k, "a space-separated list");
+        return items;
+    };
+    const QStringList tones = list("tones"), harms = list("harms");
+    if (harms.size() != 1 && harms.size() != tones.size()) bad(where + ".harms", "one value, or one per tone");
+    std::string c = ".hb";
+    for (const auto& t : tones) numeric(t, where + ".tones"), c += " " + t.toStdString();
+    c += "\n.options hbint numfreq=";
+    for (int k = 0; k < harms.size(); ++k) {
+        bool ok = false;
+        if (harms[k].toInt(&ok) < 1 || !ok) bad(where + ".harms", "'" + harms[k].toStdString() + "' is not a whole number >= 1");
+        c += (k ? "," : "") + harms[k].toStdString();
+    }
+    if (a.contains("intmodmax")) {
+        bool ok = false;
+        if (a["intmodmax"].toString().toInt(&ok) < 1 || !ok) bad(where + ".intmodmax", "a whole number >= 1");
+        c += " selectharms=diamond intmodmax=" + a["intmodmax"].toString().toStdString();
+    }
+    return c;
+}
 
 // an analysis as its SPICE card (validating it)
 std::string card(const QJsonObject& a, const std::string& where) {
     const std::string type = s(a["type"]);
     const auto f = kAnalyses.find(type);
-    if (f == kAnalyses.end()) bad(where, "type '" + type + "' is not op, dc, ac, tran, noise, tf, sens, pz, stb, pss, pac or pnoise");
+    if (f == kAnalyses.end()) bad(where, "type '" + type + "' is not op, dc, ac, tran, noise, tf, sens, pz, stb, pss, pac, pnoise or hb");
+    if (type == "hb") return hbCard(a, where);
     Strings all = {"type"};
     all.insert(all.end(), f->second.required.begin(), f->second.required.end());
     all.insert(all.end(), f->second.optional.begin(), f->second.optional.end());

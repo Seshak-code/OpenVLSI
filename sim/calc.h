@@ -9,6 +9,8 @@
 //                                               peak phasors at k fund, k = 0 .. harms)
 //            VPAC(net, m) IPAC(src, m)          the pac response at sideband m (f + m fund) over the input's f
 //            VPN(out)                           the pnoise output density (over the offset from relharm fund)
+//            VHB(net) IHB(src)                  the hb spectrum: peak phasors at 0 and each positive mix frequency
+//                                               (value(VHB(if), 10meg)); VHBT(net) IHBT(src) one tone's period over time
 //   numbers  1.5k 10meg 2u 1e-9 (SPICE suffixes); + - * / ^, unary -, parentheses
 //   any      value(w, x)  mag(w)  dB20(w)  dB10(w)  phase(w) (degrees)  real(w)  imag(w)  abs(w)  sqrt(w)  log10(w)
 //   real w   ymax(w)  ymin(w)  average(w)  rms(w)  cross(w, level [, n [, "rising"|"falling"|"either"]])

@@ -19,6 +19,8 @@
 //                pac {sweep, points, start, stop, sidebands}: the sources' AC as a small signal about the test's pss;
 //                pnoise {output, sweep, points, start, stop, sidebands [, relharm]}: noise about it, relharm 1 sweeping
 //                the offset from the carrier (an oscillator's phase noise)
+//                hb {tones, harms [, intmodmax]}: harmonic balance; tones "100meg 110meg", harms "10" or one per tone
+//                ("10 5"); intmodmax caps the mixes' order sum |k_t| (a diamond, else the box |k_t| <= harms_t)
 //   variables    {name: "1k"}; a space-separated list ("1k 2k 5k") is a parametric sweep. They are .params, so an
 //                instance parameter "{name}" uses one.
 //   temperature  "27" (the nominal corner's); a space-separated list ("-40 27 125") sweeps it, a corner's too

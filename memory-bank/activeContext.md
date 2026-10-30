@@ -1,5 +1,22 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-10-30 — M2 slice 6: HB; TreeSPICE refcheck and Gear merged**
+
+- **PRs, merge in order:** TreeSPICE `mac/hb`, then OpenVLSI `rebuild/m2-s6` (it pins the engine at `mac/hb`'s
+  head; afterwards, move the pointer to its merge commit). TreeSPICE #31 (refcheck, variable-step Gear) is merged.
+- **Engine:** `.hb f1 [f2 ...]` with Xyce's `.options hbint numfreq=... [selectharms=diamond intmodmax=n]`. Newton
+  on the harmonics with PAC's conversion matrix as the Jacobian; several tones by the frequency map.
+  - Checks: 12 Xyce HB golds (2.3e-5); a rectifier against its PSS; two tones against one at their GCD.
+  - Refused: Meyer MOS (levels 1-3), BJT excess phase, transmission lines, XSPICE.
+  - Also fixed: ngspice's `sin 0 1 1meg AC 1` now parses.
+- **OpenVLSI:** ADE analysis `hb {tones, harms [, intmodmax]}`; the calculator's `VHB`/`IHB` and `VHBT`/`IHBT`;
+  `tools/m2_gate.py` step 8 (HB against PSS and PAC on SG13G2), 35 of 35.
+- **Matrix:** run_diff 1270 PASS / 0 FAIL; Xyce 208 PASS / 0 FAIL; refcheck 39/39; ctest 15/15.
+- **Note:** neither build has `TREESPICE_GPU` on, and no Dawn exists here: run_diff's "gpu" mode is the CPU fallback.
+- **Next:** M2 slice 7 (Spectre X); the GPU and billion-transistor assessment.
+
+---
+
 **Last session: Claude Code (dev), 2026-10-26 — M2 slice 5: FinFET devices (ASAP7, ASAP5)**
 
 - **PRs, merge in order:** TreeSPICE `mac/finfet`, then OpenVLSI `rebuild/m2-s5`. The latter pins the engine at
