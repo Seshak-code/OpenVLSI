@@ -2,6 +2,7 @@
 
 #include "app/ade_explorer.h"
 #include "app/icons.h"
+#include "app/implement.h"
 #include "app/layout_viewer.h"
 #include "app/verifier.h"
 #include "app/library_manager.h"
@@ -44,6 +45,7 @@ QString iconOf(QWidget* tool) {
     if (qobject_cast<WaveformViewer*>(tool)) return "waveform";
     if (qobject_cast<LayoutViewer*>(tool)) return "layout";
     if (qobject_cast<Verifier*>(tool)) return "verifier";
+    if (qobject_cast<FlowRunView*>(tool)) return "implement";
     return "view";
 }
 
@@ -53,6 +55,7 @@ QString tabTitle(QWidget* tool) {
     if (auto* w = qobject_cast<WaveformViewer*>(tool)) return QFileInfo(w->run()).fileName();
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->cell() + " " + l->view();
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->cell() + " " + r->view();
+    if (auto* f = qobject_cast<FlowRunView*>(tool)) return f->run().replace('/', ' ');
     return tool->windowTitle();
 }
 
@@ -62,6 +65,7 @@ QString crumbOf(QWidget* tool) {
     if (auto* w = qobject_cast<WaveformViewer*>(tool)) return (w->design().isEmpty() ? QString() : w->design() + "  ›  ") + QFileInfo(w->run()).fileName();
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->library() + "  ›  " + l->cell() + "  ›  " + l->view();
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->library() + "  ›  " + r->cell() + "  ›  " + r->view();
+    if (auto* f = qobject_cast<FlowRunView*>(tool)) return "Implement  ›  " + f->design() + "  ›  " + f->run().section('/', 1);
     return {};
 }
 }  // namespace
@@ -81,8 +85,10 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     auto* railLayout = new QVBoxLayout(rail);
     railLayout->setContentsMargins(0, 6, 0, 6);
     railLayout->setSpacing(0);
-    const std::pair<QString, QString> stages[] = {{"design", "Design: libraries, cells and views"}, {"maestro", "Simulate: tests and their runs"}};
-    for (int k = 0; k < 2; ++k) {
+    const std::pair<QString, QString> stages[] = {{"design", "Design: libraries, cells and views"},
+                                                  {"maestro", "Simulate: tests and their runs"},
+                                                  {"implement", "Implement: Verilog to GDS"}};
+    for (int k = 0; k < (int)std::size(stages); ++k) {
         auto* b = new QToolButton(rail);
         b->setObjectName("railButton");
         b->setCheckable(true);
@@ -121,6 +127,10 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     simulate_ = new Navigator(session_, Navigator::Mode::Simulate, {open, form}, panels_);
     panels_->addWidget(design_);
     panels_->addWidget(simulate_);
+    implement_ = new ImplementPanel(session_, {[this](const QString& run) {
+        session_.call("flow_view", {{"run", run}});
+    }}, panels_);
+    panels_->addWidget(implement_);
 
     tabs_ = new QTabWidget(this);
     tabs_->setDocumentMode(true);
@@ -348,6 +358,7 @@ void Shell::host(QWidget* tool) {
     connect(close, &QToolButton::clicked, this, [this, tool] { closeTab(tabs_->indexOf(tool)); });
     tabs_->tabBar()->setTabButton(index, QTabBar::RightSide, close);
     tabs_->setCurrentIndex(index);
+    if (qobject_cast<FlowRunView*>(tool)) showStage(2);
     if (auto* e = qobject_cast<ViewEditor*>(tool)) noteRecent(e->library() + "/" + e->cell() + "/" + e->view());
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) noteRecent(a->library() + "/" + a->cell() + "/" + a->view());
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) noteRecent(l->library() + "/" + l->cell() + "/" + l->view());

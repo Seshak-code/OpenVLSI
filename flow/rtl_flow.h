@@ -32,6 +32,8 @@ struct Platform {
     std::vector<std::string> orfsConfig;   // extra config.mk lines
     std::vector<std::string> cellVerilog;  // gate-level models, the patched file first (runFirmware)
     bool gateSim;             // runFirmware's patching of cellVerilog has been checked on this platform
+    std::string layerProperties;  // KLayout .lyp: names and colours of its layers
+    std::string tech;         // the layout process (layout/tech.h) a run's layout attaches; "" none
 };
 
 const std::vector<Platform>& platforms();

@@ -20,6 +20,7 @@ namespace app {
 
 class CommandForm;
 class CommandPalette;
+class ImplementPanel;
 class Navigator;
 
 class Shell : public QMainWindow {
@@ -30,6 +31,7 @@ public:
     QTabWidget* tabs() const { return tabs_; }
     Navigator* navigator() const { return design_; }
     Navigator* simulations() const { return simulate_; }
+    ImplementPanel* implementPanel() const { return implement_; }
     QWidget* current() const;              // the active tool; null on the start page
     QStringList tabTitles() const;
     QMenu* themeMenu() const { return themeMenu_; }
@@ -37,7 +39,7 @@ public:
     bool runForm(const QString& command, const QJsonObject& prefill = {});  // no parameters: runs it; else its form
     void showConsole(bool on);
     bool consoleVisible() const;
-    void showStage(int stage);             // 0 design, 1 simulate
+    void showStage(int stage);             // 0 design, 1 simulate, 2 implement
     QStringList recentViews() const;
     QStringList menuTitles() const;
 
@@ -61,6 +63,7 @@ private:
     QTabWidget* tabs_;
     QStackedWidget* panels_;
     Navigator *design_, *simulate_;
+    ImplementPanel* implement_ = nullptr;
     QSplitter *outer_, *inner_;
     QWidget* start_;
     QVBoxLayout* recentList_;

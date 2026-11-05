@@ -57,46 +57,50 @@ const char* kView = "layout";
 
 }  // namespace
 
+QJsonObject importGds(oadb::Library& l, const std::string& file, const std::string& lyp) {
+    const layout::GdsLibrary gds = layout::readGds(file);
+    // Everything checked before anything is written: a refused import leaves the library as it was
+    const QJsonArray layers = lyp.empty() ? QJsonArray{} : readLyp(QString::fromStdString(lyp));
+    std::set<std::string> have, placed;
+    for (const auto& cl : l.cells()) have.insert(cl);
+    std::set<std::string> names;
+    for (const auto& g : gds.cells) {
+        if (!oadb::validName(g.name)) throw std::runtime_error("structure name '" + g.name + "' is not a valid cell name");
+        if (!names.insert(g.name).second) throw std::runtime_error("structure " + g.name + " appears twice in the file");
+        if (have.count(g.name))
+            for (const auto& v : l.views(g.name))
+                if (v.name == kView) throw std::runtime_error("cell " + g.name + " already has a layout view in " + l.name());
+        for (const auto& i : g.instances) placed.insert(i.cell);
+    }
+    for (const auto& name : placed)
+        if (!names.count(name)) throw std::runtime_error("the file places structure " + name + " but does not define it");
+    qint64 shapes = 0, instances = 0;
+    QJsonArray tops, cells;
+    l.change("import " + file, [&] {
+        for (const auto& g : gds.cells) {
+            if (!have.count(g.name)) l.createCell(g.name);
+            l.createView(g.name, kView, "layout");
+            l.setProp(g.name, kView, "metersPerDbu", QString::number(gds.metersPerDbu, 'g', 17).toStdString());
+            l.addLayoutObjects(g.name, kView, g.shapes, g.instances);
+            shapes += (qint64)g.shapes.size();
+            instances += (qint64)g.instances.size();
+            cells.append(QString::fromStdString(g.name));
+            if (!placed.count(g.name)) tops.append(QString::fromStdString(g.name));
+        }
+    });
+    if (!layers.isEmpty()) l.setLibraryProp("layers", QJsonDocument(layers).toJson(QJsonDocument::Compact).toStdString());
+    return {{"cells", cells.size()}, {"tops", tops}, {"shapes", (double)shapes}, {"instances", (double)instances},
+            {"metersPerDbu", gds.metersPerDbu}, {"nodesDropped", gds.nodesDropped}};
+}
+
 void addLayoutCommands(Registry& r) {
     const QJsonObject lib = param("string", "library name"), cell = param("string", "cell name"), view = param("string", "the layout view");
 
     r.add({"layout_import_gds", "Reads a GDSII file into a library: a cell with a layout view per structure. Layers (a KLayout .lyp) name and colour its layers. Returns its cells, top cells and counts.",
            object({{"library", lib}, {"file", param("string", "the GDS file")}}, {{"layers", param("string", "a KLayout layer properties file (.lyp)")}}),
            [](Context& c, const QJsonObject& a) {
-               oadb::Library& l = c.workspace.library(a["library"].toString().toStdString());
-               const layout::GdsLibrary gds = layout::readGds(a["file"].toString().toStdString());
-               // Everything checked before anything is written: a refused import leaves the library as it was
-               const QJsonArray layers = a.contains("layers") ? readLyp(a["layers"].toString()) : QJsonArray{};
-               std::set<std::string> have, placed;
-               for (const auto& cl : l.cells()) have.insert(cl);
-               std::set<std::string> names;
-               for (const auto& g : gds.cells) {
-                   if (!oadb::validName(g.name)) throw std::runtime_error("structure name '" + g.name + "' is not a valid cell name");
-                   if (!names.insert(g.name).second) throw std::runtime_error("structure " + g.name + " appears twice in the file");
-                   if (have.count(g.name))
-                       for (const auto& v : l.views(g.name))
-                           if (v.name == kView) throw std::runtime_error("cell " + g.name + " already has a layout view in " + a["library"].toString().toStdString());
-                   for (const auto& i : g.instances) placed.insert(i.cell);
-               }
-               for (const auto& name : placed)
-                   if (!names.count(name)) throw std::runtime_error("the file places structure " + name + " but does not define it");
-               qint64 shapes = 0, instances = 0;
-               QJsonArray tops, cells;
-               l.change("import " + a["file"].toString().toStdString(), [&] {
-                   for (const auto& g : gds.cells) {
-                       if (!have.count(g.name)) l.createCell(g.name);
-                       l.createView(g.name, kView, "layout");
-                       l.setProp(g.name, kView, "metersPerDbu", QString::number(gds.metersPerDbu, 'g', 17).toStdString());
-                       l.addLayoutObjects(g.name, kView, g.shapes, g.instances);
-                       shapes += (qint64)g.shapes.size();
-                       instances += (qint64)g.instances.size();
-                       cells.append(QString::fromStdString(g.name));
-                       if (!placed.count(g.name)) tops.append(QString::fromStdString(g.name));
-                   }
-               });
-               if (!layers.isEmpty()) l.setLibraryProp("layers", QJsonDocument(layers).toJson(QJsonDocument::Compact).toStdString());
-               return QJsonValue(QJsonObject{{"cells", cells.size()}, {"tops", tops}, {"shapes", (double)shapes}, {"instances", (double)instances},
-                                             {"metersPerDbu", gds.metersPerDbu}, {"nodesDropped", gds.nodesDropped}});
+               return QJsonValue(importGds(c.workspace.library(a["library"].toString().toStdString()), a["file"].toString().toStdString(),
+                                           a.contains("layers") ? a["layers"].toString().toStdString() : std::string()));
            }});
 
     r.add({"layout_export_gds", "Writes a layout view and everything it places to a GDSII file; returns the structures written.",

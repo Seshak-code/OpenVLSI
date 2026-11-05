@@ -14,7 +14,7 @@
 #include <map>
 #include <vector>
 
-namespace oadb { class Workspace; }
+namespace oadb { class Workspace; class Library; }
 namespace sim { class Jobs; }
 
 namespace cmd {
@@ -69,6 +69,8 @@ void addSchematicCommands(Registry& r);  // cell properties, shapes, pins, insta
 void addSimulationCommands(Registry& r);  // netlist, simulate, results_get
 void addAdeCommands(Registry& r);         // ade_setup_get/set, ade_run, ade_stop, ade_history_list/get
 void addPdkCommands(Registry& r);         // pdk_install
+// A GDS file into a library (layout_import_gds, flow_import_layout); lyp "" for none. Refused whole, or done in one undo step.
+QJsonObject importGds(oadb::Library& l, const std::string& file, const std::string& lyp);
 void addLayoutCommands(Registry& r);      // layout_import_gds, layout_export_gds, layout_layers, layout_info
 void addVerifierCommands(Registry& r);    // verifier_setup_get/set, verifier_requirement_add/remove, verifier_map, verifier_check
 void addLayoutEditCommands(Registry& r);  // layout_shape_add, ..., layout_pcell_mos, layout_generate, layout_connectivity

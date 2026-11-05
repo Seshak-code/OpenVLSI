@@ -274,8 +274,8 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
    (ihp-sg13g2, asap7). `flow_tools` (what is installed, where, its version), `flow_run` in the background with stage
    progress, `flow_status`, `flow_stop`, `flow_report` (each stage's metrics; a missing report is an error).
    `tests/test_flow_commands`. Done (2026-11-05).
-3. **Implement stage in the GUI:** the flow as a pipeline of stages with live logs, metrics per stage and history, for
-   a design from Verilog to GDS.
+3. **Implement stage in the GUI (done):** the flow as a pipeline of stages with live logs, metrics per stage and history, for
+   a design from Verilog to GDS; a run's GDS opens in the layout viewer (`flow_import_layout`).
 4. **Layout data and viewer (done, GDS):** a layout view in oadb (layers, shapes, instances), GDS import and export, a
    layer palette from the PDK's `.lyp` and a fast canvas on QRhi that opens what the flow produced. Checked on the routed
    RV32I against KLayout, layer by layer. DEF and LEF import wait until something needs them.
@@ -291,6 +291,11 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
 10. **Spectre X in ADE:** thread count, and `.options hier` arrays, from ADE; a large array's speedup measured (M2 slice 7).
 11. **Finish:** the M3-M6 gates through MCP alone, the bundle carrying or finding the tools, keyboard and accessibility pass,
     documentation.
+
+**The owner's end state (2026-11-05):** one app for the whole of RTL to GDS that takes in the other apps, then testing the
+simulated chip afterwards, with feature parity or better. So a **Test** stage follows sign-off: testbenches and firmware on the
+RTL and on the routed netlist with its layout's delays, with waveforms. "Parity" is tracked below, tool by tool, as what really
+runs and what does not yet.
 
 ## Salvage and retirement
 

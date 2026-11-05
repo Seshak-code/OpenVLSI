@@ -490,6 +490,40 @@ void addFlowCommands(Registry& r) {
                return QJsonValue(out);
            },
            true});
+    r.add({"flow_import_layout", "Brings a run's final GDS into a library of its own (<design>_run<N>, in the run's directory) with the platform's layer colours; "
+                                 "returns the library and the top cell. A run already imported returns the same.",
+           object({{"run", kRun}}),
+           [](Context& c, const QJsonObject& a) {
+               const fs::path dir = runPath(c, a);
+               const QJsonObject rec = readRecord(dir);
+               const std::string design = rec["design"].toString().toStdString(), platform = rec["platform"].toString().toStdString();
+               const flow::Platform* pdk = flow::findPlatform(platform);
+               if (!pdk) throw std::runtime_error("the run's platform '" + platform + "' is not known");
+               const fs::path gds = dir / "results" / platform / design / "base" / "6_final.gds";
+               if (!fs::exists(gds)) throw std::runtime_error("this run has no final GDS (" + gds.string() + ")");
+               const std::string number = dir.filename().string().substr(4);
+               const std::string library = design + "_run" + number;
+               const QJsonObject out{{"library", q(library)}, {"cell", rec["top"]}, {"view", "layout"}};
+               const auto known = c.workspace.libraries();
+               if (std::find(known.begin(), known.end(), library) != known.end()) {
+                   for (const auto& cell : c.workspace.library(library).cells())
+                       if (cell == s(rec, "top")) return QJsonValue(out);
+                   throw std::runtime_error("library " + library + " exists and does not hold " + s(rec, "top"));
+               }
+               const fs::path file = dir / "layout.oalib";
+               oadb::Library& l = fs::exists(file) ? (c.workspace.defineLibrary(library, file.string()), c.workspace.library(library))
+                                                   : c.workspace.createLibrary(library, file.string());
+               const std::string tool = RtlFlowTools::detect().flowDir;
+               const std::string lyp = pdk->layerProperties.empty() || tool.empty() ? std::string() : flow::platformFile(*pdk, tool, pdk->layerProperties);
+               bool imported = false;
+               for (const auto& cell : l.cells()) imported = imported || cell == s(rec, "top");
+               if (!imported) {
+                   const QJsonObject done = importGds(l, gds.string(), lyp);
+                   if (!done["tops"].toArray().contains(rec["top"])) throw std::runtime_error("the GDS's top cells are not the run's top " + s(rec, "top"));
+               }
+               if (!pdk->tech.empty()) l.setLibraryProp("tech", "\"" + pdk->tech + "\"");
+               return QJsonValue(out);
+           }});
     r.add({"flow_report", "Returns each stage's metrics from its reports (instances, area, utilization as a fraction, slack, WNS and TNS in ns, power in W, "
                           "routing, DRC and LVS counts); a missing report is an error in that stage's entry. clean is true only with every stage reported "
                           "and passing, and not_clean says why it is not.",

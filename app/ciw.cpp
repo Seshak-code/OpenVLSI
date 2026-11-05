@@ -2,6 +2,7 @@
 
 #include "app/library_manager.h"
 #include "app/ade_explorer.h"
+#include "app/implement.h"
 #include "app/layout_viewer.h"
 #include "app/verifier.h"
 #include "app/view_editor.h"
@@ -116,6 +117,34 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                          },
                          true});
 
+    session_.addCommand({"flow_view", "Opens an implementation run as a tab (the GUI's command).", cmd::object({{"run", cmd::param("string", "a run: <design>/run.N")}}),
+                         [this](cmd::Context&, const QJsonObject& a) {
+                             const QString run = a["run"].toString();
+                             const cmd::Result status = session_.call("flow_status", {{"run", run}});
+                             if (!status.ok) throw std::runtime_error(status.error.toStdString());
+                             auto& view = flowViews_[run];
+                             if (!view) {
+                                 view = new FlowRunView(session_, run, this);
+                                 connect(view, &FlowRunView::openLayoutRequested, this, [this](const QString& r) {
+                                     const cmd::Result opened = session_.call("flow_open_layout", {{"run", r}});
+                                     if (!opened.ok) runLine("flow_open_layout {\"run\": \"" + r + "\"}");
+                                 });
+                             }
+                             present(view);
+                             return QJsonValue(run);
+                         },
+                         true});
+    session_.addCommand({"flow_open_layout", "Imports a run's GDS if need be and opens its layout (the GUI's command); returns the library, cell and view.",
+                         cmd::object({{"run", cmd::param("string", "a run: <design>/run.N")}}),
+                         [this](cmd::Context&, const QJsonObject& a) {
+                             const cmd::Result imported = session_.call("flow_import_layout", {{"run", a["run"]}});
+                             if (!imported.ok) throw std::runtime_error(imported.error.toStdString());
+                             const QJsonObject o = imported.value.toObject();
+                             const cmd::Result opened = session_.call("editor_open", {{"library", o["library"]}, {"cell", o["cell"]}, {"view", o["view"]}});
+                             if (!opened.ok) throw std::runtime_error(opened.error.toStdString());
+                             return QJsonValue(o);
+                         }});
+
     // The layout viewer's state, for a script
     const QJsonObject kLib = cmd::param("string", "library name"), kCell = cmd::param("string", "cell name"), kView = cmd::param("string", "the layout view");
     auto openLayout = [this](const QJsonObject& a) {
@@ -210,6 +239,11 @@ WaveformViewer* Ciw::viewer(const QString& run) const {
 AdeExplorer* Ciw::explorer(const QString& lib, const QString& cell, const QString& view) const {
     const auto it = editors_.find(lib + "/" + cell + "/" + view);
     return it == editors_.end() ? nullptr : qobject_cast<AdeExplorer*>(it->second.data());
+}
+
+FlowRunView* Ciw::flowView(const QString& run) const {
+    const auto it = flowViews_.find(run);
+    return it == flowViews_.end() ? nullptr : it->second.data();
 }
 
 Verifier* Ciw::verifier(const QString& lib, const QString& cell, const QString& view) const {
