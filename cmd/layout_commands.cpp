@@ -2,6 +2,7 @@
 #include "cmd/registry.h"
 #include "layout/flatten.h"
 #include "layout/gds.h"
+#include "layout/tech.h"
 #include "oadb/oadb.h"
 
 #include <QFile>
@@ -127,11 +128,17 @@ void addLayoutCommands(Registry& r) {
            },
            true});
 
-    r.add({"layout_layers", "A library's layer table: layer, datatype, name, colour and whether it starts visible, from its import's .lyp; empty when it has none.",
+    r.add({"layout_layers", "A library's layer table: layer, datatype, name, colour and whether it starts visible, from its import's .lyp or its process; empty when it has neither.",
            object({{"library", lib}}),
            [](Context& c, const QJsonObject& a) {
-               const auto t = c.workspace.library(a["library"].toString().toStdString()).libraryProp("layers");
-               return QJsonValue(t ? QJsonDocument::fromJson(QByteArray::fromStdString(*t)).array() : QJsonArray{});
+               const oadb::Library& l = c.workspace.library(a["library"].toString().toStdString());
+               if (const auto t = l.libraryProp("layers")) return QJsonValue(QJsonDocument::fromJson(QByteArray::fromStdString(*t)).array());
+               QJsonArray layers;
+               if (const auto name = l.libraryProp("tech"))
+                   if (const layout::Tech* tech = layout::findTech(QJsonDocument::fromJson(QByteArray::fromStdString("[" + *name + "]")).array()[0].toString().toStdString()))
+                       for (const auto& k : tech->layers)
+                           layers.append(QJsonObject{{"layer", k.layer}, {"datatype", k.datatype}, {"name", QString::fromStdString(k.name)}, {"color", QString::fromStdString(k.color)}, {"visible", true}});
+               return QJsonValue(layers);
            },
            true});
 

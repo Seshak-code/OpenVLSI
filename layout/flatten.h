@@ -3,6 +3,7 @@
 // is tessellated once in its own coordinates; flattening then only transforms vertices.
 #include "oadb/oadb.h"
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
@@ -38,13 +39,14 @@ struct FlatShape {  // one drawn shape, in top coordinates relative to Flat::ori
     uint32_t layer;     // index into Flat::layers
     uint32_t tri, triCount;  // its triangle vertices in that layer's `tri`
     uint32_t master;    // index into Flat::masters
+    int64_t object;     // what to edit: the top cell's shape id, or minus its instance's id for what an instance draws
 };
 struct FlatLayer {
     LayerKey key;
     std::vector<float> tri, line;  // x, y pairs: triangle vertices, line vertices
     uint64_t shapes = 0;
 };
-struct FlatLabel { float x, y; uint32_t layer; std::string text; };
+struct FlatLabel { float x, y; uint32_t layer; std::string text; int64_t object; };
 struct Flat {
     double originX = 0, originY = 0;  // subtracted from every coordinate: floats keep their precision around the design
     Box box;                          // in database units, absolute

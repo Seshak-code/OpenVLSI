@@ -132,6 +132,14 @@ public:
     // Layout objects, in bulk: a stream import writes thousands at once
     void addLayoutObjects(const std::string& cell, const std::string& view, const std::vector<LayoutShape>& shapes,
                           const std::vector<LayoutInstance>& instances);
+    int64_t addLayoutShape(const std::string& cell, const std::string& view, const LayoutShape& s);
+    int64_t addLayoutInstance(const std::string& cell, const std::string& view, const LayoutInstance& i);
+    void moveLayoutObjects(const std::string& cell, const std::string& view, const std::vector<int64_t>& shapes,
+                           const std::vector<int64_t>& instances, int64_t dx, int64_t dy);
+    void deleteLayoutObjects(const std::string& cell, const std::string& view, const std::vector<int64_t>& shapes,
+                             const std::vector<int64_t>& instances);
+    void setLayoutShapePoints(const std::string& cell, const std::string& view, int64_t id, const std::vector<Point>& points);
+    int revision() const;  // grows with every write: a viewer's way to see whether it must reload
     std::vector<LayoutShape> layoutShapes(const std::string& cell, const std::string& view) const;
     std::vector<LayoutInstance> layoutInstances(const std::string& cell, const std::string& view) const;
     // Library-wide values (JSON text), outside undo: the layer table

@@ -8,8 +8,11 @@
 #include <QRhiWidget>
 #include <QJsonObject>
 
+#include <array>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 
 class QLabel;
 class QLineEdit;
@@ -46,14 +49,21 @@ public:
     void panBy(QPointF px);
     const layout::Flat* flat() const { return flat_; }
     const std::vector<LayerStyle>* styles() const { return styles_; }
-    std::optional<size_t> selected;
+    std::vector<QRectF> selectedBoxes;                    // world: one per selected object
+    std::vector<std::pair<QPointF, QPointF>> flightLines; // world: what remains to route
+    enum class Rubber { None, Box, Line, Closed, Ghost };
+    Rubber rubber = Rubber::None;                         // what the tool in progress draws to the cursor
+    std::vector<QPointF> rubberPoints;
+    std::vector<QRectF> ghost;                            // Ghost: boxes that follow the cursor from rubberPoints[0]
+    void refreshOverlay();
     std::vector<std::pair<QPointF, QPointF>> rulers;
     std::optional<QPointF> rulerStart;
     QPointF cursor;
     double micronsPerDbu = 1e-3;
 
 signals:
-    void clicked(QPointF world);
+    void clicked(QPointF world, bool extend);
+    void doubleClicked();
     void moved(QPointF world);
 
 protected:
@@ -64,6 +74,7 @@ protected:
     void mousePressEvent(QMouseEvent* e) override;
     void mouseMoveEvent(QMouseEvent* e) override;
     void mouseReleaseEvent(QMouseEvent* e) override;
+    void mouseDoubleClickEvent(QMouseEvent* e) override;
     void wheelEvent(QWheelEvent* e) override;
     bool event(QEvent* e) override;
 
@@ -81,7 +92,7 @@ private:
     double scale_ = 1, cx_ = 0, cy_ = 0;
     std::optional<QPoint> dragFrom_;
     QPoint pressAt_;
-    bool dragged_ = false;
+    bool dragged_ = false, swallowRelease_ = false;
     LayoutOverlay* overlay_;
 };
 
@@ -99,18 +110,50 @@ public:
     bool setLayerVisible(int layer, int datatype, bool visible);  // false: the design has no such layer
     void setLevels(int levels);                                   // how deep shapes are drawn; 0 the top cell
     int levels() const { return levels_; }
-    QJsonObject selectAt(QPointF world);                          // top coordinates relative to the origin; {} when nothing is there
+    QJsonObject selectAt(QPointF world, bool extend = false);     // top coordinates relative to the origin; {} when nothing is there
     QJsonObject selectAtDbu(double x, double y);                  // in database units, absolute
     void zoomToMicrons(double x0, double y0, double x1, double y1);
     void startRuler();
     void clearRulers();
+
+    // Editing: each tool gathers its clicks, snaps them to the process's grid and calls a command
+    enum class Tool { Select, Ruler, Rect, Path, Polygon, Label, Pin, Via, Instance, Move, Copy, Stretch };
+    void startTool(Tool t);
+    Tool tool() const { return tool_; }
+    void setToolText(const QString& text) { toolText_ = text; }  // what Label writes, what Pin names
+    void setInstanceMaster(const QString& cell) { instanceMaster_ = cell; }
+    void setCurrentLayer(int layer, int datatype);
+    void clickDbu(double x, double y, bool extend = false);      // what a click there does, in the current tool
+    void finishTool();                                           // Enter: ends a path or a polygon
+    void cancelTool();                                           // Esc
+    void deleteSelection();
+    void undo();
+    void redo();
+    std::set<int64_t> selection() const { return selection_; }   // shape ids; an instance's as minus its id
+    QString lastError() const { return lastError_; }
+    int flightLineCount() const { return (int)canvas_->flightLines.size(); }
+    void setFlightLinesShown(bool on);
     QTreeWidget* layerTree() const { return layerTree_; }
     QString status() const;
 
 private:
     void reload();
+    void reloadIfChanged();
     void fillLayers();
     void buildStyles();
+    void click(QPointF world, bool extend);
+    void toolPoint(oadb::Point at);
+    oadb::Point snapped(QPointF world) const;
+    QPointF worldOf(oadb::Point p) const;
+    void refreshSelection();
+    void refreshFlightLines();
+    bool run(const QString& command, QJsonObject args, QJsonValue* value = nullptr);  // the view's names added; false and lastError on a refusal
+    void hint(const QString& text);
+    bool currentIsMetal(QString* name) const;
+    QString currentLayerName() const;
+    void askPlaceInstance();
+    void askTransistor();
+    void askLabel(Tool t);
     Session& session_;
     QString lib_, cell_, view_;
     std::unique_ptr<layout::Hierarchy> hierarchy_;
@@ -123,6 +166,17 @@ private:
     QLabel* position_;
     int levels_ = 1 << 30;
     bool rulerMode_ = false;
+    Tool tool_ = Tool::Select;
+    std::vector<oadb::Point> points_;      // the tool's clicks so far
+    std::set<int64_t> selection_;
+    std::map<layout::LayerKey, bool> shown_;
+    std::optional<layout::LayerKey> current_;
+    QString toolText_, instanceMaster_, lastError_;
+    int64_t grid_ = 1, lastRevision_ = -1;
+    bool flightShown_ = true;
+    std::vector<int64_t> stretchShapes_;
+    std::array<int64_t, 4> stretchWindow_{};
+    bool stretchX_ = true, stretchY_ = true;
 };
 
 }  // namespace app

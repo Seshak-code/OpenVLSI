@@ -674,6 +674,73 @@ void Library::addLayoutObjects(const std::string& cell, const std::string& view,
     });
 }
 
+int64_t Library::addLayoutShape(const std::string& cell, const std::string& view, const LayoutShape& s) {
+    int64_t id = 0;
+    change("add layout shape", [&] {
+        addLayoutObjects(cell, view, {s}, {});
+        id = sqlite3_last_insert_rowid(db_);
+    });
+    return id;
+}
+
+int64_t Library::addLayoutInstance(const std::string& cell, const std::string& view, const LayoutInstance& i) {
+    int64_t id = 0;
+    change("add layout instance", [&] {
+        addLayoutObjects(cell, view, {}, {i});
+        id = sqlite3_last_insert_rowid(db_);
+    });
+    return id;
+}
+
+void Library::moveLayoutObjects(const std::string& cell, const std::string& view, const std::vector<int64_t>& shapes,
+                                const std::vector<int64_t>& instances, int64_t dx, int64_t dy) {
+    const int64_t v = viewId(cell, view);
+    change("move layout objects in " + cell + "/" + view, [&] {
+        for (int64_t id : shapes) {
+            Stmt q(db_, "SELECT points FROM lshapes WHERE view_id = ?1 AND id = ?2");
+            q.bind(1, v).bind(2, id);
+            need(q.step(), "oadb: no layout shape " + std::to_string(id) + " in " + cell + "/" + view);
+            std::vector<Point> pts = q.points(0);
+            for (auto& p : pts) p = {p.x + dx, p.y + dy};
+            Stmt u(db_, "UPDATE lshapes SET points = ?1 WHERE id = ?2");
+            u.blob(1, pack(pts)).bind(2, id).step();
+        }
+        for (int64_t id : instances) {
+            Stmt u(db_, "UPDATE linsts SET x = x + ?1, y = y + ?2 WHERE view_id = ?3 AND id = ?4");
+            u.bind(1, dx).bind(2, dy).bind(3, v).bind(4, id).step();
+            need(sqlite3_changes(db_) == 1, "oadb: no layout instance " + std::to_string(id) + " in " + cell + "/" + view);
+        }
+    });
+}
+
+void Library::deleteLayoutObjects(const std::string& cell, const std::string& view, const std::vector<int64_t>& shapes,
+                                  const std::vector<int64_t>& instances) {
+    const int64_t v = viewId(cell, view);
+    change("delete layout objects in " + cell + "/" + view, [&] {
+        for (int64_t id : shapes) {
+            Stmt d(db_, "DELETE FROM lshapes WHERE view_id = ?1 AND id = ?2");
+            d.bind(1, v).bind(2, id).step();
+            need(sqlite3_changes(db_) == 1, "oadb: no layout shape " + std::to_string(id) + " in " + cell + "/" + view);
+        }
+        for (int64_t id : instances) {
+            Stmt d(db_, "DELETE FROM linsts WHERE view_id = ?1 AND id = ?2");
+            d.bind(1, v).bind(2, id).step();
+            need(sqlite3_changes(db_) == 1, "oadb: no layout instance " + std::to_string(id) + " in " + cell + "/" + view);
+        }
+    });
+}
+
+void Library::setLayoutShapePoints(const std::string& cell, const std::string& view, int64_t id, const std::vector<Point>& points) {
+    const int64_t v = viewId(cell, view);
+    change("edit layout shape in " + cell + "/" + view, [&] {
+        Stmt u(db_, "UPDATE lshapes SET points = ?1 WHERE view_id = ?2 AND id = ?3");
+        u.blob(1, pack(points)).bind(2, v).bind(3, id).step();
+        need(sqlite3_changes(db_) == 1, "oadb: no layout shape " + std::to_string(id) + " in " + cell + "/" + view);
+    });
+}
+
+int Library::revision() const { return sqlite3_total_changes(db_); }
+
 std::vector<LayoutShape> Library::layoutShapes(const std::string& cell, const std::string& view) const {
     std::vector<LayoutShape> out;
     Stmt s(db_, "SELECT id, layer, datatype, kind, points, width, path_type, text FROM lshapes WHERE view_id = ?1 ORDER BY id");

@@ -278,8 +278,10 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
 4. **Layout data and viewer (done, GDS):** a layout view in oadb (layers, shapes, instances), GDS import and export, a
    layer palette from the PDK's `.lyp` and a fast canvas on QRhi that opens what the flow produced. Checked on the routed
    RV32I against KLayout, layer by layer. DEF and LEF import wait until something needs them.
-5. **Layout editing (Virtuoso Layout's role):** create and stretch shapes, vias, pins, rulers; hierarchy; a transistor
-   Pcell; GDS export; connectivity from the schematic (M3).
+5. **Layout editing (Virtuoso Layout's role, done for SG13G2 low-voltage MOS):** create and stretch shapes, vias, pins,
+   rulers; hierarchy; a transistor Pcell; GDS export; connectivity from the schematic (M3). `tools/m3_gate.py`: generators
+   and a routed inverter against IHP's DRC and LVS decks. Still to come for M3: FinFET Pcells, edit-in-place, resistors
+   and capacitors, device abutment.
 6. **Verify stage:** DRC and LVS (KLayout decks) as commands and views: a marker browser over the layout canvas; ASAP7 as
    in M2 slice 5's notes. Extraction (OpenRCX) to a post-layout netlist simulated on TreeSPICE, from ADE (M3).
 7. **Timing views:** OpenSTA through OpenROAD: slack summary, path reports, cross-probe to the layout (M5).

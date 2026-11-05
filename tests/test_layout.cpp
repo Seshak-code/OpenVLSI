@@ -195,6 +195,7 @@ int main(int argc, char** argv) {
         check(hit.ok && hit.value.toObject()["layer"].toInt() == 8 && hit.value.toObject()["master"] == "leaf" && near(hit.value.toObject()["width_um"].toDouble(), 0.1, 1e-6), "selecting finds the shape, its master and size");
         check(!call("layout_view_select", {{"library", "chip"}, {"cell", "top"}, {"view", "layout"}, {"x", 3000}, {"y", 3000}}).ok, "nothing there is an error");
         check(call("layout_view_layer", {{"library", "chip"}, {"cell", "top"}, {"view", "layout"}, {"layer", 8}, {"datatype", 0}, {"visible", false}}).ok, "layout_view_layer hides a layer");
+        check(call("layout_view_layer", {{"library", "chip"}, {"cell", "top"}, {"view", "layout"}, {"layer", 8}, {"datatype", 25}, {"visible", false}}).ok, "and its label's");
         check(!call("layout_view_select", {{"library", "chip"}, {"cell", "top"}, {"view", "layout"}, {"x", 1050}, {"y", 25}}).ok, "a hidden layer is not selectable");
         check(!call("layout_view_layer", {{"library", "chip"}, {"cell", "top"}, {"view", "layout"}, {"layer", 99}, {"datatype", 0}, {"visible", true}}).ok, "an absent layer is an error");
         check(call("layout_view_levels", {{"library", "chip"}, {"cell", "top"}, {"view", "layout"}, {"levels", 0}}).ok && v->flat().shapes.empty(), "levels redraw");

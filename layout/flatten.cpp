@@ -116,11 +116,12 @@ std::vector<double> pathQuads(const std::vector<oadb::Point>& p, int64_t width, 
 struct Hierarchy::Master {
     std::string name;
     double metersPerDbu = 1e-9;
-    struct Piece { uint32_t layerIndex; uint32_t triFirst, triCount, lineFirst, lineCount; Box box; };  // one shape's
+    struct Piece { uint32_t layerIndex; uint32_t triFirst, triCount, lineFirst, lineCount; Box box; int64_t id; };  // one shape's
     std::vector<LayerKey> keys;
     std::vector<std::vector<double>> tri, line;  // per layer in `keys`
     std::vector<Piece> pieces;
-    std::vector<std::pair<std::array<double, 2>, std::pair<uint32_t, std::string>>> labels;
+    struct Label { double x, y; uint32_t layerIndex; std::string text; int64_t id; };
+    std::vector<Label> labels;
     struct Child { std::shared_ptr<Master> master; oadb::LayoutInstance placed; };
     std::vector<Child> children;
     uint64_t ownShapes = 0, unfilled = 0;
@@ -152,10 +153,10 @@ std::shared_ptr<Hierarchy::Master> Hierarchy::load(oadb::Workspace& ws, const st
     for (const auto& s : library.layoutShapes(cell, view)) {
         const uint32_t li = layerIndex({s.layer, s.datatype});
         if (s.kind == "text") {
-            if (!s.points.empty()) m->labels.push_back({{(double)s.points[0].x, (double)s.points[0].y}, {li, s.text}});
+            if (!s.points.empty()) m->labels.push_back({(double)s.points[0].x, (double)s.points[0].y, li, s.text, s.id});
             continue;
         }
-        Master::Piece piece{li, (uint32_t)(m->tri[li].size() / 2), 0, (uint32_t)(m->line[li].size() / 2), 0, {}};
+        Master::Piece piece{li, (uint32_t)(m->tri[li].size() / 2), 0, (uint32_t)(m->line[li].size() / 2), 0, {}, s.id};
         auto& tri = m->tri[li];
         auto& line = m->line[li];
         auto edge = [&](double x0, double y0, double x1, double y1) { line.insert(line.end(), {x0, y0, x1, y1}); };
@@ -249,7 +250,7 @@ Flat Hierarchy::flatten(int levels) const {
         out.layers.back().key = k;
     }
 
-    const auto put = [&](const Master& m, const Xform& t) {
+    const auto put = [&](const Master& m, const Xform& t, int64_t placedBy) {
         std::vector<uint32_t> map(m.keys.size());
         for (size_t k = 0; k < m.keys.size(); ++k) map[k] = indexOf[m.keys[k]];
         double x, y;
@@ -267,6 +268,7 @@ Flat Hierarchy::flatten(int levels) const {
             s.tri = (uint32_t)(l.tri.size() / 2);
             s.triCount = piece.triCount;
             s.master = m.index;
+            s.object = placedBy ? -placedBy : piece.id;
             Box b;
             for (uint32_t v = 0; v < piece.triCount; ++v) {
                 relative(tri[2 * (piece.triFirst + v)], tri[2 * (piece.triFirst + v) + 1], l.tri);
@@ -281,19 +283,19 @@ Flat Hierarchy::flatten(int levels) const {
             ++l.shapes;
         }
         for (const auto& lb : m.labels) {
-            t.apply(lb.first[0], lb.first[1], x, y);
-            out.labels.push_back({(float)(x - out.originX), (float)(y - out.originY), map[lb.second.first], lb.second.second});
+            t.apply(lb.x, lb.y, x, y);
+            out.labels.push_back({(float)(x - out.originX), (float)(y - out.originY), map[lb.layerIndex], lb.text, placedBy ? -placedBy : lb.id});
         }
     };
-    const std::function<void(const Master&, const Xform&, int)> walk = [&](const Master& m, const Xform& t, int depth) {
-        put(m, t);
+    const std::function<void(const Master&, const Xform&, int, int64_t)> walk = [&](const Master& m, const Xform& t, int depth, int64_t placedBy) {
+        put(m, t, placedBy);
         for (const auto& c : m.children)
             for (int col = 0; col < c.placed.cols; ++col)
                 for (int row = 0; row < c.placed.rows; ++row) {
                     const Xform placed = Xform::of(c.placed, col, row).then(t);
                     ++out.instances;
                     if (depth < levels) {
-                        walk(*c.master, placed, depth + 1);
+                        walk(*c.master, placed, depth + 1, placedBy ? placedBy : c.placed.id);
                     } else if (!c.master->box.empty()) {
                         const Box& b = c.master->box;
                         Box w;
@@ -306,7 +308,7 @@ Flat Hierarchy::flatten(int levels) const {
                     }
                 }
     };
-    walk(*top_, Xform{}, 0);
+    walk(*top_, Xform{}, 0, 0);
     return out;
 }
 
