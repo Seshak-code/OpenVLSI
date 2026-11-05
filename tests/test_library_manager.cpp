@@ -37,7 +37,8 @@ int main(int argc, char** argv) {
                                              "cell_prop_get", "view_get", "schematic_check",
                                              "netlist", "simulate", "results_get", "wave_eval", "ade_setup_get", "ade_run", "ade_stop",
                                              "ade_history_list", "ade_history_get", "ade_run_plan",
-                                             "ade_summary", "ade_compare"},
+                                             "ade_summary", "ade_compare", "flow_tools", "flow_platforms", "flow_run", "flow_status",
+                                             "flow_stop", "flow_list", "flow_report"},
               "exactly the commands that only read are marked read-only");
 
         app::Ciw ciw(session);

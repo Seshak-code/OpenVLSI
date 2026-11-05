@@ -1,8 +1,8 @@
 #pragma once
 // RTL -> GDS on a real PDK (Roadmap Phase 6): OpenROAD-flow-scripts (Yosys, OpenROAD) for
-// synthesis through routing and fill, then the PDK's own KLayout decks for DRC and LVS.
+// synthesis through routing and fill, then the platform's own KLayout decks for DRC and LVS.
 // The flow is ORFS's maintained, taped-out recipe; this file only writes the design config,
-// runs it and reads its reports into the result structs the GUI dialogs show. Qt-free.
+// runs it and reads its reports into the result structs the commands show. Qt-free.
 #include "yosys_log_parser.h"        // SynthesisResult
 #include "openroad_report_parser.h"  // PnRResult
 #include "klayout_report_parser.h"   // DRCResult, LVSResult
@@ -11,7 +11,36 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
+
+namespace flow {
+
+// What the flow needs of one ORFS platform. Files are relative to its directory (platforms/<name>), or to $HOME with ~/.
+struct Platform {
+    std::string name;
+    std::string timeUnit;     // its Liberty's ("1ns"): SDC periods and ORFS's slacks are in it
+    double nsPerTimeUnit;
+    std::string drcDeck;
+    std::vector<std::string> drcDefines;  // -rd name=value the deck needs
+    std::string lvsDeck;      // "": none, and noLvs says why (a run with no LVS is never clean)
+    std::string noLvs;
+    std::string cdl;          // the cells' netlists LVS compares against
+    std::string lvsFlatten;   // cells flattened on both sides before LVS aligns the netlists
+    std::vector<std::string> liberty;      // the corner ORFS runs by default
+    std::string setRC;
+    std::vector<std::string> orfsConfig;   // extra config.mk lines
+    std::vector<std::string> cellVerilog;  // gate-level models, the patched file first (runFirmware)
+    bool gateSim;             // runFirmware's patching of cellVerilog has been checked on this platform
+};
+
+const std::vector<Platform>& platforms();
+const Platform* findPlatform(const std::string& name);  // nullptr: unknown
+std::string knownPlatforms();                           // their names, comma separated
+std::string platformFile(const Platform& p, const std::string& flowDir, const std::string& file);
+std::vector<std::string> missingFiles(const Platform& p, const std::string& flowDir);  // what a flow run needs and is not there
+
+}  // namespace flow
 
 namespace acutesim::compute::orchestration {
 
@@ -20,13 +49,13 @@ struct RtlFlowTools {
     std::string make, yosys, openroad, klayout;
     std::string binDir;    // prepended to PATH (the klayout wrapper, a pmap shim for IHP's LVS deck)
     std::string iverilog, vvp;  // firmware simulation (Icarus: it annotates SDF, Verilator does not)
-    std::string cellModels;     // IHP-Open-PDK sg13g2_stdcell.v + sg13g2_udp.v (~/eda/ihp-verilog)
 
-    // ORFS_FLOW_HOME / OPENROAD_EXE / KLAYOUT_CMD / YOSYS_EXE override; else ~/eda (where the
-    // source builds live: their build tools break on paths with spaces), else PATH
+    // ORFS_FLOW_HOME / OPENROAD_EXE / KLAYOUT_CMD / YOSYS_EXE / MAKE_EXE override, and one naming nothing leaves the tool
+    // missing; else ~/eda (where the source builds live: their build tools break on paths with spaces), else PATH
     static RtlFlowTools detect();
+    std::vector<std::pair<std::string, std::string>> flowTools() const;  // a flow run's tools: name, path ("" not found)
     std::string missing() const;  // names of the tools not found, empty when all are there
-    std::string simMissing() const;  // the same for runFirmware
+    std::string simMissing(const std::string& platform = "ihp-sg13g2") const;  // the same for runFirmware
 };
 
 struct RtlFlowConfig {
@@ -50,6 +79,14 @@ struct RtlFlowResult {
     std::string gds, reportDir;
     double seconds = 0.0;
 };
+
+// What is wrong with a run of cfg before anything starts; "" when it can go. Names reach make and Tcl, so they are checked.
+std::string rtlFlowConfigError(const RtlFlowConfig& cfg, const RtlFlowTools& tools);
+
+// The DRC deck's report (KLayout's .lyrdb) and LVS's cross-reference (.lvsdb), both read from the files the decks write
+// so a finished run can be read again. A missing or incomplete file is !success with its reason in errors.
+DRCResult readDrcReport(const std::string& lyrdb);
+LVSResult readLvsReport(const std::string& lvsdb);
 
 using FlowLog = std::function<void(const std::string& line, bool isError)>;
 using FlowStage = std::function<void(const std::string& stage, double progress)>;  // progress 0..1

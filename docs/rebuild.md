@@ -273,6 +273,7 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
 2. **Flow commands:** `flow/` reached from the command layer. A platform description instead of IHP's hard-coded paths
    (ihp-sg13g2, asap7). `flow_tools` (what is installed, where, its version), `flow_run` in the background with stage
    progress, `flow_status`, `flow_stop`, `flow_report` (each stage's metrics; a missing report is an error).
+   `tests/test_flow_commands`. Done (2026-11-05).
 3. **Implement stage in the GUI:** the flow as a pipeline of stages with live logs, metrics per stage and history, for
    a design from Verilog to GDS.
 4. **Layout data and viewer:** a layout view in oadb (layers, shapes, instances), GDS and DEF/LEF import, a layer palette
