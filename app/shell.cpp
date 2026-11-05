@@ -43,6 +43,8 @@
 
 namespace app {
 
+static const QStringList kStageNames{"design", "rtl", "simulate", "implement", "verify", "test"};
+
 namespace {
 QString iconOf(QWidget* tool) {
     if (auto* e = qobject_cast<ViewEditor*>(tool)) return e->isSchematic() ? "schematic" : "symbol";
@@ -111,6 +113,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
         b->setCheckable(true);
         b->setIconSize({24, 24});
         b->setToolTip(stages[k].second);
+        b->setAccessibleName(stages[k].second);
         b->setProperty("glyph", stages[k].first);
         b->setFixedWidth(46);
         connect(b, &QToolButton::clicked, this, [this, k] { showStage(k); });
@@ -123,6 +126,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     consoleButton_->setCheckable(true);
     consoleButton_->setIconSize({24, 24});
     consoleButton_->setToolTip("Command window (Ctrl+J)");
+    consoleButton_->setAccessibleName("Command window");
     consoleButton_->setProperty("glyph", "console");
     consoleButton_->setFixedWidth(46);
     connect(consoleButton_, &QToolButton::clicked, this, [this](bool on) { showConsole(on); });
@@ -241,6 +245,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     search_->setObjectName("searchButton");
     search_->setText("Find a command   ⌘K");
     search_->setProperty("api", "api_list");
+    search_->setAccessibleName("Find a command");
     search_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     connect(search_, &QToolButton::clicked, this, &Shell::openPalette);
     bar->addWidget(search_);
@@ -256,6 +261,11 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     viewMenu_->addAction("Command Palette", QKeySequence("Ctrl+K"), this, &Shell::openPalette);
     viewMenu_->addAction("Command Window", QKeySequence("Ctrl+J"), this, [this] { showConsole(!consoleVisible()); });
     viewMenu_->addAction("Side Panel", QKeySequence("Ctrl+B"), this, [this] { panels_->setVisible(!panels_->isVisible()); });
+    viewMenu_->addSeparator();
+    for (int k = 0; k < (int)kStageNames.size(); ++k) {
+        const QString name = kStageNames[k];
+        viewMenu_->addAction(k == 1 ? QString("RTL") : name.left(1).toUpper() + name.mid(1), QKeySequence(QString("Ctrl+%1").arg(k + 1)), this, [this, k] { showStage(k); });
+    }
     viewMenu_->addSeparator();
     viewMenu_->addAction("Library Manager", this, [this] { showLibraryManager(); });
     themeMenu_ = viewMenu_->addMenu("Appearance");
@@ -276,7 +286,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     api_ = new ApiServer(session_, this);
     if (!api_->listening()) qWarning("OpenVLSI API: %s", qPrintable(api_->error()));
     bindActions(this, {{"New Library…", "library_create"}, {"Install PDK…", "pdk_install"}, {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"},
-                       {"Command Window", "ui_console"}, {"Side Panel", "ui_panel"}, {"Library Manager", "ui_library_manager"}, {"Match the system", "ui_theme"}, {"Light", "ui_theme"}, {"Dark", "ui_theme"}});
+                       {"Command Window", "ui_console"}, {"Side Panel", "ui_panel"}, {"Design", "ui_stage"}, {"RTL", "ui_stage"}, {"Simulate", "ui_stage"}, {"Implement", "ui_stage"}, {"Verify", "ui_stage"}, {"Test", "ui_stage"}, {"Library Manager", "ui_library_manager"}, {"Match the system", "ui_theme"}, {"Light", "ui_theme"}, {"Dark", "ui_theme"}});
     session_.addCommand({"ui_theme", "Sets the app's appearance: auto follows the system, or light or dark; returns the mode now in effect.",
                          cmd::object({{"mode", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"auto", "light", "dark"}}, {"description", "the appearance"}}}}),
                          [this](cmd::Context&, const QJsonObject& a) {
@@ -384,6 +394,7 @@ void Shell::host(QWidget* tool) {
     close->setIcon(icons::get("close"));
     close->setIconSize({12, 12});
     close->setToolTip("Close this tab");
+    close->setAccessibleName("Close " + tabTitle(tool));
     connect(close, &QToolButton::clicked, this, [this, tool] { closeTab(tabs_->indexOf(tool)); });
     tabs_->tabBar()->setTabButton(index, QTabBar::RightSide, close);
     tabs_->setCurrentIndex(index);
@@ -480,8 +491,6 @@ void Shell::showStage(int stage) {
     for (int k = 0; k < (int)stages_.size(); ++k) stages_[k]->setChecked(k == stage);
     refreshIcons();
 }
-
-static const QStringList kStageNames{"design", "rtl", "simulate", "implement", "verify", "test"};
 
 int Shell::stageIndex(const QString& name) const { return (int)kStageNames.indexOf(name); }
 

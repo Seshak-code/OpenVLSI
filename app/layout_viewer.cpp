@@ -219,6 +219,8 @@ LayoutCanvas::LayoutCanvas(QWidget* parent) : QRhiWidget(parent), overlay_(new L
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(200, 150);
+    setAccessibleName("Layout canvas");
+    setAccessibleDescription("The layout. Its contents are readable through the layout_view_state and layout_objects_get commands");
     connect(static_cast<ThemeNotifier*>(Theme::notifier()), &ThemeNotifier::changed, this, [this] { changed(); });
 }
 

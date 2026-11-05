@@ -214,6 +214,10 @@ def run(ov, hands, gpu, work):
     for stage in ("rtl", "verify", "implement", "test", "simulate", "design"):
         hands.press("rail", text=stage)
         check(ov.ui_state()["stage"] == stage, f"a click on the rail shows {stage}")
+    hands.key("Ctrl+3")
+    check(ov.ui_state()["stage"] == "simulate", "Ctrl+3 shows the third stage")
+    hands.key("Ctrl+1")
+    check(ov.ui_state()["stage"] == "design", "Ctrl+1 the first")
     hands.press("console")
     check(ov.ui_state()["console"] is True, "the rail's button opens the command window")
     hands.press("console")

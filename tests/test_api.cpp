@@ -12,10 +12,12 @@
 #include <QDockWidget>
 #include <QFile>
 #include <QJsonArray>
+#include <QLineEdit>
 #include <QMenu>
 #include <QPushButton>
 #include <QSettings>
 #include <QToolBar>
+#include <QToolButton>
 
 #include <cstdio>
 #include <filesystem>
@@ -98,6 +100,16 @@ int main(int argc, char** argv) {
         for (int k = 0; k < shell.tabs()->count(); ++k) audit(shell.tabs()->widget(k), shell.tabs()->tabText(k));
         audit(shell.ciw(), "the command window");
         check(shell.tabs()->count() >= 8, "one of each tool was open: " + std::to_string(shell.tabs()->count()) + " tabs");
+
+        // Accessibility: every control and every canvas a screen reader meets says what it is
+        QStringList unnamed;
+        for (QWidget* w : shell.findChildren<QWidget*>()) {
+            const auto* tool = qobject_cast<QToolButton*>(w);
+            const bool custom = w->inherits("app::LayoutCanvas") || w->inherits("app::Canvas") || w->inherits("app::Plot") || w->inherits("app::DigitalWaves") || w->inherits("app::StagePipeline");
+            if ((tool && tool->text().isEmpty() && !tool->objectName().startsWith("qt_") && !w->inherits("QTabBar") && !QString(w->parent()->metaObject()->className()).startsWith("QTab") && !qobject_cast<QLineEdit*>(w->parent())) || custom)
+                if (w->accessibleName().isEmpty()) unnamed << QString(w->metaObject()->className());
+        }
+        check(unnamed.isEmpty(), ("every icon button and canvas has an accessible name" + (unnamed.isEmpty() ? QString() : ": " + unnamed.join(", "))).toStdString());
 
         // Each command's description and schema are what a client reads
         std::set<QString> unexplained;
