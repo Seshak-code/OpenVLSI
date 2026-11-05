@@ -7,6 +7,7 @@
 #include <QMainWindow>
 #include <QPointer>
 
+#include <functional>
 #include <map>
 
 class QLineEdit;
@@ -18,6 +19,8 @@ class LibraryManager;
 class ViewEditor;
 class AdeExplorer;
 class WaveformViewer;
+class LayoutViewer;
+class Verifier;
 
 class Ciw : public QMainWindow {
     Q_OBJECT
@@ -25,14 +28,20 @@ public:
     explicit Ciw(Session& session, QWidget* parent = nullptr);
     // `name` or `name {json object}`; false (and the reason in the log) when it does not parse or the command fails
     bool runLine(const QString& line);
+    // Where tools open: the shell's tabs. Unset, each is a window of its own.
+    void setHost(std::function<void(QWidget*)> host) { host_ = std::move(host); }
     QString logText() const;
     LibraryManager* libraryManager();  // opened on first use
     ViewEditor* editor(const QString& lib, const QString& cell, const QString& view) const;  // open, or null
     AdeExplorer* explorer(const QString& lib, const QString& cell, const QString& view) const;
+    LayoutViewer* layout(const QString& lib, const QString& cell, const QString& view) const;
+    Verifier* verifier(const QString& lib, const QString& cell, const QString& view) const;
     WaveformViewer* viewer(const QString& run) const;  // the open viewer on a run directory, or null
 
 private:
     void append(const QString& html);
+    void present(QWidget* tool);
+    std::function<void(QWidget*)> host_;
     Session& session_;
     QPlainTextEdit* log_;
     QLineEdit* input_;

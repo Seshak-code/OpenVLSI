@@ -1,5 +1,7 @@
 #include "app/canvas.h"
 
+#include "app/theme.h"
+
 #include <QFile>
 #include <QMouseEvent>
 #include <QNativeGestureEvent>
@@ -13,21 +15,24 @@ namespace app {
 
 namespace {
 
-constexpr float kBackground[3] = {0.05f, 0.05f, 0.07f};
+QVector3D rgb(const QColor& c) { return {(float)c.redF(), (float)c.greenF(), (float)c.blueF()}; }
 
+// The schematic's colours for the theme's canvas; the roles keep their hues in both, darker on the light one
 QVector3D color(Role r) {
+    const Theme& t = Theme::current();
+    const bool d = t.dark;
     switch (r) {
-        case Role::Grid: return {0.32f, 0.32f, 0.36f};
-        case Role::Device: return {0.35f, 0.85f, 0.35f};
-        case Role::Pin: return {0.95f, 0.30f, 0.30f};
-        case Role::Wire: return {0.30f, 0.60f, 1.00f};
-        case Role::Label: return {1.00f, 0.85f, 0.35f};
-        case Role::Annotate: return {0.95f, 0.60f, 0.25f};
-        case Role::Marker: return {1.00f, 0.25f, 0.85f};
-        case Role::Selected: return {1.00f, 1.00f, 1.00f};
-        case Role::Preview: return {1.00f, 1.00f, 0.45f};
+        case Role::Grid: return rgb(t.canvasGrid);
+        case Role::Device: return d ? QVector3D{0.42f, 0.80f, 0.56f} : QVector3D{0.08f, 0.45f, 0.26f};
+        case Role::Pin: return d ? QVector3D{0.90f, 0.39f, 0.42f} : QVector3D{0.74f, 0.17f, 0.22f};
+        case Role::Wire: return d ? QVector3D{0.43f, 0.66f, 0.96f} : QVector3D{0.10f, 0.33f, 0.72f};
+        case Role::Label: return d ? QVector3D{0.85f, 0.76f, 0.45f} : QVector3D{0.50f, 0.38f, 0.05f};
+        case Role::Annotate: return d ? QVector3D{0.86f, 0.62f, 0.35f} : QVector3D{0.62f, 0.34f, 0.06f};
+        case Role::Marker: return d ? QVector3D{0.93f, 0.40f, 0.80f} : QVector3D{0.70f, 0.13f, 0.56f};
+        case Role::Selected: return rgb(t.via);
+        case Role::Preview: return d ? QVector3D{0.95f, 0.90f, 0.50f} : QVector3D{0.55f, 0.45f, 0.00f};
     }
-    return {1, 1, 1};
+    return rgb(t.canvasInk);
 }
 
 QShader shader(const QString& name) {
@@ -74,6 +79,7 @@ private:
 };
 
 Canvas::Canvas(QWidget* parent) : QRhiWidget(parent), text_(new TextLayer(this)) {
+    connect(Theme::notifier(), SIGNAL(changed()), this, SLOT(update()));
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(200, 150);
@@ -239,7 +245,7 @@ void Canvas::render(QRhiCommandBuffer* cb) {
     u->updateDynamicBuffer(ubuf_.get(), 0, 64, mvp.constData());
 
     const QSize size = renderTarget()->pixelSize();
-    cb->beginPass(renderTarget(), QColor::fromRgbF(kBackground[0], kBackground[1], kBackground[2]), {1.0f, 0}, u);
+    cb->beginPass(renderTarget(), Theme::current().canvas, {1.0f, 0}, u);
     cb->setViewport({0, 0, (float)size.width(), (float)size.height()});
     auto draw = [&](QRhiGraphicsPipeline* p, quint32 first, quint32 count) {
         if (!count) return;

@@ -49,6 +49,7 @@ if(TARGET WrapOpenGL::WrapOpenGL)
 endif()
 
 # ── Design database: libraries (one SQLite file each), cells, views (docs/rebuild.md, oadb) ──────────────────────
+add_library(openvlsi_layout STATIC layout/gds.cpp layout/flatten.cpp layout/tech.cpp layout/pcell.cpp layout/connectivity.cpp)
 add_library(oadb STATIC oadb/oadb.cpp)
 target_include_directories(oadb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(oadb PUBLIC SQLite::SQLite3)
@@ -61,13 +62,15 @@ target_link_libraries(openvlsi_sch PUBLIC oadb)
 # ── Worker processes (a process group with a watchdog), and simulation: netlister, TreeSPICE runs, raw files ─────
 add_library(openvlsi_proc STATIC flow/subprocess.cpp)
 target_include_directories(openvlsi_proc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade.cpp)
+add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade.cpp sim/verifier.cpp)
 target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
 
 add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp
-            cmd/ade_commands.cpp cmd/pdk_commands.cpp)
+            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(openvlsi_cmd PUBLIC oadb openvlsi_sch openvlsi_sim Qt6::Core)
+target_include_directories(openvlsi_layout PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(openvlsi_layout PUBLIC oadb Qt6::Core)
+target_link_libraries(openvlsi_cmd PUBLIC oadb openvlsi_sch openvlsi_sim openvlsi_layout openvlsi_flow Qt6::Core)
 
 # ── MCP server: the command registry over stdio JSON-RPC ─────────────────────────────────────────────────────────
 add_library(openvlsi_mcp STATIC mcp/server.cpp)
@@ -86,9 +89,10 @@ treespice_beside(openvlsi-mcp)
 # ── The app: the CIW and the tools' windows, every action a command through app::Session ───────────────────────────
 set(CMAKE_AUTOMOC ON)
 add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp app/scene.cpp app/canvas.cpp
-            app/view_editor.cpp app/ade_explorer.cpp app/plot.cpp app/waveform_viewer.cpp)
+            app/view_editor.cpp app/ade_explorer.cpp app/plot.cpp app/waveform_viewer.cpp app/theme.cpp app/icons.cpp
+            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp)
 target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
-qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag)
+qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag app/shaders/layout.vert app/shaders/layout.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
 target_link_libraries(OpenVLSI PRIVATE openvlsi_app)
 treespice_beside(OpenVLSI)
@@ -111,14 +115,14 @@ endif()
 add_library(openvlsi_flow STATIC flow/yosys_log_parser.cpp flow/openroad_report_parser.cpp
             flow/klayout_report_parser.cpp flow/def_parser.cpp flow/rtl_flow.cpp)
 target_include_directories(openvlsi_flow PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(openvlsi_flow PUBLIC acutesim_engine openvlsi_proc)
+target_link_libraries(openvlsi_flow PUBLIC openvlsi_proc)  # the tools run as processes: nothing of the engine
 add_library(openvlsi_soc STATIC soc/rv32i.cpp soc/soc.cpp)
 target_include_directories(openvlsi_soc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer test_waveforms)
+foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
@@ -135,20 +139,25 @@ target_link_libraries(test_library_manager PRIVATE openvlsi_app)
 target_link_libraries(test_view_editor PRIVATE openvlsi_app)
 target_link_libraries(test_ade_explorer PRIVATE openvlsi_app)
 target_link_libraries(test_waveforms PRIVATE openvlsi_app)
+target_link_libraries(test_shell PRIVATE openvlsi_app)
+target_link_libraries(test_layout PRIVATE openvlsi_app)
+target_link_libraries(test_layout_edit PRIVATE openvlsi_app)
+target_link_libraries(test_verifier PRIVATE openvlsi_app)
 treespice_beside(test_waveforms)
 treespice_beside(test_ade_explorer)
 # the plugins of the Qt this links (a machine with a second, stale Qt prefix otherwise finds no platform plugin)
-set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms PROPERTIES ENVIRONMENT
+set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier PROPERTIES ENVIRONMENT
                      "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>/..")
 target_compile_definitions(test_mcp PRIVATE OPENVLSI_MCP_EXE="$<TARGET_FILE:openvlsi-mcp>")
 
 # The flow and SoC gates skip (and pass) without their tools: ~/eda (scripts/setup_eda_tools.sh), datasets/
-foreach(t test_eda_drivers test_rtl_flow test_firmware_on_silicon test_soc_hello)
+foreach(t test_eda_drivers test_rtl_flow test_firmware_on_silicon test_soc_hello test_flow_commands)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
     target_link_libraries(${t} PRIVATE openvlsi_flow openvlsi_soc)
     target_compile_definitions(${t} PRIVATE SOC_DATASETS="${CMAKE_CURRENT_SOURCE_DIR}/datasets")
 endforeach()
+target_link_libraries(test_flow_commands PRIVATE openvlsi_cmd)
 
 add_test(NAME engine_isolation COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_engine_isolation.py
          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
