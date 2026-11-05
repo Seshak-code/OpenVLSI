@@ -1,5 +1,17 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-05 (cont.) — build-out to the single app, on `rebuild/buildout` (OpenVLSI PR #45)**
+
+- **Done (docs/rebuild.md, "Build-out"):** slices 1 (shell), 2 (flow commands), 4 (layout data and viewer), 5 (layout editing,
+  `tools/m3_gate.py` 13 of 13 against IHP's DRC and LVS decks), 9 (ADE Verifier).
+- **Next:** slice 3 (Implement stage in the GUI, on `flow_run`/`flow_status`/`flow_report`), 6 (Verify stage), 7, 8, 10, 11.
+- **Open PRs for the owner:** TreeSPICE #38 (OSDI bypass; bump the pointer after it merges), OpenVLSI #45.
+- **Not clean:** asap7 gcd finishes with 52 KLayout DRC violations (stock ORFS gives 34) and has no open LVS deck.
+- **Not done:** the layout tools are tested through their click handlers offscreen, not real mouse events; the Verifier window
+  has had no visual check.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-05 — engine at TreeSPICE 6ef512b: MOS1 limiting and the flat transient's scale**
 
 - **Engine (TreeSPICE #33-#37, all merged):**

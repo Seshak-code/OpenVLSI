@@ -19,8 +19,8 @@ ctest --test-dir build                          # oadb, commands, mcp, schematic
 open build/OpenVLSI.app                         # the one window; `OpenVLSI [--run LINE]... <workspace.libs>`, default ~/OpenVLSI/openvlsi.libs
 ```
 
-The flow and SoC gates (`test_rtl_flow`, `test_firmware_on_silicon`, `test_soc_hello`) run the real tools from
-`~/eda` (`scripts/setup_eda_tools.sh`) and `datasets/`; without them they skip.
+The flow and SoC gates (`test_rtl_flow`, `test_flow_commands`'s real runs, `test_firmware_on_silicon`, `test_soc_hello`)
+run the real tools from `~/eda` (`scripts/setup_eda_tools.sh`) and `datasets/`; without them they skip.
 
 The M2 gate grows with M2's slices: `python3 tools/m2_gate.py --mcp build/openvlsi-mcp --pdk ... --osdi ...`.
 The M1 gate (docs/rebuild.md), through openvlsi-mcp alone, against ngspice:
@@ -62,6 +62,12 @@ app/ (Qt 6: the shell: stages rail, navigators, palette, themes; CIW, schematic/
   `BSIMCMG107_DIR`). The waveform viewer (`app/waveform_viewer`) plots calculator expressions
   over one run; `wave_eval` is the calculator as a command; it cross-probes with the schematic both ways
   (`waveform_probe`, `editor_select_net`).
+- **Digital flow** (`flow/rtl_flow.h`, `cmd/flow_commands.cpp`): `flow::Platform` says what a platform needs (decks, Liberty,
+  time unit, ORFS config); `ihp-sg13g2` and `asap7`, whose LVS step says no open deck exists, so its runs are never clean.
+  `flow_run` (`wait: false` for the background) takes ORFS from Verilog to GDS, then DRC and LVS; runs are directories
+  (`implementation/<design>/run.N`: `run.json`, `flow.log`, ORFS's tree), read by `flow_status`, `flow_list` and `flow_report`
+  (per stage from ORFS's metrics files and the decks' reports; a missing report is that stage's error), so they survive the
+  app. The workspace's path must have no spaces (make). `flow_tools`, `flow_platforms`, `flow_stop`.
 - **oadb** (`oadb/oadb.h`): one SQLite file per library; cells, views, per-view JSON properties. `Library::change`
   makes one undo group (trigger-logged inverse SQL; session-scoped history). A workspace file lists libraries
   (`DEFINE <library> <path>`).

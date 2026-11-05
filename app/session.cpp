@@ -14,6 +14,7 @@ Session::Session(const QString& workspaceFile, QObject* parent)
     cmd::addLayoutCommands(registry_);
     cmd::addLayoutEditCommands(registry_);
     cmd::addVerifierCommands(registry_);
+    cmd::addFlowCommands(registry_);
     // the bundle's own treespice, beside the app's executable
     ctx_ = std::make_unique<cmd::Context>(cmd::Context{*workspace_, (QCoreApplication::applicationDirPath() + "/treespice").toStdString()});
 }

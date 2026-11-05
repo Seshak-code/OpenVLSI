@@ -39,7 +39,8 @@ int main(int argc, char** argv) {
                                              "ade_history_list", "ade_history_get", "ade_run_plan",
                                              "ade_summary", "ade_compare", "layout_export_gds", "layout_layers", "layout_info",
                                              "layout_tech_get", "layout_objects_get", "layout_connectivity",
-                                             "verifier_setup_get", "verifier_check"},
+                                             "verifier_setup_get", "verifier_check", "flow_tools", "flow_platforms", "flow_run", "flow_status",
+                                             "flow_stop", "flow_list", "flow_report"},
               "exactly the commands that only read are marked read-only");
 
         app::Ciw ciw(session);
