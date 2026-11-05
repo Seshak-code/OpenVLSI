@@ -63,6 +63,25 @@ struct Label {  // names the net of the wire it sits on
     std::string name;
     Point at;
 };
+// Layout objects (schema 4): what a mask holds. Integer database units; a view's metersPerDbu prop gives their size.
+struct LayoutShape {
+    int64_t id = 0;
+    int layer = 0, datatype = 0;  // GDS's numbers
+    std::string kind;             // polygon, path, text
+    std::vector<Point> points;
+    int64_t width = 0;            // path
+    int pathType = 0;             // path: 0 flush, 1 round, 2 extended
+    std::string text;             // text
+};
+struct LayoutInstance {
+    int64_t id = 0;
+    std::string lib, cell, view;  // the master; lib and view empty: this library's cell, its "layout" view
+    Point at;
+    double angle = 0, mag = 1;    // degrees counter-clockwise
+    bool mirrorX = false;         // about the x axis, before scaling and rotating
+    int cols = 1, rows = 1;       // an array
+    Point colStep, rowStep;
+};
 bool validOrient(const std::string& o);
 bool validDirection(const std::string& d);
 bool validJustify(const std::string& j);  // {upper,center,lower}{Left,Center,Right}
@@ -110,6 +129,14 @@ public:
     std::vector<Instance> instances(const std::string& cell, const std::string& view) const;  // sorted by name
     std::vector<Wire> wires(const std::string& cell, const std::string& view) const;
     std::vector<Label> labels(const std::string& cell, const std::string& view) const;
+    // Layout objects, in bulk: a stream import writes thousands at once
+    void addLayoutObjects(const std::string& cell, const std::string& view, const std::vector<LayoutShape>& shapes,
+                          const std::vector<LayoutInstance>& instances);
+    std::vector<LayoutShape> layoutShapes(const std::string& cell, const std::string& view) const;
+    std::vector<LayoutInstance> layoutInstances(const std::string& cell, const std::string& view) const;
+    // Library-wide values (JSON text), outside undo: the layer table
+    void setLibraryProp(const std::string& key, const std::string& json);
+    std::optional<std::string> libraryProp(const std::string& key) const;
     void moveInstance(const std::string& cell, const std::string& view, const std::string& name, Point at, const std::string& orient);
     void setInstanceParams(const std::string& cell, const std::string& view, const std::string& name,
                            const std::map<std::string, std::string>& params);  // "" removes a parameter

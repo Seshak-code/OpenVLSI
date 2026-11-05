@@ -2,6 +2,7 @@
 
 #include "app/library_manager.h"
 #include "app/ade_explorer.h"
+#include "app/layout_viewer.h"
 #include "app/view_editor.h"
 #include "app/waveform_viewer.h"
 
@@ -53,10 +54,11 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                          [this](cmd::Context& c, const QJsonObject& a) {
                              const QString lib = a["library"].toString(), cell = a["cell"].toString(), view = a["view"].toString();
                              const std::string type = c.workspace.library(lib.toStdString()).viewType(cell.toStdString(), view.toStdString());
-                             if (type != "schematic" && type != "symbol" && type != "maestro")
-                                 throw std::runtime_error("no tool for a " + type + " view yet (schematic, symbol and maestro)");
+                             if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout")
+                                 throw std::runtime_error("no tool for a " + type + " view yet (schematic, symbol, maestro and layout)");
                              QPointer<QWidget>& e = editors_[lib + "/" + cell + "/" + view];
                              if (!e && type == "maestro") e = new AdeExplorer(session_, lib, cell, view, this);
+                             else if (!e && type == "layout") e = new LayoutViewer(session_, lib, cell, view, this);
                              else if (!e) e = new ViewEditor(session_, lib, cell, view, this);
                              present(e);
                              return QJsonValue(QString::fromStdString(type));
@@ -112,6 +114,48 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                          },
                          true});
 
+    // The layout viewer's state, for a script
+    const QJsonObject kLib = cmd::param("string", "library name"), kCell = cmd::param("string", "cell name"), kView = cmd::param("string", "the layout view");
+    auto openLayout = [this](const QJsonObject& a) {
+        const cmd::Result r = session_.call("editor_open", {{"library", a["library"]}, {"cell", a["cell"]}, {"view", a["view"]}});
+        LayoutViewer* v = r.ok ? this->layout(a["library"].toString(), a["cell"].toString(), a["view"].toString()) : nullptr;
+        if (!v) throw std::runtime_error(r.ok ? "not a layout view" : r.error.toStdString());
+        return v;
+    };
+    session_.addCommand({"layout_view_layer", "Shows or hides a layer in a layout's viewer (opened if need be).",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"layer", cmd::param("integer", "layer number")},
+                                      {"datatype", cmd::param("integer", "datatype number")}, {"visible", cmd::param("boolean", "shown or not")}}),
+                         [openLayout](cmd::Context&, const QJsonObject& a) {
+                             if (!openLayout(a)->setLayerVisible(a["layer"].toInt(), a["datatype"].toInt(), a["visible"].toBool()))
+                                 throw std::runtime_error("the design has no shapes on that layer");
+                             return QJsonValue(a["visible"]);
+                         },
+                         true});
+    session_.addCommand({"layout_view_levels", "Sets how deep a layout's viewer draws shapes: 0 is the top cell, its instances as boxes.",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"levels", cmd::param("integer", "hierarchy levels")}}),
+                         [openLayout](cmd::Context&, const QJsonObject& a) {
+                             openLayout(a)->setLevels(a["levels"].toInt());
+                             return QJsonValue(a["levels"]);
+                         },
+                         true});
+    session_.addCommand({"layout_view_window", "Shows a window of a layout in its viewer, in microns (opened if need be).",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"x0", cmd::param("number", "left, microns")}, {"y0", cmd::param("number", "bottom, microns")},
+                                      {"x1", cmd::param("number", "right, microns")}, {"y1", cmd::param("number", "top, microns")}}),
+                         [openLayout](cmd::Context&, const QJsonObject& a) {
+                             if (a["x1"].toDouble() <= a["x0"].toDouble() || a["y1"].toDouble() <= a["y0"].toDouble()) throw std::runtime_error("the window is empty");
+                             openLayout(a)->zoomToMicrons(a["x0"].toDouble(), a["y0"].toDouble(), a["x1"].toDouble(), a["y1"].toDouble());
+                             return QJsonValue(true);
+                         },
+                         true});
+    session_.addCommand({"layout_view_select", "Selects the smallest visible shape at a point of a layout's viewer; returns its layer, master and size.",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"x", cmd::param("number", "x, database units")}, {"y", cmd::param("number", "y, database units")}}),
+                         [openLayout](cmd::Context&, const QJsonObject& a) {
+                             const QJsonObject s = openLayout(a)->selectAtDbu(a["x"].toDouble(), a["y"].toDouble());
+                             if (s.isEmpty()) throw std::runtime_error("no visible shape there");
+                             return QJsonValue(s);
+                         },
+                         true});
+
     QMenu* file = menuBar()->addMenu("&File");
     file->addAction("&Quit", QKeySequence::Quit, qApp, &QApplication::quit);
     QMenu* tools = menuBar()->addMenu("&Tools");
@@ -164,6 +208,11 @@ WaveformViewer* Ciw::viewer(const QString& run) const {
 AdeExplorer* Ciw::explorer(const QString& lib, const QString& cell, const QString& view) const {
     const auto it = editors_.find(lib + "/" + cell + "/" + view);
     return it == editors_.end() ? nullptr : qobject_cast<AdeExplorer*>(it->second.data());
+}
+
+LayoutViewer* Ciw::layout(const QString& lib, const QString& cell, const QString& view) const {
+    const auto it = editors_.find(lib + "/" + cell + "/" + view);
+    return it == editors_.end() ? nullptr : qobject_cast<LayoutViewer*>(it->second.data());
 }
 
 bool Ciw::runLine(const QString& line) {

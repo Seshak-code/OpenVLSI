@@ -19,6 +19,7 @@ class LibraryManager;
 class ViewEditor;
 class AdeExplorer;
 class WaveformViewer;
+class LayoutViewer;
 
 class Ciw : public QMainWindow {
     Q_OBJECT
@@ -32,6 +33,7 @@ public:
     LibraryManager* libraryManager();  // opened on first use
     ViewEditor* editor(const QString& lib, const QString& cell, const QString& view) const;  // open, or null
     AdeExplorer* explorer(const QString& lib, const QString& cell, const QString& view) const;
+    LayoutViewer* layout(const QString& lib, const QString& cell, const QString& view) const;
     WaveformViewer* viewer(const QString& run) const;  // the open viewer on a run directory, or null
 
 private:

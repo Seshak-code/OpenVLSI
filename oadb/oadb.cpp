@@ -12,7 +12,7 @@
 namespace oadb {
 namespace {
 
-constexpr int kSchema = 3;
+constexpr int kSchema = 4;
 
 // The tables, and for each its non-key columns: what the undo triggers restore
 const char* kTables =
@@ -50,6 +50,19 @@ const char* kTables2 =
     "CREATE TABLE labels(id INTEGER PRIMARY KEY,"
     " view_id INTEGER NOT NULL REFERENCES views(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,"
     " name TEXT NOT NULL, x INTEGER NOT NULL, y INTEGER NOT NULL);";
+// Schema 4: layout objects (a text's string in text; a path's width and type)
+const char* kTables4 =
+    "CREATE TABLE IF NOT EXISTS lshapes(id INTEGER PRIMARY KEY,"
+    " view_id INTEGER NOT NULL REFERENCES views(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,"
+    " layer INTEGER NOT NULL, datatype INTEGER NOT NULL, kind TEXT NOT NULL, points BLOB NOT NULL,"
+    " width INTEGER NOT NULL, path_type INTEGER NOT NULL, text TEXT NOT NULL);"
+    "CREATE INDEX IF NOT EXISTS lshapes_view ON lshapes(view_id);"
+    "CREATE TABLE IF NOT EXISTS linsts(id INTEGER PRIMARY KEY,"
+    " view_id INTEGER NOT NULL REFERENCES views(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,"
+    " master_lib TEXT NOT NULL, master_cell TEXT NOT NULL, master_view TEXT NOT NULL, x INTEGER NOT NULL, y INTEGER NOT NULL,"
+    " angle REAL NOT NULL, mag REAL NOT NULL, mirror INTEGER NOT NULL, cols INTEGER NOT NULL, rows INTEGER NOT NULL,"
+    " col_x INTEGER NOT NULL, col_y INTEGER NOT NULL, row_x INTEGER NOT NULL, row_y INTEGER NOT NULL);"
+    "CREATE INDEX IF NOT EXISTS linsts_view ON linsts(view_id);";
 const std::vector<std::pair<std::string, std::vector<std::string>>> kLogged = {
     {"cells", {"name"}},
     {"views", {"cell_id", "name", "type"}},
@@ -61,6 +74,8 @@ const std::vector<std::pair<std::string, std::vector<std::string>>> kLogged = {
     {"instparams", {"instance_id", "name", "value"}},
     {"wires", {"view_id", "points"}},
     {"labels", {"view_id", "name", "x", "y"}},
+    {"lshapes", {"view_id", "layer", "datatype", "kind", "points", "width", "path_type", "text"}},
+    {"linsts", {"view_id", "master_lib", "master_cell", "master_view", "x", "y", "angle", "mag", "mirror", "cols", "rows", "col_x", "col_y", "row_x", "row_y"}},
 };
 
 std::string pack(const std::vector<Point>& pts) {
@@ -93,6 +108,9 @@ public:
     ~Stmt() { sqlite3_finalize(s_); }
     Stmt& bind(int i, const std::string& v) { sqlite3_bind_text(s_, i, v.c_str(), (int)v.size(), SQLITE_TRANSIENT); return *this; }
     Stmt& bind(int i, int64_t v) { sqlite3_bind_int64(s_, i, v); return *this; }
+    Stmt& real(int i, double v) { sqlite3_bind_double(s_, i, v); return *this; }
+    void reset() { sqlite3_reset(s_); }
+    double number(int c) const { return sqlite3_column_double(s_, c); }
     Stmt& blob(int i, const std::string& v) { sqlite3_bind_blob(s_, i, v.data(), (int)v.size(), SQLITE_TRANSIENT); return *this; }
     std::vector<Point> points(int c) const { return unpack(sqlite3_column_blob(s_, c), sqlite3_column_bytes(s_, c)); }
     bool step() {  // true: a row
@@ -189,7 +207,7 @@ std::unique_ptr<Library> Library::create(const std::string& path, const std::str
     sqlite3* db = openFile(path, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE);
     try {
         execOn(db, "PRAGMA journal_mode=WAL");  // readers in other processes while one writes
-        execOn(db, std::string("BEGIN;") + kTables + kTables2 + "COMMIT;");
+        execOn(db, std::string("BEGIN;") + kTables + kTables2 + kTables4 + "COMMIT;");
         Stmt s(db, "INSERT INTO meta(key, value) VALUES('schema', ?1), ('name', ?2)");
         s.bind(1, std::to_string(kSchema)).bind(2, name).step();
     } catch (...) {
@@ -221,6 +239,15 @@ std::unique_ptr<Library> Library::open(const std::string& path) {
             throw;
         }
         schema = "3";
+    }
+    if (schema == "3") {  // schema 4 only adds the layout tables: upgrade in place
+        try {
+            execOn(db, std::string("BEGIN; ") + kTables4 + "UPDATE meta SET value = '4' WHERE key = 'schema'; COMMIT;");
+        } catch (const Error&) {
+            sqlite3_close(db);
+            throw;
+        }
+        schema = "4";
     }
     if (schema != std::to_string(kSchema) || name.empty()) {
         sqlite3_close(db);
@@ -624,6 +651,83 @@ void Library::moveObject(const std::string& cell, const std::string& view, const
     });
 }
 
+void Library::addLayoutObjects(const std::string& cell, const std::string& view, const std::vector<LayoutShape>& shapes,
+                               const std::vector<LayoutInstance>& instances) {
+    const int64_t id = viewId(cell, view);
+    change("add layout objects", [&] {
+        {
+            Stmt s(db_, "INSERT INTO lshapes(view_id, layer, datatype, kind, points, width, path_type, text) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)");
+            for (const auto& o : shapes) {
+                s.bind(1, id).bind(2, (int64_t)o.layer).bind(3, (int64_t)o.datatype).bind(4, o.kind).blob(5, pack(o.points)).bind(6, o.width).bind(7, (int64_t)o.pathType).bind(8, o.text);
+                s.step();
+                s.reset();
+            }
+        }
+        Stmt s(db_, "INSERT INTO linsts(view_id, master_lib, master_cell, master_view, x, y, angle, mag, mirror, cols, rows, col_x, col_y, row_x, row_y)"
+                    " VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)");
+        for (const auto& o : instances) {
+            s.bind(1, id).bind(2, o.lib).bind(3, o.cell).bind(4, o.view).bind(5, o.at.x).bind(6, o.at.y).real(7, o.angle).real(8, o.mag)
+                .bind(9, (int64_t)o.mirrorX).bind(10, (int64_t)o.cols).bind(11, (int64_t)o.rows).bind(12, o.colStep.x).bind(13, o.colStep.y).bind(14, o.rowStep.x).bind(15, o.rowStep.y);
+            s.step();
+            s.reset();
+        }
+    });
+}
+
+std::vector<LayoutShape> Library::layoutShapes(const std::string& cell, const std::string& view) const {
+    std::vector<LayoutShape> out;
+    Stmt s(db_, "SELECT id, layer, datatype, kind, points, width, path_type, text FROM lshapes WHERE view_id = ?1 ORDER BY id");
+    s.bind(1, viewId(cell, view));
+    while (s.step()) {
+        LayoutShape o;
+        o.id = s.integer(0);
+        o.layer = (int)s.integer(1);
+        o.datatype = (int)s.integer(2);
+        o.kind = s.text(3);
+        o.points = s.points(4);
+        o.width = s.integer(5);
+        o.pathType = (int)s.integer(6);
+        o.text = s.text(7);
+        out.push_back(std::move(o));
+    }
+    return out;
+}
+
+std::vector<LayoutInstance> Library::layoutInstances(const std::string& cell, const std::string& view) const {
+    std::vector<LayoutInstance> out;
+    Stmt s(db_, "SELECT id, master_lib, master_cell, master_view, x, y, angle, mag, mirror, cols, rows, col_x, col_y, row_x, row_y FROM linsts WHERE view_id = ?1 ORDER BY id");
+    s.bind(1, viewId(cell, view));
+    while (s.step()) {
+        LayoutInstance o;
+        o.id = s.integer(0);
+        o.lib = s.text(1);
+        o.cell = s.text(2);
+        o.view = s.text(3);
+        o.at = {s.integer(4), s.integer(5)};
+        o.angle = s.number(6);
+        o.mag = s.number(7);
+        o.mirrorX = s.integer(8) != 0;
+        o.cols = (int)s.integer(9);
+        o.rows = (int)s.integer(10);
+        o.colStep = {s.integer(11), s.integer(12)};
+        o.rowStep = {s.integer(13), s.integer(14)};
+        out.push_back(std::move(o));
+    }
+    return out;
+}
+
+void Library::setLibraryProp(const std::string& key, const std::string& json) {
+    Stmt s(db_, "INSERT INTO meta(key, value) VALUES(?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+    s.bind(1, "prop:" + key).bind(2, json).step();
+}
+
+std::optional<std::string> Library::libraryProp(const std::string& key) const {
+    Stmt s(db_, "SELECT value FROM meta WHERE key = ?1");
+    s.bind(1, "prop:" + key);
+    if (s.step()) return s.text(0);
+    return std::nullopt;
+}
+
 std::string Library::exportText() const {
     std::ostringstream o;
     o << "library " << name_ << "\n";
@@ -654,6 +758,13 @@ std::string Library::exportText() const {
                 rows.push_back("shape " + sh.kind + " " + sh.layer + pts(sh.points) + (sh.text.empty() ? "" : " \"" + sh.text + "\" " + sh.justify));
             for (const auto& w : wires(c, v.name)) rows.push_back("wire" + pts(w.points));
             for (const auto& l : labels(c, v.name)) rows.push_back("label " + l.name + pts({l.at}));
+            for (const auto& l : layoutShapes(c, v.name))
+                rows.push_back("lshape " + std::to_string(l.layer) + "/" + std::to_string(l.datatype) + " " + l.kind + pts(l.points) +
+                               (l.kind == "path" ? " width " + std::to_string(l.width) + " type " + std::to_string(l.pathType) : "") +
+                               (l.text.empty() ? "" : " \"" + l.text + "\""));
+            for (const auto& l : layoutInstances(c, v.name))
+                rows.push_back("linst " + l.lib + "/" + l.cell + "/" + l.view + pts({l.at}) + " angle " + std::to_string(l.angle) + " mag " + std::to_string(l.mag) +
+                               (l.mirrorX ? " mirror" : "") + " array " + std::to_string(l.cols) + "x" + std::to_string(l.rows) + pts({l.colStep, l.rowStep}));
             std::sort(rows.begin(), rows.end());
             for (const auto& r : rows) o << "    " << r << "\n";
         }

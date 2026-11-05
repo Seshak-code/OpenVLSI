@@ -2,6 +2,7 @@
 
 #include "app/ade_explorer.h"
 #include "app/icons.h"
+#include "app/layout_viewer.h"
 #include "app/library_manager.h"
 #include "app/navigator.h"
 #include "app/palette.h"
@@ -40,6 +41,7 @@ QString iconOf(QWidget* tool) {
     if (auto* e = qobject_cast<ViewEditor*>(tool)) return e->isSchematic() ? "schematic" : "symbol";
     if (qobject_cast<AdeExplorer*>(tool)) return "maestro";
     if (qobject_cast<WaveformViewer*>(tool)) return "waveform";
+    if (qobject_cast<LayoutViewer*>(tool)) return "layout";
     return "view";
 }
 
@@ -47,6 +49,7 @@ QString tabTitle(QWidget* tool) {
     if (auto* e = qobject_cast<ViewEditor*>(tool)) return e->cell() + " " + e->view();
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) return a->cell() + " " + a->view();
     if (auto* w = qobject_cast<WaveformViewer*>(tool)) return QFileInfo(w->run()).fileName();
+    if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->cell() + " " + l->view();
     return tool->windowTitle();
 }
 
@@ -54,6 +57,7 @@ QString crumbOf(QWidget* tool) {
     if (auto* e = qobject_cast<ViewEditor*>(tool)) return e->library() + "  ›  " + e->cell() + "  ›  " + e->view();
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) return a->library() + "  ›  " + a->cell() + "  ›  " + a->view();
     if (auto* w = qobject_cast<WaveformViewer*>(tool)) return (w->design().isEmpty() ? QString() : w->design() + "  ›  ") + QFileInfo(w->run()).fileName();
+    if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->library() + "  ›  " + l->cell() + "  ›  " + l->view();
     return {};
 }
 }  // namespace
@@ -342,6 +346,7 @@ void Shell::host(QWidget* tool) {
     tabs_->setCurrentIndex(index);
     if (auto* e = qobject_cast<ViewEditor*>(tool)) noteRecent(e->library() + "/" + e->cell() + "/" + e->view());
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) noteRecent(a->library() + "/" + a->cell() + "/" + a->view());
+    if (auto* l = qobject_cast<LayoutViewer*>(tool)) noteRecent(l->library() + "/" + l->cell() + "/" + l->view());
 }
 
 void Shell::closeTab(int index) {
@@ -437,6 +442,7 @@ QJsonObject Shell::context() const {
     QJsonObject c = design_->selection();
     if (auto* e = qobject_cast<ViewEditor*>(current())) c = {{"library", e->library()}, {"cell", e->cell()}, {"view", e->view()}};
     if (auto* a = qobject_cast<AdeExplorer*>(current())) c = {{"library", a->library()}, {"cell", a->cell()}, {"view", a->view()}};
+    if (auto* l = qobject_cast<LayoutViewer*>(current())) c = {{"library", l->library()}, {"cell", l->cell()}, {"view", l->view()}};
     return c;
 }
 
@@ -463,7 +469,7 @@ CommandPalette* Shell::newPalette() {
             const QString cell = c.toString();
             for (const auto& v : session_.call("view_list", {{"library", lib}, {"cell", cell}}).value.toArray()) {
                 const QString view = v.toObject()["view"].toString(), type = v.toObject()["type"].toString();
-                if (type != "schematic" && type != "symbol" && type != "maestro") continue;
+                if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout") continue;
                 entries.push_back({cell + " " + view, lib + "/" + cell + "/" + view + " (" + type + ")", type, [this, lib, cell, view] {
                                        session_.call("editor_open", {{"library", lib}, {"cell", cell}, {"view", view}});
                                    }});

@@ -19,6 +19,7 @@ public:
     const cmd::Registry& registry() const { return registry_; }
     void addCommand(cmd::Command c) { registry_.add(std::move(c)); }  // the GUI's own (editor_open, ...)
     QString workspaceFile() const;
+    oadb::Workspace& workspace() { return *workspace_; }
     int depth() const { return depth_; }  // > 0: this call runs inside another (a window refreshing, a command's own reads)
 
 signals:

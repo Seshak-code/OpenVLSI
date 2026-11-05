@@ -180,10 +180,10 @@ int main(int argc, char** argv) {
         ciw.runLine(R"(wire_add {"library": "analog", "cell": "top", "view": "schematic", "points": [[-500, -600], [-400, -600]]})");
         check(top->scene().items().size() == n + 2, "a change typed in the CIW redraws the editor");
 
-        must("view_create", {{"library", "analog"}, {"cell", "top"}, {"view", "layout"}, {"type", "layout"}});
-        check(!session.call("editor_open", {{"library", "analog"}, {"cell", "top"}, {"view", "layout"}}).ok &&
+        must("view_create", {{"library", "analog"}, {"cell", "top"}, {"view", "config"}, {"type", "config"}});
+        check(!session.call("editor_open", {{"library", "analog"}, {"cell", "top"}, {"view", "config"}}).ok &&
                   !session.call("editor_open", {{"library", "analog"}, {"cell", "top"}, {"view", "nope"}}).ok,
-              "editor_open refuses a layout and a missing view");
+              "editor_open refuses a view with no tool and a missing view");
 
         app::Scene scene;
         scene.load(session, "analog", "top", "schematic");
