@@ -290,8 +290,8 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
 9. **ADE Verifier (done):** requirements traced to Assembler results (M4). `sim/verifier`, `tests/test_verifier`.
 10. **Spectre X in ADE (done):** a test's `acceleration`: its thread count, and `.options hier` arrays; `tools/spectre_x_gate.py` measures them on 8192 identical
     transistors (M2 slice 7).
-11. **Finish:** the M3-M6 gates through MCP alone, the bundle carrying or finding the tools, keyboard and accessibility pass,
-    documentation.
+11. **Finish (partly):** gates through MCP alone (`m3_gate`, `m5_gate`; M4 is `test_verifier`, M6 is in `m5_gate`), accessibility names and stage keys enforced by `test_api`,
+    `docs/guide.md`, `docs/api.md`. The bundle finds the tools in `~/eda` rather than carrying them, and the M3 FinFET items are still to come.
 
 **The owner's end state (2026-11-05):** one app for the whole of RTL to GDS that takes in the other apps, then testing the
 simulated chip afterwards, with feature parity or better. So a **Test** stage follows sign-off: testbenches and firmware on the
