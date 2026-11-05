@@ -101,6 +101,7 @@ std::vector<const Command*> Registry::commands() const {
 }
 
 Result Registry::call(Context& ctx, const QString& name, const QJsonObject& args) {
+    ctx.registry = this;
     Result r;
     if (const Command* c = find(name); !c)
         r.error = "no command '" + name + "'";

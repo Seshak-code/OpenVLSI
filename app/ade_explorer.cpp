@@ -1,4 +1,5 @@
 #include "app/ade_explorer.h"
+#include "app/ui_commands.h"
 
 #include "sim/calc.h"
 
@@ -109,7 +110,7 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     : QMainWindow(parent, Qt::Window), session_(session), lib_(lib), cell_(cell), view_(view), poll_(new QTimer(this)) {
     setAttribute(Qt::WA_DeleteOnClose);
     setWindowTitle("ADE Explorer Editing: " + lib + " " + cell + " " + view);
-    tests_ = table({"On", "Name", "Design (lib/cell/view)", "Analyses", "Models (file:section)", "Options", "Variables"}, this);
+    tests_ = table({"On", "Name", "Design (lib/cell/view)", "Analyses", "Models (file:section)", "Options", "Variables", "Acceleration (threads= array=)"}, this);
     vars_ = table({"Name", "Value (a list sweeps)"}, this);
     corners_ = table({"On", "Name", "Temperature", "Variables", "Models (file:section)"}, this);
     outputs_ = table({"Test", "Name", "Expression", "Min", "Max"}, this);
@@ -167,6 +168,7 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     bar->addAction("Run Monte Carlo", this, [this] { run("montecarlo"); });
     bar->addAction("Run Plan", this, &AdeExplorer::runPlan);
     bar->addAction("Stop", this, &AdeExplorer::stop);
+    bindActions(this, {{"Run", "ade_view_run"}, {"Run Monte Carlo", "ade_view_run"}, {"Run Plan", "ade_view_run_plan"}, {"Stop", "ade_view_stop"}});
     bar->addSeparator();
     bar->addWidget(new QLabel(" History ", this));
     history_ = new QComboBox(this);
@@ -222,6 +224,7 @@ void AdeExplorer::load() {
         put(tests_, k, 4, modelsText(t["models"].toArray()));
         put(tests_, k, 5, pairs(t["options"].toObject()));
         put(tests_, k, 6, pairs(t["variables"].toObject()));
+        put(tests_, k, 7, pairs(t["acceleration"].toObject()));
     }
     vars_->setRowCount(0);
     vars_->setRowCount((int)vs.size() + 1);
@@ -270,6 +273,7 @@ QJsonObject AdeExplorer::collect(QString& error) const {
         if (const QJsonArray m = parseModels(text(tests_, k, 4)); !m.isEmpty()) t["models"] = m;
         if (const QJsonObject o = parsePairs(text(tests_, k, 5), error); !o.isEmpty()) t["options"] = o;
         if (const QJsonObject v = parsePairs(text(tests_, k, 6), error); !v.isEmpty()) t["variables"] = v;
+        if (const QJsonObject x = parsePairs(text(tests_, k, 7), error); !x.isEmpty()) t["acceleration"] = x;
         tests.append(t);
     }
     QJsonObject vars;

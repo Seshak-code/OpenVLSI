@@ -2,7 +2,13 @@
 
 #include "app/ade_explorer.h"
 #include "app/icons.h"
+#include "app/implement.h"
 #include "app/layout_viewer.h"
+#include "app/rtl_stage.h"
+#include "app/test_stage.h"
+#include "app/api_server.h"
+#include "app/ui_commands.h"
+#include "app/verify_stage.h"
 #include "app/verifier.h"
 #include "app/library_manager.h"
 #include "app/navigator.h"
@@ -37,6 +43,8 @@
 
 namespace app {
 
+static const QStringList kStageNames{"design", "rtl", "simulate", "implement", "verify", "test"};
+
 namespace {
 QString iconOf(QWidget* tool) {
     if (auto* e = qobject_cast<ViewEditor*>(tool)) return e->isSchematic() ? "schematic" : "symbol";
@@ -44,6 +52,10 @@ QString iconOf(QWidget* tool) {
     if (qobject_cast<WaveformViewer*>(tool)) return "waveform";
     if (qobject_cast<LayoutViewer*>(tool)) return "layout";
     if (qobject_cast<Verifier*>(tool)) return "verifier";
+    if (qobject_cast<FlowRunView*>(tool)) return "implement";
+    if (qobject_cast<TestRunView*>(tool)) return "test";
+    if (qobject_cast<SignoffView*>(tool)) return "verify";
+    if (qobject_cast<RtlEditor*>(tool)) return "rtl";
     return "view";
 }
 
@@ -53,6 +65,10 @@ QString tabTitle(QWidget* tool) {
     if (auto* w = qobject_cast<WaveformViewer*>(tool)) return QFileInfo(w->run()).fileName();
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->cell() + " " + l->view();
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->cell() + " " + r->view();
+    if (auto* f = qobject_cast<FlowRunView*>(tool)) return f->run().replace('/', ' ');
+    if (auto* v = qobject_cast<TestRunView*>(tool)) return v->run().replace('/', ' ');
+    if (auto* e = qobject_cast<RtlEditor*>(tool)) return QFileInfo(e->file()).fileName();
+    if (auto* o = qobject_cast<SignoffView*>(tool)) return o->run().section('/', 0, 0) + (o->kind() == SignoffView::Kind::Timing ? " timing" : " power");
     return tool->windowTitle();
 }
 
@@ -62,6 +78,10 @@ QString crumbOf(QWidget* tool) {
     if (auto* w = qobject_cast<WaveformViewer*>(tool)) return (w->design().isEmpty() ? QString() : w->design() + "  ›  ") + QFileInfo(w->run()).fileName();
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->library() + "  ›  " + l->cell() + "  ›  " + l->view();
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->library() + "  ›  " + r->cell() + "  ›  " + r->view();
+    if (auto* f = qobject_cast<FlowRunView*>(tool)) return "Implement  ›  " + f->design() + "  ›  " + f->run().section('/', 1);
+    if (auto* v = qobject_cast<TestRunView*>(tool)) return "Test  ›  " + v->run().section('/', 0, 0) + "  ›  " + v->run().section('/', 1);
+    if (auto* e = qobject_cast<RtlEditor*>(tool)) return "RTL  ›  " + (e->design().isEmpty() ? QString() : e->design() + "  ›  ") + QFileInfo(e->file()).fileName();
+    if (auto* o = qobject_cast<SignoffView*>(tool)) return "Sign-off  ›  " + o->run().section('/', 0, 0) + "  ›  " + o->run().section('/', 1) + (o->kind() == SignoffView::Kind::Timing ? "  ›  timing" : "  ›  power");
     return {};
 }
 }  // namespace
@@ -81,13 +101,19 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     auto* railLayout = new QVBoxLayout(rail);
     railLayout->setContentsMargins(0, 6, 0, 6);
     railLayout->setSpacing(0);
-    const std::pair<QString, QString> stages[] = {{"design", "Design: libraries, cells and views"}, {"maestro", "Simulate: tests and their runs"}};
-    for (int k = 0; k < 2; ++k) {
+    const std::pair<QString, QString> stages[] = {{"design", "Design: libraries, cells and views"},
+                                                  {"rtl", "RTL: digital designs and their Verilog"},
+                                                  {"maestro", "Simulate: tests and their runs"},
+                                                  {"implement", "Implement: Verilog to GDS"},
+                                                  {"verify", "Verify: DRC and LVS"},
+                                                  {"test", "Test: the chip under its testbenches and firmware"}};
+    for (int k = 0; k < (int)std::size(stages); ++k) {
         auto* b = new QToolButton(rail);
         b->setObjectName("railButton");
         b->setCheckable(true);
         b->setIconSize({24, 24});
         b->setToolTip(stages[k].second);
+        b->setAccessibleName(stages[k].second);
         b->setProperty("glyph", stages[k].first);
         b->setFixedWidth(46);
         connect(b, &QToolButton::clicked, this, [this, k] { showStage(k); });
@@ -100,6 +126,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     consoleButton_->setCheckable(true);
     consoleButton_->setIconSize({24, 24});
     consoleButton_->setToolTip("Command window (Ctrl+J)");
+    consoleButton_->setAccessibleName("Command window");
     consoleButton_->setProperty("glyph", "console");
     consoleButton_->setFixedWidth(46);
     connect(consoleButton_, &QToolButton::clicked, this, [this](bool on) { showConsole(on); });
@@ -120,7 +147,18 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     design_ = new Navigator(session_, Navigator::Mode::Design, {open, form}, panels_);
     simulate_ = new Navigator(session_, Navigator::Mode::Simulate, {open, form}, panels_);
     panels_->addWidget(design_);
+    rtl_ = new RtlPanel(session_, {[this](const QString& file, const QString& design) { session_.call("rtl_open", {{"file", file}, {"design", design}}); },
+                                   [this] { runForm("rtl_design_set", {}); }}, panels_);
+    panels_->addWidget(rtl_);
     panels_->addWidget(simulate_);
+    implement_ = new ImplementPanel(session_, {[this](const QString& run) {
+        session_.call("flow_view", {{"run", run}});
+    }}, panels_);
+    panels_->addWidget(implement_);
+    verify_ = new VerifyPanel(session_, {[this](const QString& command) { runForm(command, context()); }}, panels_);
+    panels_->addWidget(verify_);
+    test_ = new TestPanel(session_, {[this](const QString& run) { session_.call("test_view", {{"run", run}}); }, [this] { runForm("test_shmoo", {}); }}, panels_);
+    panels_->addWidget(test_);
 
     tabs_ = new QTabWidget(this);
     tabs_->setDocumentMode(true);
@@ -152,6 +190,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
         {"Find a command", [this] { openPalette(); }}};
     for (const auto& [text, fn] : starts) {
         auto* b = new QPushButton(text, start_);
+        b->setProperty("api", text == QLatin1String("Create a library") ? "library_create" : text == QLatin1String("Install a PDK") ? "pdk_install" : "api_list");
         b->setObjectName("linkButton");
         b->setCursor(Qt::PointingHandCursor);
         connect(b, &QPushButton::clicked, this, fn);
@@ -205,6 +244,8 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     search_ = new QToolButton(bar);
     search_->setObjectName("searchButton");
     search_->setText("Find a command   ⌘K");
+    search_->setProperty("api", "api_list");
+    search_->setAccessibleName("Find a command");
     search_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     connect(search_, &QToolButton::clicked, this, &Shell::openPalette);
     bar->addWidget(search_);
@@ -221,10 +262,12 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     viewMenu_->addAction("Command Window", QKeySequence("Ctrl+J"), this, [this] { showConsole(!consoleVisible()); });
     viewMenu_->addAction("Side Panel", QKeySequence("Ctrl+B"), this, [this] { panels_->setVisible(!panels_->isVisible()); });
     viewMenu_->addSeparator();
-    viewMenu_->addAction("Library Manager", this, [this] {
-        ciw_->libraryManager()->show();
-        ciw_->libraryManager()->raise();
-    });
+    for (int k = 0; k < (int)kStageNames.size(); ++k) {
+        const QString name = kStageNames[k];
+        viewMenu_->addAction(k == 1 ? QString("RTL") : name.left(1).toUpper() + name.mid(1), QKeySequence(QString("Ctrl+%1").arg(k + 1)), this, [this, k] { showStage(k); });
+    }
+    viewMenu_->addSeparator();
+    viewMenu_->addAction("Library Manager", this, [this] { showLibraryManager(); });
     themeMenu_ = viewMenu_->addMenu("Appearance");
     auto* group = new QActionGroup(this);
     for (Theme::Mode m : {Theme::Mode::Auto, Theme::Mode::Light, Theme::Mode::Dark}) {
@@ -239,6 +282,11 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     }
     goMenu_ = nullptr;
 
+    addUiCommands(session_, *this);
+    api_ = new ApiServer(session_, this);
+    if (!api_->listening()) qWarning("OpenVLSI API: %s", qPrintable(api_->error()));
+    bindActions(this, {{"New Library…", "library_create"}, {"Install PDK…", "pdk_install"}, {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"},
+                       {"Command Window", "ui_console"}, {"Side Panel", "ui_panel"}, {"Design", "ui_stage"}, {"RTL", "ui_stage"}, {"Simulate", "ui_stage"}, {"Implement", "ui_stage"}, {"Verify", "ui_stage"}, {"Test", "ui_stage"}, {"Library Manager", "ui_library_manager"}, {"Match the system", "ui_theme"}, {"Light", "ui_theme"}, {"Dark", "ui_theme"}});
     session_.addCommand({"ui_theme", "Sets the app's appearance: auto follows the system, or light or dark; returns the mode now in effect.",
                          cmd::object({{"mode", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"auto", "light", "dark"}}, {"description", "the appearance"}}}}),
                          [this](cmd::Context&, const QJsonObject& a) {
@@ -262,7 +310,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
                          [this](cmd::Context&, const QJsonObject& a) {
                              const QString p = a["part"].toString();
                              if (p == "console") showConsole(true);
-                             else showStage(p == "simulate" ? 1 : 0);
+                             else showStage(stageIndex(p));
                              return a["part"];
                          },
                          true});
@@ -281,6 +329,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     connect(&session_, &Session::changed, this, [this] { refreshStart(); });
 
     connect(tabs_, &QTabWidget::currentChanged, this, [this] {
+        if (QWidget* tool = tabs_->currentWidget()) tool->setFocus(Qt::TabFocusReason);  // its keys work at once, without a click first
         rebuildMenus();
         updateCrumb();
         if (auto* m = qobject_cast<QMainWindow*>(current()); m && m->centralWidget()) m->centralWidget()->setFocus();
@@ -345,9 +394,13 @@ void Shell::host(QWidget* tool) {
     close->setIcon(icons::get("close"));
     close->setIconSize({12, 12});
     close->setToolTip("Close this tab");
+    close->setAccessibleName("Close " + tabTitle(tool));
     connect(close, &QToolButton::clicked, this, [this, tool] { closeTab(tabs_->indexOf(tool)); });
     tabs_->tabBar()->setTabButton(index, QTabBar::RightSide, close);
     tabs_->setCurrentIndex(index);
+    if (qobject_cast<FlowRunView*>(tool)) showStage(stageIndex("implement"));
+    if (qobject_cast<TestRunView*>(tool)) showStage(stageIndex("test"));
+    if (qobject_cast<RtlEditor*>(tool)) showStage(stageIndex("rtl"));
     if (auto* e = qobject_cast<ViewEditor*>(tool)) noteRecent(e->library() + "/" + e->cell() + "/" + e->view());
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) noteRecent(a->library() + "/" + a->cell() + "/" + a->view());
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) noteRecent(l->library() + "/" + l->cell() + "/" + l->view());
@@ -406,6 +459,7 @@ void Shell::refreshStart() {
         if (p.size() != 3) continue;
         if (!session_.call("view_list", {{"library", p[0]}, {"cell", p[1]}}).ok) continue;  // gone from this workspace
         auto* b = new QPushButton(p[1] + " " + p[2] + "   " + p[0], start_);
+        b->setProperty("api", "editor_open");
         b->setObjectName("linkButton");
         b->setCursor(Qt::PointingHandCursor);
         connect(b, &QPushButton::clicked, this, [this, p] {
@@ -430,9 +484,35 @@ void Shell::updateCrumb() {
 void Shell::showStage(int stage) {
     panels_->setCurrentIndex(stage);
     panels_->show();
+    if (stage == stageIndex("rtl")) rtl_->refresh();
+    if (stage == stageIndex("implement")) implement_->refresh();
+    if (stage == stageIndex("verify")) verify_->refresh();
+    if (stage == stageIndex("test")) test_->refresh();
     for (int k = 0; k < (int)stages_.size(); ++k) stages_[k]->setChecked(k == stage);
     refreshIcons();
 }
+
+int Shell::stageIndex(const QString& name) const { return (int)kStageNames.indexOf(name); }
+
+QString Shell::stageName() const { return kStageNames.value(panels_->currentIndex()); }
+
+bool Shell::sidePanelVisible() const { return !panels_->isHidden(); }
+
+void Shell::setSidePanelVisible(bool on) { panels_->setVisible(on); }
+
+void Shell::showLibraryManager() {
+    ciw_->libraryManager()->show();
+    ciw_->libraryManager()->raise();
+}
+
+QWidget* Shell::railButton(const QString& stage) const {
+    const int at = stageIndex(stage);
+    return at < 0 || at >= (int)stages_.size() ? nullptr : stages_[at];
+}
+
+QWidget* Shell::consoleRailButton() const { return consoleButton_; }
+
+QString Shell::apiEndpoint() const { return api_ && api_->listening() ? api_->endpoint() : QString(); }
 
 void Shell::showConsole(bool on) {
     ciw_->setVisible(on);

@@ -2,7 +2,11 @@
 
 #include "app/library_manager.h"
 #include "app/ade_explorer.h"
+#include "app/implement.h"
 #include "app/layout_viewer.h"
+#include "app/rtl_stage.h"
+#include "app/test_stage.h"
+#include "app/ui_commands.h"
 #include "app/verifier.h"
 #include "app/view_editor.h"
 #include "app/waveform_viewer.h"
@@ -116,6 +120,69 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                          },
                          true});
 
+    session_.addCommand({"flow_view", "Opens an implementation run as a tab (the GUI's command).", cmd::object({{"run", cmd::param("string", "a run: <design>/run.N")}}),
+                         [this](cmd::Context&, const QJsonObject& a) {
+                             const QString run = a["run"].toString();
+                             const cmd::Result status = session_.call("flow_status", {{"run", run}});
+                             if (!status.ok) throw std::runtime_error(status.error.toStdString());
+                             auto& view = flowViews_[run];
+                             if (!view) {
+                                 view = new FlowRunView(session_, run, this);
+                                 connect(view, &FlowRunView::stageRequested, this, [this](const QString& r, const QString& stage) {
+                                     if (stage == "drc" || stage == "lvs" || stage == "synth") return;  // nothing laid out there
+                                     if (stage == "finish") {
+                                         session_.call("flow_open_layout", {{"run", r}});
+                                         return;
+                                     }
+                                     const QJsonObject args{{"run", r}, {"stage", stage}};
+                                     const cmd::Result layout = session_.call("flow_stage_layout", args);
+                                     if (layout.ok) session_.call("editor_open", layout.value.toObject());
+                                     else runLine("flow_stage_layout " + QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)));
+                                 });
+                                 connect(view, &FlowRunView::signoffRequested, this, [this](const QString& r, bool timing) {
+                                     session_.call(timing ? "timing_view" : "power_view", {{"run", r}});
+                                 });
+                                 connect(view, &FlowRunView::showMarkersRequested, this, [this](const QString& r) {
+                                     const cmd::Result layout = session_.call("flow_open_layout", {{"run", r}});
+                                     if (!layout.ok) return;
+                                     QJsonObject a = layout.value.toObject();
+                                     a["flow_run"] = r;
+                                     session_.call("layout_view_markers", a);
+                                 });
+                                 connect(view, &FlowRunView::openLayoutRequested, this, [this](const QString& r) {
+                                     const cmd::Result opened = session_.call("flow_open_layout", {{"run", r}});
+                                     if (!opened.ok) runLine("flow_open_layout {\"run\": \"" + r + "\"}");
+                                 });
+                             }
+                             present(view);
+                             return QJsonValue(run);
+                         },
+                         true});
+    session_.addCommand({"test_view", "Opens a test's run as a tab, with its waveforms (the GUI's command).", cmd::object({{"run", cmd::param("string", "a test's run: <name>/run.N")}}),
+                         [this](cmd::Context&, const QJsonObject& a) {
+                             const QString run = a["run"].toString();
+                             const cmd::Result status = session_.call("test_status", {{"run", run}});
+                             if (!status.ok) throw std::runtime_error(status.error.toStdString());
+                             auto& view = testViews_[run];
+                             if (!view) {
+                                 view = new TestRunView(session_, run, this);
+                                 connect(view, &TestRunView::opened, this, [this](const QString& r) { session_.call("test_view", {{"run", r}}); });
+                             }
+                             present(view);
+                             return QJsonValue(run);
+                         },
+                         true});
+    session_.addCommand({"flow_open_layout", "Imports a run's GDS if need be and opens its layout (the GUI's command); returns the library, cell and view.",
+                         cmd::object({{"run", cmd::param("string", "a run: <design>/run.N")}}),
+                         [this](cmd::Context&, const QJsonObject& a) {
+                             const cmd::Result imported = session_.call("flow_import_layout", {{"run", a["run"]}});
+                             if (!imported.ok) throw std::runtime_error(imported.error.toStdString());
+                             const QJsonObject o = imported.value.toObject();
+                             const cmd::Result opened = session_.call("editor_open", {{"library", o["library"]}, {"cell", o["cell"]}, {"view", o["view"]}});
+                             if (!opened.ok) throw std::runtime_error(opened.error.toStdString());
+                             return QJsonValue(o);
+                         }});
+
     // The layout viewer's state, for a script
     const QJsonObject kLib = cmd::param("string", "library name"), kCell = cmd::param("string", "cell name"), kView = cmd::param("string", "the layout view");
     auto openLayout = [this](const QJsonObject& a) {
@@ -149,6 +216,27 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              return QJsonValue(true);
                          },
                          true});
+    session_.addCommand({"layout_view_markers", "Shows what a DRC found in a layout's viewer (opened if need be): the run of verify_drc, or flow_run for an implementation's. Returns how many landed.",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}}, {{"run", cmd::param("string", "a verification run")}, {"flow_run", cmd::param("string", "an implementation run")}}),
+                         [this, openLayout](cmd::Context&, const QJsonObject& a) {
+                             QJsonObject which;
+                             if (a.contains("run")) which["run"] = a["run"];
+                             if (a.contains("flow_run")) which["flow_run"] = a["flow_run"];
+                             const cmd::Result markers = session_.call("verify_markers", which);
+                             if (!markers.ok) throw std::runtime_error(markers.error.toStdString());
+                             return QJsonValue(openLayout(a)->setMarkers(markers.value.toObject()));
+                         },
+                         true});
+    session_.addCommand({"layout_view_marker", "Shows one marker of a layout's viewer: zooms to it and marks it.",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"index", cmd::param("integer", "which, from 0")}}),
+                         [openLayout](cmd::Context&, const QJsonObject& a) {
+                             auto* viewer = openLayout(a);
+                             const QRectF w = viewer->markerWindow(a["index"].toInt());
+                             if (w.isEmpty()) throw std::runtime_error("no such marker");
+                             viewer->showMarker(a["index"].toInt());
+                             return QJsonValue(a["index"]);
+                         },
+                         true});
     session_.addCommand({"layout_view_select", "Selects the smallest visible shape at a point of a layout's viewer; returns its layer, master and size.",
                          cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"x", cmd::param("number", "x, database units")}, {"y", cmd::param("number", "y, database units")}}),
                          [openLayout](cmd::Context&, const QJsonObject& a) {
@@ -165,6 +253,7 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
         libraryManager()->show();
         libraryManager()->raise();
     });
+    bindActions(this, {{"Quit", "ui_quit"}, {"Library Manager", "ui_library_manager"}});
     resize(820, 420);
 }
 
@@ -210,6 +299,52 @@ WaveformViewer* Ciw::viewer(const QString& run) const {
 AdeExplorer* Ciw::explorer(const QString& lib, const QString& cell, const QString& view) const {
     const auto it = editors_.find(lib + "/" + cell + "/" + view);
     return it == editors_.end() ? nullptr : qobject_cast<AdeExplorer*>(it->second.data());
+}
+
+RtlEditor* Ciw::rtlEditor(const QString& file, const QString& design) {
+    auto& view = rtlEditors_[file];
+    if (!view) {
+        view = new RtlEditor(session_, file, design, this);
+        // From source to GDS: the design's record says how
+        connect(view, &RtlEditor::implementRequested, this, [this](const QString& name) {
+            const cmd::Result d = session_.call("rtl_design_get", {{"design", name}});
+            if (!d.ok) return;
+            const QJsonObject o = d.value.toObject();
+            QJsonObject args{{"design", name}, {"verilog", o["verilog"]}, {"top", o["top"]}, {"platform", o["platform"]}, {"clock_period_ns", o["clock_period_ns"]}, {"clock_port", o["clock_port"]}, {"wait", false}};
+            if (o.contains("core_utilization")) args["core_utilization"] = o["core_utilization"];
+            const cmd::Result run = session_.call("flow_run", args);
+            if (run.ok) session_.call("flow_view", {{"run", run.value.toObject()["run"]}});
+            else runLine("flow_run " + QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)));
+        });
+        connect(view, &RtlEditor::simulateRequested, this, [this](const QString& name) {
+            const cmd::Result d = session_.call("rtl_design_get", {{"design", name}});
+            if (!d.ok) return;
+            const QJsonObject o = d.value.toObject();
+            if (o["testbenches"].toArray().isEmpty()) return;
+            const QString bench = o["testbenches"].toArray()[0].toString();
+            const cmd::Result run = session_.call("test_run", {{"name", name + "_rtl"}, {"testbench", o["testbenches"]}, {"top", QFileInfo(bench).baseName()}, {"level", "rtl"}, {"verilog", o["verilog"]}, {"wait", false}});
+            if (run.ok) session_.call("test_view", {{"run", run.value.toObject()["run"]}});
+        });
+    }
+    present(view);
+    return view;
+}
+
+SignoffView* Ciw::signoffView(const QString& run, SignoffView::Kind kind) {
+    auto& view = signoffViews_[run + (kind == SignoffView::Kind::Timing ? "/timing" : "/power")];
+    if (!view) view = new SignoffView(session_, run, kind, this);
+    present(view);
+    return view;
+}
+
+TestRunView* Ciw::testView(const QString& run) const {
+    const auto it = testViews_.find(run);
+    return it == testViews_.end() ? nullptr : it->second.data();
+}
+
+FlowRunView* Ciw::flowView(const QString& run) const {
+    const auto it = flowViews_.find(run);
+    return it == flowViews_.end() ? nullptr : it->second.data();
 }
 
 Verifier* Ciw::verifier(const QString& lib, const QString& cell, const QString& view) const {

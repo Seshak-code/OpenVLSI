@@ -1,4 +1,5 @@
 #include "app/waveform_viewer.h"
+#include "app/ui_commands.h"
 
 #include "sim/calc.h"
 
@@ -68,15 +69,10 @@ WaveformViewer::WaveformViewer(Session& session, const QString& run, QWidget* pa
     addDockWidget(Qt::LeftDockWidgetArea, dock);
     statusBar()->addWidget(status_, 1);
     QToolBar* bar = addToolBar("Waveforms");
-    bar->addAction("Remove Trace", this, [this] {
-        const int k = list_->currentRow();
-        if (k < 0) return;
-        traces_.erase(traces_.begin() + k);
-        if (traces_.empty()) scale_.clear();
-        redraw();
-    });
+    bar->addAction("Remove Trace", this, [this] { removeTrace(list_->currentRow()); });
     bar->addAction("Clear", this, &WaveformViewer::clear);
     bar->addAction("Fit", plot_, &Plot::fit);
+    bindActions(this, {{"Remove Trace", "waveform_remove"}, {"Clear", "waveform_clear"}, {"Fit", "waveform_fit"}});
 
     connect(calc_, &QLineEdit::returnPressed, this, [this] { calculate(calc_->text()); });
     connect(plot_, &Plot::cursorsChanged, this, &WaveformViewer::updateReadout);
@@ -139,6 +135,14 @@ bool WaveformViewer::add(const QString& expression, QString* error) {
     traces_.emplace_back(expression, t);
     redraw();
     status_->setText("Plotted " + t.name);
+    return true;
+}
+
+bool WaveformViewer::removeTrace(int index) {
+    if (index < 0 || index >= (int)traces_.size()) return false;
+    traces_.erase(traces_.begin() + index);
+    if (traces_.empty()) scale_.clear();
+    redraw();
     return true;
 }
 

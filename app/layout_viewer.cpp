@@ -2,6 +2,7 @@
 
 #include "app/palette.h"
 #include "app/theme.h"
+#include "app/ui_commands.h"
 
 #include <QAction>
 #include <QDockWidget>
@@ -112,6 +113,63 @@ protected:
         p.setPen(QPen(t.via, 2));
         for (const QRectF& s : c_->selectedBoxes) p.drawRect(QRectF(c_->toScreen(s.topLeft()), c_->toScreen(s.bottomRight())).normalized());
 
+        for (int k = 0; k < (int)c_->markers.size(); ++k) {
+            const QRectF box = QRectF(c_->toScreen(c_->markers[k].topLeft()), c_->toScreen(c_->markers[k].bottomRight())).normalized();
+            if (!box.adjusted(-8, -8, 8, 8).intersects(rect())) continue;
+            const bool current = k == c_->currentMarker;
+            p.setPen(QPen(t.fail, current ? 2.5 : 1));
+            p.setBrush(Qt::NoBrush);
+            // A marker smaller than a few pixels still shows: a cross at its place
+            if (box.width() < 6 && box.height() < 6) {
+                const QPointF at = box.center();
+                p.drawLine(at + QPointF(-4, -4), at + QPointF(4, 4));
+                p.drawLine(at + QPointF(-4, 4), at + QPointF(4, -4));
+            } else {
+                p.drawRect(box);
+            }
+        }
+
+        if (!c_->heat.empty()) {
+            p.setPen(Qt::NoPen);
+            for (const auto& h : c_->heat) {
+                const QPointF at = c_->toScreen(h.at);
+                if (!rect().contains(at.toPoint())) continue;
+                // Blue is no drop and red the worst: and bigger too, so it does not hang on colour alone
+                QColor heat = QColor::fromHsvF((1.0 - h.share) * 0.66, 0.9, 1.0);
+                heat.setAlphaF(0.85);
+                p.setBrush(heat);
+                const double r = 2.0 + 3.0 * h.share;
+                p.drawEllipse(at, r, r);
+            }
+            p.setBrush(Qt::NoBrush);
+        }
+
+        if (c_->pathOverlay.size() >= 2) {
+            p.setRenderHint(QPainter::Antialiasing, true);
+            p.setPen(QPen(t.via, 2));
+            QPolygonF line;
+            for (const QPointF& w : c_->pathOverlay) line << c_->toScreen(w);
+            p.drawPolyline(line);
+            p.setBrush(t.via);
+            for (const QPointF& s : line) p.drawEllipse(s, 2.5, 2.5);
+            p.setBrush(t.pass);
+            p.drawEllipse(line.first(), 4.5, 4.5);
+            p.setBrush(t.fail);
+            p.drawEllipse(line.last(), 4.5, 4.5);
+            p.setBrush(Qt::NoBrush);
+            p.setRenderHint(QPainter::Antialiasing, false);
+        }
+
+        if (!c_->overlayTitle.isEmpty()) {
+            QFont f = font();
+            f.setPixelSize(12);
+            p.setFont(f);
+            const QRect box = p.fontMetrics().boundingRect(c_->overlayTitle).adjusted(-8, -5, 8, 5).translated(14, 22);
+            p.fillRect(box, t.panel);
+            p.setPen(t.ink);
+            p.drawText(box, Qt::AlignCenter, c_->overlayTitle);
+        }
+
         if (!c_->flightLines.empty()) {
             QPen line(t.warn, 1);
             line.setStyle(Qt::DashLine);
@@ -161,6 +219,8 @@ LayoutCanvas::LayoutCanvas(QWidget* parent) : QRhiWidget(parent), overlay_(new L
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(200, 150);
+    setAccessibleName("Layout canvas");
+    setAccessibleDescription("The layout. Its contents are readable through the layout_view_state and layout_objects_get commands");
     connect(static_cast<ThemeNotifier*>(Theme::notifier()), &ThemeNotifier::changed, this, [this] { changed(); });
 }
 
@@ -172,6 +232,23 @@ void LayoutCanvas::changed() {
 }
 
 void LayoutCanvas::setScene(const layout::Flat* flat, const std::vector<LayerStyle>* styles) {
+    // The scene's origin moves with its box, and everything the canvas holds is relative to it: what stays put is the design
+    if (flat_ == flat && hasOrigin_ && (originX_ != flat->originX || originY_ != flat->originY)) {
+        const QPointF by(originX_ - flat->originX, originY_ - flat->originY);
+        cx_ += by.x();
+        cy_ += by.y();
+        for (auto& [a, b] : rulers) {
+            a += by;
+            b += by;
+        }
+        if (rulerStart) *rulerStart += by;
+        for (QPointF& p : rubberPoints) p += by;
+        for (QPointF& p : pathOverlay) p += by;
+        for (auto& h : heat) h.at += by;
+    }
+    originX_ = flat->originX;
+    originY_ = flat->originY;
+    hasOrigin_ = true;
     flat_ = flat;
     styles_ = styles;
     dirty_ = true;
@@ -265,9 +342,9 @@ void LayoutCanvas::mouseReleaseEvent(QMouseEvent* e) {
     if (!dragged_) emit clicked(toWorld(e->position()), e->modifiers() & Qt::ShiftModifier);
 }
 
-void LayoutCanvas::mouseDoubleClickEvent(QMouseEvent*) {
-    swallowRelease_ = true;  // the second release of a double click is not one more point
-    emit doubleClicked();
+void LayoutCanvas::mouseDoubleClickEvent(QMouseEvent* e) {
+    swallowRelease_ = true;  // the double click is this press: its release is not one more
+    emit doubleClicked(toWorld(e->position()), e->modifiers() & Qt::ShiftModifier);
 }
 
 void LayoutCanvas::refreshOverlay() { overlay_->update(); }
@@ -421,6 +498,7 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     : QMainWindow(parent, Qt::Window), session_(session), lib_(lib), cell_(cell), view_(view), canvas_(new LayoutCanvas(this)) {
     setWindowTitle("Layout: " + lib + " " + cell + " " + view);
     setCentralWidget(canvas_);
+    setFocusProxy(canvas_);
 
     auto* dock = new QDockWidget("Layers", this);
     dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
@@ -440,6 +518,18 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     panel->setMinimumWidth(210);
     dock->setWidget(panel);
     addDockWidget(Qt::RightDockWidgetArea, dock);
+
+    markerDock_ = new QDockWidget("Markers", this);
+    markerDock_->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    markerTree_ = new QTreeWidget(markerDock_);
+    markerTree_->setHeaderHidden(true);
+    markerTree_->setAccessibleName("What the check found");
+    markerDock_->setWidget(markerTree_);
+    addDockWidget(Qt::RightDockWidgetArea, markerDock_);
+    markerDock_->hide();
+    connect(markerTree_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* i) {
+        if (i && i->data(0, Qt::UserRole).isValid()) showMarker(i->data(0, Qt::UserRole).toInt());
+    });
 
     status_ = new QLabel(this);
     position_ = new QLabel(this);
@@ -465,7 +555,12 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
         if (i) current_ = layout::LayerKey{i->data(0, Qt::UserRole).toPoint().x(), i->data(0, Qt::UserRole).toPoint().y()};
     });
     connect(&session_, &Session::changed, this, [this] { reloadIfChanged(); });
-    connect(canvas_, &LayoutCanvas::doubleClicked, this, [this] { finishTool(); });
+    // Two quick clicks end a path or polygon. To every other tool they are two clicks: a reference point right after selecting at
+    // the same place must not be lost
+    connect(canvas_, &LayoutCanvas::doubleClicked, this, [this](QPointF w, bool extend) {
+        if (tool_ == Tool::Path || tool_ == Tool::Polygon) finishTool();
+        else click(w, extend);
+    });
     connect(canvas_, &LayoutCanvas::moved, this, [this](QPointF w) {
         if (tool_ != Tool::Select) canvas_->cursor = worldOf(snapped(w));
         const double um = canvas_->micronsPerDbu;
@@ -490,10 +585,9 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     act(edit, "Move", QKeySequence("M"), [this] { startTool(Tool::Move); });
     act(edit, "Copy", QKeySequence("C"), [this] { startTool(Tool::Copy); });
     act(edit, "Stretch", QKeySequence("S"), [this] { startTool(Tool::Stretch); });
-    act(edit, "Delete", QKeySequence::Delete, [this] { deleteSelection(); });
-    act(edit, "Delete", QKeySequence(Qt::Key_Backspace), [this] { deleteSelection(); })->setVisible(false);
-    act(edit, "Finish", QKeySequence(Qt::Key_Return), [this] { finishTool(); })->setVisible(false);
-    act(edit, "Finish", QKeySequence(Qt::Key_Enter), [this] { finishTool(); })->setVisible(false);
+    // Both keys on one action: a hidden action's shortcut does not fire
+    act(edit, "Delete", QKeySequence::Delete, [this] { deleteSelection(); })->setShortcuts({QKeySequence(Qt::Key_Delete), QKeySequence(Qt::Key_Backspace)});
+    act(edit, "Finish", QKeySequence(Qt::Key_Return), [this] { finishTool(); })->setShortcuts({QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)});
     act(edit, "Cancel", QKeySequence(Qt::Key_Escape), [this] { cancelTool(); });
     QMenu* create = menuBar()->addMenu("&Create");
     act(create, "Rectangle", QKeySequence("R"), [this] { startTool(Tool::Rect); });
@@ -518,17 +612,16 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     act(measure, "Ruler", QKeySequence("K"), [this] { startRuler(); });
     act(measure, "Clear Rulers", QKeySequence("Shift+K"), [this] { clearRulers(); });
     QMenu* layers = menuBar()->addMenu("&Layers");
-    auto setAll = [this](bool on) {
-        layerTree_->blockSignals(true);
-        for (int k = 0; k < layerTree_->topLevelItemCount(); ++k) layerTree_->topLevelItem(k)->setCheckState(0, on ? Qt::Checked : Qt::Unchecked);
-        layerTree_->blockSignals(false);
-        for (auto& s : styles_) s.visible = on;
-        canvas_->visibilityChanged();
-    };
-    layers->addAction("Show All", this, [setAll] { setAll(true); });
-    layers->addAction("Hide All", this, [setAll] { setAll(false); });
+    layers->addAction("Show All", this, [this] { setAllLayersVisible(true); });
+    layers->addAction("Hide All", this, [this] { setAllLayersVisible(false); });
 
     reload();
+    bindActions(this, {{"Undo", "edit_undo"}, {"Redo", "edit_redo"}, {"Move", "layout_view_tool"}, {"Copy", "layout_view_tool"}, {"Stretch", "layout_view_tool"},
+                       {"Delete", "layout_view_delete"}, {"Finish", "layout_view_finish"}, {"Cancel", "layout_view_cancel"}, {"Rectangle", "layout_view_tool"}, {"Path", "layout_view_tool"},
+                       {"Polygon", "layout_view_tool"}, {"Via", "layout_view_tool"}, {"Label…", "layout_view_tool"}, {"Pin…", "layout_view_tool"}, {"Instance…", "layout_view_tool"},
+                       {"Transistor…", "layout_pcell_mos"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
+                       {"Show Top Level Only", "layout_view_levels"}, {"Zoom In", "layout_view_zoom"}, {"Zoom Out", "layout_view_zoom"}, {"Ruler", "layout_view_ruler"},
+                       {"Clear Rulers", "layout_view_rulers_clear"}, {"Show All", "layout_view_layers_all"}, {"Hide All", "layout_view_layers_all"}});
 }
 
 LayoutViewer::~LayoutViewer() = default;
@@ -605,6 +698,7 @@ void LayoutViewer::reload() {
     canvas_->setScene(&flat_, &styles_);
     refreshSelection();
     refreshFlightLines();
+    placeMarkers();
     lastRevision_ = 0;
     for (const auto& name : session_.workspace().libraries()) lastRevision_ += session_.workspace().library(name).revision();
     const double um = canvas_->micronsPerDbu;
@@ -727,6 +821,128 @@ void LayoutViewer::refreshFlightLines() {
 void LayoutViewer::setFlightLinesShown(bool on) {
     flightShown_ = on;
     refreshFlightLines();
+}
+
+void LayoutViewer::setAllLayersVisible(bool on) {
+    layerTree_->blockSignals(true);
+    for (int k = 0; k < layerTree_->topLevelItemCount(); ++k) layerTree_->topLevelItem(k)->setCheckState(0, on ? Qt::Checked : Qt::Unchecked);
+    layerTree_->blockSignals(false);
+    for (size_t k = 0; k < styles_.size(); ++k) {
+        styles_[k].visible = on;
+        shown_[flat_.layers[k].key] = on;
+    }
+    for (auto& [key, visible] : shown_) visible = on;
+    canvas_->visibilityChanged();
+}
+
+double LayoutViewer::addRuler(double x0, double y0, double x1, double y1) {
+    canvas_->rulers.push_back({{x0 - flat_.originX, y0 - flat_.originY}, {x1 - flat_.originX, y1 - flat_.originY}});
+    canvas_->refreshOverlay();
+    return std::hypot(x1 - x0, y1 - y0) * canvas_->micronsPerDbu;
+}
+
+QJsonObject LayoutViewer::state() const {
+    const QPointF a = canvas_->toWorld(QPointF(0, canvas_->height())), b = canvas_->toWorld(QPointF(canvas_->width(), 0));
+    QJsonArray selected, shown, hidden, rulers;
+    for (int64_t o : selection_) selected.append((double)o);
+    for (const auto& [key, on] : shown_) (on ? shown : hidden).append(QString("%1/%2").arg(key.first).arg(key.second));
+    for (const auto& [from, to] : canvas_->rulers)
+        rulers.append(QJsonArray{from.x() + flat_.originX, from.y() + flat_.originY, to.x() + flat_.originX, to.y() + flat_.originY});
+    static const char* toolNames[] = {"select", "ruler", "rect", "path", "polygon", "label", "pin", "via", "instance", "move", "copy", "stretch"};
+    QJsonObject out{{"window", QJsonArray{a.x() + flat_.originX, a.y() + flat_.originY, b.x() + flat_.originX, b.y() + flat_.originY}},
+                    {"scale", canvas_->scale()}, {"levels", levels_}, {"tool", toolNames[(int)tool_]}, {"selection", selected},
+                    {"layers_shown", shown}, {"layers_hidden", hidden}, {"markers", (int)canvas_->markers.size()}, {"current_marker", canvas_->currentMarker}, {"rulers", rulers},
+                    {"flight_lines", (int)canvas_->flightLines.size()}, {"path_overlay", (int)canvas_->pathOverlay.size()}, {"heat_points", (int)canvas_->heat.size()}, {"overlay", canvas_->overlayTitle}, {"status", status_->text()}, {"shapes", (double)flat_.shapes.size()}};
+    if (current_) out["current_layer"] = QString("%1/%2").arg(current_->first).arg(current_->second);
+    return out;
+}
+
+void LayoutViewer::setPathOverlay(const std::vector<QPointF>& microns, const QString& title) {
+    const double dbuPerUm = 1.0 / canvas_->micronsPerDbu;
+    canvas_->pathOverlay.clear();
+    canvas_->heat.clear();
+    for (const QPointF& p : microns) canvas_->pathOverlay.push_back({p.x() * dbuPerUm - flat_.originX, p.y() * dbuPerUm - flat_.originY});
+    canvas_->overlayTitle = title;
+    canvas_->refreshOverlay();
+}
+
+void LayoutViewer::setHeatOverlay(const std::vector<std::array<double, 3>>& nodes, double worst, const QString& title) {
+    const double dbuPerUm = 1.0 / canvas_->micronsPerDbu;
+    canvas_->heat.clear();
+    canvas_->pathOverlay.clear();
+    for (const auto& n : nodes) canvas_->heat.push_back({{n[0] * dbuPerUm - flat_.originX, n[1] * dbuPerUm - flat_.originY}, worst > 0 ? (float)(n[2] / worst) : 0.0f});
+    canvas_->overlayTitle = title;
+    canvas_->refreshOverlay();
+}
+
+void LayoutViewer::placeMarkers() {
+    canvas_->markers.clear();
+    markerOfItem_.clear();
+    const double dbuPerUm = 1.0 / canvas_->micronsPerDbu;
+    for (const auto& rv : markerReport_["rules"].toArray())
+        for (const auto& mv : rv.toObject()["markers"].toArray()) {
+            const QJsonObject m = mv.toObject();
+            const QJsonArray points = m["points"].toArray();
+            if (points.isEmpty()) continue;
+            const QString cell = m["cell"].toString();
+            std::vector<layout::Xform> where = hierarchy_->placements(cell.toStdString());
+            if (cell.isEmpty()) where = {layout::Xform{}};
+            for (const auto& t : where) {
+                layout::Box box;
+                for (const auto& pv : points) {
+                    double x, y;
+                    t.apply(pv.toArray()[0].toDouble() * dbuPerUm, pv.toArray()[1].toDouble() * dbuPerUm, x, y);
+                    box.add(x - flat_.originX, y - flat_.originY);
+                }
+                canvas_->markers.push_back(QRectF(QPointF(box.x0, box.y0), QPointF(box.x1, box.y1)));
+            }
+        }
+    canvas_->refreshOverlay();
+}
+
+int LayoutViewer::setMarkers(const QJsonObject& report) {
+    markerReport_ = report;
+    placeMarkers();
+    markerTree_->blockSignals(true);
+    markerTree_->clear();
+    int at = 0;
+    const double dbuPerUm = 1.0 / canvas_->micronsPerDbu;
+    for (const auto& rv : report["rules"].toArray()) {
+        const QJsonObject rule = rv.toObject();
+        auto* top = new QTreeWidgetItem(markerTree_, {rule["rule"].toString() + "  " + QString::number(rule["count"].toInt())});
+        top->setToolTip(0, rule["description"].toString());
+        for (const auto& mv : rule["markers"].toArray()) {
+            const QJsonObject m = mv.toObject();
+            const QString cell = m["cell"].toString();
+            if (m["points"].toArray().isEmpty()) continue;
+            const size_t places = cell.isEmpty() ? 1 : hierarchy_->placements(cell.toStdString()).size();
+            for (size_t k = 0; k < places; ++k, ++at) {
+                const QRectF r = canvas_->markers[at];
+                auto* item = new QTreeWidgetItem(top, {QString("%1, %2 µm").arg((r.center().x() + flat_.originX) / dbuPerUm, 0, 'f', 2).arg((r.center().y() + flat_.originY) / dbuPerUm, 0, 'f', 2)});
+                item->setData(0, Qt::UserRole, at);
+                item->setToolTip(0, rule["description"].toString() + (cell.isEmpty() ? QString() : "\nin " + cell));
+            }
+        }
+    }
+    markerTree_->blockSignals(false);
+    markerDock_->setVisible(!canvas_->markers.empty() || report["total"].toInt() > 0);
+    canvas_->refreshOverlay();
+    return (int)canvas_->markers.size();
+}
+
+QRectF LayoutViewer::markerWindow(int index) const {
+    if (index < 0 || index >= (int)canvas_->markers.size()) return {};
+    const QRectF r = canvas_->markers[index];
+    const double margin = std::max({r.width(), r.height(), 400.0}) * 2;
+    return r.adjusted(-margin, -margin, margin, margin);
+}
+
+void LayoutViewer::showMarker(int index) {
+    if (index < 0 || index >= (int)canvas_->markers.size()) return;
+    canvas_->currentMarker = index;
+    const QRectF w = markerWindow(index);
+    canvas_->zoomTo(w.left() + flat_.originX, w.top() + flat_.originY, w.right() + flat_.originX, w.bottom() + flat_.originY);
+    canvas_->refreshOverlay();
 }
 
 void LayoutViewer::reloadIfChanged() {

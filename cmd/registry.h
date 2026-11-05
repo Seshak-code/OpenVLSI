@@ -14,7 +14,7 @@
 #include <map>
 #include <vector>
 
-namespace oadb { class Workspace; }
+namespace oadb { class Workspace; class Library; }
 namespace sim { class Jobs; }
 
 namespace cmd {
@@ -25,6 +25,7 @@ struct Context {
     oadb::Workspace& workspace;
     std::string simulator;
     std::shared_ptr<sim::Jobs> jobs;
+    const class Registry* registry = nullptr;  // set by Registry::call: the commands known to this one
 };
 
 struct Command {
@@ -69,9 +70,17 @@ void addSchematicCommands(Registry& r);  // cell properties, shapes, pins, insta
 void addSimulationCommands(Registry& r);  // netlist, simulate, results_get
 void addAdeCommands(Registry& r);         // ade_setup_get/set, ade_run, ade_stop, ade_history_list/get
 void addPdkCommands(Registry& r);         // pdk_install
+// A GDS file into a library (layout_import_gds, flow_import_layout); lyp "" for none. Refused whole, or done in one undo step.
+QJsonObject importGds(oadb::Library& l, const std::string& file, const std::string& lyp);
+// A layout view and all it places to a GDS file (layout_export_gds, verify_*); returns the structures written.
+int exportGds(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, const std::string& file);
 void addLayoutCommands(Registry& r);      // layout_import_gds, layout_export_gds, layout_layers, layout_info
 void addVerifierCommands(Registry& r);    // verifier_setup_get/set, verifier_requirement_add/remove, verifier_map, verifier_check
 void addLayoutEditCommands(Registry& r);  // layout_shape_add, ..., layout_pcell_mos, layout_generate, layout_connectivity
+void addRtlCommands(Registry& r);         // rtl_design_set/get/list/remove, rtl_lint, rtl_read, rtl_write
+void addSignoffCommands(Registry& r);     // timing_analyze, timing_report, power_analyze, power_report, power_map, flow_artifacts
+void addVerifyCommands(Registry& r);      // verify_drc, verify_lvs, verify_status, verify_list, verify_markers
+void addTestCommands(Registry& r);        // test_run, test_firmware, test_spice, test_shmoo, test_status, test_stop, test_list, test_signals, test_value
 void addFlowCommands(Registry& r);        // flow_tools, flow_platforms, flow_run, flow_status, flow_stop, flow_list, flow_report
 
 // A run directory a caller names (simulate's, an ADE point's): one under the workspace's simulation/ with results,

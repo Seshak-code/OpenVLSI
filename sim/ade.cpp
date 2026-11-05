@@ -1,5 +1,7 @@
 #include "sim/ade.h"
 
+#include <chrono>
+
 #include "sim/calc.h"
 #include "sim/netlist.h"
 #include "sim/run.h"
@@ -242,7 +244,15 @@ void validateSetup(const QJsonObject& setup) {
     for (int k = 0; k < ts.size(); ++k) {
         const QJsonObject t = ts[k].toObject();
         const std::string w = "tests[" + std::to_string(k) + "]";
-        keys(t, {"name", "design", "enabled", "analyses", "models", "options", "variables"}, w);
+        keys(t, {"name", "design", "enabled", "analyses", "models", "options", "variables", "acceleration"}, w);
+        const QJsonObject accel = t["acceleration"].toObject();
+        keys(accel, {"threads", "array"}, w + ".acceleration");
+        if (accel.contains("threads")) {
+            bool whole = false;
+            const int threads = accel["threads"].toString().toInt(&whole);
+            if (!whole || threads < 1) bad(w + ".acceleration.threads", "a whole number of threads, at least 1");
+        }
+        if (accel.contains("array") && accel["array"] != "0" && accel["array"] != "1") bad(w + ".acceleration.array", "0 or 1");
         validateWords(t["variables"], w + ".variables", true);
         if (!identifier(t["name"].toString()) || !tests.insert(t["name"].toString()).second) bad(w + ".name", "a unique name");
         if (t["design"].toString().split('/').size() != 3) bad(w + ".design", "\"lib/cell/view\"");
@@ -348,11 +358,14 @@ Job prepare(oadb::Workspace& ws, const std::string& lib, const std::string& cell
                         for (auto it = opts.begin(); it != opts.end(); ++it) options += " " + it.key().toStdString() + "=" + s(it.value());
                         if (monteCarlo) options += " seed=" + std::to_string(seed + k - 1);
                         if (!options.empty()) text += ".options" + options + "\n";
+                        const QJsonObject accel = t["acceleration"].toObject();
+                        if (accel["array"] == "1") text += ".options hier\n";  // the quotient circuit of identical instances
                         for (const auto& m : models) text += modelCard(m) + "\n";
                         text += cards + ".end\n";
                         QJsonObject info{{"index", (int)job.points.size() + 1}, {"test", t["name"]}, {"design", t["design"]}, {"corner", corner["name"]},
                                          {"variables", shown}, {"defaults", defaults}, {"temperature", temperature}, {"models", modelsShown},
                                          {"options", opts}, {"analyses", QString::fromStdString(cards).trimmed()}, {"status", "pending"}};
+                        if (!accel.isEmpty()) info["acceleration"] = accel;
                         if (monteCarlo) info["sample"] = k, info["seed"] = seed + k - 1;
                         job.points.push_back({info, text});
                     }
@@ -403,7 +416,9 @@ QJsonObject execute(const Job& job, const std::string& simulator, std::chrono::s
             p["status"] = "running";
             update(k, p);
             try {
-                const Run r = simulate(simulator, s(p["dir"]), job.points[k].netlist, timeout, cancel);
+                const auto started = std::chrono::steady_clock::now();
+                const Run r = simulate(simulator, s(p["dir"]), job.points[k].netlist, timeout, cancel, p["acceleration"].toObject()["threads"].toString().toInt());
+                p["seconds"] = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
                 p["outputs"] = outputs(job.setup, p["test"].toString(), r.plots);
                 p["status"] = "done";
             } catch (const std::exception& e) {
@@ -413,8 +428,12 @@ QJsonObject execute(const Job& job, const std::string& simulator, std::chrono::s
             update(k, p);
         }
     };
-    // ponytail: half the cores, one point each; treespice's own threads share the rest
-    const size_t n = std::min(job.points.size(), (size_t)std::max(1u, std::thread::hardware_concurrency() / 2));
+    // ponytail: half the cores, one point each; treespice's own threads share the rest. A test that asks for its threads gets them: points
+    // run so that their sum stays within the machine
+    int asked = 1;
+    for (const auto& pt : job.points) asked = std::max(asked, pt.info["acceleration"].toObject()["threads"].toString().toInt());
+    const unsigned cores = std::max(1u, std::thread::hardware_concurrency());
+    const size_t n = std::min(job.points.size(), (size_t)std::max(1u, asked > 1 ? cores / (unsigned)asked : cores / 2));
     std::vector<std::thread> threads;
     for (size_t k = 0; k < n; ++k) threads.emplace_back(worker);
     for (auto& t : threads) t.join();

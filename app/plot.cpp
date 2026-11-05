@@ -28,6 +28,7 @@ std::vector<double> ticks(double lo, double hi) {
 }  // namespace
 
 Plot::Plot(QWidget* parent) : QWidget(parent) {
+    setAccessibleName("Waveform plot");
     setMinimumSize(320, 200);
     setMouseTracking(true);
     setFocusPolicy(Qt::ClickFocus);

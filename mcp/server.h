@@ -7,19 +7,22 @@
 
 #include <QByteArray>
 
+#include <functional>
 #include <optional>
 
 namespace mcp {
 
 class Server {
 public:
-    Server(cmd::Registry& registry, cmd::Context& ctx) : registry_(registry), ctx_(ctx) {}
+    using Caller = std::function<cmd::Result(const QString&, const QJsonObject&)>;
+    Server(cmd::Registry& registry, cmd::Context& ctx) : registry_(registry), call_([&registry, &ctx](const QString& n, const QJsonObject& a) { return registry.call(ctx, n, a); }) {}
+    Server(const cmd::Registry& registry, Caller call) : registry_(registry), call_(std::move(call)) {}  // the app's: through its Session
     // One incoming line; the response line (no trailing newline), or nothing for a notification
     std::optional<QByteArray> handle(const QByteArray& line);
 
 private:
-    cmd::Registry& registry_;
-    cmd::Context& ctx_;
+    const cmd::Registry& registry_;
+    Caller call_;
 };
 
 }  // namespace mcp

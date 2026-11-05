@@ -391,9 +391,15 @@ void addFlowCommands(Registry& r) {
                    {"clock_period_ns", param("number", "the clock's period in ns, on every platform")}},
                   {{"clock_port", param("string", "the clock's port (default clk)")},
                    {"core_utilization", param("number", "percent of the core the cells fill, within (0, 100) (default 40)")},
+                   {"settings", param("object", "more ORFS variables, as PLACE_DENSITY or CORE_ASPECT_RATIO: strings")},
                    {"wait", param("boolean", "wait for the run (default true)")}}),
            [](Context& c, const QJsonObject& a) {
                RtlFlowConfig cfg;
+               const QJsonObject settings = a["settings"].toObject();
+               for (auto it = settings.begin(); it != settings.end(); ++it) {
+                   if (!it.value().isString() && !it.value().isDouble()) throw std::invalid_argument("flow setting " + it.key().toStdString() + " must be a string or number");
+                   cfg.settings[it.key().toStdString()] = it.value().toVariant().toString().toStdString();
+               }
                cfg.design = s(a, "design");
                cfg.top = s(a, "top");
                cfg.platform = s(a, "platform");
@@ -426,7 +432,7 @@ void addFlowCommands(Registry& r) {
                for (const auto& v : cfg.verilog) verilog.append(q(v));
                const QJsonObject rec{{"run", q(cfg.design + "/run." + std::to_string(n))}, {"design", q(cfg.design)}, {"top", q(cfg.top)},
                                      {"platform", q(cfg.platform)}, {"verilog", verilog}, {"clock_period_ns", cfg.clockPeriodNs},
-                                     {"clock_port", q(cfg.clockPort)}, {"core_utilization", cfg.coreUtilization}, {"dir", q(dir.string())},
+                                     {"clock_port", q(cfg.clockPort)}, {"core_utilization", cfg.coreUtilization}, {"settings", settings}, {"dir", q(dir.string())},
                                      {"state", "running"}, {"stage", QJsonValue(QJsonValue::Null)}, {"stages", stages},
                                      {"pid", QCoreApplication::applicationPid()}, {"started", now()}};
                if (!writeRecord(dir, rec)) throw std::runtime_error("cannot write the run's record in " + dir.string());
@@ -490,6 +496,40 @@ void addFlowCommands(Registry& r) {
                return QJsonValue(out);
            },
            true});
+    r.add({"flow_import_layout", "Brings a run's final GDS into a library of its own (<design>_run<N>, in the run's directory) with the platform's layer colours; "
+                                 "returns the library and the top cell. A run already imported returns the same.",
+           object({{"run", kRun}}),
+           [](Context& c, const QJsonObject& a) {
+               const fs::path dir = runPath(c, a);
+               const QJsonObject rec = readRecord(dir);
+               const std::string design = rec["design"].toString().toStdString(), platform = rec["platform"].toString().toStdString();
+               const flow::Platform* pdk = flow::findPlatform(platform);
+               if (!pdk) throw std::runtime_error("the run's platform '" + platform + "' is not known");
+               const fs::path gds = dir / "results" / platform / design / "base" / "6_final.gds";
+               if (!fs::exists(gds)) throw std::runtime_error("this run has no final GDS (" + gds.string() + ")");
+               const std::string number = dir.filename().string().substr(4);
+               const std::string library = design + "_run" + number;
+               const QJsonObject out{{"library", q(library)}, {"cell", rec["top"]}, {"view", "layout"}};
+               const auto known = c.workspace.libraries();
+               if (std::find(known.begin(), known.end(), library) != known.end()) {
+                   for (const auto& cell : c.workspace.library(library).cells())
+                       if (cell == s(rec, "top")) return QJsonValue(out);
+                   throw std::runtime_error("library " + library + " exists and does not hold " + s(rec, "top"));
+               }
+               const fs::path file = dir / "layout.oalib";
+               oadb::Library& l = fs::exists(file) ? (c.workspace.defineLibrary(library, file.string()), c.workspace.library(library))
+                                                   : c.workspace.createLibrary(library, file.string());
+               const std::string tool = RtlFlowTools::detect().flowDir;
+               const std::string lyp = pdk->layerProperties.empty() || tool.empty() ? std::string() : flow::platformFile(*pdk, tool, pdk->layerProperties);
+               bool imported = false;
+               for (const auto& cell : l.cells()) imported = imported || cell == s(rec, "top");
+               if (!imported) {
+                   const QJsonObject done = importGds(l, gds.string(), lyp);
+                   if (!done["tops"].toArray().contains(rec["top"])) throw std::runtime_error("the GDS's top cells are not the run's top " + s(rec, "top"));
+               }
+               if (!pdk->tech.empty()) l.setLibraryProp("tech", "\"" + pdk->tech + "\"");
+               return QJsonValue(out);
+           }});
     r.add({"flow_report", "Returns each stage's metrics from its reports (instances, area, utilization as a fraction, slack, WNS and TNS in ns, power in W, "
                           "routing, DRC and LVS counts); a missing report is an error in that stage's entry. clean is true only with every stage reported "
                           "and passing, and not_clean says why it is not.",
