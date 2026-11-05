@@ -28,7 +28,8 @@ struct Run {
 // Writes dir/input.cir (dir must exist) and runs `simulator -b --cpu -r out.raw input.cir` there. A simulator that
 // fails, times out, is cancelled (a set `cancel` kills it) or writes no results is an error whose text ends with the
 // log's last lines.
+// threads above 0 fixes how many it uses; 0 leaves it to the machine.
 Run simulate(const std::string& simulator, const std::string& dir, const std::string& netlist, std::chrono::seconds timeout,
-             const std::atomic<bool>* cancel = nullptr);
+             const std::atomic<bool>* cancel = nullptr, int threads = 0);
 
 }  // namespace sim

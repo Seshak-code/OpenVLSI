@@ -288,7 +288,8 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
 7. **Timing views (done):** OpenSTA through OpenROAD with the run's SPEF: slack summary, path reports, cross-probe to the layout (M5). One corner.
 8. **IR and EM (done):** OpenROAD PSM: IR-drop maps over the layout canvas, the largest grid currents (M6). Static analysis; EM limits against the process's are still to come.
 9. **ADE Verifier (done):** requirements traced to Assembler results (M4). `sim/verifier`, `tests/test_verifier`.
-10. **Spectre X in ADE:** thread count, and `.options hier` arrays, from ADE; a large array's speedup measured (M2 slice 7).
+10. **Spectre X in ADE (done):** a test's `acceleration`: its thread count, and `.options hier` arrays; `tools/spectre_x_gate.py` measures them on 8192 identical
+    transistors (M2 slice 7).
 11. **Finish:** the M3-M6 gates through MCP alone, the bundle carrying or finding the tools, keyboard and accessibility pass,
     documentation.
 

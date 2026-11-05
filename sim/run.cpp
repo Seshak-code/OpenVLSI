@@ -73,7 +73,7 @@ std::vector<Plot> readRaw(const std::string& path) {
 }
 
 Run simulate(const std::string& simulator, const std::string& dir, const std::string& netlist, std::chrono::seconds timeout,
-             const std::atomic<bool>* cancel) {
+             const std::atomic<bool>* cancel, int threads) {
     namespace fs = std::filesystem;
     if (simulator.empty() || !fs::exists(simulator)) throw std::runtime_error("no simulator: treespice is not at '" + simulator + "'");
     const fs::path d(dir);
@@ -87,6 +87,7 @@ Run simulate(const std::string& simulator, const std::string& dir, const std::st
     p.setWorkingDirectory(dir);
     p.setTimeout(timeout);
     p.setCancelFlag(cancel);
+    if (threads > 0) p.setEnvironment({{"TREESPICE_THREADS", std::to_string(threads)}});
     const auto r = p.run();
     Run run{dir, r.stdout_output + r.stderr_output, {}};
     std::ofstream(d / "log.txt") << run.log;
