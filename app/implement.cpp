@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -117,6 +118,14 @@ QString StagePipeline::stateOf(const QString& stage) const {
     for (const auto& n : nodes_)
         if (n.name == stage) return n.state;
     return {};
+}
+
+void StagePipeline::mouseReleaseEvent(QMouseEvent* e) {
+    if (nodes_.empty()) return;
+    const int n = (int)nodes_.size();
+    const double margin = 46, step = n > 1 ? (width() - 2 * margin) / (n - 1) : 0;
+    const int at = step > 0 ? (int)std::lround((e->position().x() - margin) / step) : 0;
+    if (at >= 0 && at < n && nodes_[at].state == "done") emit stageClicked(nodes_[at].name);
 }
 
 void StagePipeline::paintEvent(QPaintEvent*) {
@@ -238,6 +247,8 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     });
     connect(layout_, &QPushButton::clicked, this, [this] { emit openLayoutRequested(run_); });
     connect(markers_, &QPushButton::clicked, this, [this] { emit showMarkersRequested(run_); });
+    pipeline_->setToolTip("Click a finished stage to see the layout at that point");
+    connect(pipeline_, &StagePipeline::stageClicked, this, [this](const QString& stage) { emit stageRequested(run_, stage); });
     connect(timing_, &QPushButton::clicked, this, [this] { emit signoffRequested(run_, true); });
     connect(power_, &QPushButton::clicked, this, [this] { emit signoffRequested(run_, false); });
     bindActions(this, {{"Stop", "flow_stop"}, {"Open layout", "flow_open_layout"}, {"Show DRC markers", "layout_view_markers"}, {"Timing", "timing_view"}, {"IR drop", "power_view"}});
@@ -397,6 +408,9 @@ public:
         form->addRow("Clock period", clock_);
         form->addRow("Clock port", port_);
         form->addRow("Core utilization", util_);
+        settings_ = new QLineEdit(this);
+        settings_->setPlaceholderText("more ORFS settings: PLACE_DENSITY=0.6 CORE_ASPECT_RATIO=1");
+        form->addRow("Settings", settings_);
         error_ = new QLabel(this);
         error_->setWordWrap(true);
         error_->setStyleSheet(QString("color: %1;").arg(Theme::current().fail.name()));
@@ -414,9 +428,18 @@ private:
     void start() {
         QJsonArray verilog;
         for (int k = 0; k < files_->count(); ++k) verilog.append(files_->item(k)->text());
-        const cmd::Result r = session_.call("flow_run", {{"design", design_->text()}, {"verilog", verilog}, {"top", top_->text()},
-                                                         {"platform", platform_->currentData().toString()}, {"clock_period_ns", clock_->value()},
-                                                         {"clock_port", port_->text()}, {"core_utilization", util_->value()}, {"wait", false}});
+        QJsonObject settings;
+        for (const QString& word : settings_->text().split(' ', Qt::SkipEmptyParts)) {
+            if (!word.contains('=')) {
+                error_->setText("Settings are NAME=value: " + word);
+                return;
+            }
+            settings[word.section('=', 0, 0)] = word.section('=', 1);
+        }
+        QJsonObject args{{"design", design_->text()}, {"verilog", verilog}, {"top", top_->text()}, {"platform", platform_->currentData().toString()}, {"clock_period_ns", clock_->value()},
+                         {"clock_port", port_->text()}, {"core_utilization", util_->value()}, {"wait", false}};
+        if (!settings.isEmpty()) args["settings"] = settings;
+        const cmd::Result r = session_.call("flow_run", args);
         if (!r.ok) {
             error_->setText(r.error);  // the form stays open, with what was wrong
             return;
@@ -428,6 +451,7 @@ private:
     QLineEdit* design_;
     QLineEdit* top_;
     QLineEdit* port_;
+    QLineEdit* settings_;
     QComboBox* platform_;
     QDoubleSpinBox* clock_;
     QDoubleSpinBox* util_;

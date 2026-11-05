@@ -113,6 +113,7 @@ def main():
     p.add_argument("--pdk", help="ihp-sg13g2: with --osdi, the chip also runs at transistor level")
     p.add_argument("--osdi")
     p.add_argument("--spice-ns", type=float, default=300.0)
+    p.add_argument("--settings-run", action="store_true", help="also run the flow once more with a setting (about 2 minutes)")
     a = p.parse_args()
     gcd = os.path.join(a.flowdir, "designs/src/gcd/gcd.v")
     if not os.path.exists(gcd):
@@ -185,6 +186,31 @@ def main():
     check(abs(max(n[2] for n in mp["nodes"]) - vdd["worst_drop_mv"]) < 1e-6 and len(mp["nodes"]) == vdd["nodes"], "power_map holds the same nodes and the same worst")
     files = m("flow_artifacts", run=run)
     check(any(f.endswith("6_final.gds") for f in files["results"]) and any(f.endswith("6_final.spef") for f in files["results"]), "flow_artifacts lists the GDS and the SPEF")
+
+    print("The layout at each stage, and the flow's own settings", flush=True)
+    counts = {}
+    for stage in ("floorplan", "place", "cts", "route"):
+        where = m("flow_stage_layout", run=run, stage=stage)
+        info = m("layout_info", **where)
+        counts[stage] = info
+        print(f"    {stage}: {info['instances']} instances, {info['shapes']} shapes, {info['box']['x1'] - info['box']['x0']:.1f} um wide", flush=True)
+    final_box = m("layout_info", library=m("flow_import_layout", run=run)["library"], cell="gcd")["box"]
+    check(counts["floorplan"]["instances"] < counts["place"]["instances"], f"placement adds its cells: floorplan {counts['floorplan']['instances']}, place {counts['place']['instances']}")
+    check(counts["place"]["shapes"] < counts["route"]["shapes"], f"routing adds its wires: place {counts['place']['shapes']} shapes, route {counts['route']['shapes']}")
+    wide = counts["route"]["box"]["x1"] - counts["route"]["box"]["x0"]
+    check(abs(wide - (final_box["x1"] - final_box["x0"])) < 2, f"the stages share the die: {wide:.1f} um against the final {final_box['x1'] - final_box['x0']:.1f} um")
+    if a.settings_run:
+        tall = m("flow_run", design="gcd", verilog=[gcd], top="gcd", platform=a.platform, clock_period_ns=10.0, settings={"CORE_ASPECT_RATIO": "2"})
+        where = m("flow_stage_layout", run=tall["run"], stage="floorplan")
+        box = m("layout_info", **where)["box"]
+        ratio = (box["y1"] - box["y0"]) / (box["x1"] - box["x0"])
+        check(ratio > 1.5, f"a setting reaches the flow: CORE_ASPECT_RATIO=2 makes it {ratio:.2f} times as tall as wide")
+    refused = None
+    try:
+        m("flow_run", design="gcd", verilog=[gcd], top="gcd", platform=a.platform, clock_period_ns=10.0, settings={"PLATFORM": "x"})
+    except RuntimeError as e:
+        refused = str(e)
+    check(refused is not None and "PLATFORM" in refused, f"a setting cannot override what the app sets: {refused}")
 
     print("Clock sweep, and the chip at transistor level", flush=True)
     periods = [round(min_period * f, 3) for f in (0.3, 0.6, 1.0, 1.5, 2.0)]

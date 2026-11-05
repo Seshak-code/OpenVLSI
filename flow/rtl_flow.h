@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -35,6 +36,7 @@ struct Platform {
     std::string layerProperties;  // KLayout .lyp: names and colours of its layers
     std::string tech;         // the layout process (layout/tech.h) a run's layout attaches; "" none
     double supplyVolts;       // its core supply
+    std::vector<std::string> cellGds;  // the standard cells' layouts, to stream any stage
 };
 
 const std::vector<Platform>& platforms();
@@ -70,6 +72,7 @@ struct RtlFlowConfig {
     double coreUtilization = 40.0;   // percent; leaves room for fill and routing
     std::string platform = "ihp-sg13g2";
     std::string workDir;             // ORFS WORK_HOME; must not contain spaces (make)
+    std::map<std::string, std::string> settings;  // more ORFS variables: PLACE_DENSITY, CORE_ASPECT_RATIO, ...
 };
 
 struct RtlFlowResult {

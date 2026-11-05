@@ -31,7 +31,7 @@ const std::vector<Platform>& platforms() {
          {"densityRules=false"},
          "lvs/sg13g2.lvs", "", "cdl/sg13g2_stdcell.cdl", "sg13g2_antenna*", {"lib/sg13g2_stdcell_typ_1p20V_25C.lib"}, "setRC.tcl",
          {"USE_FILL = 1"},
-         {"~/eda/ihp-verilog/sg13g2_stdcell.v", "~/eda/ihp-verilog/sg13g2_udp.v"}, true, "sg13g2.lyp", "sg13g2", 1.2},
+         {"~/eda/ihp-verilog/sg13g2_stdcell.v", "~/eda/ihp-verilog/sg13g2_udp.v"}, true, "sg13g2.lyp", "sg13g2", 1.2, {"gds/sg13g2_stdcell.gds"}},
         {"asap7", "1ps", 1e-3, "drc/asap7.lydrc", {},
          "", "no open LVS deck exists for asap7 (ORFS, the PDK and lambdapdk have none; the PDK's own is Calibre)", "", "",
          {"lib/NLDM/asap7sc7p5t_AO_RVT_FF_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_INVBUF_RVT_FF_nldm_220122.lib.gz",
@@ -40,7 +40,7 @@ const std::vector<Platform>& platforms() {
          "setRC.tcl", {},
          {"verilog/stdcell/asap7sc7p5t_AO_RVT_TT_201020.v", "verilog/stdcell/asap7sc7p5t_INVBUF_RVT_TT_201020.v",
           "verilog/stdcell/asap7sc7p5t_OA_RVT_TT_201020.v", "verilog/stdcell/asap7sc7p5t_SIMPLE_RVT_TT_201020.v",
-          "verilog/stdcell/asap7sc7p5t_SEQ_RVT_TT_220101.v"}, false, "KLayout/asap7.lyp", "", 0.7},
+          "verilog/stdcell/asap7sc7p5t_SEQ_RVT_TT_220101.v"}, false, "KLayout/asap7.lyp", "", 0.7, {"gds/asap7sc7p5t_28_R_220121a.gds"}},
     };
     return all;
 }
@@ -220,6 +220,14 @@ std::string RtlFlowTools::simMissing(const std::string& platform) const {
 }
 
 std::string rtlFlowConfigError(const RtlFlowConfig& cfg, const RtlFlowTools& tools) {
+    // They reach make: a name of capitals, a value with nothing make or a shell would read further. What this app sets itself stays its own.
+    static const std::regex settingName("^[A-Z][A-Z0-9_]*$"), settingValue("^[A-Za-z0-9_.+ -]*$");
+    static const std::set<std::string> reserved = {"DESIGN_NAME", "DESIGN_NICKNAME", "PLATFORM", "VERILOG_FILES", "SDC_FILE", "WORK_HOME", "FLOW_HOME", "CORE_UTILIZATION"};
+    for (const auto& [key, value] : cfg.settings) {
+        if (!std::regex_match(key, settingName)) return "the flow setting '" + key + "' is not an ORFS variable's name";
+        if (reserved.count(key)) return "the flow setting " + key + " is set by flow_run's own parameters";
+        if (!std::regex_match(value, settingValue)) return "the value of flow setting " + key + " has a character make would read";
+    }
     static const std::regex identifier("[A-Za-z_][A-Za-z0-9_]*"), fileName("[A-Za-z0-9_.+-]+");
     const flow::Platform* p = flow::findPlatform(cfg.platform);
     if (!p) return "RTL flow: unknown platform '" + cfg.platform + "' (known: " + flow::knownPlatforms() + ")";
@@ -360,6 +368,7 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
            << "\nexport SDC_FILE = " << sdc.string() << "\nexport CORE_UTILIZATION = " << cfg.coreUtilization
            << "\nexport PLACE_DENSITY_LB_ADDON = 0.2\nexport TNS_END_PERCENT = 100\n";
     for (const auto& line : pdk.orfsConfig) mkFile << "export " << line << "\n";
+    for (const auto& [key, value] : cfg.settings) mkFile << "export " << key << " = " << value << "\n";
     mkFile.close();
 
     const std::string threads = std::to_string(std::max(1, (int)std::thread::hardware_concurrency() - 2));

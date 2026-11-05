@@ -391,9 +391,15 @@ void addFlowCommands(Registry& r) {
                    {"clock_period_ns", param("number", "the clock's period in ns, on every platform")}},
                   {{"clock_port", param("string", "the clock's port (default clk)")},
                    {"core_utilization", param("number", "percent of the core the cells fill, within (0, 100) (default 40)")},
+                   {"settings", param("object", "more ORFS variables, as PLACE_DENSITY or CORE_ASPECT_RATIO: strings")},
                    {"wait", param("boolean", "wait for the run (default true)")}}),
            [](Context& c, const QJsonObject& a) {
                RtlFlowConfig cfg;
+               const QJsonObject settings = a["settings"].toObject();
+               for (auto it = settings.begin(); it != settings.end(); ++it) {
+                   if (!it.value().isString() && !it.value().isDouble()) throw std::invalid_argument("flow setting " + it.key().toStdString() + " must be a string or number");
+                   cfg.settings[it.key().toStdString()] = it.value().toVariant().toString().toStdString();
+               }
                cfg.design = s(a, "design");
                cfg.top = s(a, "top");
                cfg.platform = s(a, "platform");
@@ -426,7 +432,7 @@ void addFlowCommands(Registry& r) {
                for (const auto& v : cfg.verilog) verilog.append(q(v));
                const QJsonObject rec{{"run", q(cfg.design + "/run." + std::to_string(n))}, {"design", q(cfg.design)}, {"top", q(cfg.top)},
                                      {"platform", q(cfg.platform)}, {"verilog", verilog}, {"clock_period_ns", cfg.clockPeriodNs},
-                                     {"clock_port", q(cfg.clockPort)}, {"core_utilization", cfg.coreUtilization}, {"dir", q(dir.string())},
+                                     {"clock_port", q(cfg.clockPort)}, {"core_utilization", cfg.coreUtilization}, {"settings", settings}, {"dir", q(dir.string())},
                                      {"state", "running"}, {"stage", QJsonValue(QJsonValue::Null)}, {"stages", stages},
                                      {"pid", QCoreApplication::applicationPid()}, {"started", now()}};
                if (!writeRecord(dir, rec)) throw std::runtime_error("cannot write the run's record in " + dir.string());

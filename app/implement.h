@@ -26,8 +26,12 @@ public:
     QString stateOf(const QString& stage) const;
     QSize sizeHint() const override;
 
+signals:
+    void stageClicked(const QString& stage);
+
 protected:
     void paintEvent(QPaintEvent*) override;
+    void mouseReleaseEvent(QMouseEvent* e) override;
 
 private:
     struct Node { QString name, state; double elapsed = -1; };
@@ -51,6 +55,7 @@ signals:
     void openLayoutRequested(const QString& run);
     void showMarkersRequested(const QString& run);
     void signoffRequested(const QString& run, bool timing);
+    void stageRequested(const QString& run, const QString& stage);
 
 private:
     void fillReport(const QJsonObject& report);

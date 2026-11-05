@@ -1636,9 +1636,19 @@ Runs Verilog to GDS on a platform (ORFS, then its DRC and LVS decks) as a new ru
 | `core_utilization` | number |  | percent of the core the cells fill, within (0, 100) (default 40) |
 | `design` | string | yes | the run's design name: letters, digits, _ |
 | `platform` | string | yes | a platform of flow_platforms |
+| `settings` | object |  | more ORFS variables, as PLACE_DENSITY or CORE_ASPECT_RATIO: strings |
 | `top` | string | yes | the top module |
 | `verilog` | array | yes | the Verilog sources: absolute paths |
 | `wait` | boolean |  | wait for the run (default true) |
+
+### `flow_stage_layout`
+
+Brings a run's layout at a stage (floorplan, place, cts or route) into a library of its own, standard cells' own layouts merged in, with the platform's layer colours; returns the library, cell and view.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `run` | string | yes | an implementation run: <design>/run.N |
+| `stage` | string | yes | the stage |
 
 ### `flow_status`
 

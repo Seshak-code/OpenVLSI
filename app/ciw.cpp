@@ -128,6 +128,17 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              auto& view = flowViews_[run];
                              if (!view) {
                                  view = new FlowRunView(session_, run, this);
+                                 connect(view, &FlowRunView::stageRequested, this, [this](const QString& r, const QString& stage) {
+                                     if (stage == "drc" || stage == "lvs" || stage == "synth") return;  // nothing laid out there
+                                     if (stage == "finish") {
+                                         session_.call("flow_open_layout", {{"run", r}});
+                                         return;
+                                     }
+                                     const QJsonObject args{{"run", r}, {"stage", stage}};
+                                     const cmd::Result layout = session_.call("flow_stage_layout", args);
+                                     if (layout.ok) session_.call("editor_open", layout.value.toObject());
+                                     else runLine("flow_stage_layout " + QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)));
+                                 });
                                  connect(view, &FlowRunView::signoffRequested, this, [this](const QString& r, bool timing) {
                                      session_.call(timing ? "timing_view" : "power_view", {{"run", r}});
                                  });

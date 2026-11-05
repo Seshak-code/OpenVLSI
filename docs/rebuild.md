@@ -307,7 +307,7 @@ Honest parity: each row is what a designer gets now, checked by the gate named, 
 | Source | Text editors, HAL | RTL stage: Verilog editing, Icarus lint with jump to line (`tools/ui_test.py`) | Deep lint rules, SystemVerilog beyond Icarus, language-aware navigation |
 | Simulate RTL | Xcelium | Test stage on the RTL, waveforms (`tools/m5_gate.py`) | Coverage, UVM, speed; Icarus does not run timing checks |
 | Synthesis | Genus | Yosys through ORFS, cells and area per stage | Physical-aware synthesis, MCMM, power optimization, a logic-equivalence check (Conformal) |
-| Place and route | Innovus | OpenROAD through ORFS, pipeline and metrics; final layout viewed | Editing mid-flow, per-stage layouts, floorplan and power-grid editing, ECO, MMMC, tuning beyond clock and utilization |
+| Place and route | Innovus | OpenROAD through ORFS: pipeline, metrics, any ORFS setting (`settings`), the layout at each stage (`m5_gate`) | Editing mid-flow, interactive floorplan and power-grid editing, ECO, MMMC |
 | Timing | Tempus | OpenSTA with SPEF: WNS, TNS, paths, cross-probe (`m5_gate`: agrees with simulation) | Multi-corner, multi-mode, SI, OCV/AOCV/POCV |
 | Power grid | Voltus | PSM static IR and grid currents, map on layout (`m5_gate`) | Dynamic IR, EM against process limits, vectors from activity |
 | Physical verification | Pegasus | KLayout's DRC and LVS decks, marker browser (`m3_gate`, flow) | ERC, LVS mismatch browser, ASAP7 LVS (no open deck) |

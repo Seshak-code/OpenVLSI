@@ -15,6 +15,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 
@@ -297,6 +298,49 @@ void addSignoffCommands(Registry& r) {
                return QJsonValue(QJsonObject{{"net", net}, {"worst_mv", worst}, {"nodes", nodes}});
            },
            true});
+    r.add({"flow_stage_layout", "Brings a run's layout at a stage (floorplan, place, cts or route) into a library of its own, standard cells' own layouts merged in, with the platform's layer colours; returns the library, cell and view.",
+           object({{"run", kRun}, {"stage", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"floorplan", "place", "cts", "route"}}, {"description", "the stage"}}}}),
+           [](Context& c, const QJsonObject& a) {
+               const Run run = runOf(c, a);
+               static const std::map<QString, std::string> odbs = {{"floorplan", "2_floorplan.odb"}, {"place", "3_place.odb"}, {"cts", "4_cts.odb"}, {"route", "5_route.odb"}};
+               const auto odb = odbs.find(a["stage"].toString());
+               if (odb == odbs.end()) throw std::invalid_argument("a stage is floorplan, place, cts or route");
+               if (!fs::exists(run.results / odb->second)) throw std::runtime_error("this run has no " + odb->second);
+               const std::string design = s(run.record, "design"), top = s(run.record, "top"), stage = s(a, "stage");
+               const std::string library = design + "_run" + run.dir.filename().string().substr(4) + "_" + stage;
+               const QJsonObject out{{"library", q(library)}, {"cell", q(top)}, {"view", "layout"}};
+               const fs::path file = run.dir / ("layout_" + stage + ".oalib");
+               const auto known = c.workspace.libraries();
+               if (std::find(known.begin(), known.end(), library) != known.end()) return QJsonValue(out);
+               if (fs::exists(file)) {
+                   c.workspace.defineLibrary(library, file.string());
+                   return QJsonValue(out);
+               }
+               const RtlFlowTools tools = RtlFlowTools::detect();
+               if (tools.openroad.empty() || tools.klayout.empty() || tools.flowDir.empty()) throw std::runtime_error("OpenROAD, KLayout and the platform are needed: " + tools.missing());
+               const fs::path dir = run.signoff / "stages" / stage;
+               std::string log, why;
+               if (!openroad(tools, dir, "read_db " + (run.results / odb->second).string() + "\nwrite_def stage.def\n", nullptr, &log, &why)) throw std::runtime_error("OpenROAD: " + why);
+               const fs::path tech = run.dir / "objects" / s(run.record, "platform") / design / "base" / "klayout.lyt";
+               if (!fs::exists(tech)) throw std::runtime_error("this run has no KLayout technology (" + tech.string() + ")");
+               std::string cells;
+               for (const auto& g : run.pdk->cellGds) cells += (cells.empty() ? "" : " ") + flow::platformFile(*run.pdk, tools.flowDir, g);
+               acutesim::orchestration::Subprocess k(tools.klayout, {"-zz", "-rd", "design_name=" + top, "-rd", "in_def=" + (dir / "stage.def").string(), "-rd", "in_files=" + cells, "-rd", "seal_file=", "-rd",
+                                                                    "out_file=" + (dir / "stage.gds").string(), "-rd", "tech_file=" + tech.string(), "-rd", "layer_map=", "-r", (fs::path(tools.flowDir) / "util" / "def2stream.py").string()});
+               k.setWorkingDirectory(dir.string());
+               if (!tools.binDir.empty()) {
+                   const char* path = std::getenv("PATH");
+                   k.setEnvironment({{"PATH", tools.binDir + ":" + (path ? path : "")}});
+               }
+               const auto res = k.run();
+               std::ofstream(dir / "stream.log") << res.stdout_output << res.stderr_output;
+               if (res.exit_code != 0 || !fs::exists(dir / "stage.gds")) throw std::runtime_error("KLayout could not stream this stage: see " + (dir / "stream.log").string());
+               oadb::Library& l = c.workspace.createLibrary(library, file.string());
+               const std::string lyp = run.pdk->layerProperties.empty() ? std::string() : flow::platformFile(*run.pdk, tools.flowDir, run.pdk->layerProperties);
+               importGds(l, (dir / "stage.gds").string(), lyp);
+               if (!run.pdk->tech.empty()) l.setLibraryProp("tech", "\"" + run.pdk->tech + "\"");
+               return QJsonValue(out);
+           }});
     r.add({"flow_artifacts", "The files an implementation run made, stage by stage: netlists, databases, constraints, parasitics, GDS, reports. For tools outside this app.", object({{"run", kRun}}),
            [](Context& c, const QJsonObject& a) {
                const Run run = runOf(c, a);
