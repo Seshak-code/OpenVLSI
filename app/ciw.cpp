@@ -3,6 +3,7 @@
 #include "app/library_manager.h"
 #include "app/ade_explorer.h"
 #include "app/layout_viewer.h"
+#include "app/verifier.h"
 #include "app/view_editor.h"
 #include "app/waveform_viewer.h"
 
@@ -54,11 +55,12 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                          [this](cmd::Context& c, const QJsonObject& a) {
                              const QString lib = a["library"].toString(), cell = a["cell"].toString(), view = a["view"].toString();
                              const std::string type = c.workspace.library(lib.toStdString()).viewType(cell.toStdString(), view.toStdString());
-                             if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout")
-                                 throw std::runtime_error("no tool for a " + type + " view yet (schematic, symbol, maestro and layout)");
+                             if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout" && type != "verifier")
+                                 throw std::runtime_error("no tool for a " + type + " view yet (schematic, symbol, maestro, layout and verifier)");
                              QPointer<QWidget>& e = editors_[lib + "/" + cell + "/" + view];
                              if (!e && type == "maestro") e = new AdeExplorer(session_, lib, cell, view, this);
                              else if (!e && type == "layout") e = new LayoutViewer(session_, lib, cell, view, this);
+                             else if (!e && type == "verifier") e = new Verifier(session_, lib, cell, view, this);
                              else if (!e) e = new ViewEditor(session_, lib, cell, view, this);
                              present(e);
                              return QJsonValue(QString::fromStdString(type));
@@ -208,6 +210,11 @@ WaveformViewer* Ciw::viewer(const QString& run) const {
 AdeExplorer* Ciw::explorer(const QString& lib, const QString& cell, const QString& view) const {
     const auto it = editors_.find(lib + "/" + cell + "/" + view);
     return it == editors_.end() ? nullptr : qobject_cast<AdeExplorer*>(it->second.data());
+}
+
+Verifier* Ciw::verifier(const QString& lib, const QString& cell, const QString& view) const {
+    const auto it = editors_.find(lib + "/" + cell + "/" + view);
+    return it == editors_.end() ? nullptr : qobject_cast<Verifier*>(it->second.data());
 }
 
 LayoutViewer* Ciw::layout(const QString& lib, const QString& cell, const QString& view) const {

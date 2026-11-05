@@ -94,8 +94,8 @@ void Navigator::refresh() {
                 const QString view = v.toObject()["view"].toString(), type = v.toObject()["type"].toString();
                 if (mode_ == Mode::Design) {
                     node(cellItem, tree_, view, type, lib, cell, view);
-                } else if (type == "maestro") {
-                    auto* item = node(nullptr, tree_, cell + " " + view, "maestro", lib, cell, view);
+                } else if (type == "maestro" || type == "verifier") {
+                    auto* item = node(nullptr, tree_, cell + " " + view, type, lib, cell, view);
                     item->setToolTip(0, lib + "/" + cell + "/" + view);
                     for (const auto& h : session_.call("ade_history_list", {{"library", lib}, {"cell", cell}, {"view", view}}).value.toArray())
                         node(item, tree_, h.toString(), "waveform", lib, cell, view, h.toString());

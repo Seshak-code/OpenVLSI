@@ -286,7 +286,7 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
    in M2 slice 5's notes. Extraction (OpenRCX) to a post-layout netlist simulated on TreeSPICE, from ADE (M3).
 7. **Timing views:** OpenSTA through OpenROAD: slack summary, path reports, cross-probe to the layout (M5).
 8. **IR and EM:** OpenROAD PDN/PSM: IR-drop maps over the layout canvas (M6).
-9. **ADE Verifier:** requirements traced to Assembler results (M4).
+9. **ADE Verifier (done):** requirements traced to Assembler results (M4). `sim/verifier`, `tests/test_verifier`.
 10. **Spectre X in ADE:** thread count, and `.options hier` arrays, from ADE; a large array's speedup measured (M2 slice 7).
 11. **Finish:** the M3-M6 gates through MCP alone, the bundle carrying or finding the tools, keyboard and accessibility pass,
     documentation.

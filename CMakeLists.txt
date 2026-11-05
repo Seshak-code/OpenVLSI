@@ -62,11 +62,11 @@ target_link_libraries(openvlsi_sch PUBLIC oadb)
 # ── Worker processes (a process group with a watchdog), and simulation: netlister, TreeSPICE runs, raw files ─────
 add_library(openvlsi_proc STATIC flow/subprocess.cpp)
 target_include_directories(openvlsi_proc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade.cpp)
+add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade.cpp sim/verifier.cpp)
 target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
 
 add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp
-            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp)
+            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(openvlsi_layout PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_layout PUBLIC oadb Qt6::Core)
@@ -90,7 +90,7 @@ treespice_beside(openvlsi-mcp)
 set(CMAKE_AUTOMOC ON)
 add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp app/scene.cpp app/canvas.cpp
             app/view_editor.cpp app/ade_explorer.cpp app/plot.cpp app/waveform_viewer.cpp app/theme.cpp app/icons.cpp
-            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp)
+            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp)
 target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag app/shaders/layout.vert app/shaders/layout.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
@@ -122,7 +122,7 @@ target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit)
+foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
@@ -142,10 +142,11 @@ target_link_libraries(test_waveforms PRIVATE openvlsi_app)
 target_link_libraries(test_shell PRIVATE openvlsi_app)
 target_link_libraries(test_layout PRIVATE openvlsi_app)
 target_link_libraries(test_layout_edit PRIVATE openvlsi_app)
+target_link_libraries(test_verifier PRIVATE openvlsi_app)
 treespice_beside(test_waveforms)
 treespice_beside(test_ade_explorer)
 # the plugins of the Qt this links (a machine with a second, stale Qt prefix otherwise finds no platform plugin)
-set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit PROPERTIES ENVIRONMENT
+set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier PROPERTIES ENVIRONMENT
                      "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>/..")
 target_compile_definitions(test_mcp PRIVATE OPENVLSI_MCP_EXE="$<TARGET_FILE:openvlsi-mcp>")
 

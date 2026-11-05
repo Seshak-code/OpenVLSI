@@ -38,7 +38,8 @@ int main(int argc, char** argv) {
                                              "netlist", "simulate", "results_get", "wave_eval", "ade_setup_get", "ade_run", "ade_stop",
                                              "ade_history_list", "ade_history_get", "ade_run_plan",
                                              "ade_summary", "ade_compare", "layout_export_gds", "layout_layers", "layout_info",
-                                             "layout_tech_get", "layout_objects_get", "layout_connectivity"},
+                                             "layout_tech_get", "layout_objects_get", "layout_connectivity",
+                                             "verifier_setup_get", "verifier_check"},
               "exactly the commands that only read are marked read-only");
 
         app::Ciw ciw(session);

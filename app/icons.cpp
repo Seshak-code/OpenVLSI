@@ -23,6 +23,12 @@ void draw(QPainter& p, const QString& n) {
         a.moveTo(2, 9); a.lineTo(6, 9);
         a.moveTo(2, 15); a.lineTo(6, 15);
         a.moveTo(19, 12); a.lineTo(23, 12);
+    } else if (n == "verifier") {  // requirements, ticked off
+        for (int k = 0; k < 3; ++k) {
+            const qreal y = 6 + 6 * k;
+            a.moveTo(3, y); a.lineTo(5, y + 2); a.lineTo(8.5, y - 2);
+            a.moveTo(11, y); a.lineTo(21, y);
+        }
     } else if (n == "maestro") {  // test setup: sliders
         for (int k = 0; k < 3; ++k) {
             const qreal y = 6 + 6 * k, x = k == 1 ? 8 : k == 0 ? 15 : 12;
