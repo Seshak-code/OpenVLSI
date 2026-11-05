@@ -693,7 +693,7 @@ TestbenchResult runTestbench(const TestbenchConfig& cfg, const RtlFlowTools& too
     // never finishes on its own
     std::ofstream(work / "harness.v") << "`timescale 1ns/1ps\nmodule openvlsi_harness;\n  initial begin\n"
                                          "    $dumpfile(\"dump.vcd\");\n    $dumpvars(0, " << cfg.top << ");\n"
-                                      << (gate ? "    $sdf_annotate(\"design.sdf\", " + cfg.dut + ", , \"sdf.log\", \"MAXIMUM\");\n" : std::string())
+                                      << (gate ? "    $sdf_annotate(\"design.sdf\", " + cfg.dut + ");\n" : std::string())
                                       << "    #" << cfg.timeLimitNs << " $display(\"OPENVLSI_TIME_LIMIT\");\n    $finish;\n  end\nendmodule\n";
     std::vector<std::string> args{"-g2012", "-s", cfg.top, "-s", "openvlsi_harness", "-o", (work / "sim.vvp").string()};
     if (gate) args.insert(args.begin(), "-gspecify");

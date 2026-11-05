@@ -192,11 +192,13 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     verdict_->setAccessibleName("Verdict");
     stop_ = new QPushButton("Stop", central);
     layout_ = new QPushButton("Open layout", central);
+    markers_ = new QPushButton("Show DRC markers", central);
     top->addWidget(title_);
     top->addSpacing(14);
     top->addWidget(verdict_);
     top->addStretch(1);
     top->addWidget(stop_);
+    top->addWidget(markers_);
     top->addWidget(layout_);
     layout->addLayout(top);
 
@@ -230,6 +232,7 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
         refresh();
     });
     connect(layout_, &QPushButton::clicked, this, [this] { emit openLayoutRequested(run_); });
+    connect(markers_, &QPushButton::clicked, this, [this] { emit showMarkersRequested(run_); });
 
     poll_ = new QTimer(this);
     poll_->setInterval(1000);
@@ -326,6 +329,10 @@ void FlowRunView::fillReport(const QJsonObject& report) {
     bool hasGds = false;
     for (const auto& s : stages) hasGds = hasGds || s.toObject()["metrics"].toObject().contains("gds");
     layout_->setEnabled(hasGds);
+    int violations = 0;
+    for (const auto& s : stages)
+        if (s.toObject()["stage"] == "drc") violations = s.toObject()["metrics"].toObject()["violations"].toInt();
+    markers_->setVisible(hasGds && violations > 0);
     if (state == "running") return;
     const bool clean = report["clean"].toBool();
     verdict_->setText(clean ? "Clean: timing met, DRC clean, LVS matched" : state == "done" ? "Finished, not clean" : "Run " + state);

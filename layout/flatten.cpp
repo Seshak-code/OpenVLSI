@@ -218,6 +218,19 @@ Box Hierarchy::box() const { return top_->box; }
 uint64_t Hierarchy::shapeCount() const { return top_->ownShapes; }
 double Hierarchy::metersPerDbu() const { return top_->metersPerDbu; }
 
+std::vector<Xform> Hierarchy::placements(const std::string& cell, size_t limit) const {
+    std::vector<Xform> out;
+    const std::function<void(const Master&, const Xform&)> walk = [&](const Master& m, const Xform& t) {
+        if (out.size() >= limit) return;
+        if (m.name == cell) out.push_back(t);
+        for (const auto& c : m.children)
+            for (int col = 0; col < c.placed.cols && out.size() < limit; ++col)
+                for (int row = 0; row < c.placed.rows && out.size() < limit; ++row) walk(*c.master, Xform::of(c.placed, col, row).then(t));
+    };
+    walk(*top_, Xform{});
+    return out;
+}
+
 std::vector<std::string> Hierarchy::children() const {
     std::vector<std::string> out;
     for (const auto& c : top_->children)

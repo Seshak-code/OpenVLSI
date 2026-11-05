@@ -16,6 +16,7 @@
 
 class QLabel;
 class QLineEdit;
+class QDockWidget;
 class QTreeWidget;
 class QRhi;
 class QRhiBuffer;
@@ -51,6 +52,8 @@ public:
     const std::vector<LayerStyle>* styles() const { return styles_; }
     std::vector<QRectF> selectedBoxes;                    // world: one per selected object
     std::vector<std::pair<QPointF, QPointF>> flightLines; // world: what remains to route
+    std::vector<QRectF> markers;                          // world: what a check found, each a box
+    int currentMarker = -1;
     enum class Rubber { None, Box, Line, Closed, Ghost };
     Rubber rubber = Rubber::None;                         // what the tool in progress draws to the cursor
     std::vector<QPointF> rubberPoints;
@@ -133,12 +136,19 @@ public:
     QString lastError() const { return lastError_; }
     int flightLineCount() const { return (int)canvas_->flightLines.size(); }
     void setFlightLinesShown(bool on);
+
+    // What a DRC found (verify_markers), walked in a panel: choosing one shows it. Returns how many landed on this layout.
+    int setMarkers(const QJsonObject& report);
+    QTreeWidget* markerTree() const { return markerTree_; }
+    void showMarker(int index);
+    QRectF markerWindow(int index) const;
     QTreeWidget* layerTree() const { return layerTree_; }
     QString status() const;
 
 private:
     void reload();
     void reloadIfChanged();
+    void placeMarkers();
     void fillLayers();
     void buildStyles();
     void click(QPointF world, bool extend);
@@ -161,6 +171,10 @@ private:
     std::vector<LayerStyle> styles_;
     LayoutCanvas* canvas_;
     QTreeWidget* layerTree_;
+    QTreeWidget* markerTree_;
+    QDockWidget* markerDock_;
+    QJsonObject markerReport_;
+    std::vector<int> markerOfItem_;
     QLineEdit* layerFilter_;
     QLabel* status_;
     QLabel* position_;

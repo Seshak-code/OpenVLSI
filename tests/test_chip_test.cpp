@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
         check(view->signalTree()->topLevelItemCount() >= 4, "every signal is listed");
         check(session.call("test_view", {{"run", "wrong/run.1"}}).ok && shell.ciw()->testView("wrong/run.1")->verdict().startsWith("Failed"), "a failure is called one");
         check(session.call("ui_theme", {{"mode", "light"}}).ok, "the stage follows the theme");
-        shell.showStage(3);
+        shell.showStage(4);
         check(shell.testPanel()->runs()->topLevelItemCount() == 5, "the rail's Test panel lists them");
     }
     QSettings().clear();

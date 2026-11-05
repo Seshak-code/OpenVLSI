@@ -49,6 +49,7 @@ public:
 
 signals:
     void openLayoutRequested(const QString& run);
+    void showMarkersRequested(const QString& run);
 
 private:
     void fillReport(const QJsonObject& report);
@@ -62,6 +63,7 @@ private:
     QLabel* reasons_;
     QPushButton* stop_;
     QPushButton* layout_;
+    QPushButton* markers_;
     QTimer* poll_;
 };
 

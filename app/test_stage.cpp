@@ -255,6 +255,7 @@ TestRunView::TestRunView(Session& session, const QString& run, QWidget* parent) 
     signals_->setAccessibleName("Recorded signals");
     leftLayout->addWidget(filter_);
     leftLayout->addWidget(signals_, 1);
+    left->setMinimumWidth(230);
     waves_ = new DigitalWaves(upper);
     upper->setStretchFactor(0, 1);
     upper->setStretchFactor(1, 4);

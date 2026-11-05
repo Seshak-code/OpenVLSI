@@ -57,6 +57,31 @@ const char* kView = "layout";
 
 }  // namespace
 
+int exportGds(oadb::Workspace& ws, const std::string& libName, const std::string& cell, const std::string& view, const std::string& file) {
+    layout::GdsLibrary gds;
+    gds.name = libName;
+    std::set<std::string> seen;
+    std::function<void(const std::string&, const std::string&)> add = [&](const std::string& name, const std::string& v) {
+        if (!seen.insert(name).second) return;
+        oadb::Library& l = ws.library(libName);
+        if (l.viewType(name, v) != "layout") throw std::runtime_error(name + "/" + v + " is not a layout view");
+        layout::GdsCell g;
+        g.name = name;
+        g.shapes = l.layoutShapes(name, v);
+        g.instances = l.layoutInstances(name, v);
+        if (const auto u = l.prop(name, v, "metersPerDbu")) gds.metersPerDbu = std::stod(*u);
+        for (const auto& i : g.instances) {
+            if (!i.lib.empty() && i.lib != libName) throw std::runtime_error(name + " places a master of library " + i.lib + ": GDS export follows one library");
+            add(i.cell, i.view.empty() ? kView : i.view);
+        }
+        gds.cells.push_back(std::move(g));
+    };
+    add(cell, view);
+    gds.userPerDbu = gds.metersPerDbu / 1e-6;
+    layout::writeGds(file, gds);
+    return (int)gds.cells.size();
+}
+
 QJsonObject importGds(oadb::Library& l, const std::string& file, const std::string& lyp) {
     const layout::GdsLibrary gds = layout::readGds(file);
     // Everything checked before anything is written: a refused import leaves the library as it was
@@ -106,29 +131,8 @@ void addLayoutCommands(Registry& r) {
     r.add({"layout_export_gds", "Writes a layout view and everything it places to a GDSII file; returns the structures written.",
            object({{"library", lib}, {"cell", cell}, {"file", param("string", "the GDS file to write")}}, {{"view", view}}),
            [](Context& c, const QJsonObject& a) {
-               const std::string libName = a["library"].toString().toStdString();
-               layout::GdsLibrary gds;
-               gds.name = libName;
-               std::set<std::string> seen;
-               std::function<void(const std::string&, const std::string&)> add = [&](const std::string& name, const std::string& v) {
-                   if (!seen.insert(name).second) return;
-                   oadb::Library& l = c.workspace.library(libName);
-                   if (l.viewType(name, v) != "layout") throw std::runtime_error(name + "/" + v + " is not a layout view");
-                   layout::GdsCell g;
-                   g.name = name;
-                   g.shapes = l.layoutShapes(name, v);
-                   g.instances = l.layoutInstances(name, v);
-                   if (const auto u = l.prop(name, v, "metersPerDbu")) gds.metersPerDbu = std::stod(*u);
-                   for (const auto& i : g.instances) {
-                       if (!i.lib.empty() && i.lib != libName) throw std::runtime_error(name + " places a master of library " + i.lib + ": GDS export follows one library");
-                       add(i.cell, i.view.empty() ? kView : i.view);
-                   }
-                   gds.cells.push_back(std::move(g));
-               };
-               add(a["cell"].toString().toStdString(), a.contains("view") ? a["view"].toString().toStdString() : kView);
-               gds.userPerDbu = gds.metersPerDbu / 1e-6;
-               layout::writeGds(a["file"].toString().toStdString(), gds);
-               return QJsonValue((int)gds.cells.size());
+               return QJsonValue(exportGds(c.workspace, a["library"].toString().toStdString(), a["cell"].toString().toStdString(),
+                                           a.contains("view") ? a["view"].toString().toStdString() : kView, a["file"].toString().toStdString()));
            },
            true});
 

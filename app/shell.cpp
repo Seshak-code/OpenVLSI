@@ -5,6 +5,7 @@
 #include "app/implement.h"
 #include "app/layout_viewer.h"
 #include "app/test_stage.h"
+#include "app/verify_stage.h"
 #include "app/verifier.h"
 #include "app/library_manager.h"
 #include "app/navigator.h"
@@ -92,6 +93,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     const std::pair<QString, QString> stages[] = {{"design", "Design: libraries, cells and views"},
                                                   {"maestro", "Simulate: tests and their runs"},
                                                   {"implement", "Implement: Verilog to GDS"},
+                                                  {"verify", "Verify: DRC and LVS"},
                                                   {"test", "Test: the chip under its testbenches and firmware"}};
     for (int k = 0; k < (int)std::size(stages); ++k) {
         auto* b = new QToolButton(rail);
@@ -136,6 +138,8 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
         session_.call("flow_view", {{"run", run}});
     }}, panels_);
     panels_->addWidget(implement_);
+    verify_ = new VerifyPanel(session_, {[this](const QString& command) { runForm(command, context()); }}, panels_);
+    panels_->addWidget(verify_);
     test_ = new TestPanel(session_, {[this](const QString& run) { session_.call("test_view", {{"run", run}}); }}, panels_);
     panels_->addWidget(test_);
 
@@ -366,7 +370,7 @@ void Shell::host(QWidget* tool) {
     tabs_->tabBar()->setTabButton(index, QTabBar::RightSide, close);
     tabs_->setCurrentIndex(index);
     if (qobject_cast<FlowRunView*>(tool)) showStage(2);
-    if (qobject_cast<TestRunView*>(tool)) showStage(3);
+    if (qobject_cast<TestRunView*>(tool)) showStage(4);
     if (auto* e = qobject_cast<ViewEditor*>(tool)) noteRecent(e->library() + "/" + e->cell() + "/" + e->view());
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) noteRecent(a->library() + "/" + a->cell() + "/" + a->view());
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) noteRecent(l->library() + "/" + l->cell() + "/" + l->view());
@@ -450,7 +454,8 @@ void Shell::showStage(int stage) {
     panels_->setCurrentIndex(stage);
     panels_->show();
     if (stage == 2) implement_->refresh();
-    if (stage == 3) test_->refresh();
+    if (stage == 3) verify_->refresh();
+    if (stage == 4) test_->refresh();
     for (int k = 0; k < (int)stages_.size(); ++k) stages_[k]->setChecked(k == stage);
     refreshIcons();
 }

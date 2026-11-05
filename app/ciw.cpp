@@ -126,6 +126,13 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              auto& view = flowViews_[run];
                              if (!view) {
                                  view = new FlowRunView(session_, run, this);
+                                 connect(view, &FlowRunView::showMarkersRequested, this, [this](const QString& r) {
+                                     const cmd::Result layout = session_.call("flow_open_layout", {{"run", r}});
+                                     if (!layout.ok) return;
+                                     QJsonObject a = layout.value.toObject();
+                                     a["flow_run"] = r;
+                                     session_.call("layout_view_markers", a);
+                                 });
                                  connect(view, &FlowRunView::openLayoutRequested, this, [this](const QString& r) {
                                      const cmd::Result opened = session_.call("flow_open_layout", {{"run", r}});
                                      if (!opened.ok) runLine("flow_open_layout {\"run\": \"" + r + "\"}");
@@ -188,6 +195,27 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              if (a["x1"].toDouble() <= a["x0"].toDouble() || a["y1"].toDouble() <= a["y0"].toDouble()) throw std::runtime_error("the window is empty");
                              openLayout(a)->zoomToMicrons(a["x0"].toDouble(), a["y0"].toDouble(), a["x1"].toDouble(), a["y1"].toDouble());
                              return QJsonValue(true);
+                         },
+                         true});
+    session_.addCommand({"layout_view_markers", "Shows what a DRC found in a layout's viewer (opened if need be): the run of verify_drc, or flow_run for an implementation's. Returns how many landed.",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}}, {{"run", cmd::param("string", "a verification run")}, {"flow_run", cmd::param("string", "an implementation run")}}),
+                         [this, openLayout](cmd::Context&, const QJsonObject& a) {
+                             QJsonObject which;
+                             if (a.contains("run")) which["run"] = a["run"];
+                             if (a.contains("flow_run")) which["flow_run"] = a["flow_run"];
+                             const cmd::Result markers = session_.call("verify_markers", which);
+                             if (!markers.ok) throw std::runtime_error(markers.error.toStdString());
+                             return QJsonValue(openLayout(a)->setMarkers(markers.value.toObject()));
+                         },
+                         true});
+    session_.addCommand({"layout_view_marker", "Shows one marker of a layout's viewer: zooms to it and marks it.",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"index", cmd::param("integer", "which, from 0")}}),
+                         [openLayout](cmd::Context&, const QJsonObject& a) {
+                             auto* viewer = openLayout(a);
+                             const QRectF w = viewer->markerWindow(a["index"].toInt());
+                             if (w.isEmpty()) throw std::runtime_error("no such marker");
+                             viewer->showMarker(a["index"].toInt());
+                             return QJsonValue(a["index"]);
                          },
                          true});
     session_.addCommand({"layout_view_select", "Selects the smallest visible shape at a point of a layout's viewer; returns its layer, master and size.",

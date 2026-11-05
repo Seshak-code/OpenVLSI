@@ -22,6 +22,7 @@ class CommandForm;
 class CommandPalette;
 class ImplementPanel;
 class TestPanel;
+class VerifyPanel;
 class Navigator;
 
 class Shell : public QMainWindow {
@@ -34,6 +35,7 @@ public:
     Navigator* simulations() const { return simulate_; }
     ImplementPanel* implementPanel() const { return implement_; }
     TestPanel* testPanel() const { return test_; }
+    VerifyPanel* verifyPanel() const { return verify_; }
     QWidget* current() const;              // the active tool; null on the start page
     QStringList tabTitles() const;
     QMenu* themeMenu() const { return themeMenu_; }
@@ -41,7 +43,7 @@ public:
     bool runForm(const QString& command, const QJsonObject& prefill = {});  // no parameters: runs it; else its form
     void showConsole(bool on);
     bool consoleVisible() const;
-    void showStage(int stage);             // 0 design, 1 simulate, 2 implement, 3 test
+    void showStage(int stage);             // 0 design, 1 simulate, 2 implement, 3 verify, 4 test
     QStringList recentViews() const;
     QStringList menuTitles() const;
 
@@ -67,6 +69,7 @@ private:
     Navigator *design_, *simulate_;
     ImplementPanel* implement_ = nullptr;
     TestPanel* test_ = nullptr;
+    VerifyPanel* verify_ = nullptr;
     QSplitter *outer_, *inner_;
     QWidget* start_;
     QVBoxLayout* recentList_;

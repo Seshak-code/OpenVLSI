@@ -112,6 +112,22 @@ protected:
         p.setPen(QPen(t.via, 2));
         for (const QRectF& s : c_->selectedBoxes) p.drawRect(QRectF(c_->toScreen(s.topLeft()), c_->toScreen(s.bottomRight())).normalized());
 
+        for (int k = 0; k < (int)c_->markers.size(); ++k) {
+            const QRectF box = QRectF(c_->toScreen(c_->markers[k].topLeft()), c_->toScreen(c_->markers[k].bottomRight())).normalized();
+            if (!box.adjusted(-8, -8, 8, 8).intersects(rect())) continue;
+            const bool current = k == c_->currentMarker;
+            p.setPen(QPen(t.fail, current ? 2.5 : 1));
+            p.setBrush(Qt::NoBrush);
+            // A marker smaller than a few pixels still shows: a cross at its place
+            if (box.width() < 6 && box.height() < 6) {
+                const QPointF at = box.center();
+                p.drawLine(at + QPointF(-4, -4), at + QPointF(4, 4));
+                p.drawLine(at + QPointF(-4, 4), at + QPointF(4, -4));
+            } else {
+                p.drawRect(box);
+            }
+        }
+
         if (!c_->flightLines.empty()) {
             QPen line(t.warn, 1);
             line.setStyle(Qt::DashLine);
@@ -441,6 +457,18 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     dock->setWidget(panel);
     addDockWidget(Qt::RightDockWidgetArea, dock);
 
+    markerDock_ = new QDockWidget("Markers", this);
+    markerDock_->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    markerTree_ = new QTreeWidget(markerDock_);
+    markerTree_->setHeaderHidden(true);
+    markerTree_->setAccessibleName("What the check found");
+    markerDock_->setWidget(markerTree_);
+    addDockWidget(Qt::RightDockWidgetArea, markerDock_);
+    markerDock_->hide();
+    connect(markerTree_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* i) {
+        if (i && i->data(0, Qt::UserRole).isValid()) showMarker(i->data(0, Qt::UserRole).toInt());
+    });
+
     status_ = new QLabel(this);
     position_ = new QLabel(this);
     statusBar()->addWidget(status_, 1);
@@ -605,6 +633,7 @@ void LayoutViewer::reload() {
     canvas_->setScene(&flat_, &styles_);
     refreshSelection();
     refreshFlightLines();
+    placeMarkers();
     lastRevision_ = 0;
     for (const auto& name : session_.workspace().libraries()) lastRevision_ += session_.workspace().library(name).revision();
     const double um = canvas_->micronsPerDbu;
@@ -727,6 +756,76 @@ void LayoutViewer::refreshFlightLines() {
 void LayoutViewer::setFlightLinesShown(bool on) {
     flightShown_ = on;
     refreshFlightLines();
+}
+
+void LayoutViewer::placeMarkers() {
+    canvas_->markers.clear();
+    markerOfItem_.clear();
+    const double dbuPerUm = 1.0 / canvas_->micronsPerDbu;
+    for (const auto& rv : markerReport_["rules"].toArray())
+        for (const auto& mv : rv.toObject()["markers"].toArray()) {
+            const QJsonObject m = mv.toObject();
+            const QJsonArray points = m["points"].toArray();
+            if (points.isEmpty()) continue;
+            const QString cell = m["cell"].toString();
+            std::vector<layout::Xform> where = hierarchy_->placements(cell.toStdString());
+            if (cell.isEmpty()) where = {layout::Xform{}};
+            for (const auto& t : where) {
+                layout::Box box;
+                for (const auto& pv : points) {
+                    double x, y;
+                    t.apply(pv.toArray()[0].toDouble() * dbuPerUm, pv.toArray()[1].toDouble() * dbuPerUm, x, y);
+                    box.add(x - flat_.originX, y - flat_.originY);
+                }
+                canvas_->markers.push_back(QRectF(QPointF(box.x0, box.y0), QPointF(box.x1, box.y1)));
+            }
+        }
+    canvas_->refreshOverlay();
+}
+
+int LayoutViewer::setMarkers(const QJsonObject& report) {
+    markerReport_ = report;
+    placeMarkers();
+    markerTree_->blockSignals(true);
+    markerTree_->clear();
+    int at = 0;
+    const double dbuPerUm = 1.0 / canvas_->micronsPerDbu;
+    for (const auto& rv : report["rules"].toArray()) {
+        const QJsonObject rule = rv.toObject();
+        auto* top = new QTreeWidgetItem(markerTree_, {rule["rule"].toString() + "  " + QString::number(rule["count"].toInt())});
+        top->setToolTip(0, rule["description"].toString());
+        for (const auto& mv : rule["markers"].toArray()) {
+            const QJsonObject m = mv.toObject();
+            const QString cell = m["cell"].toString();
+            if (m["points"].toArray().isEmpty()) continue;
+            const size_t places = cell.isEmpty() ? 1 : hierarchy_->placements(cell.toStdString()).size();
+            for (size_t k = 0; k < places; ++k, ++at) {
+                const QRectF r = canvas_->markers[at];
+                auto* item = new QTreeWidgetItem(top, {QString("%1, %2 µm").arg((r.center().x() + flat_.originX) / dbuPerUm, 0, 'f', 2).arg((r.center().y() + flat_.originY) / dbuPerUm, 0, 'f', 2)});
+                item->setData(0, Qt::UserRole, at);
+                item->setToolTip(0, rule["description"].toString() + (cell.isEmpty() ? QString() : "\nin " + cell));
+            }
+        }
+    }
+    markerTree_->blockSignals(false);
+    markerDock_->setVisible(!canvas_->markers.empty() || report["total"].toInt() > 0);
+    canvas_->refreshOverlay();
+    return (int)canvas_->markers.size();
+}
+
+QRectF LayoutViewer::markerWindow(int index) const {
+    if (index < 0 || index >= (int)canvas_->markers.size()) return {};
+    const QRectF r = canvas_->markers[index];
+    const double margin = std::max({r.width(), r.height(), 400.0}) * 2;
+    return r.adjusted(-margin, -margin, margin, margin);
+}
+
+void LayoutViewer::showMarker(int index) {
+    if (index < 0 || index >= (int)canvas_->markers.size()) return;
+    canvas_->currentMarker = index;
+    const QRectF w = markerWindow(index);
+    canvas_->zoomTo(w.left() + flat_.originX, w.top() + flat_.originY, w.right() + flat_.originX, w.bottom() + flat_.originY);
+    canvas_->refreshOverlay();
 }
 
 void LayoutViewer::reloadIfChanged() {

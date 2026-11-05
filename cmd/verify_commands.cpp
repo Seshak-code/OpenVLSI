@@ -95,7 +95,7 @@ bool runDeck(const RtlFlowTools& tools, const fs::path& dir, const std::vector<s
     p.setWorkingDirectory(dir.string());
     if (!tools.binDir.empty()) {
         const char* path = std::getenv("PATH");
-        p.setEnv("PATH", tools.binDir + ":" + (path ? path : ""));
+        p.setEnvironment({{"PATH", tools.binDir + ":" + (path ? path : "")}});
     }
     if (cancel) p.setCancelFlag(cancel);
     const auto r = p.run();

@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
                                              "layout_tech_get", "layout_objects_get", "layout_connectivity",
                                              "verifier_setup_get", "verifier_check", "flow_tools", "flow_platforms", "flow_run", "flow_status",
                                              "flow_stop", "flow_list", "flow_report", "test_run", "test_firmware", "test_status", "test_stop",
-                                             "test_list", "test_signals", "test_value"},
+                                             "test_list", "test_signals", "test_value", "verify_drc", "verify_lvs", "verify_status", "verify_list", "verify_markers"},
               "exactly the commands that only read are marked read-only");
 
         app::Ciw ciw(session);

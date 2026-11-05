@@ -70,6 +70,8 @@ public:
     Box box() const;
     uint64_t shapeCount() const;  // this cell's own, not through its instances
     std::vector<std::string> children() const;  // the masters this cell places directly
+    // Every placement of a cell through the hierarchy, as the transform from its coordinates to the top's, up to a limit
+    std::vector<Xform> placements(const std::string& cell, size_t limit = 64) const;
     double metersPerDbu() const;
 
 private:
