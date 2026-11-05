@@ -5,6 +5,7 @@
 #include "app/implement.h"
 #include "app/layout_viewer.h"
 #include "app/test_stage.h"
+#include "app/ui_commands.h"
 #include "app/verifier.h"
 #include "app/view_editor.h"
 #include "app/waveform_viewer.h"
@@ -234,6 +235,7 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
         libraryManager()->show();
         libraryManager()->raise();
     });
+    bindActions(this, {{"Quit", "ui_quit"}, {"Library Manager", "ui_library_manager"}});
     resize(820, 420);
 }
 

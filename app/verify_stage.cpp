@@ -25,6 +25,8 @@ VerifyPanel::VerifyPanel(Session& session, Actions actions, QWidget* parent) : Q
     auto* lvs = new QPushButton("Run LVS…", this);
     connect(drc, &QPushButton::clicked, this, [this] { if (actions_.form) actions_.form("verify_drc"); });
     connect(lvs, &QPushButton::clicked, this, [this] { if (actions_.form) actions_.form("verify_lvs"); });
+    drc->setProperty("api", "verify_drc");
+    lvs->setProperty("api", "verify_lvs");
     row->addWidget(drc);
     row->addWidget(lvs);
     layout->addLayout(row);

@@ -449,6 +449,7 @@ TestPanel::TestPanel(Session& session, Actions actions, QWidget* parent) : QWidg
     auto* start = new QPushButton("New test…", this);
     start->setIcon(icons::get("add"));
     connect(start, &QPushButton::clicked, this, [this] { newTest(); });
+    start->setProperty("api", "test_run");
     layout->addWidget(start);
     tree_ = new QTreeWidget(this);
     tree_->setHeaderHidden(true);

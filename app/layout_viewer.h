@@ -66,7 +66,7 @@ public:
 
 signals:
     void clicked(QPointF world, bool extend);
-    void doubleClicked();
+    void doubleClicked(QPointF world, bool extend);
     void moved(QPointF world);
 
 protected:
@@ -93,6 +93,8 @@ private:
     std::vector<Range> fills_, outlines_;
     bool dirty_ = true, moved_ = false;
     double scale_ = 1, cx_ = 0, cy_ = 0;
+    double originX_ = 0, originY_ = 0;
+    bool hasOrigin_ = false;
     std::optional<QPoint> dragFrom_;
     QPoint pressAt_;
     bool dragged_ = false, swallowRelease_ = false;
@@ -136,6 +138,9 @@ public:
     QString lastError() const { return lastError_; }
     int flightLineCount() const { return (int)canvas_->flightLines.size(); }
     void setFlightLinesShown(bool on);
+    void setAllLayersVisible(bool on);
+    double addRuler(double x0, double y0, double x1, double y1);  // database units, absolute; its length in microns
+    QJsonObject state() const;
 
     // What a DRC found (verify_markers), walked in a panel: choosing one shows it. Returns how many landed on this layout.
     int setMarkers(const QJsonObject& report);

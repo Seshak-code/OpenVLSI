@@ -2,6 +2,7 @@
 
 #include "app/palette.h"
 #include "app/theme.h"
+#include "app/ui_commands.h"
 
 #include <QAction>
 #include <QHeaderView>
@@ -76,6 +77,8 @@ Verifier::Verifier(Session& session, const QString& lib, const QString& cell, co
     act(edit, "Check", QKeySequence("F5"), [this] { check(); });
     act(edit, "Run What Is Unverified", QKeySequence("Shift+F5"), [this] { runUnverified(); });
 
+    bindActions(this, {{"Add Requirement…", "verifier_requirement_add"}, {"Map to an Output…", "verifier_map"}, {"Remove", "verifier_requirement_remove"}, {"Check", "verifier_check"},
+                       {"Run What Is Unverified", "verifier_view_run"}});
     poll_ = new QTimer(this);
     poll_->setInterval(1000);
     connect(poll_, &QTimer::timeout, this, [this] { check(); });

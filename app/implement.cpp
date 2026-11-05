@@ -2,6 +2,7 @@
 
 #include "app/icons.h"
 #include "app/theme.h"
+#include "app/ui_commands.h"
 
 #include <QComboBox>
 #include <QDialog>
@@ -233,6 +234,7 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     });
     connect(layout_, &QPushButton::clicked, this, [this] { emit openLayoutRequested(run_); });
     connect(markers_, &QPushButton::clicked, this, [this] { emit showMarkersRequested(run_); });
+    bindActions(this, {{"Stop", "flow_stop"}, {"Open layout", "flow_open_layout"}, {"Show DRC markers", "layout_view_markers"}});
 
     poll_ = new QTimer(this);
     poll_->setInterval(1000);
@@ -437,6 +439,7 @@ ImplementPanel::ImplementPanel(Session& session, Actions actions, QWidget* paren
     auto* start = new QPushButton("New run…", this);
     start->setIcon(icons::get("add"));
     connect(start, &QPushButton::clicked, this, [this] { newRun(); });
+    start->setProperty("api", "flow_run");
     layout->addWidget(start);
     tree_ = new QTreeWidget(this);
     tree_->setHeaderHidden(true);

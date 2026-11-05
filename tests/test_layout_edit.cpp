@@ -103,11 +103,16 @@ int main(int argc, char** argv) {
         const qsizetype start = shapes().size();
         check(v->layerTree()->topLevelItemCount() > 20, "the panel offers the process's layers, used or not");
 
+        // The view stays on the design while edits move the scene's origin
+        session.call("layout_view_window", with({{"x0", 0}, {"y0", 0}, {"x1", 10}, {"y1", 10}}));
+        const QJsonArray windowBefore = v->state()["window"].toArray();
         v->setCurrentLayer(10, 0);  // Metal2
         v->startTool(app::LayoutViewer::Tool::Rect);
         v->clickDbu(1000, 1000);
         v->clickDbu(1502, 1203);    // snaps to the 5 nm grid
         check(shapes().size() == start + 1, "Rectangle draws on two clicks");
+        const QJsonArray windowAfter = v->state()["window"].toArray();
+        check(std::abs(windowAfter[0].toDouble() - windowBefore[0].toDouble()) < 1 && std::abs(windowAfter[1].toDouble() - windowBefore[1].toDouble()) < 1, "an edit that moves the box leaves the view where it was");
         QJsonObject added = shapes().last().toObject();
         check(added["layer"].toInt() == 10 && added["points"].toArray()[2].toArray()[0].toInt() == 1500 && added["points"].toArray()[2].toArray()[1].toInt() == 1205, "on the current layer, on the grid");
 

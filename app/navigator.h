@@ -24,6 +24,7 @@ public:
     Navigator(Session& session, Mode mode, Actions actions, QWidget* parent = nullptr);
     QTreeWidget* tree() const { return tree_; }
     void setFilter(const QString& text);
+    bool select(const QString& library, const QString& cell, const QString& view);  // false: not in this panel
     QJsonObject selection() const;  // {library, cell, view} as far as the current item names them
 
 public slots:

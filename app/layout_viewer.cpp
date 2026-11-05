@@ -2,6 +2,7 @@
 
 #include "app/palette.h"
 #include "app/theme.h"
+#include "app/ui_commands.h"
 
 #include <QAction>
 #include <QDockWidget>
@@ -188,6 +189,21 @@ void LayoutCanvas::changed() {
 }
 
 void LayoutCanvas::setScene(const layout::Flat* flat, const std::vector<LayerStyle>* styles) {
+    // The scene's origin moves with its box, and everything the canvas holds is relative to it: what stays put is the design
+    if (flat_ == flat && hasOrigin_ && (originX_ != flat->originX || originY_ != flat->originY)) {
+        const QPointF by(originX_ - flat->originX, originY_ - flat->originY);
+        cx_ += by.x();
+        cy_ += by.y();
+        for (auto& [a, b] : rulers) {
+            a += by;
+            b += by;
+        }
+        if (rulerStart) *rulerStart += by;
+        for (QPointF& p : rubberPoints) p += by;
+    }
+    originX_ = flat->originX;
+    originY_ = flat->originY;
+    hasOrigin_ = true;
     flat_ = flat;
     styles_ = styles;
     dirty_ = true;
@@ -281,9 +297,9 @@ void LayoutCanvas::mouseReleaseEvent(QMouseEvent* e) {
     if (!dragged_) emit clicked(toWorld(e->position()), e->modifiers() & Qt::ShiftModifier);
 }
 
-void LayoutCanvas::mouseDoubleClickEvent(QMouseEvent*) {
-    swallowRelease_ = true;  // the second release of a double click is not one more point
-    emit doubleClicked();
+void LayoutCanvas::mouseDoubleClickEvent(QMouseEvent* e) {
+    swallowRelease_ = true;  // the double click is this press: its release is not one more
+    emit doubleClicked(toWorld(e->position()), e->modifiers() & Qt::ShiftModifier);
 }
 
 void LayoutCanvas::refreshOverlay() { overlay_->update(); }
@@ -437,6 +453,7 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     : QMainWindow(parent, Qt::Window), session_(session), lib_(lib), cell_(cell), view_(view), canvas_(new LayoutCanvas(this)) {
     setWindowTitle("Layout: " + lib + " " + cell + " " + view);
     setCentralWidget(canvas_);
+    setFocusProxy(canvas_);
 
     auto* dock = new QDockWidget("Layers", this);
     dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
@@ -493,7 +510,12 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
         if (i) current_ = layout::LayerKey{i->data(0, Qt::UserRole).toPoint().x(), i->data(0, Qt::UserRole).toPoint().y()};
     });
     connect(&session_, &Session::changed, this, [this] { reloadIfChanged(); });
-    connect(canvas_, &LayoutCanvas::doubleClicked, this, [this] { finishTool(); });
+    // Two quick clicks end a path or polygon. To every other tool they are two clicks: a reference point right after selecting at
+    // the same place must not be lost
+    connect(canvas_, &LayoutCanvas::doubleClicked, this, [this](QPointF w, bool extend) {
+        if (tool_ == Tool::Path || tool_ == Tool::Polygon) finishTool();
+        else click(w, extend);
+    });
     connect(canvas_, &LayoutCanvas::moved, this, [this](QPointF w) {
         if (tool_ != Tool::Select) canvas_->cursor = worldOf(snapped(w));
         const double um = canvas_->micronsPerDbu;
@@ -518,10 +540,9 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     act(edit, "Move", QKeySequence("M"), [this] { startTool(Tool::Move); });
     act(edit, "Copy", QKeySequence("C"), [this] { startTool(Tool::Copy); });
     act(edit, "Stretch", QKeySequence("S"), [this] { startTool(Tool::Stretch); });
-    act(edit, "Delete", QKeySequence::Delete, [this] { deleteSelection(); });
-    act(edit, "Delete", QKeySequence(Qt::Key_Backspace), [this] { deleteSelection(); })->setVisible(false);
-    act(edit, "Finish", QKeySequence(Qt::Key_Return), [this] { finishTool(); })->setVisible(false);
-    act(edit, "Finish", QKeySequence(Qt::Key_Enter), [this] { finishTool(); })->setVisible(false);
+    // Both keys on one action: a hidden action's shortcut does not fire
+    act(edit, "Delete", QKeySequence::Delete, [this] { deleteSelection(); })->setShortcuts({QKeySequence(Qt::Key_Delete), QKeySequence(Qt::Key_Backspace)});
+    act(edit, "Finish", QKeySequence(Qt::Key_Return), [this] { finishTool(); })->setShortcuts({QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)});
     act(edit, "Cancel", QKeySequence(Qt::Key_Escape), [this] { cancelTool(); });
     QMenu* create = menuBar()->addMenu("&Create");
     act(create, "Rectangle", QKeySequence("R"), [this] { startTool(Tool::Rect); });
@@ -546,17 +567,16 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     act(measure, "Ruler", QKeySequence("K"), [this] { startRuler(); });
     act(measure, "Clear Rulers", QKeySequence("Shift+K"), [this] { clearRulers(); });
     QMenu* layers = menuBar()->addMenu("&Layers");
-    auto setAll = [this](bool on) {
-        layerTree_->blockSignals(true);
-        for (int k = 0; k < layerTree_->topLevelItemCount(); ++k) layerTree_->topLevelItem(k)->setCheckState(0, on ? Qt::Checked : Qt::Unchecked);
-        layerTree_->blockSignals(false);
-        for (auto& s : styles_) s.visible = on;
-        canvas_->visibilityChanged();
-    };
-    layers->addAction("Show All", this, [setAll] { setAll(true); });
-    layers->addAction("Hide All", this, [setAll] { setAll(false); });
+    layers->addAction("Show All", this, [this] { setAllLayersVisible(true); });
+    layers->addAction("Hide All", this, [this] { setAllLayersVisible(false); });
 
     reload();
+    bindActions(this, {{"Undo", "edit_undo"}, {"Redo", "edit_redo"}, {"Move", "layout_view_tool"}, {"Copy", "layout_view_tool"}, {"Stretch", "layout_view_tool"},
+                       {"Delete", "layout_view_delete"}, {"Finish", "layout_view_finish"}, {"Cancel", "layout_view_cancel"}, {"Rectangle", "layout_view_tool"}, {"Path", "layout_view_tool"},
+                       {"Polygon", "layout_view_tool"}, {"Via", "layout_view_tool"}, {"Label…", "layout_view_tool"}, {"Pin…", "layout_view_tool"}, {"Instance…", "layout_view_tool"},
+                       {"Transistor…", "layout_pcell_mos"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
+                       {"Show Top Level Only", "layout_view_levels"}, {"Zoom In", "layout_view_zoom"}, {"Zoom Out", "layout_view_zoom"}, {"Ruler", "layout_view_ruler"},
+                       {"Clear Rulers", "layout_view_rulers_clear"}, {"Show All", "layout_view_layers_all"}, {"Hide All", "layout_view_layers_all"}});
 }
 
 LayoutViewer::~LayoutViewer() = default;
@@ -756,6 +776,40 @@ void LayoutViewer::refreshFlightLines() {
 void LayoutViewer::setFlightLinesShown(bool on) {
     flightShown_ = on;
     refreshFlightLines();
+}
+
+void LayoutViewer::setAllLayersVisible(bool on) {
+    layerTree_->blockSignals(true);
+    for (int k = 0; k < layerTree_->topLevelItemCount(); ++k) layerTree_->topLevelItem(k)->setCheckState(0, on ? Qt::Checked : Qt::Unchecked);
+    layerTree_->blockSignals(false);
+    for (size_t k = 0; k < styles_.size(); ++k) {
+        styles_[k].visible = on;
+        shown_[flat_.layers[k].key] = on;
+    }
+    for (auto& [key, visible] : shown_) visible = on;
+    canvas_->visibilityChanged();
+}
+
+double LayoutViewer::addRuler(double x0, double y0, double x1, double y1) {
+    canvas_->rulers.push_back({{x0 - flat_.originX, y0 - flat_.originY}, {x1 - flat_.originX, y1 - flat_.originY}});
+    canvas_->refreshOverlay();
+    return std::hypot(x1 - x0, y1 - y0) * canvas_->micronsPerDbu;
+}
+
+QJsonObject LayoutViewer::state() const {
+    const QPointF a = canvas_->toWorld(QPointF(0, canvas_->height())), b = canvas_->toWorld(QPointF(canvas_->width(), 0));
+    QJsonArray selected, shown, hidden, rulers;
+    for (int64_t o : selection_) selected.append((double)o);
+    for (const auto& [key, on] : shown_) (on ? shown : hidden).append(QString("%1/%2").arg(key.first).arg(key.second));
+    for (const auto& [from, to] : canvas_->rulers)
+        rulers.append(QJsonArray{from.x() + flat_.originX, from.y() + flat_.originY, to.x() + flat_.originX, to.y() + flat_.originY});
+    static const char* toolNames[] = {"select", "ruler", "rect", "path", "polygon", "label", "pin", "via", "instance", "move", "copy", "stretch"};
+    QJsonObject out{{"window", QJsonArray{a.x() + flat_.originX, a.y() + flat_.originY, b.x() + flat_.originX, b.y() + flat_.originY}},
+                    {"scale", canvas_->scale()}, {"levels", levels_}, {"tool", toolNames[(int)tool_]}, {"selection", selected},
+                    {"layers_shown", shown}, {"layers_hidden", hidden}, {"markers", (int)canvas_->markers.size()}, {"current_marker", canvas_->currentMarker}, {"rulers", rulers},
+                    {"flight_lines", (int)canvas_->flightLines.size()}, {"status", status_->text()}, {"shapes", (double)flat_.shapes.size()}};
+    if (current_) out["current_layer"] = QString("%1/%2").arg(current_->first).arg(current_->second);
+    return out;
 }
 
 void LayoutViewer::placeMarkers() {

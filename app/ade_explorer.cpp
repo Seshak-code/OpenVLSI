@@ -1,4 +1,5 @@
 #include "app/ade_explorer.h"
+#include "app/ui_commands.h"
 
 #include "sim/calc.h"
 
@@ -167,6 +168,7 @@ AdeExplorer::AdeExplorer(Session& session, const QString& lib, const QString& ce
     bar->addAction("Run Monte Carlo", this, [this] { run("montecarlo"); });
     bar->addAction("Run Plan", this, &AdeExplorer::runPlan);
     bar->addAction("Stop", this, &AdeExplorer::stop);
+    bindActions(this, {{"Run", "ade_view_run"}, {"Run Monte Carlo", "ade_view_run"}, {"Run Plan", "ade_view_run_plan"}, {"Stop", "ade_view_stop"}});
     bar->addSeparator();
     bar->addWidget(new QLabel(" History ", this));
     history_ = new QComboBox(this);

@@ -5,6 +5,8 @@
 #include "app/implement.h"
 #include "app/layout_viewer.h"
 #include "app/test_stage.h"
+#include "app/api_server.h"
+#include "app/ui_commands.h"
 #include "app/verify_stage.h"
 #include "app/verifier.h"
 #include "app/library_manager.h"
@@ -173,6 +175,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
         {"Find a command", [this] { openPalette(); }}};
     for (const auto& [text, fn] : starts) {
         auto* b = new QPushButton(text, start_);
+        b->setProperty("api", text == QLatin1String("Create a library") ? "library_create" : text == QLatin1String("Install a PDK") ? "pdk_install" : "api_list");
         b->setObjectName("linkButton");
         b->setCursor(Qt::PointingHandCursor);
         connect(b, &QPushButton::clicked, this, fn);
@@ -226,6 +229,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     search_ = new QToolButton(bar);
     search_->setObjectName("searchButton");
     search_->setText("Find a command   ⌘K");
+    search_->setProperty("api", "api_list");
     search_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     connect(search_, &QToolButton::clicked, this, &Shell::openPalette);
     bar->addWidget(search_);
@@ -242,10 +246,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     viewMenu_->addAction("Command Window", QKeySequence("Ctrl+J"), this, [this] { showConsole(!consoleVisible()); });
     viewMenu_->addAction("Side Panel", QKeySequence("Ctrl+B"), this, [this] { panels_->setVisible(!panels_->isVisible()); });
     viewMenu_->addSeparator();
-    viewMenu_->addAction("Library Manager", this, [this] {
-        ciw_->libraryManager()->show();
-        ciw_->libraryManager()->raise();
-    });
+    viewMenu_->addAction("Library Manager", this, [this] { showLibraryManager(); });
     themeMenu_ = viewMenu_->addMenu("Appearance");
     auto* group = new QActionGroup(this);
     for (Theme::Mode m : {Theme::Mode::Auto, Theme::Mode::Light, Theme::Mode::Dark}) {
@@ -260,6 +261,11 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     }
     goMenu_ = nullptr;
 
+    addUiCommands(session_, *this);
+    api_ = new ApiServer(session_, this);
+    if (!api_->listening()) qWarning("OpenVLSI API: %s", qPrintable(api_->error()));
+    bindActions(this, {{"New Library…", "library_create"}, {"Install PDK…", "pdk_install"}, {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"},
+                       {"Command Window", "ui_console"}, {"Side Panel", "ui_panel"}, {"Library Manager", "ui_library_manager"}, {"Match the system", "ui_theme"}, {"Light", "ui_theme"}, {"Dark", "ui_theme"}});
     session_.addCommand({"ui_theme", "Sets the app's appearance: auto follows the system, or light or dark; returns the mode now in effect.",
                          cmd::object({{"mode", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"auto", "light", "dark"}}, {"description", "the appearance"}}}}),
                          [this](cmd::Context&, const QJsonObject& a) {
@@ -302,6 +308,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     connect(&session_, &Session::changed, this, [this] { refreshStart(); });
 
     connect(tabs_, &QTabWidget::currentChanged, this, [this] {
+        if (QWidget* tool = tabs_->currentWidget()) tool->setFocus(Qt::TabFocusReason);  // its keys work at once, without a click first
         rebuildMenus();
         updateCrumb();
         if (auto* m = qobject_cast<QMainWindow*>(current()); m && m->centralWidget()) m->centralWidget()->setFocus();
@@ -429,6 +436,7 @@ void Shell::refreshStart() {
         if (p.size() != 3) continue;
         if (!session_.call("view_list", {{"library", p[0]}, {"cell", p[1]}}).ok) continue;  // gone from this workspace
         auto* b = new QPushButton(p[1] + " " + p[2] + "   " + p[0], start_);
+        b->setProperty("api", "editor_open");
         b->setObjectName("linkButton");
         b->setCursor(Qt::PointingHandCursor);
         connect(b, &QPushButton::clicked, this, [this, p] {
@@ -459,6 +467,30 @@ void Shell::showStage(int stage) {
     for (int k = 0; k < (int)stages_.size(); ++k) stages_[k]->setChecked(k == stage);
     refreshIcons();
 }
+
+QString Shell::stageName() const {
+    static const char* names[] = {"design", "simulate", "implement", "verify", "test"};
+    return names[panels_->currentIndex()];
+}
+
+bool Shell::sidePanelVisible() const { return !panels_->isHidden(); }
+
+void Shell::setSidePanelVisible(bool on) { panels_->setVisible(on); }
+
+void Shell::showLibraryManager() {
+    ciw_->libraryManager()->show();
+    ciw_->libraryManager()->raise();
+}
+
+QWidget* Shell::railButton(const QString& stage) const {
+    static const QStringList names{"design", "simulate", "implement", "verify", "test"};
+    const int at = (int)names.indexOf(stage);
+    return at < 0 || at >= (int)stages_.size() ? nullptr : stages_[at];
+}
+
+QWidget* Shell::consoleRailButton() const { return consoleButton_; }
+
+QString Shell::apiEndpoint() const { return api_ && api_->listening() ? api_->endpoint() : QString(); }
 
 void Shell::showConsole(bool on) {
     ciw_->setVisible(on);

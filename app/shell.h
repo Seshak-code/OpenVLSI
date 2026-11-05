@@ -42,6 +42,15 @@ public:
     CommandPalette* newPalette();          // what Cmd+K shows
     bool runForm(const QString& command, const QJsonObject& prefill = {});  // no parameters: runs it; else its form
     void showConsole(bool on);
+    QString stageName() const;
+    bool sidePanelVisible() const;
+    void setSidePanelVisible(bool on);
+    void closeTabAt(int index) { closeTab(index); }
+    void showLibraryManager();
+    QJsonObject currentContext() const { return context(); }
+    QString apiEndpoint() const;
+    QWidget* railButton(const QString& stage) const;
+    QWidget* consoleRailButton() const;
     bool consoleVisible() const;
     void showStage(int stage);             // 0 design, 1 simulate, 2 implement, 3 verify, 4 test
     QStringList recentViews() const;
@@ -70,6 +79,7 @@ private:
     ImplementPanel* implement_ = nullptr;
     TestPanel* test_ = nullptr;
     VerifyPanel* verify_ = nullptr;
+    class ApiServer* api_ = nullptr;
     QSplitter *outer_, *inner_;
     QWidget* start_;
     QVBoxLayout* recentList_;

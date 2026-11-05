@@ -25,6 +25,7 @@ struct Context {
     oadb::Workspace& workspace;
     std::string simulator;
     std::shared_ptr<sim::Jobs> jobs;
+    const class Registry* registry = nullptr;  // set by Registry::call: the commands known to this one
 };
 
 struct Command {

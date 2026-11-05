@@ -57,7 +57,7 @@ std::optional<QByteArray> Server::handle(const QByteArray& in) {
     if (method == "tools/call") {
         const QString name = params["name"].toString();
         if (!registry_.find(name)) return line(error(id, -32602, "unknown tool: " + name));
-        const cmd::Result r = registry_.call(ctx_, name, params["arguments"].toObject());
+        const cmd::Result r = call_(name, params["arguments"].toObject());
         return line(result(id, {{"content", QJsonArray{QJsonObject{{"type", "text"}, {"text", r.ok ? text(r.value) : r.error}}}},
                                 {"isError", !r.ok}}));
     }

@@ -27,6 +27,7 @@ public:
 
     bool add(const QString& expression, QString* error = nullptr);  // a trace (a waveform; a number is an error)
     void clear();
+    bool removeTrace(int index);  // false: no such trace
     QStringList expressions() const;
     QString calculate(const QString& expression);  // the calculator line: a number's text, or plots a waveform
     void selectTrace(int index);                    // and cross-probes its net
