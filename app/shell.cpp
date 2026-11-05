@@ -51,6 +51,7 @@ QString iconOf(QWidget* tool) {
     if (qobject_cast<Verifier*>(tool)) return "verifier";
     if (qobject_cast<FlowRunView*>(tool)) return "implement";
     if (qobject_cast<TestRunView*>(tool)) return "test";
+    if (qobject_cast<SignoffView*>(tool)) return "verify";
     return "view";
 }
 
@@ -62,6 +63,7 @@ QString tabTitle(QWidget* tool) {
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->cell() + " " + r->view();
     if (auto* f = qobject_cast<FlowRunView*>(tool)) return f->run().replace('/', ' ');
     if (auto* v = qobject_cast<TestRunView*>(tool)) return v->run().replace('/', ' ');
+    if (auto* o = qobject_cast<SignoffView*>(tool)) return o->run().section('/', 0, 0) + (o->kind() == SignoffView::Kind::Timing ? " timing" : " power");
     return tool->windowTitle();
 }
 
@@ -73,6 +75,7 @@ QString crumbOf(QWidget* tool) {
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->library() + "  ›  " + r->cell() + "  ›  " + r->view();
     if (auto* f = qobject_cast<FlowRunView*>(tool)) return "Implement  ›  " + f->design() + "  ›  " + f->run().section('/', 1);
     if (auto* v = qobject_cast<TestRunView*>(tool)) return "Test  ›  " + v->run().section('/', 0, 0) + "  ›  " + v->run().section('/', 1);
+    if (auto* o = qobject_cast<SignoffView*>(tool)) return "Sign-off  ›  " + o->run().section('/', 0, 0) + "  ›  " + o->run().section('/', 1) + (o->kind() == SignoffView::Kind::Timing ? "  ›  timing" : "  ›  power");
     return {};
 }
 }  // namespace

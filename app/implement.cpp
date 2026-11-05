@@ -194,12 +194,16 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     stop_ = new QPushButton("Stop", central);
     layout_ = new QPushButton("Open layout", central);
     markers_ = new QPushButton("Show DRC markers", central);
+    timing_ = new QPushButton("Timing", central);
+    power_ = new QPushButton("IR drop", central);
     top->addWidget(title_);
     top->addSpacing(14);
     top->addWidget(verdict_);
     top->addStretch(1);
     top->addWidget(stop_);
     top->addWidget(markers_);
+    top->addWidget(timing_);
+    top->addWidget(power_);
     top->addWidget(layout_);
     layout->addLayout(top);
 
@@ -234,7 +238,9 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     });
     connect(layout_, &QPushButton::clicked, this, [this] { emit openLayoutRequested(run_); });
     connect(markers_, &QPushButton::clicked, this, [this] { emit showMarkersRequested(run_); });
-    bindActions(this, {{"Stop", "flow_stop"}, {"Open layout", "flow_open_layout"}, {"Show DRC markers", "layout_view_markers"}});
+    connect(timing_, &QPushButton::clicked, this, [this] { emit signoffRequested(run_, true); });
+    connect(power_, &QPushButton::clicked, this, [this] { emit signoffRequested(run_, false); });
+    bindActions(this, {{"Stop", "flow_stop"}, {"Open layout", "flow_open_layout"}, {"Show DRC markers", "layout_view_markers"}, {"Timing", "timing_view"}, {"IR drop", "power_view"}});
 
     poll_ = new QTimer(this);
     poll_->setInterval(1000);
@@ -335,6 +341,8 @@ void FlowRunView::fillReport(const QJsonObject& report) {
     for (const auto& s : stages)
         if (s.toObject()["stage"] == "drc") violations = s.toObject()["metrics"].toObject()["violations"].toInt();
     markers_->setVisible(hasGds && violations > 0);
+    timing_->setEnabled(hasGds);
+    power_->setEnabled(hasGds);
     if (state == "running") return;
     const bool clean = report["clean"].toBool();
     verdict_->setText(clean ? "Clean: timing met, DRC clean, LVS matched" : state == "done" ? "Finished, not clean" : "Run " + state);

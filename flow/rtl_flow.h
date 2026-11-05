@@ -34,6 +34,7 @@ struct Platform {
     bool gateSim;             // runFirmware's patching of cellVerilog has been checked on this platform
     std::string layerProperties;  // KLayout .lyp: names and colours of its layers
     std::string tech;         // the layout process (layout/tech.h) a run's layout attaches; "" none
+    double supplyVolts;       // its core supply
 };
 
 const std::vector<Platform>& platforms();

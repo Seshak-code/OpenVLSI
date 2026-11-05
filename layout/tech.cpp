@@ -21,6 +21,10 @@ Tech sg13g2() {
         {"Via2", 29, 0, "#ff3736"},     {"Metal3", 30, 0, "#d80000"},     {"Metal3.pin", 30, 2, "#d80000"}, {"Metal3.text", 30, 25, "#d80000"},
         {"Via3", 49, 0, "#9ba940"},     {"Metal4", 50, 0, "#93e837"},     {"Metal4.pin", 50, 2, "#93e837"}, {"Metal4.text", 50, 25, "#93e837"},
         {"Via4", 66, 0, "#deac5e"},     {"Metal5", 67, 0, "#dcd146"},     {"Metal5.pin", 67, 2, "#dcd146"}, {"Metal5.text", 67, 25, "#dcd146"},
+        {"Metal1.filler", 8, 22, "#39bfff"},  {"Metal2.filler", 10, 22, "#ccccd9"}, {"Metal3.filler", 30, 22, "#d80000"}, {"Metal4.filler", 50, 22, "#93e837"}, {"Metal5.filler", 67, 22, "#dcd146"},
+        {"TopVia1", 125, 0, "#ffe6bf"}, {"TopMetal1", 126, 0, "#ffe6bf"}, {"TopMetal1.pin", 126, 2, "#ffe6bf"}, {"TopMetal1.filler", 126, 22, "#ffe6bf"}, {"TopMetal1.text", 126, 25, "#ffe6bf"},
+        {"TopVia2", 133, 0, "#ff8000"}, {"TopMetal2", 134, 0, "#ff8000"}, {"TopMetal2.pin", 134, 2, "#ff8000"}, {"TopMetal2.filler", 134, 22, "#ff8000"}, {"TopMetal2.text", 134, 25, "#ff8000"},
+        {"prBoundary", 189, 4, "#9900e6"},
     };
     t.metals = {
         {"Metal1", 8, 160, 180, 90000},    // M1.a, M1.b, M1.d

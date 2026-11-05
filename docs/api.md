@@ -1204,6 +1204,16 @@ Shows what a DRC found in a layout's viewer (opened if need be): the run of veri
 | `run` | string |  | a verification run |
 | `view` | string | yes | the layout view |
 
+### `layout_view_overlay_clear`
+
+Clears a timing path or IR map from a layout's viewer.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | cell name |
+| `library` | string | yes | library name |
+| `view` | string | yes | the view |
+
 ### `layout_view_pan`
 
 Moves a layout's window by a distance in database units.
@@ -1214,6 +1224,30 @@ Moves a layout's window by a distance in database units.
 | `dx` | number | yes | x, database units |
 | `dy` | number | yes | y, database units |
 | `library` | string | yes | library name |
+| `view` | string | yes | the view |
+
+### `layout_view_path`
+
+Draws a timing path of an implementation run over its layout: run and index into timing_report's setup, then hold, paths. Returns its slack.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | cell name |
+| `index` | integer | yes | which path, from 0 |
+| `library` | string | yes | library name |
+| `run` | string | yes | an implementation run |
+| `view` | string | yes | the view |
+
+### `layout_view_power`
+
+Draws a power net's IR map from an implementation run's analysis over its layout. Returns the worst drop in mV.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | cell name |
+| `library` | string | yes | library name |
+| `net` | string | yes | VDD or VSS |
+| `run` | string | yes | an implementation run |
 | `view` | string | yes | the view |
 
 ### `layout_view_ruler`
@@ -1555,6 +1589,14 @@ An implementation tab's state: its verdict, why it is not clean, its stages.
 
 ## Implement
 
+### `flow_artifacts`
+
+The files an implementation run made, stage by stage: netlists, databases, constraints, parasitics, GDS, reports. For tools outside this app.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `run` | string | yes | an implementation run: <design>/run.N |
+
 ### `flow_import_layout`
 
 Brings a run's final GDS into a library of its own (<design>_run<N>, in the run's directory) with the platform's layer colours; returns the library and the top cell. A run already imported returns the same.
@@ -1797,6 +1839,41 @@ A recorded signal's value at a time, as hex, and its changes up to a limit.
 
 ## Other
 
+### `power_analyze`
+
+IR drop and electromigration of a run's power grid through OpenROAD's PSM, net by net: worst and average drop, where it is worst, the largest current in a grid resistor. supply_v defaults to the platform's. Waits and returns it, or with wait false starts it in the background (poll power_report).
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `run` | string | yes | an implementation run: <design>/run.N |
+| `supply_v` | number |  | the supply, in volts |
+| `wait` | boolean |  | wait for it (default true) |
+
+### `power_map`
+
+The voltage drop at every node of a power net, for a map: [x, y, drop] in microns and millivolts, with the worst.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `net` | string | yes | VDD or VSS |
+| `run` | string | yes | an implementation run: <design>/run.N |
+
+### `power_report`
+
+A run's last power-grid analysis: its state and results (see power_analyze); an error when it has none.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `run` | string | yes | an implementation run: <design>/run.N |
+
+### `power_view`
+
+Opens an implementation run's power grid as a tab (the GUI's command).
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `run` | string | yes | an implementation run: <design>/run.N |
+
 ### `shape_add`
 
 Adds a drawing shape (line, rect, polygon, ellipse, label) to a symbol or schematic; returns its id.
@@ -1811,6 +1888,50 @@ Adds a drawing shape (line, rect, polygon, ellipse, label) to a symbol or schema
 | `points` | array | yes | points [[x, y], ...], in database units |
 | `text` | string |  | a label's text |
 | `view` | string | yes | view name |
+
+### `signoff_view_select`
+
+Selects a row of a timing tab, showing that path's steps.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `row` | integer | yes | from 0 |
+| `run` | string | yes | an implementation run: <design>/run.N |
+
+### `signoff_view_state`
+
+A timing or power tab's summary and rows.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `kind` | string | yes | timing or power |
+| `run` | string | yes | an implementation run: <design>/run.N |
+
+### `timing_analyze`
+
+Static timing of a run's routed design through OpenSTA, with its extracted parasitics: WNS, TNS, each clock's minimum period, and the worst setup and hold paths step by step. Waits and returns it, or with wait false starts it in the background (poll timing_report).
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `paths` | integer |  | how many paths per group (default 20) |
+| `run` | string | yes | an implementation run: <design>/run.N |
+| `wait` | boolean |  | wait for it (default true) |
+
+### `timing_report`
+
+A run's last timing analysis: its state and results (see timing_analyze); an error when it has none.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `run` | string | yes | an implementation run: <design>/run.N |
+
+### `timing_view`
+
+Opens an implementation run's timing as a tab (the GUI's command): its worst paths, each step by step.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `run` | string | yes | an implementation run: <design>/run.N |
 
 ### `workspace_libraries`
 

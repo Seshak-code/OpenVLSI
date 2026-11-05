@@ -66,7 +66,7 @@ add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade
 target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
 
 add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp
-            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp cmd/test_commands.cpp cmd/verify_commands.cpp)
+            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp cmd/test_commands.cpp cmd/verify_commands.cpp cmd/signoff_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(openvlsi_layout PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_layout PUBLIC oadb Qt6::Core)
@@ -90,7 +90,7 @@ treespice_beside(openvlsi-mcp)
 set(CMAKE_AUTOMOC ON)
 add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp app/scene.cpp app/canvas.cpp
             app/view_editor.cpp app/ade_explorer.cpp app/plot.cpp app/waveform_viewer.cpp app/theme.cpp app/icons.cpp
-            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp app/implement.cpp app/test_stage.cpp app/verify_stage.cpp app/ui_commands.cpp app/ui_input.cpp app/api_server.cpp)
+            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp app/implement.cpp app/test_stage.cpp app/verify_stage.cpp app/ui_commands.cpp app/ui_input.cpp app/api_server.cpp app/signoff.cpp)
 target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd openvlsi_mcp Qt6::Widgets Qt6::Network PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag app/shaders/layout.vert app/shaders/layout.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)

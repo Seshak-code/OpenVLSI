@@ -129,6 +129,47 @@ protected:
             }
         }
 
+        if (!c_->heat.empty()) {
+            p.setPen(Qt::NoPen);
+            for (const auto& h : c_->heat) {
+                const QPointF at = c_->toScreen(h.at);
+                if (!rect().contains(at.toPoint())) continue;
+                // Blue is no drop and red the worst: and bigger too, so it does not hang on colour alone
+                QColor heat = QColor::fromHsvF((1.0 - h.share) * 0.66, 0.9, 1.0);
+                heat.setAlphaF(0.85);
+                p.setBrush(heat);
+                const double r = 2.0 + 3.0 * h.share;
+                p.drawEllipse(at, r, r);
+            }
+            p.setBrush(Qt::NoBrush);
+        }
+
+        if (c_->pathOverlay.size() >= 2) {
+            p.setRenderHint(QPainter::Antialiasing, true);
+            p.setPen(QPen(t.via, 2));
+            QPolygonF line;
+            for (const QPointF& w : c_->pathOverlay) line << c_->toScreen(w);
+            p.drawPolyline(line);
+            p.setBrush(t.via);
+            for (const QPointF& s : line) p.drawEllipse(s, 2.5, 2.5);
+            p.setBrush(t.pass);
+            p.drawEllipse(line.first(), 4.5, 4.5);
+            p.setBrush(t.fail);
+            p.drawEllipse(line.last(), 4.5, 4.5);
+            p.setBrush(Qt::NoBrush);
+            p.setRenderHint(QPainter::Antialiasing, false);
+        }
+
+        if (!c_->overlayTitle.isEmpty()) {
+            QFont f = font();
+            f.setPixelSize(12);
+            p.setFont(f);
+            const QRect box = p.fontMetrics().boundingRect(c_->overlayTitle).adjusted(-8, -5, 8, 5).translated(14, 22);
+            p.fillRect(box, t.panel);
+            p.setPen(t.ink);
+            p.drawText(box, Qt::AlignCenter, c_->overlayTitle);
+        }
+
         if (!c_->flightLines.empty()) {
             QPen line(t.warn, 1);
             line.setStyle(Qt::DashLine);
@@ -200,6 +241,8 @@ void LayoutCanvas::setScene(const layout::Flat* flat, const std::vector<LayerSty
         }
         if (rulerStart) *rulerStart += by;
         for (QPointF& p : rubberPoints) p += by;
+        for (QPointF& p : pathOverlay) p += by;
+        for (auto& h : heat) h.at += by;
     }
     originX_ = flat->originX;
     originY_ = flat->originY;
@@ -807,9 +850,27 @@ QJsonObject LayoutViewer::state() const {
     QJsonObject out{{"window", QJsonArray{a.x() + flat_.originX, a.y() + flat_.originY, b.x() + flat_.originX, b.y() + flat_.originY}},
                     {"scale", canvas_->scale()}, {"levels", levels_}, {"tool", toolNames[(int)tool_]}, {"selection", selected},
                     {"layers_shown", shown}, {"layers_hidden", hidden}, {"markers", (int)canvas_->markers.size()}, {"current_marker", canvas_->currentMarker}, {"rulers", rulers},
-                    {"flight_lines", (int)canvas_->flightLines.size()}, {"status", status_->text()}, {"shapes", (double)flat_.shapes.size()}};
+                    {"flight_lines", (int)canvas_->flightLines.size()}, {"path_overlay", (int)canvas_->pathOverlay.size()}, {"heat_points", (int)canvas_->heat.size()}, {"overlay", canvas_->overlayTitle}, {"status", status_->text()}, {"shapes", (double)flat_.shapes.size()}};
     if (current_) out["current_layer"] = QString("%1/%2").arg(current_->first).arg(current_->second);
     return out;
+}
+
+void LayoutViewer::setPathOverlay(const std::vector<QPointF>& microns, const QString& title) {
+    const double dbuPerUm = 1.0 / canvas_->micronsPerDbu;
+    canvas_->pathOverlay.clear();
+    canvas_->heat.clear();
+    for (const QPointF& p : microns) canvas_->pathOverlay.push_back({p.x() * dbuPerUm - flat_.originX, p.y() * dbuPerUm - flat_.originY});
+    canvas_->overlayTitle = title;
+    canvas_->refreshOverlay();
+}
+
+void LayoutViewer::setHeatOverlay(const std::vector<std::array<double, 3>>& nodes, double worst, const QString& title) {
+    const double dbuPerUm = 1.0 / canvas_->micronsPerDbu;
+    canvas_->heat.clear();
+    canvas_->pathOverlay.clear();
+    for (const auto& n : nodes) canvas_->heat.push_back({{n[0] * dbuPerUm - flat_.originX, n[1] * dbuPerUm - flat_.originY}, worst > 0 ? (float)(n[2] / worst) : 0.0f});
+    canvas_->overlayTitle = title;
+    canvas_->refreshOverlay();
 }
 
 void LayoutViewer::placeMarkers() {

@@ -157,6 +157,32 @@ def main():
     fast_gate = test("gate_fast", "gate", 1)
     check(not fast_gate["passed"], f"at 1 ns the routed netlist fails: its delays are real ({fast_gate.get('error', 'it passed')})")
 
+    print("Sign-off", flush=True)
+    t = m("timing_analyze", run=run)
+    check(t["state"] == "done" and t["met"], f"timing_analyze: met, WNS {t.get('wns_ns')} ns, TNS {t.get('tns_ns')} ns, parasitics {t.get('parasitics')} {t.get('error', '')}")
+    min_period = t["clocks"][0]["min_period_ns"]
+    worst_slack = t["setup"][0]["slack_ns"]
+    final = next(s for s in report["stages"] if s["stage"] == "finish")["metrics"]
+    check(abs(worst_slack - final["setup_slack_ns"]) < 0.02, f"its worst slack {worst_slack:.3f} ns agrees with the flow's own report {final['setup_slack_ns']:.3f} ns")
+    check(0 < min_period < 10, f"a minimum period of {min_period:.3f} ns under the 10 ns clock")
+    step = t["setup"][0]["steps"][-1]
+    arrivals = [s["arrival_ns"] for s in t["setup"][0]["steps"]]
+    check(arrivals == sorted(arrivals) and len(arrivals) > 2, f"a path's arrivals only grow, over {len(arrivals)} steps, ending at {step['pin']}")
+    above = test("gate_above", "gate", round(min_period * 1.3, 3))
+    check(above["passed"], f"the routed netlist passes at 1.3 x STA's minimum period, {min_period * 1.3:.2f} ns: {above.get('error', '')}")
+    below = test("gate_below", "gate", round(min_period * 0.4, 3))
+    check(not below["passed"], f"and fails at 0.4 x it, {min_period * 0.4:.2f} ns: simulation and STA tell one story")
+
+    p_ = m("power_analyze", run=run)
+    check(p_["state"] == "done" and len(p_.get("nets", [])) == 2, f"power_analyze: both rails {p_.get('error', '')}")
+    vdd = next(n for n in p_["nets"] if n["net"] == "VDD")
+    check(0 < vdd["worst_drop_mv"] < 0.05 * p_["supply_v"] * 1e3, f"VDD's worst drop is real and small: {vdd['worst_drop_mv']:.3f} mV at {vdd['worst_instance']}, {vdd['nodes']:.0f} nodes")
+    check(vdd["average_drop_mv"] <= vdd["worst_drop_mv"], "the average is under the worst")
+    mp = m("power_map", run=run, net="VDD")
+    check(abs(max(n[2] for n in mp["nodes"]) - vdd["worst_drop_mv"]) < 1e-6 and len(mp["nodes"]) == vdd["nodes"], "power_map holds the same nodes and the same worst")
+    files = m("flow_artifacts", run=run)
+    check(any(f.endswith("6_final.gds") for f in files["results"]) and any(f.endswith("6_final.spef") for f in files["results"]), "flow_artifacts lists the GDS and the SPEF")
+
     wrong = test("wrong", "rtl", 10, first=7)
     check(not wrong["passed"] and "failure" in wrong.get("error", ""), "a wrong expectation fails")
     m.p.stdin.close()

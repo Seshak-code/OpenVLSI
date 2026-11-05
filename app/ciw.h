@@ -5,6 +5,8 @@
 #include "app/session.h"
 
 #include <QMainWindow>
+#include "app/signoff.h"
+
 #include <QPointer>
 
 #include <functional>
@@ -40,6 +42,7 @@ public:
     Verifier* verifier(const QString& lib, const QString& cell, const QString& view) const;
     FlowRunView* flowView(const QString& run) const;
     TestRunView* testView(const QString& run) const;
+    SignoffView* signoffView(const QString& run, SignoffView::Kind kind);  // opened, and shown, if need be
     WaveformViewer* viewer(const QString& run) const;  // the open viewer on a run directory, or null
 
 private:
@@ -53,6 +56,7 @@ private:
     std::map<QString, QPointer<QWidget>> editors_;  // "lib/cell/view": a ViewEditor or an AdeExplorer
     std::map<QString, QPointer<FlowRunView>> flowViews_;
     std::map<QString, QPointer<TestRunView>> testViews_;
+    std::map<QString, QPointer<SignoffView>> signoffViews_;
     std::vector<QPointer<WaveformViewer>> viewers_;  // in the order they were opened (a probe goes to the newest)
     WaveformViewer* openViewer(cmd::Context& c, const QString& run);
     bool typed_ = false;  // the call in progress came from the input line (reads are echoed only then)

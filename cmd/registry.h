@@ -77,6 +77,7 @@ int exportGds(oadb::Workspace& ws, const std::string& lib, const std::string& ce
 void addLayoutCommands(Registry& r);      // layout_import_gds, layout_export_gds, layout_layers, layout_info
 void addVerifierCommands(Registry& r);    // verifier_setup_get/set, verifier_requirement_add/remove, verifier_map, verifier_check
 void addLayoutEditCommands(Registry& r);  // layout_shape_add, ..., layout_pcell_mos, layout_generate, layout_connectivity
+void addSignoffCommands(Registry& r);     // timing_analyze, timing_report, power_analyze, power_report, power_map, flow_artifacts
 void addVerifyCommands(Registry& r);      // verify_drc, verify_lvs, verify_status, verify_list, verify_markers
 void addTestCommands(Registry& r);        // test_run, test_firmware, test_status, test_stop, test_list, test_signals, test_value
 void addFlowCommands(Registry& r);        // flow_tools, flow_platforms, flow_run, flow_status, flow_stop, flow_list, flow_report

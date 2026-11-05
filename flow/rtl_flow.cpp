@@ -31,7 +31,7 @@ const std::vector<Platform>& platforms() {
          {"densityRules=false"},
          "lvs/sg13g2.lvs", "", "cdl/sg13g2_stdcell.cdl", "sg13g2_antenna*", {"lib/sg13g2_stdcell_typ_1p20V_25C.lib"}, "setRC.tcl",
          {"USE_FILL = 1"},
-         {"~/eda/ihp-verilog/sg13g2_stdcell.v", "~/eda/ihp-verilog/sg13g2_udp.v"}, true, "sg13g2.lyp", "sg13g2"},
+         {"~/eda/ihp-verilog/sg13g2_stdcell.v", "~/eda/ihp-verilog/sg13g2_udp.v"}, true, "sg13g2.lyp", "sg13g2", 1.2},
         {"asap7", "1ps", 1e-3, "drc/asap7.lydrc", {},
          "", "no open LVS deck exists for asap7 (ORFS, the PDK and lambdapdk have none; the PDK's own is Calibre)", "", "",
          {"lib/NLDM/asap7sc7p5t_AO_RVT_FF_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_INVBUF_RVT_FF_nldm_220122.lib.gz",
@@ -40,7 +40,7 @@ const std::vector<Platform>& platforms() {
          "setRC.tcl", {},
          {"verilog/stdcell/asap7sc7p5t_AO_RVT_TT_201020.v", "verilog/stdcell/asap7sc7p5t_INVBUF_RVT_TT_201020.v",
           "verilog/stdcell/asap7sc7p5t_OA_RVT_TT_201020.v", "verilog/stdcell/asap7sc7p5t_SIMPLE_RVT_TT_201020.v",
-          "verilog/stdcell/asap7sc7p5t_SEQ_RVT_TT_220101.v"}, false, "KLayout/asap7.lyp", ""},
+          "verilog/stdcell/asap7sc7p5t_SEQ_RVT_TT_220101.v"}, false, "KLayout/asap7.lyp", "", 0.7},
     };
     return all;
 }

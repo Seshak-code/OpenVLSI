@@ -53,6 +53,10 @@ public:
     std::vector<QRectF> selectedBoxes;                    // world: one per selected object
     std::vector<std::pair<QPointF, QPointF>> flightLines; // world: what remains to route
     std::vector<QRectF> markers;                          // world: what a check found, each a box
+    std::vector<QPointF> pathOverlay;                     // world: a timing path, pin to pin
+    struct HeatPoint { QPointF at; float share; };        // world; 0 no drop to 1 the worst
+    std::vector<HeatPoint> heat;
+    QString overlayTitle;
     int currentMarker = -1;
     enum class Rubber { None, Box, Line, Closed, Ghost };
     Rubber rubber = Rubber::None;                         // what the tool in progress draws to the cursor
@@ -147,6 +151,9 @@ public:
     QTreeWidget* markerTree() const { return markerTree_; }
     void showMarker(int index);
     QRectF markerWindow(int index) const;
+    // A timing path's pins, and an IR map, in microns: drawn over the layout. Empty clears.
+    void setPathOverlay(const std::vector<QPointF>& microns, const QString& title);
+    void setHeatOverlay(const std::vector<std::array<double, 3>>& nodes, double worst, const QString& title);  // x, y microns; drop
     QTreeWidget* layerTree() const { return layerTree_; }
     QString status() const;
 

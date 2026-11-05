@@ -127,6 +127,9 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              auto& view = flowViews_[run];
                              if (!view) {
                                  view = new FlowRunView(session_, run, this);
+                                 connect(view, &FlowRunView::signoffRequested, this, [this](const QString& r, bool timing) {
+                                     session_.call(timing ? "timing_view" : "power_view", {{"run", r}});
+                                 });
                                  connect(view, &FlowRunView::showMarkersRequested, this, [this](const QString& r) {
                                      const cmd::Result layout = session_.call("flow_open_layout", {{"run", r}});
                                      if (!layout.ok) return;
@@ -281,6 +284,13 @@ WaveformViewer* Ciw::viewer(const QString& run) const {
 AdeExplorer* Ciw::explorer(const QString& lib, const QString& cell, const QString& view) const {
     const auto it = editors_.find(lib + "/" + cell + "/" + view);
     return it == editors_.end() ? nullptr : qobject_cast<AdeExplorer*>(it->second.data());
+}
+
+SignoffView* Ciw::signoffView(const QString& run, SignoffView::Kind kind) {
+    auto& view = signoffViews_[run + (kind == SignoffView::Kind::Timing ? "/timing" : "/power")];
+    if (!view) view = new SignoffView(session_, run, kind, this);
+    present(view);
+    return view;
 }
 
 TestRunView* Ciw::testView(const QString& run) const {

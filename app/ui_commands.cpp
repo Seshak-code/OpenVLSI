@@ -7,6 +7,7 @@
 #include "app/library_manager.h"
 #include "app/navigator.h"
 #include "app/shell.h"
+#include "app/signoff.h"
 #include "app/test_stage.h"
 #include "app/verifier.h"
 #include "app/verify_stage.h"
@@ -321,6 +322,37 @@ void addUiCommands(Session& session, Shell& shell) {
              return QJsonValue(true);
          }});
 
+    add({"layout_view_path", "Draws a timing path of an implementation run over its layout: run and index into timing_report's setup, then hold, paths. Returns its slack.",
+         viewParams({{"run", cmd::param("string", "an implementation run")}, {"index", cmd::param("integer", "which path, from 0")}}),
+         [s, layout](cmd::Context&, const QJsonObject& a) {
+             const cmd::Result r = s->call("timing_report", {{"run", a["run"]}});
+             if (!r.ok) refuse(r.error);
+             const QJsonArray setup = r.value.toObject()["setup"].toArray(), hold = r.value.toObject()["hold"].toArray();
+             const int k = a["index"].toInt();
+             if (k < 0 || k >= setup.size() + hold.size()) refuse("no such path");
+             const QJsonObject path = (k < setup.size() ? setup[k] : hold[k - setup.size()]).toObject();
+             std::vector<QPointF> points;
+             for (const auto& st : path["steps"].toArray()) points.push_back({st.toObject()["x_um"].toDouble(), st.toObject()["y_um"].toDouble()});
+             layout(a)->setPathOverlay(points, QString("%1 to %2, slack %3 ns").arg(path["startpoint"].toString(), path["endpoint"].toString()).arg(path["slack_ns"].toDouble(), 0, 'f', 3));
+             return path["slack_ns"].toVariant().toJsonValue();
+         }});
+    add({"layout_view_power", "Draws a power net's IR map from an implementation run's analysis over its layout. Returns the worst drop in mV.",
+         viewParams({{"run", cmd::param("string", "an implementation run")}, {"net", cmd::param("string", "VDD or VSS")}}),
+         [s, layout](cmd::Context&, const QJsonObject& a) {
+             const cmd::Result r = s->call("power_map", {{"run", a["run"]}, {"net", a["net"]}});
+             if (!r.ok) refuse(r.error);
+             const QJsonObject map = r.value.toObject();
+             std::vector<std::array<double, 3>> nodes;
+             for (const auto& n : map["nodes"].toArray()) nodes.push_back({n.toArray()[0].toDouble(), n.toArray()[1].toDouble(), n.toArray()[2].toDouble()});
+             layout(a)->setHeatOverlay(nodes, map["worst_mv"].toDouble(), QString("%1 IR drop: red %2 mV").arg(a["net"].toString()).arg(map["worst_mv"].toDouble(), 0, 'f', 2));
+             return map["worst_mv"].toVariant().toJsonValue();
+         }});
+    add({"layout_view_overlay_clear", "Clears a timing path or IR map from a layout's viewer.", viewParams(),
+         [layout](cmd::Context&, const QJsonObject& a) {
+             layout(a)->setPathOverlay({}, {});
+             return QJsonValue(true);
+         }});
+
     // ---- The schematic and symbol editors
     const auto editor = [s, sh](const QJsonObject& a) -> ViewEditor* {
         const cmd::Result r = s->call("editor_open", where(a));
@@ -517,6 +549,31 @@ void addUiCommands(Session& session, Shell& shell) {
              if (!r.ok) refuse(r.error);
              FlowRunView* v = sh->ciw()->flowView(a["run"].toString());
              return QJsonValue(QJsonObject{{"verdict", v->verdict()}, {"reasons", v->reasons()}});
+         }});
+    const auto signoff = [s, sh](const QJsonObject& a, SignoffView::Kind kind) -> SignoffView* {
+        const cmd::Result r = s->call("flow_status", {{"run", a["run"]}});
+        if (!r.ok) refuse(r.error);
+        return sh->ciw()->signoffView(a["run"].toString(), kind);
+    };
+    add({"timing_view", "Opens an implementation run's timing as a tab (the GUI's command): its worst paths, each step by step.", cmd::object({{"run", kFlowRun}}),
+         [signoff](cmd::Context&, const QJsonObject& a) {
+             signoff(a, SignoffView::Kind::Timing)->refresh();
+             return a["run"].toVariant().toJsonValue();
+         }});
+    add({"power_view", "Opens an implementation run's power grid as a tab (the GUI's command).", cmd::object({{"run", kFlowRun}}),
+         [signoff](cmd::Context&, const QJsonObject& a) {
+             signoff(a, SignoffView::Kind::Power)->refresh();
+             return a["run"].toVariant().toJsonValue();
+         }});
+    add({"signoff_view_state", "A timing or power tab's summary and rows.", cmd::object({{"run", kFlowRun}, {"kind", cmd::param("string", "timing or power")}}),
+         [signoff](cmd::Context&, const QJsonObject& a) {
+             SignoffView* v = signoff(a, a["kind"].toString() == "power" ? SignoffView::Kind::Power : SignoffView::Kind::Timing);
+             return QJsonValue(QJsonObject{{"summary", v->summary()}, {"rows", v->list()->rowCount()}, {"selected", v->list()->currentRow()}, {"steps", v->detail()->rowCount()}});
+         }});
+    add({"signoff_view_select", "Selects a row of a timing tab, showing that path's steps.", cmd::object({{"run", kFlowRun}, {"row", cmd::param("integer", "from 0")}}),
+         [signoff](cmd::Context&, const QJsonObject& a) {
+             signoff(a, SignoffView::Kind::Timing)->selectRow(a["row"].toInt());
+             return QJsonValue(true);
          }});
     const QJsonObject kTestRun = cmd::param("string", "a test's run: <name>/run.N");
     const auto testView = [s, sh](const QJsonObject& a) -> TestRunView* {
