@@ -4,6 +4,7 @@
 #include "app/ade_explorer.h"
 #include "app/implement.h"
 #include "app/layout_viewer.h"
+#include "app/rtl_stage.h"
 #include "app/test_stage.h"
 #include "app/ui_commands.h"
 #include "app/verifier.h"
@@ -152,7 +153,10 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              const cmd::Result status = session_.call("test_status", {{"run", run}});
                              if (!status.ok) throw std::runtime_error(status.error.toStdString());
                              auto& view = testViews_[run];
-                             if (!view) view = new TestRunView(session_, run, this);
+                             if (!view) {
+                                 view = new TestRunView(session_, run, this);
+                                 connect(view, &TestRunView::opened, this, [this](const QString& r) { session_.call("test_view", {{"run", r}}); });
+                             }
                              present(view);
                              return QJsonValue(run);
                          },
@@ -284,6 +288,35 @@ WaveformViewer* Ciw::viewer(const QString& run) const {
 AdeExplorer* Ciw::explorer(const QString& lib, const QString& cell, const QString& view) const {
     const auto it = editors_.find(lib + "/" + cell + "/" + view);
     return it == editors_.end() ? nullptr : qobject_cast<AdeExplorer*>(it->second.data());
+}
+
+RtlEditor* Ciw::rtlEditor(const QString& file, const QString& design) {
+    auto& view = rtlEditors_[file];
+    if (!view) {
+        view = new RtlEditor(session_, file, design, this);
+        // From source to GDS: the design's record says how
+        connect(view, &RtlEditor::implementRequested, this, [this](const QString& name) {
+            const cmd::Result d = session_.call("rtl_design_get", {{"design", name}});
+            if (!d.ok) return;
+            const QJsonObject o = d.value.toObject();
+            QJsonObject args{{"design", name}, {"verilog", o["verilog"]}, {"top", o["top"]}, {"platform", o["platform"]}, {"clock_period_ns", o["clock_period_ns"]}, {"clock_port", o["clock_port"]}, {"wait", false}};
+            if (o.contains("core_utilization")) args["core_utilization"] = o["core_utilization"];
+            const cmd::Result run = session_.call("flow_run", args);
+            if (run.ok) session_.call("flow_view", {{"run", run.value.toObject()["run"]}});
+            else runLine("flow_run " + QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)));
+        });
+        connect(view, &RtlEditor::simulateRequested, this, [this](const QString& name) {
+            const cmd::Result d = session_.call("rtl_design_get", {{"design", name}});
+            if (!d.ok) return;
+            const QJsonObject o = d.value.toObject();
+            if (o["testbenches"].toArray().isEmpty()) return;
+            const QString bench = o["testbenches"].toArray()[0].toString();
+            const cmd::Result run = session_.call("test_run", {{"name", name + "_rtl"}, {"testbench", o["testbenches"]}, {"top", QFileInfo(bench).baseName()}, {"level", "rtl"}, {"verilog", o["verilog"]}, {"wait", false}});
+            if (run.ok) session_.call("test_view", {{"run", run.value.toObject()["run"]}});
+        });
+    }
+    present(view);
+    return view;
 }
 
 SignoffView* Ciw::signoffView(const QString& run, SignoffView::Kind kind) {

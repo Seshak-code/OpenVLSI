@@ -58,6 +58,7 @@ int main(int argc, char** argv) {
         cmd::addTestCommands(registry);
         cmd::addVerifyCommands(registry);
         cmd::addSignoffCommands(registry);
+        cmd::addRtlCommands(registry);
         cmd::Context ctx{ws, (QCoreApplication::applicationDirPath() + "/treespice").toStdString()};
         mcp::Server server(registry, ctx);
         for (std::string in; std::getline(std::cin, in);) {

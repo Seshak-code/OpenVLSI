@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
         app::Session session(QString::fromStdString((dir / "openvlsi.libs").string()));
         app::Shell shell(session);
 
-        shell.showStage(2);
+        shell.showStage(shell.stageIndex("implement"));
         auto* panel = shell.implementPanel();
         check(panel != nullptr, "the rail has an Implement stage");
         panel->refresh();

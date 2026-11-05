@@ -23,6 +23,7 @@ class CommandPalette;
 class ImplementPanel;
 class TestPanel;
 class VerifyPanel;
+class RtlPanel;
 class Navigator;
 
 class Shell : public QMainWindow {
@@ -36,6 +37,8 @@ public:
     ImplementPanel* implementPanel() const { return implement_; }
     TestPanel* testPanel() const { return test_; }
     VerifyPanel* verifyPanel() const { return verify_; }
+    RtlPanel* rtlPanel() const { return rtl_; }
+    int stageIndex(const QString& name) const;
     QWidget* current() const;              // the active tool; null on the start page
     QStringList tabTitles() const;
     QMenu* themeMenu() const { return themeMenu_; }
@@ -52,7 +55,7 @@ public:
     QWidget* railButton(const QString& stage) const;
     QWidget* consoleRailButton() const;
     bool consoleVisible() const;
-    void showStage(int stage);             // 0 design, 1 simulate, 2 implement, 3 verify, 4 test
+    void showStage(int stage);             // 0 design, 1 rtl, 2 simulate, 3 implement, 4 verify, 5 test (kStages)
     QStringList recentViews() const;
     QStringList menuTitles() const;
 
@@ -79,6 +82,7 @@ private:
     ImplementPanel* implement_ = nullptr;
     TestPanel* test_ = nullptr;
     VerifyPanel* verify_ = nullptr;
+    RtlPanel* rtl_ = nullptr;
     class ApiServer* api_ = nullptr;
     QSplitter *outer_, *inner_;
     QWidget* start_;

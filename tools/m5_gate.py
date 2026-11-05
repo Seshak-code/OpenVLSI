@@ -110,6 +110,9 @@ def main():
     p.add_argument("--platform", default="ihp-sg13g2")
     p.add_argument("--reuse", help="an implementation run already in the workspace")
     p.add_argument("--flowdir", default=os.path.expanduser("~/eda/orfs/flow"))
+    p.add_argument("--pdk", help="ihp-sg13g2: with --osdi, the chip also runs at transistor level")
+    p.add_argument("--osdi")
+    p.add_argument("--spice-ns", type=float, default=300.0)
     a = p.parse_args()
     gcd = os.path.join(a.flowdir, "designs/src/gcd/gcd.v")
     if not os.path.exists(gcd):
@@ -182,6 +185,18 @@ def main():
     check(abs(max(n[2] for n in mp["nodes"]) - vdd["worst_drop_mv"]) < 1e-6 and len(mp["nodes"]) == vdd["nodes"], "power_map holds the same nodes and the same worst")
     files = m("flow_artifacts", run=run)
     check(any(f.endswith("6_final.gds") for f in files["results"]) and any(f.endswith("6_final.spef") for f in files["results"]), "flow_artifacts lists the GDS and the SPEF")
+
+    print("Clock sweep, and the chip at transistor level", flush=True)
+    periods = [round(min_period * f, 3) for f in (0.3, 0.6, 1.0, 1.5, 2.0)]
+    sweep = m("test_shmoo", name="shmoo", flow_run=run, testbench=[bench], top="tb", dut="tb.dut", periods_ns=periods, defines=["FIRST=6"])
+    print("    " + ", ".join(f"{p['period_ns']} ns {'pass' if p['passed'] else 'FAIL'}" for p in sweep["points"]), flush=True)
+    check(sweep["consistent"] and "fastest_pass_ns" in sweep and "slowest_fail_ns" in sweep, f"test_shmoo finds where it stops: passes down to {sweep.get('fastest_pass_ns')} ns, fails at {sweep.get('slowest_fail_ns')} ns, against STA's {min_period:.2f} ns")
+
+    if a.pdk and a.osdi:
+        m("pdk_install", pdk="ihp-sg13g2", root=os.path.abspath(a.pdk), osdi=os.path.abspath(a.osdi))
+        spice = m("test_spice", name="chip", flow_run=run, recording=gate["run"], dut="tb.dut", stop_ns=a.spice_ns)
+        print(f"    {spice.get('transistors'):.0f} transistors, {spice.get('parasitic_pf', 0):.1f} pF on {spice.get('parasitic_nets', 0):.0f} nets, {spice.get('stop_ns')} ns of chip time in {spice.get('seconds', 0):.1f} s, {spice.get('steps', 0):.0f} steps", flush=True)
+        check(spice.get("passed") is True, f"TreeSPICE, on the routed transistors, gives the recording's outputs: {spice.get('samples')} samples, {spice.get('mismatches')} differ {spice.get('error', '')}")
 
     wrong = test("wrong", "rtl", 10, first=7)
     check(not wrong["passed"] and "failure" in wrong.get("error", ""), "a wrong expectation fails")

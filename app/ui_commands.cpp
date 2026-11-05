@@ -6,6 +6,7 @@
 #include "app/layout_viewer.h"
 #include "app/library_manager.h"
 #include "app/navigator.h"
+#include "app/rtl_stage.h"
 #include "app/shell.h"
 #include "app/signoff.h"
 #include "app/test_stage.h"
@@ -141,11 +142,10 @@ void addUiCommands(Session& session, Shell& shell) {
                                            {"modal", QApplication::activeModalWidget() ? QApplication::activeModalWidget()->windowTitle() : QString()},
                                            {"popup", QApplication::activePopupWidget() ? QString(QApplication::activePopupWidget()->metaObject()->className()) : QString()}});
          }});
-    add({"ui_stage", "Shows a stage of the rail: design, simulate, implement, verify or test.",
-         cmd::object({{"stage", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"design", "simulate", "implement", "verify", "test"}}, {"description", "the stage"}}}}),
+    add({"ui_stage", "Shows a stage of the rail: design, rtl, simulate, implement, verify or test.",
+         cmd::object({{"stage", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"design", "rtl", "simulate", "implement", "verify", "test"}}, {"description", "the stage"}}}}),
          [sh](cmd::Context&, const QJsonObject& a) {
-             static const QStringList names{"design", "simulate", "implement", "verify", "test"};
-             sh->showStage((int)names.indexOf(a["stage"].toString()));
+             sh->showStage(sh->stageIndex(a["stage"].toString()));
              return a["stage"].toVariant().toJsonValue();
          }});
     add({"ui_panel", "Shows or hides the side panel.", cmd::object({{"visible", cmd::param("boolean", "shown or not")}}),
@@ -575,6 +575,31 @@ void addUiCommands(Session& session, Shell& shell) {
              signoff(a, SignoffView::Kind::Timing)->selectRow(a["row"].toInt());
              return QJsonValue(true);
          }});
+    add({"rtl_open", "Opens a source file as a tab (the GUI's command); design, when given, is what its checks and Implement use.", cmd::object({{"file", cmd::param("string", "an absolute path")}}, {{"design", cmd::param("string", "its design")}, {"line", cmd::param("integer", "a line to show")}}),
+         [sh](cmd::Context&, const QJsonObject& a) {
+             RtlEditor* e = sh->ciw()->rtlEditor(a["file"].toString(), a["design"].toString());
+             if (a.contains("line")) e->goToLine(a["line"].toInt());
+             return QJsonValue(e->status());
+         }});
+    const auto rtlEditor = [sh](const QJsonObject& a) -> RtlEditor* { return sh->ciw()->rtlEditor(a["file"].toString(), QString()); };
+    add({"rtl_view_state", "A source tab's state: whether it holds unsaved text, its status, its line, how many problems it lists.", cmd::object({{"file", cmd::param("string", "an absolute path")}}),
+         [rtlEditor](cmd::Context&, const QJsonObject& a) {
+             RtlEditor* e = rtlEditor(a);
+             return QJsonValue(QJsonObject{{"modified", e->modified()}, {"status", e->status()}, {"line", e->currentLine()}, {"problems", e->diagnosticCount()}, {"design", e->design()}});
+         }});
+    add({"rtl_view_text", "Replaces what a source tab holds, unsaved, as typing does.", cmd::object({{"file", cmd::param("string", "an absolute path")}, {"text", cmd::param("string", "its text")}}),
+         [rtlEditor](cmd::Context&, const QJsonObject& a) {
+             rtlEditor(a)->setText(a["text"].toString());
+             return QJsonValue(true);
+         }});
+    add({"rtl_view_save", "Saves a source tab.", cmd::object({{"file", cmd::param("string", "an absolute path")}}),
+         [rtlEditor](cmd::Context&, const QJsonObject& a) {
+             RtlEditor* e = rtlEditor(a);
+             if (!e->save()) refuse(e->status());
+             return QJsonValue(e->status());
+         }});
+    add({"rtl_view_check", "Saves a source tab and checks it, listing the problems in the tab; returns rtl_lint's result.", cmd::object({{"file", cmd::param("string", "an absolute path")}}),
+         [rtlEditor](cmd::Context&, const QJsonObject& a) { return QJsonValue(rtlEditor(a)->lint()); }});
     const QJsonObject kTestRun = cmd::param("string", "a test's run: <name>/run.N");
     const auto testView = [s, sh](const QJsonObject& a) -> TestRunView* {
         const cmd::Result r = s->call("test_view", {{"run", a["run"]}});
@@ -611,7 +636,7 @@ void addUiCommands(Session& session, Shell& shell) {
          }});
     add({"verify_view", "Opens a verification run as the Verify stage does: a DRC on its layout with its markers, an LVS's summary. Returns what the panel says.", cmd::object({{"run", cmd::param("string", "a verification run")}}),
          [sh](cmd::Context&, const QJsonObject& a) {
-             sh->showStage(3);
+             sh->showStage(sh->stageIndex("verify"));
              sh->verifyPanel()->open(a["run"].toString());
              return QJsonValue(sh->verifyPanel()->details());
          }});

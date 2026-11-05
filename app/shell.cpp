@@ -4,6 +4,7 @@
 #include "app/icons.h"
 #include "app/implement.h"
 #include "app/layout_viewer.h"
+#include "app/rtl_stage.h"
 #include "app/test_stage.h"
 #include "app/api_server.h"
 #include "app/ui_commands.h"
@@ -52,6 +53,7 @@ QString iconOf(QWidget* tool) {
     if (qobject_cast<FlowRunView*>(tool)) return "implement";
     if (qobject_cast<TestRunView*>(tool)) return "test";
     if (qobject_cast<SignoffView*>(tool)) return "verify";
+    if (qobject_cast<RtlEditor*>(tool)) return "rtl";
     return "view";
 }
 
@@ -63,6 +65,7 @@ QString tabTitle(QWidget* tool) {
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->cell() + " " + r->view();
     if (auto* f = qobject_cast<FlowRunView*>(tool)) return f->run().replace('/', ' ');
     if (auto* v = qobject_cast<TestRunView*>(tool)) return v->run().replace('/', ' ');
+    if (auto* e = qobject_cast<RtlEditor*>(tool)) return QFileInfo(e->file()).fileName();
     if (auto* o = qobject_cast<SignoffView*>(tool)) return o->run().section('/', 0, 0) + (o->kind() == SignoffView::Kind::Timing ? " timing" : " power");
     return tool->windowTitle();
 }
@@ -75,6 +78,7 @@ QString crumbOf(QWidget* tool) {
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->library() + "  ›  " + r->cell() + "  ›  " + r->view();
     if (auto* f = qobject_cast<FlowRunView*>(tool)) return "Implement  ›  " + f->design() + "  ›  " + f->run().section('/', 1);
     if (auto* v = qobject_cast<TestRunView*>(tool)) return "Test  ›  " + v->run().section('/', 0, 0) + "  ›  " + v->run().section('/', 1);
+    if (auto* e = qobject_cast<RtlEditor*>(tool)) return "RTL  ›  " + (e->design().isEmpty() ? QString() : e->design() + "  ›  ") + QFileInfo(e->file()).fileName();
     if (auto* o = qobject_cast<SignoffView*>(tool)) return "Sign-off  ›  " + o->run().section('/', 0, 0) + "  ›  " + o->run().section('/', 1) + (o->kind() == SignoffView::Kind::Timing ? "  ›  timing" : "  ›  power");
     return {};
 }
@@ -96,6 +100,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     railLayout->setContentsMargins(0, 6, 0, 6);
     railLayout->setSpacing(0);
     const std::pair<QString, QString> stages[] = {{"design", "Design: libraries, cells and views"},
+                                                  {"rtl", "RTL: digital designs and their Verilog"},
                                                   {"maestro", "Simulate: tests and their runs"},
                                                   {"implement", "Implement: Verilog to GDS"},
                                                   {"verify", "Verify: DRC and LVS"},
@@ -138,6 +143,9 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     design_ = new Navigator(session_, Navigator::Mode::Design, {open, form}, panels_);
     simulate_ = new Navigator(session_, Navigator::Mode::Simulate, {open, form}, panels_);
     panels_->addWidget(design_);
+    rtl_ = new RtlPanel(session_, {[this](const QString& file, const QString& design) { session_.call("rtl_open", {{"file", file}, {"design", design}}); },
+                                   [this] { runForm("rtl_design_set", {}); }}, panels_);
+    panels_->addWidget(rtl_);
     panels_->addWidget(simulate_);
     implement_ = new ImplementPanel(session_, {[this](const QString& run) {
         session_.call("flow_view", {{"run", run}});
@@ -145,7 +153,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     panels_->addWidget(implement_);
     verify_ = new VerifyPanel(session_, {[this](const QString& command) { runForm(command, context()); }}, panels_);
     panels_->addWidget(verify_);
-    test_ = new TestPanel(session_, {[this](const QString& run) { session_.call("test_view", {{"run", run}}); }}, panels_);
+    test_ = new TestPanel(session_, {[this](const QString& run) { session_.call("test_view", {{"run", run}}); }, [this] { runForm("test_shmoo", {}); }}, panels_);
     panels_->addWidget(test_);
 
     tabs_ = new QTabWidget(this);
@@ -292,7 +300,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
                          [this](cmd::Context&, const QJsonObject& a) {
                              const QString p = a["part"].toString();
                              if (p == "console") showConsole(true);
-                             else showStage(p == "simulate" ? 1 : 0);
+                             else showStage(stageIndex(p));
                              return a["part"];
                          },
                          true});
@@ -379,8 +387,9 @@ void Shell::host(QWidget* tool) {
     connect(close, &QToolButton::clicked, this, [this, tool] { closeTab(tabs_->indexOf(tool)); });
     tabs_->tabBar()->setTabButton(index, QTabBar::RightSide, close);
     tabs_->setCurrentIndex(index);
-    if (qobject_cast<FlowRunView*>(tool)) showStage(2);
-    if (qobject_cast<TestRunView*>(tool)) showStage(4);
+    if (qobject_cast<FlowRunView*>(tool)) showStage(stageIndex("implement"));
+    if (qobject_cast<TestRunView*>(tool)) showStage(stageIndex("test"));
+    if (qobject_cast<RtlEditor*>(tool)) showStage(stageIndex("rtl"));
     if (auto* e = qobject_cast<ViewEditor*>(tool)) noteRecent(e->library() + "/" + e->cell() + "/" + e->view());
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) noteRecent(a->library() + "/" + a->cell() + "/" + a->view());
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) noteRecent(l->library() + "/" + l->cell() + "/" + l->view());
@@ -464,17 +473,19 @@ void Shell::updateCrumb() {
 void Shell::showStage(int stage) {
     panels_->setCurrentIndex(stage);
     panels_->show();
-    if (stage == 2) implement_->refresh();
-    if (stage == 3) verify_->refresh();
-    if (stage == 4) test_->refresh();
+    if (stage == stageIndex("rtl")) rtl_->refresh();
+    if (stage == stageIndex("implement")) implement_->refresh();
+    if (stage == stageIndex("verify")) verify_->refresh();
+    if (stage == stageIndex("test")) test_->refresh();
     for (int k = 0; k < (int)stages_.size(); ++k) stages_[k]->setChecked(k == stage);
     refreshIcons();
 }
 
-QString Shell::stageName() const {
-    static const char* names[] = {"design", "simulate", "implement", "verify", "test"};
-    return names[panels_->currentIndex()];
-}
+static const QStringList kStageNames{"design", "rtl", "simulate", "implement", "verify", "test"};
+
+int Shell::stageIndex(const QString& name) const { return (int)kStageNames.indexOf(name); }
+
+QString Shell::stageName() const { return kStageNames.value(panels_->currentIndex()); }
 
 bool Shell::sidePanelVisible() const { return !panels_->isHidden(); }
 
@@ -486,8 +497,7 @@ void Shell::showLibraryManager() {
 }
 
 QWidget* Shell::railButton(const QString& stage) const {
-    static const QStringList names{"design", "simulate", "implement", "verify", "test"};
-    const int at = (int)names.indexOf(stage);
+    const int at = stageIndex(stage);
     return at < 0 || at >= (int)stages_.size() ? nullptr : stages_[at];
 }
 

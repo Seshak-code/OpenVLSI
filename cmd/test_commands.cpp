@@ -5,6 +5,9 @@
 #include "flow/vcd.h"
 #include "oadb/oadb.h"
 #include "sim/ade.h"
+#include "sim/chip_deck.h"
+#include "sim/netlist.h"
+#include "sim/run.h"
 
 #include <QCoreApplication>
 #include <QFile>
@@ -247,6 +250,173 @@ void addTestCommands(Registry& r) {
                }
                jobs(c).start(dir.string(), [execute](const std::atomic<bool>& cancel) { execute(&cancel); });
                return QJsonValue(rec);
+           },
+           true});
+
+    r.add({"test_spice", "Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's capacitance from the SPEF, driven at its pins by what a test run recorded, every output compared with that "
+                         "recording at the end of each clock cycle. It needs pdk_install's device library, and passes only if every sample agrees. Waits and returns, or with wait false starts in the background.",
+           object({{"name", param("string", "the test's name")}, {"flow_run", kFlowRun}, {"recording", kRun}, {"dut", param("string", "the design's instance in the recording, as tb.dut")}},
+                  {{"stop_ns", param("number", "how much of the recording to replay (default all of it)")}, {"clock_port", param("string", "the clock's port (default the run's)")},
+                   {"parasitics", param("boolean", "add the SPEF's capacitance (default true)")}, {"threads", param("integer", "TreeSPICE's threads (default all)")},
+                   {"device_library", param("string", "the library holding the transistors (default sg13g2)")}, {"timeout_s", param("integer", "how long it may run (default 3600)")},
+                   {"wait", param("boolean", "wait for it (default true)")}}),
+           [](Context& c, const QJsonObject& a) {
+               const Implemented impl = implemented(c, s(a, "flow_run"));
+               const flow::Platform* pdk = flow::findPlatform(s(impl.record, "platform"));
+               if (!pdk) throw std::runtime_error("the run's platform is not known");
+               const fs::path cdlFile = impl.results / "6_lvs.cdl", verilog = impl.results / "6_final.v", spefFile = impl.results / "6_final.spef";
+               if (!fs::exists(cdlFile)) throw std::invalid_argument("this run has no transistor netlist (" + cdlFile.string() + "): its platform's LVS step writes it");
+               QJsonObject which = a;
+               which["run"] = a["recording"];
+               const fs::path recording = runPath(c, which) / "dump.vcd";
+               if (!fs::exists(recording)) throw std::invalid_argument("that test recorded nothing");
+               const auto slurp = [](const fs::path& f) {
+                   std::ifstream in(f);
+                   return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+               };
+               // The device library's model cards, as a simulation of its transistor would have them
+               const std::string library = a.contains("device_library") ? s(a, "device_library") : "sg13g2";
+               const auto known = c.workspace.libraries();
+               if (std::find(known.begin(), known.end(), library) == known.end()) throw std::invalid_argument("no device library " + library + " in this workspace (pdk_install)");
+               oadb::Library& devices = c.workspace.library(library);
+               const auto spice = devices.cellProp("sg13_lv_nmos", "spice");
+               if (!spice) throw std::invalid_argument(library + " has no sg13_lv_nmos with its models");
+               const QJsonObject spiceJson = QJsonDocument::fromJson(QByteArray::fromStdString(*spice)).object();
+               std::string cards;
+               const QJsonObject globals = spiceJson["globals"].toObject();
+               for (auto it = globals.begin(); it != globals.end(); ++it) cards += ".param " + it.key().toStdString() + "=" + it.value().toVariant().toString().toStdString() + "\n";
+               for (const auto& m : spiceJson["models"].toArray()) cards += sim::modelCard({m.toObject()["file"].toString().toStdString(), m.toObject()["section"].toString().toStdString()}) + "\n";
+
+               sim::ChipDeckConfig cfg;
+               cfg.cdl = slurp(cdlFile);
+               cfg.verilog = slurp(verilog);
+               if (a["parasitics"].toBool(true) && fs::exists(spefFile)) cfg.spef = slurp(spefFile);
+               cfg.top = s(impl.record, "top");
+               cfg.dut = s(a, "dut");
+               cfg.modelCards = cards;
+               cfg.supply = pdk->supplyVolts;
+               if (a.contains("stop_ns")) cfg.stopSeconds = a["stop_ns"].toDouble() * 1e-9;
+               const std::string clock = a.contains("clock_port") ? s(a, "clock_port") : s(impl.record, "clock_port");
+               const flow::Vcd vcd = flow::readVcd(recording.string());
+               const sim::ChipDeck deck = sim::buildChipDeck(cfg, vcd, clock);
+
+               std::string run;
+               const fs::path dir = newRun(c, s(a, "name"), &run);
+               const double period = impl.record["clock_period_ns"].toDouble();
+               QJsonObject rec{{"run", q(run)}, {"name", a["name"]}, {"kind", "spice"}, {"level", "transistor"}, {"flow_run", a["flow_run"]}, {"recording", a["recording"]}, {"state", "running"},
+                               {"started", now()}, {"pid", QCoreApplication::applicationPid()}, {"transistors", (double)deck.transistors}, {"parasitic_nets", (double)deck.nets},
+                               {"parasitic_pf", deck.capacitanceFarads * 1e12}, {"stop_ns", deck.stopSeconds * 1e9}};
+               writeRecord(dir, rec);
+               // At most a tenth of the fastest edge between samples: the step is an upper bound, and the engine's own error control does the rest
+               const double step = std::max(1e-12, std::min(50e-12, period * 1e-9 / 100));
+               std::string text = deck.text;
+               text += ".save";
+               for (const auto& p : deck.ports) text += " v(" + p.node + ")";
+               text += "\n.tran " + QString::number(step, 'g', 12).toStdString() + " " + QString::number(deck.stopSeconds, 'g', 12).toStdString() + "\n.end\n";
+               const std::string simulator = c.simulator;
+               const int threads = a["threads"].toInt(0);
+               const auto timeout = std::chrono::seconds(a["timeout_s"].toInt(3600));
+               const std::string dut = cfg.dut;
+               const double supply = cfg.supply;
+               const auto execute = [dir, rec, deck, text, simulator, threads, timeout, vcd, dut, supply](const std::atomic<bool>* cancel) {
+                   QJsonObject done = rec;
+                   const auto started = std::chrono::steady_clock::now();
+                   try {
+                       const sim::Run result = sim::simulate(simulator, dir.string(), text, timeout, cancel, threads);
+                       std::map<std::string, std::vector<std::pair<double, double>>> voltages;
+                       const sim::Plot* plot = nullptr;
+                       for (const auto& pl : result.plots)
+                           if (pl.name.find("ransient") != std::string::npos) plot = &pl;
+                       if (!plot) throw std::runtime_error("the simulation wrote no transient");
+                       const auto column = [&](const std::string& name) -> int {
+                           for (size_t k = 0; k < plot->vectors.size(); ++k) {
+                               std::string n = plot->vectors[k];
+                               for (auto& ch : n) ch = (char)std::tolower((unsigned char)ch);
+                               if (n == name || n == "v(" + name + ")") return (int)k;
+                           }
+                           return -1;
+                       };
+                       const int timeAt = column("time");
+                       if (timeAt < 0) throw std::runtime_error("the transient has no time");
+                       const auto& time = plot->data[(size_t)timeAt];
+                       for (const auto& p : deck.ports) {
+                           if (!p.output) continue;
+                           std::string node = p.node;
+                           for (auto& ch : node) ch = (char)std::tolower((unsigned char)ch);
+                           const int at = column(node);
+                           if (at < 0) throw std::runtime_error("the transient has no " + p.node);
+                           auto& wave = voltages[p.node];
+                           wave.reserve(time.size());
+                           for (size_t k = 0; k < time.size(); ++k) wave.push_back({time[k].real(), plot->data[(size_t)at][k].real()});
+                       }
+                       const sim::ChipCompare cmp = sim::compareOutputs(deck, vcd, dut, voltages, supply);
+                       done["samples"] = (double)cmp.samples;
+                       done["mismatches"] = (double)cmp.mismatches;
+                       done["undecided"] = (double)cmp.undecided;
+                       done["steps"] = (double)time.size();
+                       done["passed"] = cmp.samples > 0 && cmp.mismatches == 0;
+                       if (!cmp.samples) done["error"] = "the recording held no value to compare in that time";
+                       else if (cmp.mismatches) done["error"] = QString("%1 of %2 samples differ; first ").arg((double)cmp.mismatches).arg((double)cmp.samples) + q(cmp.first);
+                       done["raw"] = q((dir / "out.raw").string());
+                   } catch (const std::exception& e) {
+                       done["passed"] = false;
+                       done["error"] = q(e.what());
+                   }
+                   done["finished"] = now();
+                   done["seconds"] = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+                   done["state"] = cancel && *cancel ? "stopped" : "done";
+                   std::ifstream log(dir / "log.txt");
+                   std::ofstream(dir / "sim.log") << log.rdbuf();
+                   writeRecord(dir, done);
+               };
+               if (!a.contains("wait") || a["wait"].toBool()) {
+                   execute(nullptr);
+                   return QJsonValue(readJson(dir / "run.json"));
+               }
+               jobs(c).start(dir.string(), [execute](const std::atomic<bool>& cancel) { execute(&cancel); });
+               return QJsonValue(rec);
+           },
+           true});
+
+    r.add({"test_shmoo", "Runs a testbench on the routed netlist across clock periods: its PERIOD define takes each value (ns). Returns each one's verdict, the fastest that passed and the slowest that failed: where the chip really stops working in simulation.",
+           object({{"name", param("string", "the shmoo's name")}, {"flow_run", kFlowRun}, {"testbench", QJsonObject{{"type", "array"}, {"description", "the testbench's Verilog files"}, {"items", QJsonObject{{"type", "string"}}}}},
+                   {"top", param("string", "the testbench's module")}, {"dut", param("string", "the design's instance, as tb.dut")},
+                   {"periods_ns", QJsonObject{{"type", "array"}, {"description", "the clock periods to try, in ns"}, {"items", QJsonObject{{"type", "number"}}}}}},
+                  {{"defines", QJsonObject{{"type", "array"}, {"description", "more Verilog defines"}, {"items", QJsonObject{{"type", "string"}}}}}, {"pass_pattern", param("string", "the text that means it passed (default PASS)")}}),
+           [](Context& c, const QJsonObject& a) {
+               const Implemented impl = implemented(c, s(a, "flow_run"));
+               const QJsonArray periods = a["periods_ns"].toArray();
+               if (periods.isEmpty()) throw std::invalid_argument("no periods to try");
+               const RtlFlowTools tools = RtlFlowTools::detect();
+               QJsonArray points;
+               double fastestPass = 0, slowestFail = 0;
+               for (const auto& p : periods) {
+                   const double period = p.toDouble();
+                   if (!(period > 0)) throw std::invalid_argument("a period must be above 0");
+                   TestbenchConfig cfg;
+                   cfg.top = s(a, "top");
+                   for (const auto& v : a["testbench"].toArray()) cfg.testbench.push_back(v.toString().toStdString());
+                   for (const auto& v : a["defines"].toArray()) cfg.defines.push_back(v.toString().toStdString());
+                   cfg.defines.push_back("PERIOD=" + q(std::to_string(period)).toStdString());
+                   if (a.contains("pass_pattern")) cfg.passPattern = s(a, "pass_pattern");
+                   cfg.results = impl.results.string();
+                   cfg.platform = s(impl.record, "platform");
+                   cfg.dut = s(a, "dut");
+                   cfg.timeLimitNs = period * 1e6;
+                   std::string run;
+                   const fs::path dir = newRun(c, s(a, "name"), &run);
+                   cfg.workDir = dir.string();
+                   const TestbenchResult res = runTestbench(cfg, tools);
+                   writeRecord(dir, {{"run", q(run)}, {"name", a["name"]}, {"kind", "testbench"}, {"level", "gate"}, {"flow_run", a["flow_run"]}, {"state", "done"}, {"passed", res.passed}, {"period_ns", period},
+                                     {"error", q(res.error)}, {"seconds", res.seconds}, {"vcd", q(res.vcd)}});
+                   points.append(QJsonObject{{"period_ns", period}, {"passed", res.passed}, {"run", q(run)}, {"error", q(res.error)}});
+                   if (res.passed && (fastestPass == 0 || period < fastestPass)) fastestPass = period;
+                   if (!res.passed && period > slowestFail) slowestFail = period;
+               }
+               QJsonObject out{{"points", points}, {"consistent", fastestPass == 0 || slowestFail < fastestPass}};
+               if (fastestPass > 0) out["fastest_pass_ns"] = fastestPass;
+               if (slowestFail > 0) out["slowest_fail_ns"] = slowestFail;
+               return QJsonValue(out);
            },
            true});
 

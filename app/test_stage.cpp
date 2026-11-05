@@ -238,6 +238,14 @@ TestRunView::TestRunView(Session& session, const QString& run, QWidget* parent) 
     top->addSpacing(14);
     top->addWidget(verdict_, 1);
     top->addWidget(cursorText_);
+    transistor_ = new QPushButton("Run at transistor level", central);
+    transistor_->setProperty("api", "test_spice");
+    transistor_->setToolTip("This run's recording on the routed transistors, in TreeSPICE: slow, and the closest thing to the chip");
+    connect(transistor_, &QPushButton::clicked, this, [this] {
+        QString why;
+        if (!runTransistorLevel(&why)) verdict_->setText(why);
+    });
+    top->addWidget(transistor_);
     layout->addLayout(top);
 
     auto* split = new QSplitter(Qt::Vertical, central);
@@ -305,6 +313,11 @@ void TestRunView::refresh() {
     what += level == "gate" ? " on the routed netlist" : " on the RTL";
     if (st.contains("flow_run")) what += " of " + st["flow_run"].toString();
     title_->setText(what);
+    transistor_->setVisible(st.contains("flow_run") && st.contains("vcd") && state != "running");
+    if (st["kind"] == "spice") {
+        title_->setText(run_ + " at transistor level, " + QLocale().toString((qlonglong)st["transistors"].toDouble()) + " transistors");
+        transistor_->hide();
+    }
     if (state == "running") {
         verdict_->setText("Running");
         verdict_->setStyleSheet(QString("color: %1;").arg(t.via.name()));
@@ -313,6 +326,7 @@ void TestRunView::refresh() {
         poll_->stop();
         const bool passed = st["passed"].toBool();
         QString text = passed ? "Passed" : state == "done" ? "Failed: " + st["error"].toString() : "Run " + state;
+        if (st.contains("samples")) text += QString("   %1 samples of every output, %2 steps, %3 s").arg((qlonglong)st["samples"].toDouble()).arg((qlonglong)st["steps"].toDouble()).arg(st["seconds"].toDouble(), 0, 'f', 0);
         if (st.contains("uart")) text += "   UART: " + st["uart"].toString().trimmed() + "   " + QString::number(st["cycles"].toDouble()) + " cycles";
         verdict_->setText(text);
         verdict_->setStyleSheet(QString("color: %1;").arg((passed ? t.pass : t.fail).name()));
@@ -323,6 +337,21 @@ void TestRunView::refresh() {
         log_->moveCursor(QTextCursor::End);
     }
     if (st.contains("vcd") && loaded_ != st["vcd"].toString()) loadWaves(st["vcd"].toString());
+}
+
+bool TestRunView::runTransistorLevel(QString* why) {
+    const cmd::Result st = session_.call("test_status", {{"run", run_}});
+    if (!st.ok || !st.value.toObject().contains("flow_run")) {
+        *why = "This run is not of an implemented design";
+        return false;
+    }
+    const cmd::Result r = session_.call("test_spice", {{"name", run_.section('/', 0, 0) + "_spice"}, {"flow_run", st.value.toObject()["flow_run"]}, {"recording", run_}, {"dut", "tb.dut"}, {"wait", false}});
+    if (!r.ok) {
+        *why = r.error;
+        return false;
+    }
+    emit opened(r.value.toObject()["run"].toString());
+    return true;
 }
 
 void TestRunView::loadWaves(const QString& vcd) {
@@ -450,7 +479,11 @@ TestPanel::TestPanel(Session& session, Actions actions, QWidget* parent) : QWidg
     start->setIcon(icons::get("add"));
     connect(start, &QPushButton::clicked, this, [this] { newTest(); });
     start->setProperty("api", "test_run");
+    auto* sweep = new QPushButton("Clock sweep…", this);
+    sweep->setProperty("api", "test_shmoo");
+    connect(sweep, &QPushButton::clicked, this, [this] { if (actions_.sweep) actions_.sweep(); });
     layout->addWidget(start);
+    layout->addWidget(sweep);
     tree_ = new QTreeWidget(this);
     tree_->setHeaderHidden(true);
     tree_->setAccessibleName("Tests");

@@ -70,6 +70,8 @@ int main(int argc, char** argv) {
         must("test_view", {{"run", "t/run.1"}});
         must("timing_view", {{"run", "g/run.1"}});
         must("power_view", {{"run", "g/run.1"}});
+        std::ofstream(dir / "a.v") << "module a; endmodule\n";
+        must("rtl_open", {{"file", QString::fromStdString((dir / "a.v").string())}});
         must("ui_library_manager", {});
 
         const auto audit = [&](QWidget* w, const QString& name) {

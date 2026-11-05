@@ -131,7 +131,7 @@ Shows a part of the window: the design or simulate panel, or the command window.
 
 ### `ui_stage`
 
-Shows a stage of the rail: design, simulate, implement, verify or test.
+Shows a stage of the rail: design, rtl, simulate, implement, verify or test.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -1802,6 +1802,21 @@ Runs a testbench of yours on the design: level rtl on its Verilog (given, or a f
 | `verilog` | array |  | level rtl without a flow run: the design's Verilog |
 | `wait` | boolean |  | wait for it (default true) |
 
+### `test_shmoo`
+
+Runs a testbench on the routed netlist across clock periods: its PERIOD define takes each value (ns). Returns each one's verdict, the fastest that passed and the slowest that failed: where the chip really stops working in simulation.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `defines` | array |  | more Verilog defines |
+| `dut` | string | yes | the design's instance, as tb.dut |
+| `flow_run` | string | yes | an implementation run: <design>/run.N |
+| `name` | string | yes | the shmoo's name |
+| `pass_pattern` | string |  | the text that means it passed (default PASS) |
+| `periods_ns` | array | yes | the clock periods to try, in ns |
+| `testbench` | array | yes | the testbench's Verilog files |
+| `top` | string | yes | the testbench's module |
+
 ### `test_signals`
 
 The signals a test run recorded: name and width.
@@ -1809,6 +1824,24 @@ The signals a test run recorded: name and width.
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
 | `run` | string | yes | a test's run: <name>/run.N |
+
+### `test_spice`
+
+Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's capacitance from the SPEF, driven at its pins by what a test run recorded, every output compared with that recording at the end of each clock cycle. It needs pdk_install's device library, and passes only if every sample agrees. Waits and returns, or with wait false starts in the background.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `clock_port` | string |  | the clock's port (default the run's) |
+| `device_library` | string |  | the library holding the transistors (default sg13g2) |
+| `dut` | string | yes | the design's instance in the recording, as tb.dut |
+| `flow_run` | string | yes | an implementation run: <design>/run.N |
+| `name` | string | yes | the test's name |
+| `parasitics` | boolean |  | add the SPEF's capacitance (default true) |
+| `recording` | string | yes | a test's run: <name>/run.N |
+| `stop_ns` | number |  | how much of the recording to replay (default all of it) |
+| `threads` | integer |  | TreeSPICE's threads (default all) |
+| `timeout_s` | integer |  | how long it may run (default 3600) |
+| `wait` | boolean |  | wait for it (default true) |
 
 ### `test_status`
 
@@ -1873,6 +1906,111 @@ Opens an implementation run's power grid as a tab (the GUI's command).
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
 | `run` | string | yes | an implementation run: <design>/run.N |
+
+### `rtl_design_get`
+
+A digital design's record.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `design` | string | yes | the design's name: letters, digits, _ |
+
+### `rtl_design_list`
+
+The digital designs recorded in this workspace.
+
+### `rtl_design_remove`
+
+Forgets a digital design; its files stay.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `design` | string | yes | the design's name: letters, digits, _ |
+
+### `rtl_design_set`
+
+Records a digital design: its Verilog, its top module, its testbenches and clock. Replaces one of that name.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `clock_period_ns` | number |  | the clock's period in ns (default 10) |
+| `clock_port` | string |  | the clock's port (default clk) |
+| `core_utilization` | number |  | percent of the core the cells fill (default 40) |
+| `design` | string | yes | the design's name: letters, digits, _ |
+| `platform` | string |  | a platform of flow_platforms (default ihp-sg13g2) |
+| `testbenches` | array |  | absolute paths |
+| `top` | string | yes | the top module |
+| `verilog` | array | yes | absolute paths |
+
+### `rtl_lint`
+
+Compiles a design's Verilog (or the files given) with Icarus and returns each error and warning: file, line, message. It finds its top with top given. clean is true with no errors.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `design` | string |  | the design's name: letters, digits, _ |
+| `top` | string |  | the top module |
+| `verilog` | array |  | absolute paths |
+
+### `rtl_open`
+
+Opens a source file as a tab (the GUI's command); design, when given, is what its checks and Implement use.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `design` | string |  | its design |
+| `file` | string | yes | an absolute path |
+| `line` | integer |  | a line to show |
+
+### `rtl_read`
+
+A source file's text.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `file` | string | yes | an absolute path |
+
+### `rtl_view_check`
+
+Saves a source tab and checks it, listing the problems in the tab; returns rtl_lint's result.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `file` | string | yes | an absolute path |
+
+### `rtl_view_save`
+
+Saves a source tab.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `file` | string | yes | an absolute path |
+
+### `rtl_view_state`
+
+A source tab's state: whether it holds unsaved text, its status, its line, how many problems it lists.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `file` | string | yes | an absolute path |
+
+### `rtl_view_text`
+
+Replaces what a source tab holds, unsaved, as typing does.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `file` | string | yes | an absolute path |
+| `text` | string | yes | its text |
+
+### `rtl_write`
+
+Writes a source file's text, whole. Returns its size.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `file` | string | yes | an absolute path |
+| `text` | string | yes | its text |
 
 ### `shape_add`
 

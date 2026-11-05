@@ -211,7 +211,7 @@ def run(ov, hands, gpu, work):
     check(state()["rulers"] == [], "Shift+K clears it")
 
     print("The shell", flush=True)
-    for stage in ("verify", "implement", "test", "simulate", "design"):
+    for stage in ("rtl", "verify", "implement", "test", "simulate", "design"):
         hands.press("rail", text=stage)
         check(ov.ui_state()["stage"] == stage, f"a click on the rail shows {stage}")
     hands.press("console")
@@ -235,6 +235,26 @@ def run(ov, hands, gpu, work):
     hands.press("button", text="Cancel")
     check(ov.ui_state()["modal"] == "", "Cancel closes it")
     check(ov.flow_list() == [], "and started nothing")
+
+    print("Verilog, by hand", flush=True)
+    src = os.path.join(work, "blink.v")
+    with open(src, "w") as f:
+        f.write("module blink(input clk, output reg q);\n  always @(posedge clk) q <= ~q;\nendmodule\n")
+    ov.rtl_design_set(design="blink", verilog=[src], top="blink")
+    hands.press("rail", text="rtl")
+    hands.press("tree_item", text="blink.v")
+    hands.double(*hands.at("tree_item", text="blink.v"))
+    check(ov.ui_state()["active_title"] == "blink.v", f"a double click on a file opens it: {ov.ui_state()['active_title']}")
+    hands.press("button", text="Check")
+    check(ov.rtl_view_state(file=src)["status"] == "No errors", f"Check says so: {ov.rtl_view_state(file=src)['status']}")
+    ov.rtl_view_text(file=src, text="module blink(input clk, output reg q);\n  always @(posedge clk) q <= ~r;\nendmodule\n")
+    check(ov.rtl_view_state(file=src)["modified"] is True, "an edit is unsaved")
+    hands.press("button", text="Check")
+    st = ov.rtl_view_state(file=src)
+    check(st["modified"] is False and st["problems"] >= 1 and "error" in st["status"], f"Check saves it and lists the mistake: {st}")
+    hands.key("Ctrl+S")
+    ov.ui_tab_close(title="blink.v")
+    hands.press("tab", text="c layout")
 
     print("A schematic, by hand", flush=True)
     ov.view_create(library="d", cell="c", view="schematic", type="schematic")

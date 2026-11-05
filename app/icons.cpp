@@ -23,6 +23,10 @@ void draw(QPainter& p, const QString& n) {
         a.moveTo(2, 9); a.lineTo(6, 9);
         a.moveTo(2, 15); a.lineTo(6, 15);
         a.moveTo(19, 12); a.lineTo(23, 12);
+    } else if (n == "rtl") {  // source: angle brackets about a slash
+        a.moveTo(8, 7); a.lineTo(3, 12); a.lineTo(8, 17);
+        a.moveTo(16, 7); a.lineTo(21, 12); a.lineTo(16, 17);
+        a.moveTo(14, 5); a.lineTo(10, 19);
     } else if (n == "test") {  // a chip on its probes: a package, and a pulse through it
         a.addRoundedRect(QRectF(6, 6, 12, 12), 1.5, 1.5);
         for (int k = 0; k < 3; ++k) {

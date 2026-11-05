@@ -14,6 +14,7 @@
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
+class QPushButton;
 class QTimer;
 class QTreeWidget;
 
@@ -65,6 +66,10 @@ public:
     DigitalWaves* waves() const { return waves_; }
     QTreeWidget* signalTree() const { return signals_; }
     void refresh();
+    bool runTransistorLevel(QString* why);  // this run's recording, on the routed transistors: a new test, opened
+
+signals:
+    void opened(const QString& run);
 
 private:
     void loadWaves(const QString& vcd);
@@ -78,12 +83,16 @@ private:
     QLineEdit* filter_;
     DigitalWaves* waves_;
     QTimer* poll_;
+    QPushButton* transistor_;
 };
 
 class TestPanel : public QWidget {
     Q_OBJECT
 public:
-    struct Actions { std::function<void(const QString& run)> open; };
+    struct Actions {
+        std::function<void(const QString& run)> open;
+        std::function<void()> sweep;
+    };
     TestPanel(Session& session, Actions actions, QWidget* parent = nullptr);
     void refresh();
     QTreeWidget* runs() const { return tree_; }

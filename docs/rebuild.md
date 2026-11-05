@@ -298,6 +298,24 @@ simulated chip afterwards, with feature parity or better. So a **Test** stage fo
 RTL and on the routed netlist with its layout's delays, with waveforms. "Parity" is tracked below, tool by tool, as what really
 runs and what does not yet.
 
+## What runs today, tool by tool (2026-11-05)
+
+Honest parity: each row is what a designer gets now, checked by the gate named, and what the Cadence tool has that this does not.
+
+| Stage | Cadence | Here, and how it is checked | Missing against it |
+|---|---|---|---|
+| Source | Text editors, HAL | RTL stage: Verilog editing, Icarus lint with jump to line (`tools/ui_test.py`) | Deep lint rules, SystemVerilog beyond Icarus, language-aware navigation |
+| Simulate RTL | Xcelium | Test stage on the RTL, waveforms (`tools/m5_gate.py`) | Coverage, UVM, speed; Icarus does not run timing checks |
+| Synthesis | Genus | Yosys through ORFS, cells and area per stage | Physical-aware synthesis, MCMM, power optimization, a logic-equivalence check (Conformal) |
+| Place and route | Innovus | OpenROAD through ORFS, pipeline and metrics; final layout viewed | Editing mid-flow, per-stage layouts, floorplan and power-grid editing, ECO, MMMC, tuning beyond clock and utilization |
+| Timing | Tempus | OpenSTA with SPEF: WNS, TNS, paths, cross-probe (`m5_gate`: agrees with simulation) | Multi-corner, multi-mode, SI, OCV/AOCV/POCV |
+| Power grid | Voltus | PSM static IR and grid currents, map on layout (`m5_gate`) | Dynamic IR, EM against process limits, vectors from activity |
+| Physical verification | Pegasus | KLayout's DRC and LVS decks, marker browser (`m3_gate`, flow) | ERC, LVS mismatch browser, ASAP7 LVS (no open deck) |
+| Extraction | Quantus | OpenRCX's SPEF in timing; each net's total C in the transistor-level test | RC networks in the transistor test, extraction of hand-drawn layout |
+| Custom layout | Virtuoso Layout | Viewer, editing tools, transistor generator, layout from schematic, flight lines (`m3_gate`, `ui_test`) | Other devices, FinFET cells, abutment, edit-in-place, constraint-driven routing, guard rings |
+| Schematic, ADE, RF | Virtuoso, ADE, Spectre, Spectre RF | Editors, ADE L/XL/Verifier, TreeSPICE with PSS, PAC, PNoise, HB (`m1_gate`, `m2_gate`, `test_verifier`) | Buses, inherited nets, CDF callbacks, Library Manager copy and locks |
+| The chip under test | (Xcelium, Spectre, Palladium) | Testbenches at gate level with layout's delays, clock sweep, firmware, and the routed chip at transistor level on TreeSPICE (`m5_gate`) | Corners at transistor level, wire resistance, emulation speed |
+
 ## Salvage and retirement
 
 **Carried over:**

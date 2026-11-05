@@ -3,12 +3,14 @@
 #include "app/shell.h"
 #include "app/test_stage.h"
 #include "flow/vcd.h"
+#include "sim/chip_deck.h"
 
 #include <QApplication>
 #include <QJsonArray>
 #include <QSettings>
 #include <QTreeWidget>
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -56,6 +58,46 @@ int main(int argc, char** argv) {
         w.setCursorTime(7);
         check(w.valueAtCursor("tb.count") == "a", "its cursor reads the value");
         w.grab();
+    }
+
+    {   // The transistor-level deck and its comparison, by hand: it must be able to fail
+        std::ofstream(dir / "c.vcd") << "$timescale 1ns $end\n$scope module tb $end\n$scope module dut $end\n$var wire 1 ! clk $end\n$var wire 1 # d $end\n$var wire 2 $ q [1:0] $end\n$upscope $end\n$upscope $end\n$enddefinitions $end\n"
+                                         "#0\n0!\n0#\nbxx $\n#10\n1!\n#20\n0!\n1#\nb10 $\n#30\n1!\n#40\n0!\nb01 $\n#50\n1!\n#60\n0!\n";
+        const flow::Vcd v = flow::readVcd((dir / "c.vcd").string());
+        sim::ChipDeckConfig cfg;
+        cfg.top = "t";
+        cfg.dut = "tb.dut";
+        cfg.supply = 1.2;
+        cfg.modelCards = ".param mc_mismatch=0\n";
+        cfg.verilog = "module t(clk, d, q);\n input clk;\n input d;\n output [1:0] q;\nendmodule\n";
+        cfg.cdl = ".SUBCKT inv A Y VDD VSS\nMN0 Y A VSS VSS sg13_lv_nmos m=1 w=640.00n l=130.00n ng=1\nMP0 Y A VDD VDD sg13_lv_pmos m=1 w=1.00u l=130.00n ng=1\n.ENDS\n"
+                  ".SUBCKT t clk d q[0] q[1]\n+ VDD VSS\nX_1_ d$x\\[3\\] q[0] VDD VSS inv\nX_2_ clk q[1] VDD VSS inv\n.ENDS t\n";
+        cfg.spef = "*C_UNIT 1 PF\n*NAME_MAP\n*1 d$x\\[3\\]\n*2 VDD\n*D_NET *1 0.5\n*D_NET *2 9.0\n";
+        const sim::ChipDeck deck = sim::buildChipDeck(cfg, v, "clk");
+        check(deck.transistors == 4, "transistors are counted through placements: " + std::to_string(deck.transistors));
+        check(deck.text.find("XMN0 Y A VSS VSS sg13_lv_nmos m=1 w=640.00n l=130.00n ng=1 mm_ok={mc_mismatch}") != std::string::npos, "a transistor becomes the device library's subcircuit");
+        check(deck.text.find("d_x_3_") != std::string::npos && deck.text.find('$') == std::string::npos && deck.text.find('[') == std::string::npos, "names SPICE would misread are rewritten");
+        check(deck.nets == 1 && std::abs(deck.capacitanceFarads - 0.5e-12) < 1e-18, "a net takes its SPEF capacitance, the supply does not");
+        check(deck.text.find("Cnet1 d_x_3_ 0 5e-13") < deck.text.find(".ends\nXchip"), "inside the top subcircuit, where its names are nets");
+        check(deck.text.find("Vsupply VDD 0 dc 1.2") != std::string::npos, "the supply is driven");
+        check(deck.text.find("V_d d 0 pwl(0 0 2e-08 0 2.005e-08 1.2)") != std::string::npos, "an input replays its recording, with an edge: " + deck.text.substr(deck.text.find("V_d"), 60));
+        check(deck.text.find("Cload_q_0_ q_0_ 0 5e-15") != std::string::npos, "an output is loaded");
+
+        // q is x until 20 ns, 10 until 40, then 01. Samples just before each rising edge after the first: 30 ns and 50 ns.
+        const auto wave = [](double at30, double at50) { return std::vector<std::pair<double, double>>{{0, at30}, {35e-9, at30}, {36e-9, at50}, {60e-9, at50}}; };
+        auto cmp = sim::compareOutputs(deck, v, "tb.dut", {{"q_0_", wave(0.0, 1.2)}, {"q_1_", wave(1.2, 0.0)}}, 1.2);
+        check(cmp.samples == 4 && cmp.mismatches == 0, "right voltages agree: " + std::to_string(cmp.samples) + " samples, " + std::to_string(cmp.mismatches) + " differ");
+        cmp = sim::compareOutputs(deck, v, "tb.dut", {{"q_0_", wave(1.2, 1.2)}, {"q_1_", wave(1.2, 0.0)}}, 1.2);
+        check(cmp.mismatches == 1 && cmp.first.find("q_0_") != std::string::npos, "one wrong bit is found: " + cmp.first);
+        cmp = sim::compareOutputs(deck, v, "tb.dut", {{"q_0_", wave(0.6, 1.2)}, {"q_1_", wave(1.2, 0.0)}}, 1.2);
+        check(cmp.mismatches == 1 && cmp.undecided == 1, "a value stuck mid-rail is no pass");
+        bool threw = false;
+        try { sim::compareOutputs(deck, v, "tb.dut", {{"q_0_", wave(0.0, 1.2)}}, 1.2); } catch (const std::exception&) { threw = true; }
+        check(threw, "an output the simulation did not write is an error, not a pass");
+        threw = false;
+        cfg.cdl = ".SUBCKT t clk d q[0] q[1] VDD VSS\nR1 clk d 1k\n.ENDS\n";
+        try { sim::buildChipDeck(cfg, v, "clk"); } catch (const std::exception&) { threw = true; }
+        check(threw, "a device it cannot simulate is refused");
     }
 
     const bool icarus = std::system("command -v iverilog >/dev/null && command -v vvp >/dev/null") == 0;
@@ -106,7 +148,7 @@ int main(int argc, char** argv) {
         check(view->signalTree()->topLevelItemCount() >= 4, "every signal is listed");
         check(session.call("test_view", {{"run", "wrong/run.1"}}).ok && shell.ciw()->testView("wrong/run.1")->verdict().startsWith("Failed"), "a failure is called one");
         check(session.call("ui_theme", {{"mode", "light"}}).ok, "the stage follows the theme");
-        shell.showStage(4);
+        shell.showStage(shell.stageIndex("test"));
         check(shell.testPanel()->runs()->topLevelItemCount() == 5, "the rail's Test panel lists them");
     }
     QSettings().clear();
