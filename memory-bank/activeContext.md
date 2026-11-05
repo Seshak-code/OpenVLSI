@@ -1,5 +1,18 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-05 — engine at TreeSPICE 6ef512b: MOS1 limiting and the flat transient's scale**
+
+- **Engine (TreeSPICE #33-#37, all merged):**
+  - #33: ngspice's MOS limiting; KCL at every gmin step. MOS1 chain `.op`: 9000-9500 and 10500-20000 stages converge;
+    9800, 10000 and 50000 still fail at the critical gmin, where ngspice passes.
+  - #34-#37: chunked worker claims, OSDI stamped as one run, kept J for bypassed devices, per-thread solver buffers;
+    the matching's tie order (quadratic on supply rails); DC assembly's kept slots; Newton refines only above 1e-12.
+  - BSIM4 chain at 10 threads: 2e4 transistors 12.3 -> about 7.5 s; 2e5 179 -> about 83 s.
+- **OpenVLSI:** pointer only. ctest 15/15, M1 gate 24/24, M2 gate 35/35.
+- **Next (owner's choice):** the MOS1 lengths that still fail; OSDI per-instance memory layout; M2 slice 7 (Spectre X).
+
+---
+
 **Last session: Claude Code (dev), 2026-10-30 — M2 slice 6: HB; TreeSPICE refcheck and Gear merged**
 
 - **PRs, merge in order:** TreeSPICE `mac/hb`, then OpenVLSI `rebuild/m2-s6` (it pins the engine at `mac/hb`'s
