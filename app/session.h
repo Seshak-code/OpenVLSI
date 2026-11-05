@@ -19,6 +19,7 @@ public:
     const cmd::Registry& registry() const { return registry_; }
     void addCommand(cmd::Command c) { registry_.add(std::move(c)); }  // the GUI's own (editor_open, ...)
     QString workspaceFile() const;
+    int depth() const { return depth_; }  // > 0: this call runs inside another (a window refreshing, a command's own reads)
 
 signals:
     void called(const QString& name, const QJsonObject& args, const cmd::Result& result, bool readOnly);  // every call
@@ -28,6 +29,7 @@ private:
     std::unique_ptr<oadb::Workspace> workspace_;
     cmd::Registry registry_;
     std::unique_ptr<cmd::Context> ctx_;
+    int depth_ = 0;
 };
 
 }  // namespace app

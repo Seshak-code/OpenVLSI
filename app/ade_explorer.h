@@ -26,6 +26,9 @@ class AdeExplorer : public QMainWindow {
 public:
     AdeExplorer(Session& session, const QString& lib, const QString& cell, const QString& view, QWidget* parent = nullptr);
 
+    QString library() const { return lib_; }
+    QString cell() const { return cell_; }
+    QString view() const { return view_; }
     QTableWidget* tests() const { return tests_; }        // On, Name, Design, Analyses, Models, Options
     QTableWidget* variables() const { return vars_; }     // Name, Value
     QTableWidget* corners() const { return corners_; }    // On, Name, Temperature, Variables, Models

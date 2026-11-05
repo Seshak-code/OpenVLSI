@@ -261,6 +261,33 @@ a waveform view.
   lands, its LVS step reports that no open deck exists, rather than passing. ORFS's `gt2n` (2 nm nanosheets) follows
   the same path once its models are checked.
 
+## Build-out to the single app (owner, 2026-11-05)
+
+The owner asked for a polished single app that modernizes the Cadence suite and works with OpenROAD and the tools it
+depends on. This is the order, and what "complete" means. Each slice is commands first (MCP reaches it), then the GUI,
+with a check that runs. Nothing is shown as working before it is: a stage appears in the rail once it does something.
+
+1. **Shell:** one window: stages rail, navigators, tools in tabs, command window; light and dark themes from tokens;
+   drawn icons; Cmd+K palette over every command, with forms from each command's schema; start page. `tests/test_shell`.
+   Done (2026-11-05).
+2. **Flow commands:** `flow/` reached from the command layer. A platform description instead of IHP's hard-coded paths
+   (ihp-sg13g2, asap7). `flow_tools` (what is installed, where, its version), `flow_run` in the background with stage
+   progress, `flow_status`, `flow_stop`, `flow_report` (each stage's metrics; a missing report is an error).
+3. **Implement stage in the GUI:** the flow as a pipeline of stages with live logs, metrics per stage and history, for
+   a design from Verilog to GDS.
+4. **Layout data and viewer:** a layout view in oadb (layers, shapes, instances), GDS and DEF/LEF import, a layer palette
+   and a fast canvas on QRhi that opens what the flow produced. Replaces reaching for KLayout to look at a result.
+5. **Layout editing (Virtuoso Layout's role):** create and stretch shapes, vias, pins, rulers; hierarchy; a transistor
+   Pcell; GDS export; connectivity from the schematic (M3).
+6. **Verify stage:** DRC and LVS (KLayout decks) as commands and views: a marker browser over the layout canvas; ASAP7 as
+   in M2 slice 5's notes. Extraction (OpenRCX) to a post-layout netlist simulated on TreeSPICE, from ADE (M3).
+7. **Timing views:** OpenSTA through OpenROAD: slack summary, path reports, cross-probe to the layout (M5).
+8. **IR and EM:** OpenROAD PDN/PSM: IR-drop maps over the layout canvas (M6).
+9. **ADE Verifier:** requirements traced to Assembler results (M4).
+10. **Spectre X in ADE:** thread count, and `.options hier` arrays, from ADE; a large array's speedup measured (M2 slice 7).
+11. **Finish:** the M3-M6 gates through MCP alone, the bundle carrying or finding the tools, keyboard and accessibility pass,
+    documentation.
+
 ## Salvage and retirement
 
 **Carried over:**

@@ -16,7 +16,7 @@ that ties them together. Platform order: macOS, other desktops, then web. Engine
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # Qt 6 from Homebrew (found by its standard prefix), SQLite from the SDK
 cmake --build build -j$(( $(sysctl -n hw.ncpu) - 2 ))
 ctest --test-dir build                          # oadb, commands, mcp, schematic, simulation, ade, library_manager + view_editor + ade_explorer (offscreen), flow/SoC, isolation
-open build/OpenVLSI.app                         # the CIW and Library Manager; `OpenVLSI <workspace.libs>`, default ~/OpenVLSI/openvlsi.libs
+open build/OpenVLSI.app                         # the one window; `OpenVLSI [--run LINE]... <workspace.libs>`, default ~/OpenVLSI/openvlsi.libs
 ```
 
 The flow and SoC gates (`test_rtl_flow`, `test_firmware_on_silicon`, `test_soc_hello`) run the real tools from
@@ -33,7 +33,7 @@ cmake --build build --target bundle   # build/deploy/OpenVLSI.app: Qt inside (to
 ## Architecture (docs/rebuild.md)
 
 ```
-app/ (Qt 6: CIW, Library Manager, schematic/symbol editors on QRhi, ADE Explorer, waveforms) → cmd/ (command registry) → oadb/ (design database)
+app/ (Qt 6: the shell: stages rail, navigators, palette, themes; CIW, schematic/symbol editors on QRhi, ADE Explorer, waveforms) → cmd/ (command registry) → oadb/ (design database)
                               ├── mcp/ (MCP server)          sim/ (netlister; treespice runs) → acutesim_engine/ (TreeSPICE)
                               └── flow/ (backends), soc/
 ```

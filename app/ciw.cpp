@@ -40,7 +40,7 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
 
     // every command any window runs, echoed with its outcome
     connect(&session_, &Session::called, this, [this](const QString& name, const QJsonObject& args, const cmd::Result& r, bool readOnly) {
-        if (readOnly && !typed_) return;  // a window's browsing is not echoed; its changes and anything typed are
+        if (readOnly && (!typed_ || session_.depth() > 0)) return;  // a window's browsing is not echoed; its changes and anything typed are
         append(name.toHtmlEscaped() + " " + (args.isEmpty() ? QString() : compact(args).toHtmlEscaped()));
         append(r.ok ? "<span style='color:gray'>⇒ " + compact(r.value).toHtmlEscaped() + "</span>"
                     : "<span style='color:#c0392b'>✗ " + r.error.toHtmlEscaped() + "</span>");
@@ -58,8 +58,7 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              QPointer<QWidget>& e = editors_[lib + "/" + cell + "/" + view];
                              if (!e && type == "maestro") e = new AdeExplorer(session_, lib, cell, view, this);
                              else if (!e) e = new ViewEditor(session_, lib, cell, view, this);
-                             e->show();
-                             e->raise();
+                             present(e);
                              return QJsonValue(QString::fromStdString(type));
                          },
                          true});
@@ -93,8 +92,7 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                                  QString error;
                                  if ((*it)->defaultAccess().isEmpty() || !(*it)->add(e, &error))
                                      throw std::runtime_error(error.isEmpty() ? "the run has no waveform analysis" : error.toStdString());
-                                 (*it)->show();
-                                 (*it)->raise();
+                                 present(*it);
                                  return QJsonValue(e);
                              }
                              throw std::runtime_error("no waveform viewer shows a run of " + design.toStdString() + "; open one (waveform_open)");
@@ -131,6 +129,15 @@ LibraryManager* Ciw::libraryManager() {
 
 void Ciw::append(const QString& html) { log_->appendHtml(html); }
 
+void Ciw::present(QWidget* tool) {
+    if (host_) {
+        host_(tool);
+        return;
+    }
+    tool->show();
+    tool->raise();
+}
+
 QString Ciw::logText() const { return log_->toPlainText(); }
 
 ViewEditor* Ciw::editor(const QString& lib, const QString& cell, const QString& view) const {
@@ -145,8 +152,7 @@ WaveformViewer* Ciw::openViewer(cmd::Context& c, const QString& run) {
         v = new WaveformViewer(session_, dir, this);
         viewers_.push_back(v);
     }
-    v->show();
-    v->raise();
+    present(v);
     return v;
 }
 
