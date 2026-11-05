@@ -74,6 +74,7 @@ QJsonObject importGds(oadb::Library& l, const std::string& file, const std::stri
 void addLayoutCommands(Registry& r);      // layout_import_gds, layout_export_gds, layout_layers, layout_info
 void addVerifierCommands(Registry& r);    // verifier_setup_get/set, verifier_requirement_add/remove, verifier_map, verifier_check
 void addLayoutEditCommands(Registry& r);  // layout_shape_add, ..., layout_pcell_mos, layout_generate, layout_connectivity
+void addTestCommands(Registry& r);        // test_run, test_firmware, test_status, test_stop, test_list, test_signals, test_value
 void addFlowCommands(Registry& r);        // flow_tools, flow_platforms, flow_run, flow_status, flow_stop, flow_list, flow_report
 
 // A run directory a caller names (simulate's, an ADE point's): one under the workspace's simulation/ with results,

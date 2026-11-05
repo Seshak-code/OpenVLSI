@@ -4,6 +4,7 @@
 #include "app/ade_explorer.h"
 #include "app/implement.h"
 #include "app/layout_viewer.h"
+#include "app/test_stage.h"
 #include "app/verifier.h"
 #include "app/view_editor.h"
 #include "app/waveform_viewer.h"
@@ -134,6 +135,17 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              return QJsonValue(run);
                          },
                          true});
+    session_.addCommand({"test_view", "Opens a test's run as a tab, with its waveforms (the GUI's command).", cmd::object({{"run", cmd::param("string", "a test's run: <name>/run.N")}}),
+                         [this](cmd::Context&, const QJsonObject& a) {
+                             const QString run = a["run"].toString();
+                             const cmd::Result status = session_.call("test_status", {{"run", run}});
+                             if (!status.ok) throw std::runtime_error(status.error.toStdString());
+                             auto& view = testViews_[run];
+                             if (!view) view = new TestRunView(session_, run, this);
+                             present(view);
+                             return QJsonValue(run);
+                         },
+                         true});
     session_.addCommand({"flow_open_layout", "Imports a run's GDS if need be and opens its layout (the GUI's command); returns the library, cell and view.",
                          cmd::object({{"run", cmd::param("string", "a run: <design>/run.N")}}),
                          [this](cmd::Context&, const QJsonObject& a) {
@@ -239,6 +251,11 @@ WaveformViewer* Ciw::viewer(const QString& run) const {
 AdeExplorer* Ciw::explorer(const QString& lib, const QString& cell, const QString& view) const {
     const auto it = editors_.find(lib + "/" + cell + "/" + view);
     return it == editors_.end() ? nullptr : qobject_cast<AdeExplorer*>(it->second.data());
+}
+
+TestRunView* Ciw::testView(const QString& run) const {
+    const auto it = testViews_.find(run);
+    return it == testViews_.end() ? nullptr : it->second.data();
 }
 
 FlowRunView* Ciw::flowView(const QString& run) const {

@@ -7,7 +7,7 @@
 namespace app::icons {
 
 // "library", "cell", "schematic", "symbol", "maestro", "waveform", "view", "design", "console", "command", "implement",
-// "verify", "verifier", "layout", "add", "close"; an unknown name draws "view". active: in the accent colour.
+// "verify", "verifier", "test", "layout", "add", "close"; an unknown name draws "view". active: in the accent colour.
 QIcon get(const QString& name, bool active = false);
 
 }  // namespace app::icons

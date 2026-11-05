@@ -66,7 +66,7 @@ add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade
 target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
 
 add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp
-            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp)
+            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp cmd/test_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(openvlsi_layout PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_layout PUBLIC oadb Qt6::Core)
@@ -90,7 +90,7 @@ treespice_beside(openvlsi-mcp)
 set(CMAKE_AUTOMOC ON)
 add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp app/scene.cpp app/canvas.cpp
             app/view_editor.cpp app/ade_explorer.cpp app/plot.cpp app/waveform_viewer.cpp app/theme.cpp app/icons.cpp
-            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp app/implement.cpp)
+            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp app/implement.cpp app/test_stage.cpp)
 target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag app/shaders/layout.vert app/shaders/layout.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
@@ -113,7 +113,7 @@ endif()
 
 # ── Flow backends (Yosys / OpenROAD / KLayout drivers, report parsers) and the RV32I SoC ─────────────────────────
 add_library(openvlsi_flow STATIC flow/yosys_log_parser.cpp flow/openroad_report_parser.cpp
-            flow/klayout_report_parser.cpp flow/def_parser.cpp flow/rtl_flow.cpp)
+            flow/klayout_report_parser.cpp flow/def_parser.cpp flow/rtl_flow.cpp flow/vcd.cpp)
 target_include_directories(openvlsi_flow PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_flow PUBLIC openvlsi_proc)  # the tools run as processes: nothing of the engine
 add_library(openvlsi_soc STATIC soc/rv32i.cpp soc/soc.cpp)
@@ -122,7 +122,7 @@ target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier test_implement)
+foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier test_implement test_chip_test)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
@@ -144,10 +144,11 @@ target_link_libraries(test_layout PRIVATE openvlsi_app)
 target_link_libraries(test_layout_edit PRIVATE openvlsi_app)
 target_link_libraries(test_verifier PRIVATE openvlsi_app)
 target_link_libraries(test_implement PRIVATE openvlsi_app)
+target_link_libraries(test_chip_test PRIVATE openvlsi_app)
 treespice_beside(test_waveforms)
 treespice_beside(test_ade_explorer)
 # the plugins of the Qt this links (a machine with a second, stale Qt prefix otherwise finds no platform plugin)
-set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier test_implement PROPERTIES ENVIRONMENT
+set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier test_implement test_chip_test PROPERTIES ENVIRONMENT
                      "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>/..")
 target_compile_definitions(test_mcp PRIVATE OPENVLSI_MCP_EXE="$<TARGET_FILE:openvlsi-mcp>")
 

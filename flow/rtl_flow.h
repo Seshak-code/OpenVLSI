@@ -131,4 +131,28 @@ double staMinPeriodNs(const std::string& results, const std::string& platform, c
 FirmwareSimResult runFirmware(const FirmwareSimConfig& cfg, const RtlFlowTools& tools, FlowLog log = nullptr,
                               const std::atomic<bool>* cancel = nullptr);
 
+// A testbench of the designer's on the RTL, or on the routed netlist with the delays of its layout. Icarus runs it with every
+// signal recorded. It passes only when it finishes by itself, prints passPattern, and reports no line starting FAIL, ERROR
+// or FATAL. ponytail: Icarus does not run timing checks, so a setup violation shows up only as a wrong value downstream.
+struct TestbenchConfig {
+    std::string top;                     // the testbench's module
+    std::vector<std::string> testbench;  // its files
+    std::vector<std::string> rtl;        // the design's RTL: functional run; empty: the routed netlist in `results`
+    std::string results;                 // ORFS results dir of the routed design
+    std::string platform;
+    std::string dut;                     // gate level: the design's instance, as tb.dut, for the delays
+    std::vector<std::string> defines;    // NAME or NAME=VALUE
+    std::string passPattern = "PASS";
+    double timeLimitNs = 1e6;
+    std::string workDir;
+};
+struct TestbenchResult {
+    bool ran = false, passed = false;
+    std::string error;                   // why it did not pass; "" when it did
+    std::string output, vcd;
+    double seconds = 0.0;
+};
+TestbenchResult runTestbench(const TestbenchConfig& cfg, const RtlFlowTools& tools, FlowLog log = nullptr,
+                             const std::atomic<bool>* cancel = nullptr);
+
 }  // namespace acutesim::compute::orchestration

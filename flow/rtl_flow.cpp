@@ -520,6 +520,57 @@ double staMinPeriodNs(const std::string& results, const std::string& platform, c
     return 100.0 - std::stod(m[1]) * unit;
 }
 
+// Everything Icarus needs for the routed design: the cells with their specify blocks made plain, the netlist with plain names,
+// and design.sdf from OpenROAD with the routed design's parasitics, all in work. False with error.
+static bool prepareGateSources(const flow::Platform& platform, const RtlFlowTools& tools, const fs::path& results, const fs::path& work,
+                               const std::atomic<bool>* cancel, std::string& error, std::vector<std::string>& sources, const FlowLog& log) {
+    const flow::Platform* pdk = &platform;
+    // SDF from the layout: OpenROAD with the routed design's global-route parasitics
+    auto file = [&](const std::string& f) { return flow::platformFile(*pdk, tools.flowDir, f); };
+    std::ofstream sdfTcl(work / "sdf.tcl");
+    for (const auto& lib : pdk->liberty) sdfTcl << "read_liberty " << file(lib) << "\n";
+    sdfTcl << "read_db " << (results / "6_final.odb").string() << "\nread_sdc "
+                                    << (results / "6_final.sdc").string() << "\nsource " << file(pdk->setRC)
+                                    << "\nestimate_parasitics -global_routing\nwrite_sdf " << (work / "raw.sdf").string()
+                                    << "\nexit\n";
+    sdfTcl.close();
+    if (!run(tools, work, tools.openroad, {"-no_init", "-exit", (work / "sdf.tcl").string()}, cancel, error, nullptr, [&](const std::string& line) { if (log) log(line, false); })) {
+        error = "SDF " + error;
+        return false;
+    }
+    // Icarus splits escaped names on '.', so the netlist and the SDF get the same plain names;
+    // it ignores "min::max" delays, so they become min:max:max
+    const std::string sdf = slurp(work / "raw.sdf");
+    std::ofstream(work / "netlist.v") << plainNames(slurp(results / "6_final.v"));
+    std::ofstream(work / "design.sdf") << std::regex_replace(std::regex_replace(sdf, std::regex(R"(\\(.))"), "_"),
+                                                             std::regex(R"(\((-?[\d.]+)::(-?[\d.]+)\))"), "($1:$2:$2)");
+    // IHP's flops clock on delayed_* copies of their pins, which only the timing checks drive
+    // and Icarus does not run them: alias them. The specify blocks become plain pin-to-pin
+    // paths, the shape of the SDF's IOPATHs (2.8x faster to annotate and run).
+    // ponytail: state-dependent (COND) delays collapse to the path's maximum.
+    const std::string cells = aliasDelayed(slurp(file(pdk->cellVerilog.front())));
+    std::string patched;
+    static const std::regex specRe(R"(specify([\s\S]*?)endspecify)"),
+        pathRe(R"(\(\s*(?:posedge|negedge)?\s*(\w+)\s*=>\s*\(\s*(\w+)\s*:)");
+    auto it = cells.cbegin();
+    for (std::sregex_iterator m(cells.begin(), cells.end(), specRe), end; m != end; ++m) {
+        patched.append(it, (*m)[0].first);
+        std::set<std::pair<std::string, std::string>> paths;
+        std::string block = "specify\n";
+        const std::string body = (*m)[1];
+        for (std::sregex_iterator p(body.begin(), body.end(), pathRe); p != end; ++p)
+            if (paths.insert({(*p)[1], (*p)[2]}).second) block += "\t(" + (*p)[1].str() + " => " + (*p)[2].str() + ") = (0.0, 0.0);\n";
+        patched += block + "endspecify";
+        it = (*m)[0].second;
+    }
+    patched.append(it, cells.cend());
+    std::ofstream(work / "cells.v") << patched;
+    sources = {(work / "cells.v").string()};
+    for (size_t i = 1; i < pdk->cellVerilog.size(); ++i) sources.push_back(file(pdk->cellVerilog[i]));
+    sources.push_back((work / "netlist.v").string());
+    return true;
+}
+
 FirmwareSimResult runFirmware(const FirmwareSimConfig& cfg, const RtlFlowTools& tools, FlowLog log,
                               const std::atomic<bool>* cancel) {
     const auto t0 = std::chrono::steady_clock::now();
@@ -555,46 +606,8 @@ FirmwareSimResult runFirmware(const FirmwareSimConfig& cfg, const RtlFlowTools& 
     }
     std::vector<std::string> sources;
     if (gate) {
-        // SDF from the layout: OpenROAD with the routed design's global-route parasitics
-        auto file = [&](const std::string& f) { return flow::platformFile(*pdk, tools.flowDir, f); };
-        std::ofstream sdfTcl(work / "sdf.tcl");
-        for (const auto& lib : pdk->liberty) sdfTcl << "read_liberty " << file(lib) << "\n";
-        sdfTcl << "read_db " << (results / "6_final.odb").string() << "\nread_sdc "
-                                        << (results / "6_final.sdc").string() << "\nsource " << file(pdk->setRC)
-                                        << "\nestimate_parasitics -global_routing\nwrite_sdf " << (work / "raw.sdf").string()
-                                        << "\nexit\n";
-        sdfTcl.close();
-        if (!tool(tools.openroad, {"-no_init", "-exit", (work / "sdf.tcl").string()})) return fail("firmware sim: SDF " + res.error);
-        // Icarus splits escaped names on '.', so the netlist and the SDF get the same plain names;
-        // it ignores "min::max" delays, so they become min:max:max
-        const std::string sdf = slurp(work / "raw.sdf");
-        std::ofstream(work / "netlist.v") << plainNames(slurp(results / "6_final.v"));
-        std::ofstream(work / "design.sdf") << std::regex_replace(std::regex_replace(sdf, std::regex(R"(\\(.))"), "_"),
-                                                                 std::regex(R"(\((-?[\d.]+)::(-?[\d.]+)\))"), "($1:$2:$2)");
-        // IHP's flops clock on delayed_* copies of their pins, which only the timing checks drive
-        // and Icarus does not run them: alias them. The specify blocks become plain pin-to-pin
-        // paths, the shape of the SDF's IOPATHs (2.8x faster to annotate and run).
-        // ponytail: state-dependent (COND) delays collapse to the path's maximum.
-        const std::string cells = aliasDelayed(slurp(file(pdk->cellVerilog.front())));
-        std::string patched;
-        static const std::regex specRe(R"(specify([\s\S]*?)endspecify)"),
-            pathRe(R"(\(\s*(?:posedge|negedge)?\s*(\w+)\s*=>\s*\(\s*(\w+)\s*:)");
-        auto it = cells.cbegin();
-        for (std::sregex_iterator m(cells.begin(), cells.end(), specRe), end; m != end; ++m) {
-            patched.append(it, (*m)[0].first);
-            std::set<std::pair<std::string, std::string>> paths;
-            std::string block = "specify\n";
-            const std::string body = (*m)[1];
-            for (std::sregex_iterator p(body.begin(), body.end(), pathRe); p != end; ++p)
-                if (paths.insert({(*p)[1], (*p)[2]}).second) block += "\t(" + (*p)[1].str() + " => " + (*p)[2].str() + ") = (0.0, 0.0);\n";
-            patched += block + "endspecify";
-            it = (*m)[0].second;
-        }
-        patched.append(it, cells.cend());
-        std::ofstream(work / "cells.v") << patched;
-        sources = {(work / "cells.v").string()};
-        for (size_t i = 1; i < pdk->cellVerilog.size(); ++i) sources.push_back(file(pdk->cellVerilog[i]));
-        sources.push_back((work / "netlist.v").string());
+        std::string why;
+        if (!prepareGateSources(*pdk, tools, results, work, cancel, why, sources, log)) return fail("firmware sim: " + why);
     } else {
         sources = cfg.rtl;
     }
@@ -638,6 +651,69 @@ FirmwareSimResult runFirmware(const FirmwareSimConfig& cfg, const RtlFlowTools& 
     res.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     if (!res.ok) res.error = res.timedOut ? "no ECALL within " + std::to_string(cfg.maxCycles) + " cycles" : "simulation ended without ECALL";
     return res;
+}
+
+TestbenchResult runTestbench(const TestbenchConfig& cfg, const RtlFlowTools& tools, FlowLog log, const std::atomic<bool>* cancel) {
+    const auto t0 = std::chrono::steady_clock::now();
+    TestbenchResult res;
+    const auto finish = [&](const std::string& e) {
+        res.error = e;
+        res.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        if (log && !e.empty()) log(e, true);
+        return res;
+    };
+    static const std::regex name(R"(^[A-Za-z_][A-Za-z0-9_$]*$)"), path(R"(^[A-Za-z_][A-Za-z0-9_$.]*$)");
+    if (!std::regex_match(cfg.top, name)) return finish("testbench: its top module must be a plain Verilog name");
+    if (cfg.testbench.empty()) return finish("testbench: no testbench files");
+    if (!(cfg.timeLimitNs > 0)) return finish("testbench: the time limit must be > 0");
+    if (cfg.passPattern.empty()) return finish("testbench: a pass pattern is required, so that a testbench that says nothing does not pass");
+    if (tools.iverilog.empty() || tools.vvp.empty()) return finish("testbench: missing Icarus Verilog (iverilog, vvp)");
+    for (const auto& d : cfg.defines)
+        if (d.find_first_of(" \n\t;") != std::string::npos) return finish("testbench: define '" + d + "' has a space or separator");
+    const fs::path work = fs::absolute(cfg.workDir);
+    std::error_code ec;
+    fs::create_directories(work, ec);
+    const auto lines = [&](const std::string& line) { if (log) log(line, false); };
+
+    std::vector<std::string> sources;
+    const bool gate = cfg.rtl.empty();
+    if (gate) {
+        const flow::Platform* pdk = flow::findPlatform(cfg.platform);
+        if (!pdk) return finish("testbench: unknown platform '" + cfg.platform + "' (known: " + flow::knownPlatforms() + ")");
+        if (!pdk->gateSim) return finish("testbench: gate-level simulation is not checked on " + pdk->name);
+        if (const std::string m = tools.simMissing(cfg.platform); !m.empty()) return finish("testbench: missing " + m);
+        if (!std::regex_match(cfg.dut, path)) return finish("testbench: gate level needs the design's instance path, as tb.dut");
+        if (!fs::exists(fs::path(cfg.results) / "6_final.v")) return finish("testbench: no routed netlist in " + cfg.results);
+        std::string why;
+        if (!prepareGateSources(*pdk, tools, cfg.results, work, cancel, why, sources, log)) return finish("testbench: " + why);
+    } else {
+        sources = cfg.rtl;
+    }
+    // A second top module beside the testbench: it records every signal, annotates the layout's delays and ends a run that
+    // never finishes on its own
+    std::ofstream(work / "harness.v") << "`timescale 1ns/1ps\nmodule openvlsi_harness;\n  initial begin\n"
+                                         "    $dumpfile(\"dump.vcd\");\n    $dumpvars(0, " << cfg.top << ");\n"
+                                      << (gate ? "    $sdf_annotate(\"design.sdf\", " + cfg.dut + ", , \"sdf.log\", \"MAXIMUM\");\n" : std::string())
+                                      << "    #" << cfg.timeLimitNs << " $display(\"OPENVLSI_TIME_LIMIT\");\n    $finish;\n  end\nendmodule\n";
+    std::vector<std::string> args{"-g2012", "-s", cfg.top, "-s", "openvlsi_harness", "-o", (work / "sim.vvp").string()};
+    if (gate) args.insert(args.begin(), "-gspecify");
+    for (const auto& d : cfg.defines) args.push_back("-D" + d);
+    args.push_back((work / "harness.v").string());
+    args.insert(args.end(), cfg.testbench.begin(), cfg.testbench.end());
+    args.insert(args.end(), sources.begin(), sources.end());
+    std::string why;
+    if (!run(tools, work, tools.iverilog, args, cancel, why, nullptr, lines)) return finish("the testbench or design does not compile: " + why);
+    res.ran = true;
+    std::string out;
+    if (!run(tools, work, tools.vvp, {"-n", (work / "sim.vvp").string()}, cancel, why, &out, lines)) return finish("vvp: " + why);
+    res.output = out;
+    res.vcd = (work / "dump.vcd").string();
+    if (out.find("OPENVLSI_TIME_LIMIT") != std::string::npos) return finish("it reached the time limit of " + std::to_string(cfg.timeLimitNs) + " ns without finishing");
+    static const std::regex bad(R"((^|\n)\s*(FATAL|FAIL|ERROR)\b)");
+    if (std::regex_search(out, bad)) return finish("the testbench reported a failure");
+    if (out.find(cfg.passPattern) == std::string::npos) return finish("it finished without printing '" + cfg.passPattern + "'");
+    res.passed = true;
+    return finish("");
 }
 
 }  // namespace acutesim::compute::orchestration

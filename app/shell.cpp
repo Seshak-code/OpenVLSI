@@ -4,6 +4,7 @@
 #include "app/icons.h"
 #include "app/implement.h"
 #include "app/layout_viewer.h"
+#include "app/test_stage.h"
 #include "app/verifier.h"
 #include "app/library_manager.h"
 #include "app/navigator.h"
@@ -46,6 +47,7 @@ QString iconOf(QWidget* tool) {
     if (qobject_cast<LayoutViewer*>(tool)) return "layout";
     if (qobject_cast<Verifier*>(tool)) return "verifier";
     if (qobject_cast<FlowRunView*>(tool)) return "implement";
+    if (qobject_cast<TestRunView*>(tool)) return "test";
     return "view";
 }
 
@@ -56,6 +58,7 @@ QString tabTitle(QWidget* tool) {
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->cell() + " " + l->view();
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->cell() + " " + r->view();
     if (auto* f = qobject_cast<FlowRunView*>(tool)) return f->run().replace('/', ' ');
+    if (auto* v = qobject_cast<TestRunView*>(tool)) return v->run().replace('/', ' ');
     return tool->windowTitle();
 }
 
@@ -66,6 +69,7 @@ QString crumbOf(QWidget* tool) {
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->library() + "  ›  " + l->cell() + "  ›  " + l->view();
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->library() + "  ›  " + r->cell() + "  ›  " + r->view();
     if (auto* f = qobject_cast<FlowRunView*>(tool)) return "Implement  ›  " + f->design() + "  ›  " + f->run().section('/', 1);
+    if (auto* v = qobject_cast<TestRunView*>(tool)) return "Test  ›  " + v->run().section('/', 0, 0) + "  ›  " + v->run().section('/', 1);
     return {};
 }
 }  // namespace
@@ -87,7 +91,8 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     railLayout->setSpacing(0);
     const std::pair<QString, QString> stages[] = {{"design", "Design: libraries, cells and views"},
                                                   {"maestro", "Simulate: tests and their runs"},
-                                                  {"implement", "Implement: Verilog to GDS"}};
+                                                  {"implement", "Implement: Verilog to GDS"},
+                                                  {"test", "Test: the chip under its testbenches and firmware"}};
     for (int k = 0; k < (int)std::size(stages); ++k) {
         auto* b = new QToolButton(rail);
         b->setObjectName("railButton");
@@ -131,6 +136,8 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
         session_.call("flow_view", {{"run", run}});
     }}, panels_);
     panels_->addWidget(implement_);
+    test_ = new TestPanel(session_, {[this](const QString& run) { session_.call("test_view", {{"run", run}}); }}, panels_);
+    panels_->addWidget(test_);
 
     tabs_ = new QTabWidget(this);
     tabs_->setDocumentMode(true);
@@ -359,6 +366,7 @@ void Shell::host(QWidget* tool) {
     tabs_->tabBar()->setTabButton(index, QTabBar::RightSide, close);
     tabs_->setCurrentIndex(index);
     if (qobject_cast<FlowRunView*>(tool)) showStage(2);
+    if (qobject_cast<TestRunView*>(tool)) showStage(3);
     if (auto* e = qobject_cast<ViewEditor*>(tool)) noteRecent(e->library() + "/" + e->cell() + "/" + e->view());
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) noteRecent(a->library() + "/" + a->cell() + "/" + a->view());
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) noteRecent(l->library() + "/" + l->cell() + "/" + l->view());
@@ -441,6 +449,8 @@ void Shell::updateCrumb() {
 void Shell::showStage(int stage) {
     panels_->setCurrentIndex(stage);
     panels_->show();
+    if (stage == 2) implement_->refresh();
+    if (stage == 3) test_->refresh();
     for (int k = 0; k < (int)stages_.size(); ++k) stages_[k]->setChecked(k == stage);
     refreshIcons();
 }
