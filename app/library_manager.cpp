@@ -1,4 +1,5 @@
 #include "app/library_manager.h"
+#include "app/ui_commands.h"
 
 #include <QEvent>
 #include <QFileDialog>
@@ -72,6 +73,8 @@ LibraryManager::LibraryManager(Session& session, QWidget* parent) : QWidget(pare
     bar->addSeparator();
     bar->addAction("Undo", this, [this] { undo(); });
     bar->addAction("Redo", this, [this] { redo(); });
+    bindActions(this, {{"New Library…", "library_create"}, {"Define Library…", "library_define"}, {"New Cell…", "cell_create"}, {"New View…", "view_create"}, {"Rename…", "cell_rename"},
+                       {"Delete", "cell_delete"}, {"Undo", "edit_undo"}, {"Redo", "edit_redo"}});
 
     connect(libs_, &QListWidget::currentTextChanged, this, [this] { if (!filling_) fillCells(); });
     connect(cells_, &QListWidget::currentTextChanged, this, [this] { if (!filling_) fillViews(); });

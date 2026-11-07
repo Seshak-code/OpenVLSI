@@ -63,6 +63,26 @@ Navigator::Navigator(Session& session, Mode mode, Actions actions, QWidget* pare
 
 void Navigator::setFilter(const QString& text) { filter_->setText(text); }
 
+bool Navigator::select(const QString& library, const QString& cell, const QString& view) {
+    QStringList want{library};
+    if (!cell.isEmpty()) want << cell;
+    if (!view.isEmpty()) want << view;
+    const std::function<QTreeWidgetItem*(QTreeWidgetItem*, int)> find = [&](QTreeWidgetItem* at, int depth) -> QTreeWidgetItem* {
+        for (int k = 0; k < (at ? at->childCount() : tree_->topLevelItemCount()); ++k) {
+            QTreeWidgetItem* i = at ? at->child(k) : tree_->topLevelItem(k);
+            if (i->text(0) != want[depth]) continue;
+            if (depth + 1 == want.size()) return i;
+            if (QTreeWidgetItem* below = find(i, depth + 1)) return below;
+        }
+        return nullptr;
+    };
+    QTreeWidgetItem* item = find(nullptr, 0);
+    if (!item) return false;
+    for (QTreeWidgetItem* up = item->parent(); up; up = up->parent()) up->setExpanded(true);
+    tree_->setCurrentItem(item);
+    return true;
+}
+
 QJsonObject Navigator::selection() const {
     QJsonObject o;
     if (const auto* i = tree_->currentItem()) {

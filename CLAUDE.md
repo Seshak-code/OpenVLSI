@@ -38,6 +38,13 @@ app/ (Qt 6: the shell: stages rail, navigators, palette, themes; CIW, schematic/
                               └── flow/ (backends), soc/
 ```
 
+- **The API reaches everything (owner, 2026-11-05):** every menu item and button names its command (`bindActions`), and
+  `tests/test_api` fails on any that has none, or on a command missing from `docs/api.md` (`OpenVLSI --dump-api docs/api.md`). A running
+  app serves the API on a local socket (`app/api_server`); `openvlsi-mcp` attaches to it when that workspace is open, and otherwise works
+  on the database. `tools/openvlsi.py` is the Python client. New controls need a command that does what they do.
+- **Test the window with real input:** `tools/ui_test.py` clicks and types through `ui_locate` and `ui_input` (Qt's window-system queue; a
+  ctest offscreen, with pixel checks on a real window; `--backend os` uses real macOS events through `tools/os_input`, which needs the owner to
+  grant Accessibility permission). Handlers called directly miss focus, shortcuts and double clicks: it has found bugs they could not.
 - **Every action is a command** (`cmd/registry.h`): a name (`[a-z][a-z0-9_]*`), a description, a JSON-schema
   parameter object, a handler. Calls are validated fail-closed (an unknown key, a wrong type, a missing parameter is
   an error result), logged, and undoable through the database. The GUI, the scripting console (embedded Python, a

@@ -1,4 +1,5 @@
 #include "app/view_editor.h"
+#include "app/ui_commands.h"
 
 #include "app/canvas.h"
 
@@ -77,6 +78,7 @@ ViewEditor::ViewEditor(Session& session, const QString& lib, const QString& cell
     connect(canvas_, &Canvas::moved, this, &ViewEditor::moveTo);
     connect(canvas_, &Canvas::released, this, &ViewEditor::release);
     connect(canvas_, &Canvas::doubleClicked, this, &ViewEditor::doubleClick);
+    setFocusProxy(canvas_);
     connect(&session_, &Session::changed, this, &ViewEditor::reload);
     reload();
     setWindowTitle((isSchematic() ? "Schematic Editing: " : "Symbol Editing: ") + lib + " " + cell + " " + view);
@@ -97,8 +99,8 @@ void ViewEditor::buildMenus() {
     act(edit, "Redo", QKeySequence("Shift+U"), [this] { redo(); });
     edit->addSeparator();
     act(edit, "Move", QKeySequence("M"), [this] { startMove(); });
-    act(edit, "Delete", QKeySequence::Delete, [this] { deleteSelection(); });
-    act(edit, "Delete", QKeySequence(Qt::Key_Backspace), [this] { deleteSelection(); })->setVisible(false);
+    // Both keys on one action: a hidden action's shortcut does not fire
+    act(edit, "Delete", QKeySequence::Delete, [this] { deleteSelection(); })->setShortcuts({QKeySequence(Qt::Key_Delete), QKeySequence(Qt::Key_Backspace)});
     act(edit, "Cancel", QKeySequence(Qt::Key_Escape), [this] { escape(); });
 
     QMenu* create = menuBar()->addMenu("&Create");
@@ -158,6 +160,11 @@ void ViewEditor::buildMenus() {
     act(viewMenu, "Fit", QKeySequence("F"), [this] { fit(); });
     act(viewMenu, "Zoom In", QKeySequence("]"), [this] { canvas_->zoomBy(2); });
     act(viewMenu, "Zoom Out", QKeySequence("["), [this] { canvas_->zoomBy(0.5); });
+    bindActions(this, {{"Undo", "edit_undo"}, {"Redo", "edit_redo"}, {"Move", "editor_tool"}, {"Delete", "editor_delete"}, {"Cancel", "editor_escape"}, {"Rotate", "editor_rotate"},
+                       {"Properties…", "instance_set_params"}, {"Instance…", "editor_tool"}, {"Wire", "editor_tool"}, {"Wire Name…", "editor_tool"}, {"Pin…", "editor_tool"},
+                       {"Symbol from Schematic", "symbol_generate"}, {"Check", "schematic_check"}, {"Plot Net", "editor_plot_nets"}, {"Descend", "editor_descend"}, {"Line", "editor_tool"},
+                       {"Rectangle", "editor_tool"}, {"Polygon", "editor_tool"}, {"Ellipse", "editor_tool"}, {"Label…", "editor_tool"}, {"Fit", "editor_fit"}, {"Zoom In", "editor_zoom"},
+                       {"Zoom Out", "editor_zoom"}});
 }
 
 QPointF ViewEditor::snap(QPointF p) const {
@@ -400,8 +407,8 @@ void ViewEditor::release(QPointF world) {
 }
 
 void ViewEditor::doubleClick(QPointF world) {
+    press(world);  // the second click of the pair arrives as the double-click; to other tools it is just a click
     if (tool_ != Tool::Wire && tool_ != Tool::Line && tool_ != Tool::Polygon) return;
-    press(world);  // the second click of the pair arrives as the double-click
     finishPath();
     redraw();
 }

@@ -249,6 +249,31 @@ def step_inverter(m, a, work):
     matched, log = run_lvs(a.klayout, a.platform, gds, cdl, "inv", work)
     check(matched, "IHP's LVS deck: the layout matches its schematic" + ("" if matched else "\n" + log[-1500:]))
 
+    print("The same through the Verify stage's commands", flush=True)
+    drc = m("verify_drc", library="design", cell="inv")
+    check(drc.get("clean") is True and drc["violations"] == 0, f"verify_drc: clean ({drc.get('error', '')})")
+    lvs = m("verify_lvs", library="design", cell="inv")
+    check(lvs.get("matched") is True and lvs["devices_layout"] == lvs["devices_schematic"] == 2, f"verify_lvs: matched, two devices a side ({lvs.get('error', '')}, {lvs.get('devices_layout')}, {lvs.get('devices_schematic')})")
+    # A Metal1 rectangle 100 nm from the left of the in pin's column, where the spacing rule says 180
+    objects = m("layout_objects_get", library="design", cell="inv")
+    text = next(s for s in objects["shapes"] if s["kind"] == "text" and s["text"] == "in")
+    tx, ty = text["points"][0]
+    m("layout_shape_add", library="design", cell="inv", layer="Metal1", kind="rect", points=[[tx - 130 - 100 - 400, ty - 200], [tx - 130 - 100, ty + 200]])
+    bad = m("verify_drc", library="design", cell="inv")
+    check(not bad["clean"] and bad["violations"] > 0, f"a Metal1 rectangle 100 nm from a wire is found: {bad.get('violations')} violations")
+    markers = m("verify_markers", run=bad["run"])
+    rules = [r["rule"] for r in markers["rules"]]
+    check("M1.b" in rules, f"as M1.b, the spacing rule: {rules}")
+    m1b = next(r for r in markers["rules"] if r["rule"] == "M1.b")
+    xs = [p[0] for mk in m1b["markers"] for p in mk["points"]]
+    ys = [p[1] for mk in m1b["markers"] for p in mk["points"]]
+    gap_x = (tx - 130 - 100) / 1000
+    check(any(abs(x - gap_x) < 0.15 for x in xs) and min(ys) <= (ty + 200) / 1000 and max(ys) >= (ty - 200) / 1000, f"and its marker is at the gap, x near {gap_x:.2f} um")
+    worse = m("verify_lvs", library="design", cell="inv")
+    check(worse.get("matched") is True, "that rectangle joins nothing, so LVS still matches")
+    m("edit_undo", library="design")
+    check(m("verify_drc", library="design", cell="inv")["clean"], "undo makes it clean again")
+
     print("A short and an open are seen", flush=True)
     objects = m("layout_objects_get", library="design", cell="inv")
     outs = [s for s in objects["shapes"] if s["layer"] == 10 and s["datatype"] == 0]

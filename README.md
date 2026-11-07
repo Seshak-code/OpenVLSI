@@ -5,9 +5,9 @@ everything; Yosys, OpenROAD, KLayout, Netgen, OpenRCX and OpenSTA are the implem
 as they are. OpenVLSI is the frontend that ties them together: one design database, one command layer, and
 Cadence-style tools over them.
 
-> **Status: rebuild in progress** (`docs/rebuild.md`). Milestone 1 is the analog loop: Library Manager, schematic
-> and symbol editors, ADE Explorer-class setup and waveforms, on TreeSPICE. The foundation is in: the design
-> database, the command layer and its MCP server. The GUI comes next.
+> **Status:** one window takes a design from Verilog to a signed-off GDS and tests the result, down to the routed chip at transistor level on TreeSPICE; analog from schematic through ADE
+> to a DRC- and LVS-clean layout on IHP SG13G2. [docs/guide.md](docs/guide.md) shows how; [docs/rebuild.md](docs/rebuild.md) lists, tool by tool, what runs and what is still missing against Cadence.
+> Everything in the window is also a command: [docs/api.md](docs/api.md).
 
 ## Parts
 

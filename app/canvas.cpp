@@ -79,6 +79,7 @@ private:
 };
 
 Canvas::Canvas(QWidget* parent) : QRhiWidget(parent), text_(new TextLayer(this)) {
+    setAccessibleName("Schematic canvas");
     connect(Theme::notifier(), SIGNAL(changed()), this, SLOT(update()));
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);

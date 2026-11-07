@@ -16,6 +16,7 @@
 
 class QLabel;
 class QLineEdit;
+class QDockWidget;
 class QTreeWidget;
 class QRhi;
 class QRhiBuffer;
@@ -51,6 +52,12 @@ public:
     const std::vector<LayerStyle>* styles() const { return styles_; }
     std::vector<QRectF> selectedBoxes;                    // world: one per selected object
     std::vector<std::pair<QPointF, QPointF>> flightLines; // world: what remains to route
+    std::vector<QRectF> markers;                          // world: what a check found, each a box
+    std::vector<QPointF> pathOverlay;                     // world: a timing path, pin to pin
+    struct HeatPoint { QPointF at; float share; };        // world; 0 no drop to 1 the worst
+    std::vector<HeatPoint> heat;
+    QString overlayTitle;
+    int currentMarker = -1;
     enum class Rubber { None, Box, Line, Closed, Ghost };
     Rubber rubber = Rubber::None;                         // what the tool in progress draws to the cursor
     std::vector<QPointF> rubberPoints;
@@ -63,7 +70,7 @@ public:
 
 signals:
     void clicked(QPointF world, bool extend);
-    void doubleClicked();
+    void doubleClicked(QPointF world, bool extend);
     void moved(QPointF world);
 
 protected:
@@ -90,6 +97,8 @@ private:
     std::vector<Range> fills_, outlines_;
     bool dirty_ = true, moved_ = false;
     double scale_ = 1, cx_ = 0, cy_ = 0;
+    double originX_ = 0, originY_ = 0;
+    bool hasOrigin_ = false;
     std::optional<QPoint> dragFrom_;
     QPoint pressAt_;
     bool dragged_ = false, swallowRelease_ = false;
@@ -133,12 +142,25 @@ public:
     QString lastError() const { return lastError_; }
     int flightLineCount() const { return (int)canvas_->flightLines.size(); }
     void setFlightLinesShown(bool on);
+    void setAllLayersVisible(bool on);
+    double addRuler(double x0, double y0, double x1, double y1);  // database units, absolute; its length in microns
+    QJsonObject state() const;
+
+    // What a DRC found (verify_markers), walked in a panel: choosing one shows it. Returns how many landed on this layout.
+    int setMarkers(const QJsonObject& report);
+    QTreeWidget* markerTree() const { return markerTree_; }
+    void showMarker(int index);
+    QRectF markerWindow(int index) const;
+    // A timing path's pins, and an IR map, in microns: drawn over the layout. Empty clears.
+    void setPathOverlay(const std::vector<QPointF>& microns, const QString& title);
+    void setHeatOverlay(const std::vector<std::array<double, 3>>& nodes, double worst, const QString& title);  // x, y microns; drop
     QTreeWidget* layerTree() const { return layerTree_; }
     QString status() const;
 
 private:
     void reload();
     void reloadIfChanged();
+    void placeMarkers();
     void fillLayers();
     void buildStyles();
     void click(QPointF world, bool extend);
@@ -161,6 +183,10 @@ private:
     std::vector<LayerStyle> styles_;
     LayoutCanvas* canvas_;
     QTreeWidget* layerTree_;
+    QTreeWidget* markerTree_;
+    QDockWidget* markerDock_;
+    QJsonObject markerReport_;
+    std::vector<int> markerOfItem_;
     QLineEdit* layerFilter_;
     QLabel* status_;
     QLabel* position_;

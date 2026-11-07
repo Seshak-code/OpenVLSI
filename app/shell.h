@@ -20,6 +20,10 @@ namespace app {
 
 class CommandForm;
 class CommandPalette;
+class ImplementPanel;
+class TestPanel;
+class VerifyPanel;
+class RtlPanel;
 class Navigator;
 
 class Shell : public QMainWindow {
@@ -30,14 +34,28 @@ public:
     QTabWidget* tabs() const { return tabs_; }
     Navigator* navigator() const { return design_; }
     Navigator* simulations() const { return simulate_; }
+    ImplementPanel* implementPanel() const { return implement_; }
+    TestPanel* testPanel() const { return test_; }
+    VerifyPanel* verifyPanel() const { return verify_; }
+    RtlPanel* rtlPanel() const { return rtl_; }
+    int stageIndex(const QString& name) const;
     QWidget* current() const;              // the active tool; null on the start page
     QStringList tabTitles() const;
     QMenu* themeMenu() const { return themeMenu_; }
     CommandPalette* newPalette();          // what Cmd+K shows
     bool runForm(const QString& command, const QJsonObject& prefill = {});  // no parameters: runs it; else its form
     void showConsole(bool on);
+    QString stageName() const;
+    bool sidePanelVisible() const;
+    void setSidePanelVisible(bool on);
+    void closeTabAt(int index) { closeTab(index); }
+    void showLibraryManager();
+    QJsonObject currentContext() const { return context(); }
+    QString apiEndpoint() const;
+    QWidget* railButton(const QString& stage) const;
+    QWidget* consoleRailButton() const;
     bool consoleVisible() const;
-    void showStage(int stage);             // 0 design, 1 simulate
+    void showStage(int stage);             // 0 design, 1 rtl, 2 simulate, 3 implement, 4 verify, 5 test (kStages)
     QStringList recentViews() const;
     QStringList menuTitles() const;
 
@@ -61,6 +79,11 @@ private:
     QTabWidget* tabs_;
     QStackedWidget* panels_;
     Navigator *design_, *simulate_;
+    ImplementPanel* implement_ = nullptr;
+    TestPanel* test_ = nullptr;
+    VerifyPanel* verify_ = nullptr;
+    RtlPanel* rtl_ = nullptr;
+    class ApiServer* api_ = nullptr;
     QSplitter *outer_, *inner_;
     QWidget* start_;
     QVBoxLayout* recentList_;

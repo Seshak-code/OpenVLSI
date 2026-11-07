@@ -29,6 +29,23 @@ void addCoreCommands(Registry& r) {
                for (const auto& n : c.workspace.libraries()) out.append(q(n));
                return QJsonValue(out);
            }, true});
+    r.add({"api_info", "What this API is: mode app (the running window, which follows every call) or headless (the database only), and how many commands it has.", params({}),
+           [](Context& c, const QJsonObject&) {
+               const auto all = c.registry->commands();
+               return QJsonValue(QJsonObject{{"mode", c.registry->find("ui_state") ? "app" : "headless"}, {"commands", (int)all.size()}, {"workspace", QString::fromStdString(c.workspace.file())}});
+           },
+           true});
+    r.add({"api_list", "Every command: its name, description, parameters as a JSON schema, whether it only reads. query narrows it to names and descriptions holding that text.",
+           object({}, {{"query", param("string", "text to look for")}}),
+           [](Context& c, const QJsonObject& a) {
+               QJsonArray out;
+               const QString query = a["query"].toString();
+               for (const auto* k : c.registry->commands())
+                   if (query.isEmpty() || k->name.contains(query, Qt::CaseInsensitive) || k->description.contains(query, Qt::CaseInsensitive))
+                       out.append(QJsonObject{{"name", k->name}, {"description", k->description}, {"params", k->params}, {"read_only", k->readOnly}});
+               return QJsonValue(out);
+           },
+           true});
     r.add({"library_create", "Creates a library file and defines it in the workspace.",
            params({{"library", kLib}, {"path", str("file path, relative to the workspace file")}}),
            [](Context& c, const QJsonObject& a) {

@@ -38,7 +38,7 @@ endif()
 add_subdirectory(acutesim_engine)
 
 # Homebrew's full qt first: a machine with both qt and a newer qtbase otherwise mixes the two's plugins
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets ShaderTools HINTS /opt/homebrew/opt/qt /usr/local/opt/qt)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network ShaderTools HINTS /opt/homebrew/opt/qt /usr/local/opt/qt)
 find_package(SQLite3 REQUIRED)
 # ponytail: Qt 6.9.0's FindWrapOpenGL links AGL, which the macOS 26 SDK no longer has; drop it (delete this once Homebrew's
 # Qt no longer links it)
@@ -62,11 +62,11 @@ target_link_libraries(openvlsi_sch PUBLIC oadb)
 # ── Worker processes (a process group with a watchdog), and simulation: netlister, TreeSPICE runs, raw files ─────
 add_library(openvlsi_proc STATIC flow/subprocess.cpp)
 target_include_directories(openvlsi_proc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade.cpp sim/verifier.cpp)
+add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade.cpp sim/verifier.cpp sim/chip_deck.cpp flow/vcd.cpp)
 target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
 
 add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp
-            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp)
+            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp cmd/test_commands.cpp cmd/verify_commands.cpp cmd/signoff_commands.cpp cmd/rtl_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(openvlsi_layout PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_layout PUBLIC oadb Qt6::Core)
@@ -76,7 +76,7 @@ target_link_libraries(openvlsi_cmd PUBLIC oadb openvlsi_sch openvlsi_sim openvls
 add_library(openvlsi_mcp STATIC mcp/server.cpp)
 target_link_libraries(openvlsi_mcp PUBLIC openvlsi_cmd)
 add_executable(openvlsi-mcp mcp/main.cpp)
-target_link_libraries(openvlsi-mcp PRIVATE openvlsi_mcp)
+target_link_libraries(openvlsi-mcp PRIVATE openvlsi_mcp Qt6::Network)
 # each executable that simulates finds treespice beside it, copied on every build: as the executable's POST_BUILD the
 # copy ran only when it relinked, and an engine-only change left a stale treespice there
 function(treespice_beside target)
@@ -90,8 +90,8 @@ treespice_beside(openvlsi-mcp)
 set(CMAKE_AUTOMOC ON)
 add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp app/scene.cpp app/canvas.cpp
             app/view_editor.cpp app/ade_explorer.cpp app/plot.cpp app/waveform_viewer.cpp app/theme.cpp app/icons.cpp
-            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp)
-target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd Qt6::Widgets PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
+            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp app/implement.cpp app/test_stage.cpp app/verify_stage.cpp app/ui_commands.cpp app/ui_input.cpp app/api_server.cpp app/signoff.cpp app/rtl_stage.cpp)
+target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd openvlsi_mcp Qt6::Widgets Qt6::Network PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag app/shaders/layout.vert app/shaders/layout.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
 target_link_libraries(OpenVLSI PRIVATE openvlsi_app)
@@ -122,7 +122,7 @@ target_link_libraries(openvlsi_soc PUBLIC acutesim_engine)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 enable_testing()
-foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier)
+foreach(t test_oadb test_commands test_mcp test_schematic test_simulation test_ade test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier test_implement test_chip_test test_api)
     add_executable(${t} tests/${t}.cpp)
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
@@ -143,10 +143,14 @@ target_link_libraries(test_shell PRIVATE openvlsi_app)
 target_link_libraries(test_layout PRIVATE openvlsi_app)
 target_link_libraries(test_layout_edit PRIVATE openvlsi_app)
 target_link_libraries(test_verifier PRIVATE openvlsi_app)
+target_link_libraries(test_implement PRIVATE openvlsi_app)
+target_link_libraries(test_chip_test PRIVATE openvlsi_app)
+target_link_libraries(test_api PRIVATE openvlsi_app)
+target_compile_definitions(test_api PRIVATE OPENVLSI_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}")
 treespice_beside(test_waveforms)
 treespice_beside(test_ade_explorer)
 # the plugins of the Qt this links (a machine with a second, stale Qt prefix otherwise finds no platform plugin)
-set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier PROPERTIES ENVIRONMENT
+set_tests_properties(test_library_manager test_view_editor test_ade_explorer test_waveforms test_shell test_layout test_layout_edit test_verifier test_implement test_chip_test test_api PROPERTIES ENVIRONMENT
                      "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>/..")
 target_compile_definitions(test_mcp PRIVATE OPENVLSI_MCP_EXE="$<TARGET_FILE:openvlsi-mcp>")
 
@@ -159,5 +163,14 @@ foreach(t test_eda_drivers test_rtl_flow test_firmware_on_silicon test_soc_hello
 endforeach()
 target_link_libraries(test_flow_commands PRIVATE openvlsi_cmd)
 
+if(APPLE)
+    # Real mouse and keyboard from outside the app, for tools/ui_test.py --backend os (macOS asks for Accessibility permission)
+    add_executable(os_input tools/os_input.cpp)
+    target_link_libraries(os_input PRIVATE "-framework ApplicationServices" "-framework CoreFoundation")
+endif()
+add_test(NAME ui_input COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/ui_test.py --app $<TARGET_FILE:OpenVLSI> --mcp $<TARGET_FILE:openvlsi-mcp> --backend qt)
+set_tests_properties(ui_input PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=/opt/homebrew/opt/qt/share/qt/plugins")
+add_test(NAME api_check COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/api_check.py --app $<TARGET_FILE:OpenVLSI> --mcp $<TARGET_FILE:openvlsi-mcp>)
+set_tests_properties(api_check PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=/opt/homebrew/opt/qt/share/qt/plugins")
 add_test(NAME engine_isolation COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_engine_isolation.py
          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

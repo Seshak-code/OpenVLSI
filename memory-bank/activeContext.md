@@ -1,5 +1,24 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-05 (cont.) — one app for RTL to GDS, then testing the chip, on `rebuild/singleapp` (OpenVLSI PR #46, open)**
+
+- **In PR #46:**
+  - RTL, Implement, Verify and Test stages; timing and power-grid sign-off, drawn on the layout.
+  - Per-stage layouts; ORFS settings through `flow_run`.
+  - `test_spice`: the routed chip at transistor level on TreeSPICE.
+  - `test_shmoo`, `test_firmware`; a test's threads and array mode in ADE.
+- **API rule (owner):** every control has a command, and `tests/test_api` enforces it. The running app serves the API; `openvlsi-mcp` attaches. `tools/openvlsi.py` is the client.
+- **Real input:** `tools/ui_test.py`. `--backend os` has not run: it needs the owner to grant Accessibility permission.
+- **Final tree:** ctest 25/25, M1 28/28 with the bundle, M2 35/35, M3 20/20, M5 26/26, `ui_test.py` 50/50 on a real window.
+- **gcd:** STA minimum period 2.32 ns; the routed netlist passes simulation at 2.32 ns and fails at 1.39 ns; 300 ns at transistor level, 5,134 PSP transistors, 506 samples, none different, 30 minutes.
+- **Not parity:** see "What runs today, tool by tool" in `docs/rebuild.md`.
+- **Next, by what a designer feels first:**
+  - MMMC in timing; RC in the transistor-level test; a real failing run of `test_spice`.
+  - LVS mismatch browser and ERC; extraction of hand-drawn layout.
+  - More device generators; FinFET Pcells and an ASAP7 LVS deck; ASAP7's 52 DRC violations.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-05 (cont.) — build-out to the single app, on `rebuild/buildout` (OpenVLSI PR #45)**
 
 - **Done (docs/rebuild.md, "Build-out"):** slices 1 (shell), 2 (flow commands), 4 (layout data and viewer), 5 (layout editing,
