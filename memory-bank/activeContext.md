@@ -1,5 +1,23 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-13 — ERC, on `rebuild/erc` (after #48, merged)**
+
+- **Done:**
+  - `verify_erc`: electrical rules over an LVS report's two netlists, each flat (`run` or `flow_run`), or over a schematic alone (`library`, `cell`).
+    Rules: floating gate, well with no tap, bulk on the wrong supply, net on one terminal, nodes with no path to a supply or pin, missing supply.
+    A KLayout script the command writes beside the report (cached). Supplies by name (vdd/vcc/vpwr, vss/gnd), or `power`/`ground`.
+  - `verify_lvs` records `erc_violations`; `flow_report`'s LVS stage too, and a run with any is not clean.
+  - `verify_markers` of an LVS lists them after LVS's differences, as groups named `ERC: ...`, at the devices they name.
+  - Window: the Verify panel's LVS line and details; schematic editor **Check > Electrical Rules** (Shift+X); the Implement tab's button is now
+    **Show LVS and ERC findings**.
+- **Known limits:** device roles come from terminal names and KLayout's classes, polarity from the class name (nmos/pmos/nfet/pfet);
+  the schematic-alone check reads what LVS's reference can (SG13G2 LV MOS). No rules from the PDK's deck yet (soft connections, antenna, voltage classes).
+- **Gates:** M3 34/34, M5 37/37 (reusing a gcd run: 5,134 transistors a side, clean; supplies swapped flags all 10,268 bulks). Window checked with real clicks.
+- **Next:** RC per corner and multi-mode; RC in the transistor-level test and a real failing `test_spice`; extraction of hand-drawn layout;
+  device generators, FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations; LVS cross-probe of devices and flow runs.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-14 — the LVS mismatch browser, on `rebuild/lvs-debug` (after #47, merged)**
 
 - **Done:**

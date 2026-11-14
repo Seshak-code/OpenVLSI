@@ -1,6 +1,6 @@
 #pragma once
 // The Verify stage: DRC and LVS runs of layouts. A DRC opens on its layout with its markers; an LVS says what it compared, and one
-// that differs opens on its layout with what differs marked.
+// that differs, or whose netlists break an electrical rule, opens on its layout with those marked.
 #include "app/session.h"
 
 #include <QJsonObject>

@@ -272,6 +272,7 @@ def step_inverter(m, a, work):
     check(any(abs(x - gap_x) < 0.15 for x in xs) and min(ys) <= (ty + 200) / 1000 and max(ys) >= (ty - 200) / 1000, f"and its marker is at the gap, x near {gap_x:.2f} um")
     worse = m("verify_lvs", library="design", cell="inv")
     check(worse.get("matched") is True, "that rectangle joins nothing, so LVS still matches")
+    check(worse.get("erc_violations") == 0 and m("verify_erc", run=worse["run"])["clean"], f"and neither netlist breaks an electrical rule: {worse.get('erc_violations', worse.get('erc_error'))}")
     m("edit_undo", library="design")
     check(m("verify_drc", library="design", cell="inv")["clean"], "undo makes it clean again")
 
@@ -307,8 +308,35 @@ def step_inverter(m, a, work):
           f"verify_markers groups LVS's differences: {sorted(groups)}")
     probe = next(mk for mk in groups["nets only in the schematic"]["markers"])
     check(probe["schematic_net"].lower() == "vdd" and probe["points"] == [], "its vdd marker names the schematic's net to cross-probe to, and has no place in the layout")
+    erc = m("verify_erc", run=lvs["run"])
+    found = {(v["rule"], v["side"]): v for r in erc["rules"] for v in r["violations"]}
+    check(lvs.get("erc_violations") == 3 and set(found) == {("dangling", "layout"), ("floating_bulk", "layout"), ("supply_missing", "layout")},
+          f"verify_erc: without the rail the layout has a source on nothing, a well with no tap and no power net; the schematic has nothing: {sorted(found)}")
+    well = found.get(("floating_bulk", "layout"), {})
+    check(well.get("boxes") == [pmos.get("box")], f"the well is marked at the PMOS: {well.get('boxes')} against {pmos.get('box')}")
+    marked = groups.get("ERC: a well or substrate with no tap", {}).get("markers", [])
+    check(len(marked) == 1 and len(marked[0]["points"]) == 2 and markers["total"] == sum(r["count"] for r in markers["rules"]),
+          f"verify_markers lists the electrical rules after LVS's differences: {[g for g in groups if g.startswith('ERC')]}")
     m("edit_undo", library="design")
     check(connectivity(m)["clean"], "undo restores it")
+    check(m("verify_erc", library="design", cell="inv") == {"clean": True, "total": 0, "rules": [], "sides": {"schematic": {"devices": 2, "nets": 4, "power": ["VDD"], "ground": ["VSS"]}}},
+          "the schematic alone passes the electrical rules")
+    # A schematic that LVS would pass against a layout drawn the same way: a gate on nothing, a bulk on the supply
+    m("cell_create", library="design", cell="fg")
+    m("view_create", library="design", cell="fg", view="schematic", type="schematic")
+    m("instance_add", library="design", cell="fg", view="schematic", master_library="sg13g2", master_cell="sg13_lv_nmos", name="MN", x=0, y=0, params={"w": "1u", "l": "0.13u"})
+    for pin, net, (x, y) in [("D", "out", (0, 100)), ("G", "nc", (-100, 0)), ("S", "vss", (0, -100)), ("B", "vdd", (100, 0))]:
+        m("label_add", library="design", cell="fg", view="schematic", name=net, x=x, y=y)
+    for k, pin in enumerate(["out", "vdd", "vss"]):
+        m("pin_add", library="design", cell="fg", view="schematic", name=pin, direction="inputOutput", x=-2000, y=1000 - 300 * k)
+    erc = m("verify_erc", library="design", cell="fg")
+    found = {v["rule"]: v for r in erc["rules"] for v in r["violations"]}
+    check(set(found) == {"floating_gate", "bulk_supply"} and found["floating_gate"]["net"] == "NC" and found["floating_gate"]["devices"] == ["MN"] and found["bulk_supply"]["net"] == "VDD",
+          f"a gate on a net nothing drives and an NMOS's bulk on vdd are found in a schematic: {[(v['rule'], v['net'], v['detail']) for v in found.values()]}")
+    named = m("verify_erc", library="design", cell="fg", power=["out"], ground=["vdd", "vss"])
+    check([r["rule"] for r in named["rules"]] == ["floating_gate"] and named["sides"]["schematic"]["ground"] == ["VDD", "VSS"], "with vdd named a ground, the bulk passes")
+    check("give run, flow_run, or library and cell" in m.refused("verify_erc") and "no net name" in m.refused("verify_erc", library="design", cell="fg", power=["a,b"]),
+          "verify_erc refuses a call that names nothing to check, and a supply that is no name")
 
     box = bounds(longest["points"])
     m("layout_shape_add", library="design", cell="inv", layer="Metal2", kind="rect", points=[[box[0], box[1] - 6000], [box[2], box[3] + 6000]])

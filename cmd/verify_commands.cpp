@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QTemporaryDir>
 #include <QXmlStreamReader>
 
 #include <chrono>
@@ -297,20 +298,224 @@ for cp in x.each_circuit_pair():
 json.dump({"top": top, "circuits": circuits}, open(out, "w"))
 )PY";
 
-// Cached beside the database, until the database changes
+// A script of ours run by KLayout: it reads what defs name and writes JSON to `out`
+QJsonObject klayoutJson(const char* text, const fs::path& script, const fs::path& out, const std::vector<std::string>& defs) {
+    const RtlFlowTools tools = RtlFlowTools::detect();
+    if (tools.klayout.empty()) throw std::runtime_error("KLayout reads LVS's report: " + tools.missing());
+    std::ofstream(script) << text;
+    const fs::path tmp = out.string() + ".tmp";
+    std::vector<std::string> args{"-b", "-rd", "out=" + tmp.string()};
+    for (const auto& d : defs) {
+        args.push_back("-rd");
+        args.push_back(d);
+    }
+    args.push_back("-r");
+    args.push_back(script.string());
+    acutesim::orchestration::Subprocess p(tools.klayout, args);
+    const auto r = p.run();
+    if (r.exit_code != 0 || !fs::exists(tmp)) throw std::runtime_error("KLayout could not read the netlists: " + r.stdout_output + r.stderr_output);
+    fs::rename(tmp, out);
+    return readJson(out);
+}
+
+// A cached result stands while its source has not changed and the script that made it is still this one
+bool fresh(const fs::path& cache, const fs::path& source, const fs::path& script, const char* text) {
+    if (!fs::exists(cache) || fs::last_write_time(cache) < fs::last_write_time(source)) return false;
+    std::ifstream f(script);
+    return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>()) == text;
+}
+
+// Cached beside the database
 QJsonObject lvsCrossReference(const fs::path& lvsdb) {
     if (!fs::exists(lvsdb)) throw std::invalid_argument("no LVS report: " + lvsdb.string());
     const fs::path cache = lvsdb.string() + ".xref.json", script = lvsdb.string() + ".xref.py";
-    if (fs::exists(cache) && fs::last_write_time(cache) >= fs::last_write_time(lvsdb)) return readJson(cache);
-    const RtlFlowTools tools = RtlFlowTools::detect();
-    if (tools.klayout.empty()) throw std::runtime_error("KLayout reads LVS's report: " + tools.missing());
-    std::ofstream(script) << kXrefScript;
-    const fs::path tmp = cache.string() + ".tmp";
-    acutesim::orchestration::Subprocess p(tools.klayout, {"-b", "-rd", "lvsdb=" + lvsdb.string(), "-rd", "out=" + tmp.string(), "-r", script.string()});
-    const auto r = p.run();
-    if (r.exit_code != 0 || !fs::exists(tmp)) throw std::runtime_error("KLayout could not read the LVS report: " + r.stdout_output + r.stderr_output);
-    fs::rename(tmp, cache);
-    return readJson(cache);
+    if (fresh(cache, lvsdb, script, kXrefScript)) return readJson(cache);
+    return klayoutJson(kXrefScript, script, cache, {"lvsdb=" + lvsdb.string()});
+}
+
+// The electrical rule check: what no comparison of two netlists can see, because both may have it. Run over each netlist
+// of an LVS report, flat (or over a schematic's CDL alone): device terminals by role (a path through the device, a gate, a bulk,
+// a plate), supplies by name.
+const char* kErcScript = R"PY(
+import json, re, pya
+sides, ly, pins = [], None, {"layout": set(), "schematic": set()}
+if lvsdb:
+    lvs = pya.LayoutVsSchematic()
+    lvs.read(lvsdb)
+    ly = lvs.internal_layout()
+    sides = [("layout", lvs.netlist()), ("schematic", lvs.reference)]
+    x, top = lvs.xref(), lvs.internal_top_cell().name
+    for cp in x.each_circuit_pair():  # a top-level net that is a pin on one side is one on the other: LVS paired them
+        if cp.first() and cp.second() and cp.first().name == top:
+            for n in x.each_net_pair(cp):
+                if n.first() and n.second() and (n.first().pin_count() or n.second().pin_count()):
+                    pins["layout"].add(n.first().expanded_name())
+                    pins["schematic"].add(n.second().expanded_name())
+else:
+    nl = pya.Netlist()
+    nl.read(cdl, pya.NetlistSpiceReader())
+    sides = [("schematic", nl)]
+given = {"power": [n.lower() for n in power.split(",") if n], "ground": [n.lower() for n in ground.split(",") if n]}
+usual = {"power": re.compile(r"^(a|d|io)?(vdd|vcc|vpwr)", re.I), "ground": re.compile(r"^((a|d|io)?(vss|gnd|vgnd)|0$)", re.I)}
+def supply(kind, name): return name.lower() in given[kind] if given[kind] else bool(usual[kind].match(name))
+def roles(dc):
+    names = {t.name for t in dc.terminal_definitions()}
+    if {"S", "G", "D"} <= names: return {"S": "path", "D": "path", "G": "gate", "B": "bulk"}
+    if {"C", "B", "E"} <= names: return {"C": "path", "E": "path", "B": "gate", "S": "bulk"}
+    if isinstance(dc, (pya.DeviceClassCapacitor, pya.DeviceClassDiode)): return {"A": "plate", "B": "plate", "C": "plate", "W": "bulk"}
+    if isinstance(dc, (pya.DeviceClassResistor, pya.DeviceClassInductor)): return {"A": "path", "B": "path", "W": "bulk"}
+    return {n: "path" for n in names}  # a class this does not know: nothing is claimed about it
+def polarity(dc):  # ponytail: by the class's name; a PDK whose names say neither gets no bulk-supply check
+    n = dc.name.lower()
+    return "p" if re.search(r"pmos|pfet|pch", n) else "n" if re.search(r"nmos|nfet|nch", n) else None
+result = {"sides": {}, "violations": []}
+for side, netlist in sides:
+    nl = netlist.dup()
+    nl.flatten()  # ponytail: the whole chip flat in memory; past some millions of transistors, check cell by cell instead
+    counts = {"devices": 0, "nets": 0, "power": [], "ground": []}
+    def box(d):
+        if side != "layout" or not d.device_abstract: return None
+        b = ly.cell(d.device_abstract.cell_index()).dbbox().transformed(d.trans)
+        return [round(b.left, 4), round(b.bottom, 4), round(b.right, 4), round(b.top, 4)]
+    def add(rule, net, devices, detail):
+        boxes = [b for b in (box(d) for d in devices[:50]) if b]  # ponytail: a net's first 50 devices are marked
+        result["violations"].append({"rule": rule, "side": side, "net": net and net.expanded_name(), "devices": [d.expanded_name() for d in devices[:50]],
+                                  "device_count": len(devices), "detail": detail, "boxes": boxes})
+    for c in nl.each_circuit():
+        nets = list(c.each_net())
+        counts["devices"] += len(list(c.each_device()))
+        counts["nets"] += len(nets)
+        key = lambda n: (n.expanded_name(), n.cluster_id)  # two pieces of an open net may share a name
+        is_pin = lambda n: n.pin_count() > 0 or n.expanded_name() in pins[side]
+        kinds = {key(n): ("power" if supply("power", n.expanded_name()) else "ground" if supply("ground", n.expanded_name()) else None) for n in nets}
+        for k in ("power", "ground"): counts[k] += sorted({n[0] for n, v in kinds.items() if v == k})
+        has_mos = False
+        parent = {}
+        def find(a):
+            while parent.setdefault(a, a) != a:
+                parent[a] = parent[parent[a]]
+                a = parent[a]
+            return a
+        reaches = {}  # a net's root -> what its paths reach: a supply, a pin
+        by_role = {}
+        for n in nets:
+            r = {}
+            for t in n.each_terminal():
+                role = roles(t.device().device_class()).get(t.terminal_def().name, "path")
+                r.setdefault(role, []).append(t.device())
+            by_role[key(n)] = r
+        for d in c.each_device():
+            dc = d.device_class()
+            rl = roles(dc)
+            ends = [d.net_for_terminal(t.id()) for t in dc.terminal_definitions() if rl.get(t.name) == "path"]
+            ends = [key(n) for n in ends if n]
+            for a in ends:
+                for b in ends:
+                    if kinds[a] is None and kinds[b] is None: parent[find(a)] = find(b)
+            pol = polarity(dc) if "G" in rl else None
+            has_mos = has_mos or "G" in rl
+            bulk = d.net_for_terminal("B") if pol else None
+            if bulk and kinds[key(bulk)] == ("power" if pol == "n" else "ground"):
+                add("bulk_supply", bulk, [d], "the bulk of %s %s is on %s %s: its junctions conduct" % (dc.name, d.expanded_name(), "power" if pol == "n" else "ground", bulk.expanded_name()))
+        for d in c.each_device():
+            dc = d.device_class()
+            rl = roles(dc)
+            ends = [d.net_for_terminal(t.id()) for t in dc.terminal_definitions() if rl.get(t.name) == "path"]
+            ends = [key(n) for n in ends if n]
+            for a in ends:
+                if kinds[a] is None:
+                    reaches.setdefault(find(a), set()).update("supply" for b in ends if kinds[b])
+        for n in nets:
+            if kinds[key(n)] is None and is_pin(n) and key(n) in parent: reaches.setdefault(find(key(n)), set()).add("pin")
+        if has_mos:
+            for k in ("power", "ground"):
+                if not any(v == k for v in kinds.values()): add("supply_missing", None, [], "no net is named as %s" % k)
+        islands = {}
+        for n in nets:
+            name, r = key(n), by_role[key(n)]
+            if kinds[name] or is_pin(n): continue
+            total = sum(len(v) for v in r.values()) + n.subcircuit_pin_count()
+            if "gate" in r and "path" not in r:
+                add("floating_gate", n, r["gate"], "it joins only the gates of " + ", ".join(d.expanded_name() for d in r["gate"][:8]))
+            elif "bulk" in r and len(r) == 1:
+                add("floating_bulk", n, r["bulk"], "it joins only the bulks of " + ", ".join(d.expanded_name() for d in r["bulk"][:8]))
+            elif total == 1:
+                d = (r.get("path") or r.get("plate"))[0]
+                add("dangling", n, [d], "it joins one terminal only, of " + d.expanded_name())
+            elif "path" in r and not reaches.get(find(name)):
+                islands.setdefault(find(name), []).append(n)
+        for root, members in islands.items():
+            devices = []
+            for n in members: devices += by_role[key(n)]["path"]
+            devices = list({d.expanded_name(): d for d in devices}.values())
+            add("no_supply_path", members[0], devices, "no channel or resistor leads from %s to a supply or a pin" % ", ".join(n.expanded_name() for n in members[:8]))
+    result["sides"][side] = counts
+json.dump(result, open(out, "w"))
+)PY";
+
+const std::map<QString, QString> kErcRules = {
+    {"floating_gate", "a gate that nothing drives"},
+    {"floating_bulk", "a well or substrate with no tap"},
+    {"bulk_supply", "a bulk on the wrong supply"},
+    {"dangling", "a net that joins one terminal"},
+    {"no_supply_path", "nodes with no path to a supply or a pin"},
+    {"supply_missing", "no power or no ground net"}};
+
+std::string supplyNames(const QJsonObject& a, const char* key) {
+    QStringList names;
+    for (const auto& v : a[key].toArray()) {
+        if (v.toString().isEmpty() || v.toString().contains(',')) throw std::invalid_argument(std::string(key) + ": '" + v.toString().toStdString() + "' is no net name");
+        names << v.toString();
+    }
+    return names.join(',').toStdString();
+}
+
+// {clean, total, sides: {layout, schematic: {devices, nets, power, ground}}, rules: [{rule, description, count, violations}]}.
+// Of an LVS report (cached beside it while the supplies are the usual names), or of a CDL file.
+QJsonObject ercCheck(const fs::path& lvsdb, const fs::path& cdl, const QJsonObject& a = {}) {
+    const fs::path source = lvsdb.empty() ? cdl : lvsdb;
+    if (!fs::exists(source)) throw std::invalid_argument("no netlist to check: " + source.string());
+    const bool usual = !a.contains("power") && !a.contains("ground");
+    const fs::path cache = source.string() + (usual ? ".erc.json" : ".erc.named.json"), script = source.string() + ".erc.py";
+    const QJsonObject raw = usual && fresh(cache, source, script, kErcScript)
+                                ? readJson(cache)
+                                : klayoutJson(kErcScript, script, cache,
+                                              {"lvsdb=" + lvsdb.string(), "cdl=" + cdl.string(), "power=" + supplyNames(a, "power"), "ground=" + supplyNames(a, "ground")});
+    std::map<QString, QJsonArray> byRule;
+    for (const auto& v : raw["violations"].toArray()) byRule[v.toObject()["rule"].toString()].append(v);
+    QJsonArray rules;
+    for (const auto& [rule, list] : byRule) {
+        const auto d = kErcRules.find(rule);
+        if (d == kErcRules.end()) throw std::runtime_error("the check reported an unknown rule: " + rule.toStdString());
+        rules.append(QJsonObject{{"rule", rule}, {"description", d->second}, {"count", list.size()}, {"violations", list}});
+    }
+    const int total = raw["violations"].toArray().size();
+    return {{"clean", total == 0}, {"total", total}, {"sides", raw["sides"]}, {"rules", rules}};
+}
+
+int ercViolations(const std::string& lvsdb) { return ercCheck(lvsdb, {})["total"].toInt(); }
+
+// An electrical check's violations as markers: a layout one at each device it names, a schematic one by name only
+QJsonArray ercMarkers(const QJsonObject& erc) {
+    QJsonArray rules;
+    for (const auto& rv : erc["rules"].toArray()) {
+        QJsonArray markers;
+        for (const auto& vv : rv.toObject()["violations"].toArray()) {
+            const QJsonObject v = vv.toObject();
+            const QString net = v["net"].toString();
+            QJsonObject marker{{"cell", QString()}, {"label", (net.isEmpty() ? QString() : net + ", ") + v["side"].toString()}, {"description", v["detail"]},
+                               {"schematic_net", net.isEmpty() || net.startsWith('$') ? QJsonValue() : QJsonValue(net)}, {"points", QJsonArray{}}};
+            if (v["boxes"].toArray().isEmpty()) markers.append(marker);
+            for (const auto& bv : v["boxes"].toArray()) {
+                const QJsonArray b = bv.toArray();
+                marker["points"] = QJsonArray{QJsonArray{b[0], b[1]}, QJsonArray{b[2], b[3]}};
+                markers.append(marker);
+            }
+        }
+        rules.append(QJsonObject{{"rule", "ERC: " + rv.toObject()["description"].toString()}, {"count", markers.size()},
+                                 {"description", "electrical rule " + rv.toObject()["rule"].toString()}, {"markers", markers}});
+    }
+    return rules;
 }
 
 // The LVS report of a verification run or an implementation run
@@ -409,8 +614,8 @@ void addVerifyCommands(Registry& r) {
                return QJsonValue(rec);
            },
            true});
-    r.add({"verify_lvs", "Compares a layout view with its schematic through the process's LVS deck; returns whether they match, with device and net counts on each side. "
-                         "Waits, or with wait false starts it in the background.",
+    r.add({"verify_lvs", "Compares a layout view with its schematic through the process's LVS deck; returns whether they match, with device and net counts on each side, "
+                         "and how many electrical rule violations the two netlists have (verify_erc lists them). Waits, or with wait false starts it in the background.",
            object({{"library", kLib}, {"cell", kCell}}, {{"view", kView}, {"schematic", param("string", "the schematic view (default \"schematic\")")}, {"wait", param("boolean", "wait for it (default true)")}}),
            [](Context& c, const QJsonObject& a) {
                oadb::Library& l = c.workspace.library(s(a, "library"));
@@ -464,6 +669,11 @@ void addVerifyCommands(Registry& r) {
                            done["devices_schematic"] = lvs.deviceCountSchematic;
                            done["nets_layout"] = lvs.netCountLayout;
                            done["nets_schematic"] = lvs.netCountSchematic;
+                           try {
+                               done["erc_violations"] = ercViolations((dir / "report.lvsdb").string());
+                           } catch (const std::exception& e) {
+                               done["erc_error"] = q(e.what());
+                           }
                        }
                    }
                    writeRecord(dir, done);
@@ -535,8 +745,34 @@ void addVerifyCommands(Registry& r) {
                return QJsonValue(xref);
            },
            true});
-    r.add({"verify_markers", "What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic). run, or flow_run with "
-                             "check drc (default) or lvs for an implementation run's. Each marker gives its cell and points, in microns in that cell.",
+    r.add({"verify_erc", "The electrical rule check: gates that nothing drives, wells with no tap, bulks on the wrong supply, nets that join one terminal, nodes with "
+                         "no path to a supply or a pin, a missing supply. Of the layout's and the schematic's netlists in an LVS run (run) or an implementation run "
+                         "(flow_run), each flat, or of a schematic alone (library, cell). Supplies are nets named like vdd, vcc, vpwr and vss, gnd, unless power and "
+                         "ground name them. Returns rules with their violations: the side, the net, the devices, why, and each device's box in the layout in microns.",
+           object({}, {{"run", kRun}, {"flow_run", param("string", "an implementation run: <design>/run.N")}, {"library", kLib}, {"cell", kCell},
+                       {"schematic", param("string", "with library and cell: the schematic view (default \"schematic\")")},
+                       {"power", QJsonObject{{"type", "array"}, {"description", "the power nets' names"}, {"items", QJsonObject{{"type", "string"}}}}},
+                       {"ground", QJsonObject{{"type", "array"}, {"description", "the ground nets' names"}, {"items", QJsonObject{{"type", "string"}}}}}}),
+           [](Context& c, const QJsonObject& a) {
+               if (a.contains("library") != a.contains("cell")) throw std::invalid_argument("library and cell go together");
+               if (a.contains("run") + a.contains("flow_run") + a.contains("library") != 1) throw std::invalid_argument("give run, flow_run, or library and cell");
+               if (!a.contains("library")) {
+                   if (a.contains("schematic")) throw std::invalid_argument("schematic goes with library and cell");
+                   QJsonObject which;
+                   for (const char* k : {"run", "flow_run"})
+                       if (a.contains(k)) which[k] = a[k];
+                   return QJsonValue(ercCheck(lvsdbOf(c, which), {}, a));
+               }
+               QTemporaryDir tmp;
+               if (!tmp.isValid()) throw std::runtime_error("no temporary directory");
+               const fs::path cdl = fs::path(tmp.path().toStdString()) / "schematic.cdl";
+               std::ofstream(cdl) << schematicCdl(c.workspace, s(a, "library"), s(a, "cell"), a.contains("schematic") ? s(a, "schematic") : "schematic");
+               return QJsonValue(ercCheck({}, cdl, a));
+           },
+           true});
+    r.add({"verify_markers", "What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic) and then its "
+                             "electrical rule violations (rules named ERC: ...). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker "
+                             "gives its cell and points, in microns in that cell.",
            object({}, {{"run", kRun}, {"flow_run", param("string", "an implementation run: <design>/run.N")},
                        {"check", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"drc", "lvs"}}, {"description", "for flow_run: which check's (default drc)"}}}}),
            [](Context& c, const QJsonObject& a) {
@@ -545,7 +781,16 @@ void addVerifyCommands(Registry& r) {
                if ((a.contains("run") && a["run"].toString().contains("/lvs.")) || a["check"] == "lvs") {
                    QJsonObject which = a;
                    which.remove("check");
-                   QJsonObject markers = lvsMarkers(lvsCrossReference(lvsdbOf(c, which)));
+                   const fs::path lvsdb = lvsdbOf(c, which);
+                   QJsonObject markers = lvsMarkers(lvsCrossReference(lvsdb));
+                   QJsonArray rules = markers["rules"].toArray();
+                   int total = markers["total"].toInt();
+                   for (const auto& rule : ercMarkers(ercCheck(lvsdb, {}))) {
+                       rules.append(rule);
+                       total += rule.toObject()["count"].toInt();
+                   }
+                   markers["rules"] = rules;
+                   markers["total"] = total;
                    if (a.contains("run")) markers["schematic_view"] = readJson(runPath(c, a) / "run.json")["schematic"].toString("schematic");
                    return QJsonValue(markers);
                }
