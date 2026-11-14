@@ -39,6 +39,7 @@ struct Platform {
     std::vector<std::string> cellGds;  // the standard cells' layouts, to stream any stage
     // Timing corners, slowest first: each a name and its Liberty files. `liberty` above is the one the flow closes timing at.
     std::vector<std::pair<std::string, std::vector<std::string>>> corners;
+    std::string techLef;      // its routing layers' area and edge capacitance, for extracting hand-drawn layout; "" none
 };
 
 const std::vector<Platform>& platforms();

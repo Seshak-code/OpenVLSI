@@ -194,6 +194,21 @@ int main() {
     must("prop_set", {{"library", "sims"}, {"cell", "cfgtb"}, {"view", "bound"}, {"key", "bindings"}, {"value", QJsonObject{{"sims/rload", "layout"}}}});
     check(has(error("netlist", sc("cfgtb", "bound")), "bound to 'layout'"), "a binding to a view the cell lacks is an error");
 
+    // ── an extracted view (verify_extract writes them): a layout's own netlist, in place of the schematic ──
+    must("view_create", {{"library", "sims"}, {"cell", "rload"}, {"view", "extracted"}, {"type", "extracted"}});
+    must("view_create", {{"library", "sims"}, {"cell", "cfgtb"}, {"view", "post"}, {"type", "config"}});
+    must("prop_set", {{"library", "sims"}, {"cell", "cfgtb"}, {"view", "post"}, {"key", "top"}, {"value", "sims/cfgtb/schematic"}});
+    must("prop_set", {{"library", "sims"}, {"cell", "cfgtb"}, {"view", "post"}, {"key", "viewList"}, {"value", QJsonArray{"extracted", "schematic", "spice"}}});
+    check(has(error("netlist", sc("cfgtb", "post")), "no ports"), "an extracted view that holds nothing is an error, not an empty subcircuit");
+    must("prop_set", {{"library", "sims"}, {"cell", "rload"}, {"view", "extracted"}, {"key", "ports"}, {"value", QJsonArray{"N", "P"}}});
+    must("prop_set", {{"library", "sims"}, {"cell", "rload"}, {"view", "extracted"}, {"key", "netlist"}, {"value", "Rwire P N 1k\nCpar1 P 0 1f\n"}});
+    const std::string post = must("netlist", sc("cfgtb", "post")).toString().toStdString();
+    check(has(post, ".subckt rload N P\nRwire P N 1k\nCpar1 P 0 1f\n.ends rload\n") && has(post, "XI0 0 out rload\n") && std::abs(voutOf("post") - 0.5) < 1e-9,
+          "a config whose view list puts extracted first simulates that netlist: v(out) = 1/2");
+    check(std::abs(voutOf("config") - 2.0 / 3) < 1e-9, "and the others still descend into the schematic");
+    must("prop_set", {{"library", "sims"}, {"cell", "rload"}, {"view", "extracted"}, {"key", "ports"}, {"value", QJsonArray{"A", "B"}}});
+    check(has(error("netlist", sc("cfgtb", "post")), "differ"), "an extracted view whose ports are not the symbol's is refused");
+
     // ── pdk_install of a FinFET PDK (a stand-in ASAP7 tree): M primitives on the cards, corners as sections ──
     {
         const fs::path a7 = dir / "asap7", cards = a7 / "models" / "hspice";

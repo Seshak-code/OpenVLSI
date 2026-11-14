@@ -40,6 +40,10 @@ struct Deck {
 // globals with its variables)
 Deck deck(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view);
 
+// One primitive's element line, as a schematic holding it would netlist it: its master's spice template with these nets (by pin)
+// and its own parameters. For a netlist built from elsewhere than a schematic (a layout's extraction).
+std::string primitiveLine(oadb::Workspace& ws, const oadb::Instance& i, const std::map<std::string, std::string>& nets);
+
 // The deck whole: its text, the globals as .params, its models. It ends before .end (a test bench adds its cards).
 std::string netlist(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view);
 

@@ -254,6 +254,7 @@ def step_inverter(m, a, work):
     drc = m("verify_drc", library="design", cell="inv")
     check(drc.get("clean") is True and drc["violations"] == 0, f"verify_drc: clean ({drc.get('error', '')})")
     lvs = m("verify_lvs", library="design", cell="inv")
+    matched_lvs = lvs
     check(lvs.get("matched") is True and lvs["devices_layout"] == lvs["devices_schematic"] == 2, f"verify_lvs: matched, two devices a side ({lvs.get('error', '')}, {lvs.get('devices_layout')}, {lvs.get('devices_schematic')})")
     # A Metal1 rectangle 100 nm from the left of the in pin's column, where the spacing rule says 180
     objects = m("layout_objects_get", library="design", cell="inv")
@@ -342,6 +343,78 @@ def step_inverter(m, a, work):
     m("layout_shape_add", library="design", cell="inv", layer="Metal2", kind="rect", points=[[box[0], box[1] - 6000], [box[2], box[3] + 6000]])
     check(bool(connectivity(m)["shorts"]), "a Metal2 rectangle across the rails is reported as a short: " + str(connectivity(m)["shorts"]))
     m("edit_undo", library="design")
+    return matched_lvs
+
+
+def place(m, lib, cell, name, master_lib, master, x, y, nets, params=None):
+    """An instance whose pins get their nets by labels on them (nets: pin -> net)."""
+    m("instance_add", library=lib, cell=cell, view="schematic", master_library=master_lib, master_cell=master, name=name, x=x, y=y, params=params or {})
+    for p in m("view_get", library=master_lib, cell=master, view="symbol")["pins"]:
+        if p["name"] in nets:
+            m("label_add", library=lib, cell=cell, view="schematic", name=nets[p["name"]], x=x + p["at"][0], y=y + p["at"][1])
+
+
+def step_extract(m, a, work, lvs):
+    """The layout's own netlist with its wiring's capacitance, simulated in place of the schematic."""
+    print("Extraction, and the layout simulated", flush=True)
+    ext = m("verify_extract", run=lvs["run"])
+    nets = {n["name"]: n for n in ext["nets"]}
+    check(ext["devices"] == 2 and sorted(nets) == ["in", "out", "vdd", "vss"] and all(n["c_ff"] > 0 for n in nets.values()),
+          f"verify_extract: two transistors, and wiring capacitance on every net: {[(k, round(n['c_ff'], 3)) for k, n in sorted(nets.items())]} fF")
+    check("XMN out in vss vss sg13_lv_nmos w=1u l=0.13u ng=1 m=1" in ext["netlist"] and " as=0.34p " in ext["netlist"] and "Cpar" in ext["netlist"],
+          "its netlist: the transistors at their drawn sizes with their diffusion areas, and a capacitor a net")
+    lef = open(os.path.join(a.platform, "lef", "sg13g2_tech.lef")).read()
+    per = {}
+    for name in ("Metal1", "Metal2"):
+        block = lef[lef.index("LAYER " + name + "\n"):lef.index("END " + name)]
+        per[name] = (float(re.search(r"CPERSQDIST\s+(\S+)", block).group(1)) * 1e3, float(re.search(r"EDGECAPACITANCE\s+(\S+)", block).group(1)) * 1e3)
+    out = nets["out"]
+    by_hand = sum(v["area_um2"] * per[k][0] + v["perimeter_um"] * per[k][1] for k, v in out["layers"].items())
+    check(set(out["layers"]) == {"Metal1", "Metal2"} and abs(by_hand - out["c_ff"]) < 1e-9, f"out's {out['c_ff']:.4f} fF is its area and edge on Metal1 and Metal2 at the tech LEF's values")
+    views = {v["view"]: v["type"] for v in m("view_list", library="design", cell="inv")}
+    check(views.get("extracted") == "extracted", "it is a view of the cell")
+
+    # A known piece of metal: a 10 x 1 um stub on out's label, and nothing else changes
+    objects = m("layout_objects_get", library="design", cell="inv")
+    text = next(s for s in objects["shapes"] if s["kind"] == "text" and s["text"] == "out")
+    metal = {8: "Metal1", 10: "Metal2"}[text["layer"]]
+    tx, ty = text["points"][0]
+    added = m("layout_shape_add", library="design", cell="inv", layer=metal, kind="rect", points=[[tx - 10000, ty - 500], [tx, ty + 500]])
+    stub_lvs = m("verify_lvs", library="design", cell="inv")
+    check(stub_lvs.get("matched") is True, "with a stub on out, LVS still matches")
+    stub = {n["name"]: n for n in m("verify_extract", run=stub_lvs["run"], to="extracted_stub")["nets"]}
+    d_area = stub["out"]["layers"][metal]["area_um2"] - out["layers"][metal]["area_um2"]
+    d_edge = stub["out"]["layers"][metal]["perimeter_um"] - out["layers"][metal]["perimeter_um"]
+    d_c = stub["out"]["c_ff"] - out["c_ff"]
+    check(9.0 < d_area <= 10.0 and abs(d_c - (d_area * per[metal][0] + d_edge * per[metal][1])) < 1e-9 and d_c > 0.3,
+          f"a 10 x 1 um {metal} stub adds {d_area:.3f} um2 and {d_c:.4f} fF to out")
+    check(all(abs(stub[k]["c_ff"] - nets[k]["c_ff"]) < 1e-9 for k in ("in", "vdd", "vss")), "and nothing to the other nets")
+
+    # A test bench: the schematic, then the stubbed layout in its place through a config view
+    m("symbol_generate", library="design", cell="inv")
+    m("cell_create", library="design", cell="tb")
+    m("view_create", library="design", cell="tb", view="schematic", type="schematic")
+    place(m, "design", "tb", "X1", "design", "inv", 0, 0, {"in": "a", "out": "y", "vdd": "vdd", "vss": "gnd!"})
+    place(m, "design", "tb", "VDD", "analogLib", "vdc", -1500, 0, {"PLUS": "vdd", "MINUS": "gnd!"}, {"vdc": "1.2"})
+    place(m, "design", "tb", "VIN", "analogLib", "vpulse", -2500, 0, {"PLUS": "a", "MINUS": "gnd!"}, {"v1": "0", "v2": "1.2", "td": "100p", "tr": "20p", "tf": "20p", "pw": "400p", "per": "1n"})
+    delays = {}
+    for view, first in (("schematic", None), ("post", "extracted"), ("post_stub", "extracted_stub")):
+        if first:
+            m("view_create", library="design", cell="tb", view=view, type="config")
+            m("prop_set", library="design", cell="tb", view=view, key="top", value="design/tb/schematic")
+            m("prop_set", library="design", cell="tb", view=view, key="viewList", value=[first, "schematic", "spice"])
+        run = m("simulate", library="design", cell="tb", view=view, cards=[".tran 1p 1n"])
+        delays[view] = m("wave_eval", run=run["run"], expression="delay(VT(a), 0.6, VT(y), 0.6)") * 1e12
+    text = m("netlist", library="design", cell="tb", view="post_stub")
+    check(".subckt inv in out vdd vss" in text and "Cpar" in text and " as=0.34p " in text and "X1 a y vdd 0 inv" in text, "the config's netlist holds the extracted inverter as its subcircuit")
+    check("Cpar" not in m("netlist", library="design", cell="tb", view="schematic"), "and the schematic's does not")
+    print(f"    delay, in to out: schematic {delays['schematic']:.2f} ps, extracted {delays['post']:.2f} ps, with the stub {delays['post_stub']:.2f} ps", flush=True)
+    check(delays["schematic"] < delays["post"] < delays["post_stub"] and delays["post_stub"] < 5 * delays["schematic"],
+          "the layout is slower than its schematic, and slower again with the stub")
+    m("layout_objects_delete", library="design", cell="inv", shapes=[added["id"] if isinstance(added, dict) else added])
+    check(connectivity(m)["clean"], "the stub removed, the layout is as it was")
+    refusals = [m.refused("verify_extract", run=lvs["run"], to="schematic"), m.refused("verify_extract", run="design_inv/drc.1")]
+    check("not replaced" in refusals[0] and "not an LVS run" in refusals[1], "verify_extract will not overwrite a schematic, nor read a DRC run")
 
 
 def main():
@@ -365,7 +438,8 @@ def main():
     m = Mcp(a.mcp, os.path.join(work, "openvlsi.libs"))
     m("pdk_install", pdk="ihp-sg13g2", root=os.path.abspath(a.pdk), osdi=os.path.abspath(a.osdi))
     step_sweep(m, a, work)
-    step_inverter(m, a, work)
+    lvs = step_inverter(m, a, work)
+    step_extract(m, a, work, lvs)
     m.p.stdin.close()
     m.p.wait()
     print(("PASSED" if not G_FAIL else "FAILED") + f": {G_PASS} of {G_PASS + len(G_FAIL)} checks")
