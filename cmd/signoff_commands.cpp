@@ -18,6 +18,7 @@
 #include <map>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 
 namespace cmd {
 
@@ -73,9 +74,9 @@ Run runOf(Context& c, const QJsonObject& a) {
 }
 
 // The script's common start: libraries, the routed design, its constraints, and the best parasitics the run has
-std::string loadDesign(const Run& r, const RtlFlowTools& tools, bool* spef) {
+std::string loadDesign(const Run& r, const RtlFlowTools& tools, bool* spef, const std::string& corner = {}) {
     std::ostringstream t;
-    for (const auto& lib : r.pdk->liberty) t << "read_liberty " << flow::platformFile(*r.pdk, tools.flowDir, lib) << "\n";
+    for (const auto& lib : flow::libertyFor(*r.pdk, corner)) t << "read_liberty " << flow::platformFile(*r.pdk, tools.flowDir, lib) << "\n";
     t << "read_db " << (r.results / "6_final.odb").string() << "\nread_sdc " << (r.results / "6_final.sdc").string() << "\nsource " << flow::platformFile(*r.pdk, tools.flowDir, r.pdk->setRC) << "\n";
     *spef = fs::exists(r.results / "6_final.spef");
     if (*spef) t << "read_spef " << (r.results / "6_final.spef").string() << "\n";
@@ -118,18 +119,16 @@ QJsonArray pathsIn(const fs::path& file) {
     return out;
 }
 
-void analyzeTiming(const Run& r, int paths, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
+// One corner, in its own OpenROAD: its libraries, the routed design and its parasitics. Throws why it could not.
+// ponytail: a process per corner, and one set of parasitics for all (the flow extracts one RC corner); define_corners in one process
+// with a SPEF per corner is the upgrade when the platform's extraction has corners.
+QJsonObject timingAt(const Run& r, const std::string& corner, int paths, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
     bool spef = false;
     std::string log, why;
-    const std::string script = loadDesign(r, tools, &spef) + "report_wns\nreport_tns\nreport_clock_min_period\nreport_checks -path_delay max -group_path_count " + std::to_string(paths) +
+    const std::string script = loadDesign(r, tools, &spef, corner) + "report_wns\nreport_tns\nreport_clock_min_period\nreport_checks -path_delay max -group_path_count " + std::to_string(paths) +
                                " -format json > setup.json\nreport_checks -path_delay min -group_path_count " + std::to_string(paths) + " -format json > hold.json\n";
-    const fs::path dir = r.signoff / "timing";
-    QJsonObject out{{"state", "done"}, {"parasitics", spef ? "extracted (SPEF)" : "estimated from global routing"}};
-    if (!openroad(tools, dir, script, cancel, &log, &why)) {
-        out = {{"state", cancel && *cancel ? "stopped" : "failed"}, {"error", q(why)}};
-        writeJson(r.signoff / "timing.json", out);
-        return;
-    }
+    const fs::path dir = r.signoff / "timing" / corner;
+    if (!openroad(tools, dir, script, cancel, &log, &why)) throw std::runtime_error(corner + ": " + why);
     const double unit = r.pdk->nsPerTimeUnit;
     static const QRegularExpression wns("wns max (-?[0-9.eE+-]+)"), tns("tns max (-?[0-9.eE+-]+)"), period("(\\S+) period_min = (-?[0-9.eE+-]+) fmax = (-?[0-9.eE+-]+)");
     const QString text = q(log);
@@ -142,19 +141,79 @@ void analyzeTiming(const Run& r, int paths, const RtlFlowTools& tools, const std
         const double ns = m.captured(2).toDouble() * unit;
         clocks.append(QJsonObject{{"clock", m.captured(1)}, {"min_period_ns", ns}, {"fmax_mhz", ns > 0 ? 1000.0 / ns : 0.0}});
     }
-    try {
-        if (!wm.hasMatch() || !tm.hasMatch()) throw std::runtime_error("OpenSTA printed no WNS or TNS");
-        if (clocks.isEmpty()) throw std::runtime_error("OpenSTA printed no clock period");
-        out["wns_ns"] = wm.captured(1).toDouble() * unit;
-        out["tns_ns"] = tm.captured(1).toDouble() * unit;
-        out["clocks"] = clocks;
-        out["setup"] = pathsIn(dir / "setup.json");
-        out["hold"] = pathsIn(dir / "hold.json");
-        out["met"] = out["setup"].toArray().size() > 0 && out["setup"].toArray()[0].toObject()["slack_ns"].toDouble() >= 0 && out["hold"].toArray().size() > 0 && out["hold"].toArray()[0].toObject()["slack_ns"].toDouble() >= 0;
-    } catch (const std::exception& e) {
-        out = {{"state", "failed"}, {"error", q(e.what())}};
+    if (!wm.hasMatch() || !tm.hasMatch()) throw std::runtime_error(corner + ": OpenSTA printed no WNS or TNS");
+    if (clocks.isEmpty()) throw std::runtime_error(corner + ": OpenSTA printed no clock period");
+    const auto tagged = [&](const fs::path& file) {
+        QJsonArray out;
+        for (const auto& v : pathsIn(file)) {
+            QJsonObject p = v.toObject();
+            p["corner"] = q(corner);
+            out.append(p);
+        }
+        return out;
+    };
+    const QJsonArray setup = tagged(dir / "setup.json"), hold = tagged(dir / "hold.json");
+    if (setup.isEmpty() || hold.isEmpty()) throw std::runtime_error(corner + ": OpenSTA reported no paths");
+    QJsonArray libs;
+    for (const auto& lib : flow::libertyFor(*r.pdk, corner)) libs.append(q(fs::path(lib).filename().string()));
+    return {{"corner", q(corner)}, {"liberty", libs}, {"wns_ns", wm.captured(1).toDouble() * unit}, {"tns_ns", tm.captured(1).toDouble() * unit}, {"clocks", clocks},
+            {"setup_slack_ns", setup[0].toObject()["slack_ns"]}, {"hold_slack_ns", hold[0].toObject()["slack_ns"]},
+            {"met", setup[0].toObject()["slack_ns"].toDouble() >= 0 && hold[0].toObject()["slack_ns"].toDouble() >= 0}, {"setup", setup}, {"hold", hold},
+            {"parasitics", spef ? "extracted (SPEF)" : "estimated from global routing"}};
+}
+
+// Every corner asked for, at once; the report's top level is the worst of them, and each path says whose it is
+void analyzeTiming(const Run& r, const std::vector<std::string>& corners, int paths, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
+    std::vector<QJsonObject> results(corners.size());
+    std::vector<std::string> errors(corners.size());
+    std::vector<std::thread> threads;
+    for (size_t k = 0; k < corners.size(); ++k)
+        threads.emplace_back([&, k] {
+            try {
+                results[k] = timingAt(r, corners[k], paths, tools, cancel);
+            } catch (const std::exception& e) {
+                errors[k] = e.what();
+            }
+        });
+    for (auto& t : threads) t.join();
+    QJsonObject out;
+    for (const auto& e : errors)
+        if (!e.empty()) {  // a corner that did not report is no pass: the whole analysis fails with its reason
+            writeJson(r.signoff / "timing.json", {{"state", cancel && *cancel ? "stopped" : "failed"}, {"error", q(e)}});
+            return;
+        }
+    QJsonArray perCorner, setup, hold;
+    double wns = 0, tns = 0;
+    bool met = true;
+    std::map<QString, QJsonObject> clocks;
+    std::vector<QJsonObject> allSetup, allHold;
+    for (const QJsonObject& c : results) {
+        QJsonObject brief = c;
+        brief.remove("setup");
+        brief.remove("hold");
+        perCorner.append(brief);
+        wns = std::min(wns, c["wns_ns"].toDouble());
+        tns = std::min(tns, c["tns_ns"].toDouble());
+        met = met && c["met"].toBool();
+        for (const auto& v : c["clocks"].toArray()) {
+            QJsonObject clock = v.toObject();
+            clock["corner"] = c["corner"];
+            auto [it, fresh] = clocks.try_emplace(clock["clock"].toString(), clock);
+            if (!fresh && clock["min_period_ns"].toDouble() > it->second["min_period_ns"].toDouble()) it->second = clock;
+        }
+        for (const auto& v : c["setup"].toArray()) allSetup.push_back(v.toObject());
+        for (const auto& v : c["hold"].toArray()) allHold.push_back(v.toObject());
     }
-    writeJson(r.signoff / "timing.json", out);
+    const auto worstFirst = [&](std::vector<QJsonObject>& all) {
+        std::stable_sort(all.begin(), all.end(), [](const QJsonObject& a, const QJsonObject& b) { return a["slack_ns"].toDouble() < b["slack_ns"].toDouble(); });
+        QJsonArray list;
+        for (size_t k = 0; k < all.size() && (int)k < paths; ++k) list.append(all[k]);
+        return list;
+    };
+    QJsonArray clockList;
+    for (const auto& [name, clock] : clocks) clockList.append(clock);
+    writeJson(r.signoff / "timing.json", {{"state", "done"}, {"parasitics", results[0]["parasitics"]}, {"corners", perCorner}, {"wns_ns", wns}, {"tns_ns", tns}, {"clocks", clockList},
+                                          {"setup", worstFirst(allSetup)}, {"hold", worstFirst(allHold)}, {"met", met}});
 }
 
 void analyzePower(const Run& r, double supply, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
@@ -218,22 +277,34 @@ void analyzePower(const Run& r, double supply, const RtlFlowTools& tools, const 
 }  // namespace
 
 void addSignoffCommands(Registry& r) {
-    r.add({"timing_analyze", "Static timing of a run's routed design through OpenSTA, with its extracted parasitics: WNS, TNS, each clock's minimum period, and the worst setup and hold paths step by step. "
+    r.add({"timing_analyze", "Static timing of a run's routed design through OpenSTA at every corner of its platform (or those named), with its extracted parasitics: per corner WNS, TNS, each clock's minimum "
+                             "period and whether it is met; overall the worst of them, and the worst setup and hold paths across corners step by step, each saying its corner. "
                              "Waits and returns it, or with wait false starts it in the background (poll timing_report).",
-           object({{"run", kRun}}, {{"paths", param("integer", "how many paths per group (default 20)")}, {"wait", param("boolean", "wait for it (default true)")}}),
+           object({{"run", kRun}}, {{"paths", param("integer", "how many paths per group (default 20)")},
+                                    {"corners", QJsonObject{{"type", "array"}, {"description", "corner names, as slow, typ, fast (default all the platform has)"}, {"items", QJsonObject{{"type", "string"}}}}},
+                                    {"wait", param("boolean", "wait for it (default true)")}}),
            [](Context& c, const QJsonObject& a) {
                const Run run = runOf(c, a);
                const RtlFlowTools tools = RtlFlowTools::detect();
                if (tools.openroad.empty() || tools.flowDir.empty()) throw std::runtime_error("OpenROAD and the platform are needed: " + tools.missing());
                const int paths = a["paths"].toInt(20);
                if (paths < 1 || paths > 10000) throw std::invalid_argument("paths is 1 to 10000");
+               std::vector<std::string> corners;
+               for (const auto& v : a["corners"].toArray()) {
+                   flow::libertyFor(*run.pdk, v.toString().toStdString());
+                   if (v.toString().isEmpty() || std::find(corners.begin(), corners.end(), v.toString().toStdString()) != corners.end()) throw std::invalid_argument("corners are named once each");
+                   corners.push_back(v.toString().toStdString());
+               }
+               if (corners.empty())
+                   for (const auto& [name, files] : run.pdk->corners) corners.push_back(name);
+               if (corners.empty()) throw std::runtime_error("platform " + run.pdk->name + " has no timing corners");
                fs::create_directories(run.signoff);
                writeJson(run.signoff / "timing.json", {{"state", "running"}});
                if (!a.contains("wait") || a["wait"].toBool()) {
-                   analyzeTiming(run, paths, tools, nullptr);
+                   analyzeTiming(run, corners, paths, tools, nullptr);
                    return QJsonValue(readJson(run.signoff / "timing.json"));
                }
-               jobs(c).start((run.signoff / "timing").string(), [run, paths, tools](const std::atomic<bool>& cancel) { analyzeTiming(run, paths, tools, &cancel); });
+               jobs(c).start((run.signoff / "timing").string(), [run, corners, paths, tools](const std::atomic<bool>& cancel) { analyzeTiming(run, corners, paths, tools, &cancel); });
                return QJsonValue(QJsonObject{{"state", "running"}});
            },
            true});
@@ -349,7 +420,7 @@ void addSignoffCommands(Registry& r) {
                    QJsonArray files;
                    if (fs::is_directory(d)) {
                        std::vector<std::string> names;
-                       for (const auto& e : fs::directory_iterator(d))
+                       for (const auto& e : fs::recursive_directory_iterator(d))  // sign-off keeps a folder per corner
                            if (e.is_regular_file()) names.push_back(e.path().string());
                        std::sort(names.begin(), names.end());
                        for (const auto& n : names) files.append(q(n));

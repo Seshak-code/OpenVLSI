@@ -128,6 +128,7 @@ void addTestCommands(Registry& r) {
                   {{"flow_run", kFlowRun},
                    {"verilog", QJsonObject{{"type", "array"}, {"description", "level rtl without a flow run: the design's Verilog"}, {"items", QJsonObject{{"type", "string"}}}}},
                    {"dut", param("string", "level gate: the design's instance, as tb.dut")},
+                   {"corner", param("string", "level gate: the timing corner whose delays it runs with, as slow (default the flow's own)")},
                    {"defines", QJsonObject{{"type", "array"}, {"description", "Verilog defines: NAME or NAME=VALUE"}, {"items", QJsonObject{{"type", "string"}}}}},
                    {"pass_pattern", param("string", "the text that means it passed (default PASS)")},
                    {"time_limit_ns", param("number", "simulated time before it counts as hung (default 1e6)")},
@@ -161,6 +162,12 @@ void addTestCommands(Registry& r) {
                    if (flowRun.isEmpty()) throw std::invalid_argument("level gate needs a flow_run: its routed netlist is what runs");
                    if (!a.contains("dut")) throw std::invalid_argument("level gate needs dut, the design's instance as tb.dut, for the delays");
                    cfg.dut = s(a, "dut");
+                   if (a.contains("corner")) {
+                       const flow::Platform* pdk = flow::findPlatform(cfg.platform);
+                       if (!pdk) throw std::runtime_error("the run's platform is not known");
+                       flow::libertyFor(*pdk, s(a, "corner"));  // refuses one that does not exist, before a run is made
+                       cfg.corner = s(a, "corner");
+                   }
                }
                std::string run;
                const fs::path dir = newRun(c, s(a, "name"), &run);
@@ -168,6 +175,7 @@ void addTestCommands(Registry& r) {
                QJsonObject rec{{"run", q(run)}, {"name", a["name"]}, {"kind", "testbench"}, {"level", a["level"]}, {"top", a["top"]}, {"state", "running"}, {"started", now()},
                                {"pid", QCoreApplication::applicationPid()}};
                if (!flowRun.isEmpty()) rec["flow_run"] = flowRun;
+               if (!cfg.corner.empty()) rec["corner"] = q(cfg.corner);
                writeRecord(dir, rec);
                const auto execute = [dir, rec, cfg](const std::atomic<bool>* cancel) {
                    auto logFile = std::make_shared<std::ofstream>(dir / "sim.log");
@@ -382,12 +390,15 @@ void addTestCommands(Registry& r) {
            object({{"name", param("string", "the shmoo's name")}, {"flow_run", kFlowRun}, {"testbench", QJsonObject{{"type", "array"}, {"description", "the testbench's Verilog files"}, {"items", QJsonObject{{"type", "string"}}}}},
                    {"top", param("string", "the testbench's module")}, {"dut", param("string", "the design's instance, as tb.dut")},
                    {"periods_ns", QJsonObject{{"type", "array"}, {"description", "the clock periods to try, in ns"}, {"items", QJsonObject{{"type", "number"}}}}}},
-                  {{"defines", QJsonObject{{"type", "array"}, {"description", "more Verilog defines"}, {"items", QJsonObject{{"type", "string"}}}}}, {"pass_pattern", param("string", "the text that means it passed (default PASS)")}}),
+                  {{"defines", QJsonObject{{"type", "array"}, {"description", "more Verilog defines"}, {"items", QJsonObject{{"type", "string"}}}}}, {"pass_pattern", param("string", "the text that means it passed (default PASS)")},
+                   {"corner", param("string", "the timing corner whose delays it runs with, as slow (default the flow's own)")}}),
            [](Context& c, const QJsonObject& a) {
                const Implemented impl = implemented(c, s(a, "flow_run"));
                const QJsonArray periods = a["periods_ns"].toArray();
                if (periods.isEmpty()) throw std::invalid_argument("no periods to try");
                const RtlFlowTools tools = RtlFlowTools::detect();
+               const std::string corner = a.contains("corner") ? s(a, "corner") : std::string();
+               if (const flow::Platform* pdk = flow::findPlatform(s(impl.record, "platform"))) flow::libertyFor(*pdk, corner);
                QJsonArray points;
                double fastestPass = 0, slowestFail = 0;
                for (const auto& p : periods) {
@@ -403,6 +414,7 @@ void addTestCommands(Registry& r) {
                    cfg.platform = s(impl.record, "platform");
                    cfg.dut = s(a, "dut");
                    cfg.timeLimitNs = period * 1e6;
+                   cfg.corner = corner;
                    std::string run;
                    const fs::path dir = newRun(c, s(a, "name"), &run);
                    cfg.workDir = dir.string();
@@ -414,6 +426,7 @@ void addTestCommands(Registry& r) {
                    if (!res.passed && period > slowestFail) slowestFail = period;
                }
                QJsonObject out{{"points", points}, {"consistent", fastestPass == 0 || slowestFail < fastestPass}};
+               if (!corner.empty()) out["corner"] = q(corner);
                if (fastestPass > 0) out["fastest_pass_ns"] = fastestPass;
                if (slowestFail > 0) out["slowest_fail_ns"] = slowestFail;
                return QJsonValue(out);

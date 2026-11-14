@@ -1,5 +1,21 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-13 — timing at every corner; real macOS input, on `rebuild/corners`**
+
+- **Done:**
+  - `timing_analyze` runs every corner of the platform in parallel (ihp-sg13g2 slow/typ/fast Liberty; asap7 SS/TT/FF).
+  - Each path names its corner, and the report is worst-first across corners. `corners` picks some. `test_shmoo`/`test_run` take `corner`.
+  - The Timing window has a Corner column.
+- **gcd:** minimum period slow 3.67 ns, typ 2.32 ns, fast 1.54 ns. In simulation, slow passes from 3.54 ns and fast from 1.82 ns.
+- **Real input:** `ui_test.py --backend os` passes 50/50 with Accessibility granted. It found a bug: on macOS a mouse wheel carries a pixel delta,
+  so the layout and schematic canvases panned instead of zooming. Now only a scroll phase (a trackpad) pans. The Qt backend's wheel now
+  sends the same as macOS, so offscreen runs catch it.
+- **Gates:** M5 36/36, `ui_test.py` 50/50 (os, real window).
+- **Next:** RC per corner and multi-mode; RC in the transistor-level test and a real failing `test_spice`; LVS mismatch browser and ERC;
+  extraction of hand-drawn layout; device generators, FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-05 (cont.) — one app for RTL to GDS, then testing the chip, on `rebuild/singleapp` (OpenVLSI PR #46, open)**
 
 - **In PR #46:**

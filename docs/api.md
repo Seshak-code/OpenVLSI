@@ -1615,7 +1615,7 @@ Lists the runs on disk, per design oldest first: each one's run, design, platfor
 
 ### `flow_platforms`
 
-Returns the known flow platforms: for each whether it can run here, what is missing, its decks and time unit.
+Returns the known flow platforms: for each whether it can run here, what is missing, its decks, time unit and timing corners.
 
 ### `flow_report`
 
@@ -1800,6 +1800,7 @@ Runs a testbench of yours on the design: level rtl on its Verilog (given, or a f
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
+| `corner` | string |  | level gate: the timing corner whose delays it runs with, as slow (default the flow's own) |
 | `defines` | array |  | Verilog defines: NAME or NAME=VALUE |
 | `dut` | string |  | level gate: the design's instance, as tb.dut |
 | `flow_run` | string |  | an implementation run: <design>/run.N |
@@ -1818,6 +1819,7 @@ Runs a testbench on the routed netlist across clock periods: its PERIOD define t
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
+| `corner` | string |  | the timing corner whose delays it runs with, as slow (default the flow's own) |
 | `defines` | array |  | more Verilog defines |
 | `dut` | string | yes | the design's instance, as tb.dut |
 | `flow_run` | string | yes | an implementation run: <design>/run.N |
@@ -2057,10 +2059,11 @@ A timing or power tab's summary and rows.
 
 ### `timing_analyze`
 
-Static timing of a run's routed design through OpenSTA, with its extracted parasitics: WNS, TNS, each clock's minimum period, and the worst setup and hold paths step by step. Waits and returns it, or with wait false starts it in the background (poll timing_report).
+Static timing of a run's routed design through OpenSTA at every corner of its platform (or those named), with its extracted parasitics: per corner WNS, TNS, each clock's minimum period and whether it is met; overall the worst of them, and the worst setup and hold paths across corners step by step, each saying its corner. Waits and returns it, or with wait false starts it in the background (poll timing_report).
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
+| `corners` | array |  | corner names, as slow, typ, fast (default all the platform has) |
 | `paths` | integer |  | how many paths per group (default 20) |
 | `run` | string | yes | an implementation run: <design>/run.N |
 | `wait` | boolean |  | wait for it (default true) |

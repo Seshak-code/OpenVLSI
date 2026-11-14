@@ -31,7 +31,8 @@ const std::vector<Platform>& platforms() {
          {"densityRules=false"},
          "lvs/sg13g2.lvs", "", "cdl/sg13g2_stdcell.cdl", "sg13g2_antenna*", {"lib/sg13g2_stdcell_typ_1p20V_25C.lib"}, "setRC.tcl",
          {"USE_FILL = 1"},
-         {"~/eda/ihp-verilog/sg13g2_stdcell.v", "~/eda/ihp-verilog/sg13g2_udp.v"}, true, "sg13g2.lyp", "sg13g2", 1.2, {"gds/sg13g2_stdcell.gds"}},
+         {"~/eda/ihp-verilog/sg13g2_stdcell.v", "~/eda/ihp-verilog/sg13g2_udp.v"}, true, "sg13g2.lyp", "sg13g2", 1.2, {"gds/sg13g2_stdcell.gds"},
+         {{"slow", {"lib/sg13g2_stdcell_slow_1p08V_125C.lib"}}, {"typ", {"lib/sg13g2_stdcell_typ_1p20V_25C.lib"}}, {"fast", {"lib/sg13g2_stdcell_fast_1p32V_m40C.lib"}}}},
         {"asap7", "1ps", 1e-3, "drc/asap7.lydrc", {},
          "", "no open LVS deck exists for asap7 (ORFS, the PDK and lambdapdk have none; the PDK's own is Calibre)", "", "",
          {"lib/NLDM/asap7sc7p5t_AO_RVT_FF_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_INVBUF_RVT_FF_nldm_220122.lib.gz",
@@ -40,7 +41,10 @@ const std::vector<Platform>& platforms() {
          "setRC.tcl", {},
          {"verilog/stdcell/asap7sc7p5t_AO_RVT_TT_201020.v", "verilog/stdcell/asap7sc7p5t_INVBUF_RVT_TT_201020.v",
           "verilog/stdcell/asap7sc7p5t_OA_RVT_TT_201020.v", "verilog/stdcell/asap7sc7p5t_SIMPLE_RVT_TT_201020.v",
-          "verilog/stdcell/asap7sc7p5t_SEQ_RVT_TT_220101.v"}, false, "KLayout/asap7.lyp", "", 0.7, {"gds/asap7sc7p5t_28_R_220121a.gds"}},
+          "verilog/stdcell/asap7sc7p5t_SEQ_RVT_TT_220101.v"}, false, "KLayout/asap7.lyp", "", 0.7, {"gds/asap7sc7p5t_28_R_220121a.gds"},
+         {{"slow", {"lib/NLDM/asap7sc7p5t_AO_RVT_SS_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_INVBUF_RVT_SS_nldm_220122.lib.gz", "lib/NLDM/asap7sc7p5t_OA_RVT_SS_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_SIMPLE_RVT_SS_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_SEQ_RVT_SS_nldm_220123.lib"}},
+          {"typ", {"lib/NLDM/asap7sc7p5t_AO_RVT_TT_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_INVBUF_RVT_TT_nldm_220122.lib.gz", "lib/NLDM/asap7sc7p5t_OA_RVT_TT_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_SIMPLE_RVT_TT_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_SEQ_RVT_TT_nldm_220123.lib"}},
+          {"fast", {"lib/NLDM/asap7sc7p5t_AO_RVT_FF_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_INVBUF_RVT_FF_nldm_220122.lib.gz", "lib/NLDM/asap7sc7p5t_OA_RVT_FF_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_SIMPLE_RVT_FF_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_SEQ_RVT_FF_nldm_220123.lib"}}}},
     };
     return all;
 }
@@ -49,6 +53,16 @@ const Platform* findPlatform(const std::string& name) {
     for (const auto& p : platforms())
         if (p.name == name) return &p;
     return nullptr;
+}
+
+const std::vector<std::string>& libertyFor(const Platform& p, const std::string& corner) {
+    if (corner.empty()) return p.liberty;
+    std::string known;
+    for (const auto& [name, files] : p.corners) {
+        if (name == corner) return files;
+        known += (known.empty() ? "" : ", ") + name;
+    }
+    throw std::invalid_argument(p.name + " has no corner '" + corner + "' (it has " + known + ")");
 }
 
 std::string knownPlatforms() {
@@ -532,12 +546,13 @@ double staMinPeriodNs(const std::string& results, const std::string& platform, c
 // Everything Icarus needs for the routed design: the cells with their specify blocks made plain, the netlist with plain names,
 // and design.sdf from OpenROAD with the routed design's parasitics, all in work. False with error.
 static bool prepareGateSources(const flow::Platform& platform, const RtlFlowTools& tools, const fs::path& results, const fs::path& work,
-                               const std::atomic<bool>* cancel, std::string& error, std::vector<std::string>& sources, const FlowLog& log) {
+                               const std::atomic<bool>* cancel, std::string& error, std::vector<std::string>& sources, const FlowLog& log,
+                               const std::string& corner = {}) {
     const flow::Platform* pdk = &platform;
     // SDF from the layout: OpenROAD with the routed design's global-route parasitics
     auto file = [&](const std::string& f) { return flow::platformFile(*pdk, tools.flowDir, f); };
     std::ofstream sdfTcl(work / "sdf.tcl");
-    for (const auto& lib : pdk->liberty) sdfTcl << "read_liberty " << file(lib) << "\n";
+    for (const auto& lib : flow::libertyFor(*pdk, corner)) sdfTcl << "read_liberty " << file(lib) << "\n";
     sdfTcl << "read_db " << (results / "6_final.odb").string() << "\nread_sdc "
                                     << (results / "6_final.sdc").string() << "\nsource " << file(pdk->setRC)
                                     << "\nestimate_parasitics -global_routing\nwrite_sdf " << (work / "raw.sdf").string()
@@ -694,7 +709,11 @@ TestbenchResult runTestbench(const TestbenchConfig& cfg, const RtlFlowTools& too
         if (!std::regex_match(cfg.dut, path)) return finish("testbench: gate level needs the design's instance path, as tb.dut");
         if (!fs::exists(fs::path(cfg.results) / "6_final.v")) return finish("testbench: no routed netlist in " + cfg.results);
         std::string why;
-        if (!prepareGateSources(*pdk, tools, cfg.results, work, cancel, why, sources, log)) return finish("testbench: " + why);
+        try {
+            if (!prepareGateSources(*pdk, tools, cfg.results, work, cancel, why, sources, log, cfg.corner)) return finish("testbench: " + why);
+        } catch (const std::invalid_argument& e) {
+            return finish(std::string("testbench: ") + e.what());
+        }
     } else {
         sources = cfg.rtl;
     }
