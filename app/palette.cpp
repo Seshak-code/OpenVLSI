@@ -68,6 +68,8 @@ CommandForm::CommandForm(const cmd::Command& c, const QJsonObject& prefill, QWid
             auto* line = new QLineEdit(this);
             if (prefill[name].isString()) line->setText(prefill[name].toString());
             else if (prefill[name].isDouble()) line->setText(QString::number(prefill[name].toDouble()));
+            else if (prefill[name].isArray()) line->setText(QString::fromUtf8(QJsonDocument(prefill[name].toArray()).toJson(QJsonDocument::Compact)));
+            else if (prefill[name].isObject()) line->setText(QString::fromUtf8(QJsonDocument(prefill[name].toObject()).toJson(QJsonDocument::Compact)));
             line->setPlaceholderText(required.contains(name) ? QString() : "optional");
             w = line;
         }

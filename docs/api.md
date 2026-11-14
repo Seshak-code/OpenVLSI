@@ -2085,12 +2085,14 @@ A timing or power tab's summary and rows.
 
 ### `timing_analyze`
 
-Static timing of a run's routed design through OpenSTA at every corner of its platform (or those named), with its extracted parasitics: per corner WNS, TNS, each clock's minimum period and whether it is met; overall the worst of them, and the worst setup and hold paths across corners step by step, each saying its corner. Waits and returns it, or with wait false starts it in the background (poll timing_report).
+Static timing of a run's routed design through OpenSTA, in every mode at every corner of its platform (or those named), with its extracted parasitics: per mode and corner (the entries of corners) WNS, TNS, each clock's minimum period and whether it is met; overall the worst of them, and the worst setup and hold paths across them step by step, each saying its mode and corner. A mode is a set of constraints (an SDC file); with none given there is one, func, the run's own. rc derates the extracted resistance and capacitance at a corner. analysis in the result is what was asked, to run it again. Waits and returns it, or with wait false starts it in the background (poll timing_report).
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
 | `corners` | array |  | corner names, as slow, typ, fast (default all the platform has) |
+| `modes` | array |  | the modes, as [{"name": "func"}, {"name": "scan", "sdc": "/abs/scan.sdc"}]; sdc left out is the run's own constraints |
 | `paths` | integer |  | how many paths per group (default 20) |
+| `rc` | object |  | per corner, what to multiply the extracted resistance and capacitance by, as {"slow": {"r": 1.15, "c": 1.1}}; a corner not named keeps what was extracted |
 | `run` | string | yes | an implementation run: <design>/run.N |
 | `wait` | boolean |  | wait for it (default true) |
 

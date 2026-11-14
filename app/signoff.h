@@ -25,6 +25,7 @@ public:
     void refresh();
     void selectRow(int row);
     bool showOnLayout();  // the selected path, or the IR map
+    bool setup();         // timing: a form for the modes, corners and RC derates, then the analysis
 
 private:
     Session& session_;

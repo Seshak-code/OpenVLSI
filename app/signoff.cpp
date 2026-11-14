@@ -1,5 +1,6 @@
 #include "app/signoff.h"
 
+#include "app/palette.h"
 #include "app/theme.h"
 #include "app/ui_commands.h"
 
@@ -45,6 +46,13 @@ SignoffView::SignoffView(Session& session, const QString& run, Kind kind, QWidge
     top->addWidget(title_);
     top->addStretch(1);
     top->addWidget(show_);
+    if (kind == Kind::Timing) {
+        auto* set = new QPushButton("Setup…", central);
+        set->setToolTip("Modes, corners and RC derates, then analyze");
+        set->setProperty("api", "timing_analyze");
+        connect(set, &QPushButton::clicked, this, [this] { setup(); });
+        top->addWidget(set);
+    }
     top->addWidget(analyze_);
     layout->addLayout(top);
     summary_ = new QLabel(central);
@@ -70,7 +78,10 @@ SignoffView::SignoffView(Session& session, const QString& run, Kind kind, QWidge
     setCentralWidget(central);
 
     connect(analyze_, &QPushButton::clicked, this, [this] {
-        const cmd::Result r = session_.call(kind_ == Kind::Timing ? "timing_analyze" : "power_analyze", {{"run", run_}, {"wait", false}});
+        QJsonObject args = kind_ == Kind::Timing ? report_["analysis"].toObject() : QJsonObject();  // as it was last set up
+        args["run"] = run_;
+        args["wait"] = false;
+        const cmd::Result r = session_.call(kind_ == Kind::Timing ? "timing_analyze" : "power_analyze", args);
         summary_->setText(r.ok ? "Running" : r.error);
         poll_->start();
     });
@@ -86,6 +97,25 @@ SignoffView::SignoffView(Session& session, const QString& run, Kind kind, QWidge
 }
 
 QString SignoffView::summary() const { return summary_->text(); }
+
+bool SignoffView::setup() {
+    const cmd::Command* c = session_.registry().find("timing_analyze");
+    QJsonObject prefill = report_["analysis"].toObject();
+    prefill["run"] = run_;
+    CommandForm form(*c, prefill, this);
+    if (form.exec() != QDialog::Accepted) return false;
+    QJsonObject args;
+    QString error;
+    if (!form.arguments(&args, &error)) {
+        summary_->setText(error);
+        return false;
+    }
+    args["wait"] = false;
+    const cmd::Result r = session_.call("timing_analyze", args);
+    summary_->setText(r.ok ? "Running" : r.error);
+    poll_->start();
+    return r.ok;
+}
 
 void SignoffView::refresh() {
     const cmd::Result r = session_.call(kind_ == Kind::Timing ? "timing_report" : "power_report", {{"run", run_}});
@@ -119,17 +149,32 @@ void SignoffView::refresh() {
         QStringList clocks;
         for (const auto& c : report_["clocks"].toArray())
             clocks << QString("%1: minimum period %2 ns, %3 MHz, at %4").arg(c.toObject()["clock"].toString(), number(c.toObject()["min_period_ns"].toDouble()), number(c.toObject()["fmax_mhz"].toDouble(), 1), c.toObject()["corner"].toString());
-        QStringList corners;
+        // One line per mode: each corner's slacks, and its RC where that is derated
+        QStringList modes, lines;
+        bool derated = false;
         for (const auto& c : report_["corners"].toArray()) {
             const QJsonObject o = c.toObject();
-            corners << QString("%1: setup %2 ns, hold %3 ns%4").arg(o["corner"].toString(), number(o["setup_slack_ns"].toDouble()), number(o["hold_slack_ns"].toDouble()), o["met"].toBool() ? "" : ", not met");
+            const QJsonObject rc = o["rc"].toObject();
+            const bool scaled = rc["r"].toDouble(1) != 1 || rc["c"].toDouble(1) != 1;
+            derated = derated || scaled;
+            if (!modes.contains(o["mode"].toString())) {
+                modes << o["mode"].toString();
+                lines << QString();
+            }
+            QString& line = lines[modes.indexOf(o["mode"].toString())];
+            line += QString(line.isEmpty() ? "" : "; ") + QString("%1: setup %2 ns, hold %3 ns%4%5").arg(o["corner"].toString(), number(o["setup_slack_ns"].toDouble()), number(o["hold_slack_ns"].toDouble()),
+                        scaled ? QString(", R ×%1 C ×%2").arg(rc["r"].toDouble(1)).arg(rc["c"].toDouble(1)) : QString(), o["met"].toBool() ? "" : ", not met");
         }
-        summary_->setText(QString(met ? "Timing met at every corner. " : "Timing not met. ") + QString("WNS %1 ns, TNS %2 ns. ").arg(number(report_["wns_ns"].toDouble()), number(report_["tns_ns"].toDouble())) +
-                          clocks.join("; ") + ".\n" + corners.join("; ") + ". Parasitics " + report_["parasitics"].toString() + ", the same at every corner.");
+        for (int k = 0; k < modes.size(); ++k)
+            if (modes.size() > 1) lines[k] = modes[k] + ". " + lines[k];
+        summary_->setText(QString(met ? (modes.size() > 1 ? "Timing met in every mode at every corner. " : "Timing met at every corner. ") : "Timing not met. ") +
+                          QString("WNS %1 ns, TNS %2 ns. ").arg(number(report_["wns_ns"].toDouble()), number(report_["tns_ns"].toDouble())) + clocks.join("; ") + ".\n" + lines.join(".\n") +
+                          ". Parasitics " + report_["parasitics"].toString() + (derated ? ", derated where it says." : ", as extracted at every corner."));
         summary_->setStyleSheet(QString("color: %1;").arg((met ? t.pass : t.fail).name()));
         const QJsonArray setup = report_["setup"].toArray(), hold = report_["hold"].toArray();
-        list_->setColumnCount(6);
-        list_->setHorizontalHeaderLabels({"Check", "Corner", "Slack (ns)", "Arrival (ns)", "From", "To"});
+        list_->setColumnCount(7);
+        list_->setHorizontalHeaderLabels({"Check", "Corner", "Slack (ns)", "Arrival (ns)", "From", "To", "Mode"});
+        list_->setColumnHidden(6, modes.size() < 2);
         list_->setRowCount((int)(setup.size() + hold.size()));
         int row = 0;
         for (const auto& [name, group] : {std::pair{"Setup", setup}, {"Hold", hold}})
@@ -143,6 +188,7 @@ void SignoffView::refresh() {
                 list_->setItem(row, 3, cell(number(p["arrival_ns"].toDouble()), true));
                 list_->setItem(row, 4, cell(p["startpoint"].toString()));
                 list_->setItem(row, 5, cell(p["endpoint"].toString()));
+                list_->setItem(row, 6, cell(p["mode"].toString()));
                 ++row;
             }
     } else {

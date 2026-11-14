@@ -42,7 +42,10 @@ Settings beyond clock and utilization are any ORFS variable, as `PLACE_DENSITY=0
 ### 4. Sign off
 
 From a run's tab:
-- **Timing:** WNS, TNS, each clock's minimum period and the worst paths step by step. **Show on layout** draws a path over the design.
+- **Timing:** WNS, TNS, each clock's minimum period and the worst paths step by step, at every corner of the platform. **Show on layout** draws a path over the design. **Setup…** takes more:
+  - `modes`: other constraints for the same chip, as `[{"name": "func"}, {"name": "scan", "sdc": "/abs/scan.sdc"}]`. Every mode runs at every corner, and each path names its mode.
+  - `rc`: what to multiply the extracted resistance and capacitance by at a corner, as `{"slow": {"r": 1.15, "c": 1.1}}`. The open PDKs extract one RC corner, so this is how the wires get corners; the factors are yours to choose.
+  - **Analyze** runs the last setup again.
 - **IR drop:** each rail's worst and average drop and largest grid current. **Show on layout** draws the map, red at the worst.
 - **Show DRC markers** walks the violations, zooming to each.
 

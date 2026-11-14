@@ -333,7 +333,7 @@ void addUiCommands(Session& session, Shell& shell) {
              const QJsonObject path = (k < setup.size() ? setup[k] : hold[k - setup.size()]).toObject();
              std::vector<QPointF> points;
              for (const auto& st : path["steps"].toArray()) points.push_back({st.toObject()["x_um"].toDouble(), st.toObject()["y_um"].toDouble()});
-             layout(a)->setPathOverlay(points, QString("%1 to %2, slack %3 ns at %4").arg(path["startpoint"].toString(), path["endpoint"].toString()).arg(path["slack_ns"].toDouble(), 0, 'f', 3).arg(path["corner"].toString()));
+             layout(a)->setPathOverlay(points, QString("%1 to %2, slack %3 ns at %4").arg(path["startpoint"].toString(), path["endpoint"].toString()).arg(path["slack_ns"].toDouble(), 0, 'f', 3).arg((path["mode"].toString("func") == "func" ? QString() : path["mode"].toString() + " ") + path["corner"].toString()));
              return path["slack_ns"].toVariant().toJsonValue();
          }});
     add({"layout_view_power", "Draws a power net's IR map from an implementation run's analysis over its layout. Returns the worst drop in mV.",
