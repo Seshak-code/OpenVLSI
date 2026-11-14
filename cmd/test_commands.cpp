@@ -261,11 +261,13 @@ void addTestCommands(Registry& r) {
            },
            true});
 
-    r.add({"test_spice", "Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's capacitance from the SPEF, driven at its pins by what a test run recorded, every output compared with that "
-                         "recording at the end of each clock cycle. It needs pdk_install's device library, and passes only if every sample agrees. Waits and returns, or with wait false starts in the background.",
+    r.add({"test_spice", "Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's wire resistance and capacitance from the SPEF, driven at its pins by what a test run recorded, every "
+                         "output compared with that recording at the end of each clock cycle. It needs pdk_install's device library, and passes only if every sample agrees: a recording the chip "
+                         "cannot keep up with fails, with the first sample that differs. Waits and returns, or with wait false starts in the background.",
            object({{"name", param("string", "the test's name")}, {"flow_run", kFlowRun}, {"recording", kRun}, {"dut", param("string", "the design's instance in the recording, as tb.dut")}},
                   {{"stop_ns", param("number", "how much of the recording to replay (default all of it)")}, {"clock_port", param("string", "the clock's port (default the run's)")},
-                   {"parasitics", param("boolean", "add the SPEF's capacitance (default true)")}, {"threads", param("integer", "TreeSPICE's threads (default all)")},
+                   {"parasitics", param("boolean", "add the SPEF's parasitics (default true)")},
+                   {"wire_resistance", param("boolean", "each net's RC network (default true); false puts its capacitance alone at one node")}, {"threads", param("integer", "TreeSPICE's threads (default all)")},
                    {"device_library", param("string", "the library holding the transistors (default sg13g2)")}, {"timeout_s", param("integer", "how long it may run (default 3600)")},
                    {"wait", param("boolean", "wait for it (default true)")}}),
            [](Context& c, const QJsonObject& a) {
@@ -299,6 +301,7 @@ void addTestCommands(Registry& r) {
                cfg.cdl = slurp(cdlFile);
                cfg.verilog = slurp(verilog);
                if (a["parasitics"].toBool(true) && fs::exists(spefFile)) cfg.spef = slurp(spefFile);
+               cfg.wireResistance = a["wire_resistance"].toBool(true);
                cfg.top = s(impl.record, "top");
                cfg.dut = s(a, "dut");
                cfg.modelCards = cards;
@@ -312,7 +315,7 @@ void addTestCommands(Registry& r) {
                const fs::path dir = newRun(c, s(a, "name"), &run);
                const double period = impl.record["clock_period_ns"].toDouble();
                QJsonObject rec{{"run", q(run)}, {"name", a["name"]}, {"kind", "spice"}, {"level", "transistor"}, {"flow_run", a["flow_run"]}, {"recording", a["recording"]}, {"state", "running"},
-                               {"started", now()}, {"pid", QCoreApplication::applicationPid()}, {"transistors", (double)deck.transistors}, {"parasitic_nets", (double)deck.nets},
+                               {"started", now()}, {"pid", QCoreApplication::applicationPid()}, {"transistors", (double)deck.transistors}, {"parasitic_nets", (double)deck.nets}, {"wire_resistors", (double)deck.resistors}, {"lumped_nets", (double)deck.lumpedNets},
                                {"parasitic_pf", deck.capacitanceFarads * 1e12}, {"stop_ns", deck.stopSeconds * 1e9}};
                writeRecord(dir, rec);
                // At most a tenth of the fastest edge between samples: the step is an upper bound, and the engine's own error control does the rest

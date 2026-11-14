@@ -1865,7 +1865,7 @@ The signals a test run recorded: name and width.
 
 ### `test_spice`
 
-Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's capacitance from the SPEF, driven at its pins by what a test run recorded, every output compared with that recording at the end of each clock cycle. It needs pdk_install's device library, and passes only if every sample agrees. Waits and returns, or with wait false starts in the background.
+Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's wire resistance and capacitance from the SPEF, driven at its pins by what a test run recorded, every output compared with that recording at the end of each clock cycle. It needs pdk_install's device library, and passes only if every sample agrees: a recording the chip cannot keep up with fails, with the first sample that differs. Waits and returns, or with wait false starts in the background.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -1874,12 +1874,13 @@ Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with
 | `dut` | string | yes | the design's instance in the recording, as tb.dut |
 | `flow_run` | string | yes | an implementation run: <design>/run.N |
 | `name` | string | yes | the test's name |
-| `parasitics` | boolean |  | add the SPEF's capacitance (default true) |
+| `parasitics` | boolean |  | add the SPEF's parasitics (default true) |
 | `recording` | string | yes | a test's run: <name>/run.N |
 | `stop_ns` | number |  | how much of the recording to replay (default all of it) |
 | `threads` | integer |  | TreeSPICE's threads (default all) |
 | `timeout_s` | integer |  | how long it may run (default 3600) |
 | `wait` | boolean |  | wait for it (default true) |
+| `wire_resistance` | boolean |  | each net's RC network (default true); false puts its capacitance alone at one node |
 
 ### `test_status`
 
