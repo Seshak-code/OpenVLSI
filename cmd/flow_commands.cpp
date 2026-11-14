@@ -357,7 +357,7 @@ void addFlowCommands(Registry& r) {
                return QJsonValue(out);
            },
            true});
-    r.add({"flow_platforms", "Returns the known flow platforms: for each whether it can run here, what is missing, its decks and time unit.",
+    r.add({"flow_platforms", "Returns the known flow platforms: for each whether it can run here, what is missing, its decks, time unit and timing corners.",
            object({}),
            [](Context&, const QJsonObject&) {
                const RtlFlowTools tools = RtlFlowTools::detect();
@@ -368,8 +368,10 @@ void addFlowCommands(Registry& r) {
                        if (path.empty()) missing.append(q(name));
                    if (!tools.flowDir.empty())
                        for (const auto& f : flow::missingFiles(p, tools.flowDir)) missing.append(q(f));
+                   QJsonArray corners;
+                   for (const auto& [name, files] : p.corners) corners.append(q(name));
                    QJsonObject e{{"name", q(p.name)}, {"usable", missing.isEmpty()}, {"missing", missing}, {"time_unit", q(p.timeUnit)},
-                                 {"drc_deck", q(p.drcDeck)}};
+                                 {"drc_deck", q(p.drcDeck)}, {"corners", corners}};
                    if (p.lvsDeck.empty()) {
                        e["lvs_deck"] = QJsonValue(QJsonValue::Null);
                        e["lvs_note"] = q(p.noLvs);

@@ -118,25 +118,31 @@ void SignoffView::refresh() {
         const bool met = report_["met"].toBool();
         QStringList clocks;
         for (const auto& c : report_["clocks"].toArray())
-            clocks << QString("%1: minimum period %2 ns, %3 MHz").arg(c.toObject()["clock"].toString(), number(c.toObject()["min_period_ns"].toDouble()), number(c.toObject()["fmax_mhz"].toDouble(), 1));
-        summary_->setText(QString(met ? "Timing met. " : "Timing not met. ") + QString("WNS %1 ns, TNS %2 ns. ").arg(number(report_["wns_ns"].toDouble()), number(report_["tns_ns"].toDouble())) +
-                          clocks.join("; ") + ". Parasitics " + report_["parasitics"].toString() + ".");
+            clocks << QString("%1: minimum period %2 ns, %3 MHz, at %4").arg(c.toObject()["clock"].toString(), number(c.toObject()["min_period_ns"].toDouble()), number(c.toObject()["fmax_mhz"].toDouble(), 1), c.toObject()["corner"].toString());
+        QStringList corners;
+        for (const auto& c : report_["corners"].toArray()) {
+            const QJsonObject o = c.toObject();
+            corners << QString("%1: setup %2 ns, hold %3 ns%4").arg(o["corner"].toString(), number(o["setup_slack_ns"].toDouble()), number(o["hold_slack_ns"].toDouble()), o["met"].toBool() ? "" : ", not met");
+        }
+        summary_->setText(QString(met ? "Timing met at every corner. " : "Timing not met. ") + QString("WNS %1 ns, TNS %2 ns. ").arg(number(report_["wns_ns"].toDouble()), number(report_["tns_ns"].toDouble())) +
+                          clocks.join("; ") + ".\n" + corners.join("; ") + ". Parasitics " + report_["parasitics"].toString() + ", the same at every corner.");
         summary_->setStyleSheet(QString("color: %1;").arg((met ? t.pass : t.fail).name()));
         const QJsonArray setup = report_["setup"].toArray(), hold = report_["hold"].toArray();
-        list_->setColumnCount(5);
-        list_->setHorizontalHeaderLabels({"Check", "Slack (ns)", "Arrival (ns)", "From", "To"});
+        list_->setColumnCount(6);
+        list_->setHorizontalHeaderLabels({"Check", "Corner", "Slack (ns)", "Arrival (ns)", "From", "To"});
         list_->setRowCount((int)(setup.size() + hold.size()));
         int row = 0;
         for (const auto& [name, group] : {std::pair{"Setup", setup}, {"Hold", hold}})
             for (const auto& v : group) {
                 const QJsonObject p = v.toObject();
                 list_->setItem(row, 0, cell(name));
+                list_->setItem(row, 1, cell(p["corner"].toString()));
                 auto* slack = cell(number(p["slack_ns"].toDouble()), true);
                 if (p["slack_ns"].toDouble() < 0) slack->setForeground(t.fail);
-                list_->setItem(row, 1, slack);
-                list_->setItem(row, 2, cell(number(p["arrival_ns"].toDouble()), true));
-                list_->setItem(row, 3, cell(p["startpoint"].toString()));
-                list_->setItem(row, 4, cell(p["endpoint"].toString()));
+                list_->setItem(row, 2, slack);
+                list_->setItem(row, 3, cell(number(p["arrival_ns"].toDouble()), true));
+                list_->setItem(row, 4, cell(p["startpoint"].toString()));
+                list_->setItem(row, 5, cell(p["endpoint"].toString()));
                 ++row;
             }
     } else {

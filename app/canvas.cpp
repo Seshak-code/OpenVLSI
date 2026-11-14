@@ -158,7 +158,7 @@ void Canvas::mouseDoubleClickEvent(QMouseEvent* e) {
 
 void Canvas::wheelEvent(QWheelEvent* e) {
     const bool zoom = e->modifiers() & (Qt::ControlModifier | Qt::MetaModifier);
-    if (!zoom && !e->pixelDelta().isNull()) panBy(e->pixelDelta());  // a trackpad's two-finger scroll
+    if (!zoom && e->phase() != Qt::NoScrollPhase) panBy(e->pixelDelta());  // a trackpad's two-finger scroll; macOS gives a mouse wheel a pixel delta too
     else zoomBy(std::pow(1.0015, e->angleDelta().y()), e->position());
     e->accept();
 }

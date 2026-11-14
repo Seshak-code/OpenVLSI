@@ -285,7 +285,7 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
    and capacitors, device abutment.
 6. **Verify stage:** DRC and LVS (KLayout decks) as commands and views: a marker browser over the layout canvas; ASAP7 as
    in M2 slice 5's notes. Extraction (OpenRCX) to a post-layout netlist simulated on TreeSPICE, from ADE (M3).
-7. **Timing views (done):** OpenSTA through OpenROAD with the run's SPEF: slack summary, path reports, cross-probe to the layout (M5). One corner.
+7. **Timing views (done):** OpenSTA through OpenROAD with the run's SPEF: slack summary, path reports, cross-probe to the layout (M5). Every corner of the platform at once (slow, typ, fast), each path naming its corner; `test_shmoo` sweeps the chip at a corner.
 8. **IR and EM (done):** OpenROAD PSM: IR-drop maps over the layout canvas, the largest grid currents (M6). Static analysis; EM limits against the process's are still to come.
 9. **ADE Verifier (done):** requirements traced to Assembler results (M4). `sim/verifier`, `tests/test_verifier`.
 10. **Spectre X in ADE (done):** a test's `acceleration`: its thread count, and `.options hier` arrays; `tools/spectre_x_gate.py` measures them on 8192 identical
@@ -308,7 +308,7 @@ Honest parity: each row is what a designer gets now, checked by the gate named, 
 | Simulate RTL | Xcelium | Test stage on the RTL, waveforms (`tools/m5_gate.py`) | Coverage, UVM, speed; Icarus does not run timing checks |
 | Synthesis | Genus | Yosys through ORFS, cells and area per stage | Physical-aware synthesis, MCMM, power optimization, a logic-equivalence check (Conformal) |
 | Place and route | Innovus | OpenROAD through ORFS: pipeline, metrics, any ORFS setting (`settings`), the layout at each stage (`m5_gate`) | Editing mid-flow, interactive floorplan and power-grid editing, ECO, MMMC |
-| Timing | Tempus | OpenSTA with SPEF: WNS, TNS, paths, cross-probe (`m5_gate`: agrees with simulation) | Multi-corner, multi-mode, SI, OCV/AOCV/POCV |
+| Timing | Tempus | OpenSTA with SPEF at every corner in parallel: WNS, TNS, paths worst-first across corners, cross-probe (`m5_gate`: each corner agrees with its own simulation) | Multi-mode, per-corner RC, SI, OCV/AOCV/POCV |
 | Power grid | Voltus | PSM static IR and grid currents, map on layout (`m5_gate`) | Dynamic IR, EM against process limits, vectors from activity |
 | Physical verification | Pegasus | KLayout's DRC and LVS decks, marker browser (`m3_gate`, flow) | ERC, LVS mismatch browser, ASAP7 LVS (no open deck) |
 | Extraction | Quantus | OpenRCX's SPEF in timing; each net's total C in the transistor-level test | RC networks in the transistor test, extraction of hand-drawn layout |

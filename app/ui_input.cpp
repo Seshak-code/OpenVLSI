@@ -250,7 +250,7 @@ void addInputCommands(Session& session, Shell& shell) {
                      QWidget* w = windowAt(at);
                      if (!w || !w->window()->windowHandle()) return;
                      QWindow* window = w->window()->windowHandle();
-                     QWindowSystemInterface::handleWheelEvent(window, QPointF(window->mapFromGlobal(at)), QPointF(at), QPoint(), QPoint(0, delta), mods);
+                     QWindowSystemInterface::handleWheelEvent(window, QPointF(window->mapFromGlobal(at)), QPointF(at), QPoint(0, 2 * delta), QPoint(0, delta), mods);  // as macOS sends a mouse wheel: a pixel delta too, no phase
                  });
              } else if (action == "key") {
                  const QKeySequence seq(a["key"].toString(), QKeySequence::PortableText);

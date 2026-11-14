@@ -350,8 +350,9 @@ void LayoutCanvas::mouseDoubleClickEvent(QMouseEvent* e) {
 void LayoutCanvas::refreshOverlay() { overlay_->update(); }
 
 void LayoutCanvas::wheelEvent(QWheelEvent* e) {
-    // A trackpad scrolls (its pinch arrives as a gesture); a mouse wheel, or Ctrl with either, zooms
-    if (!e->pixelDelta().isNull() && !(e->modifiers() & Qt::ControlModifier)) panBy(e->pixelDelta());
+    // A trackpad scrolls (its pinch arrives as a gesture); a mouse wheel, or Ctrl with either, zooms. Only a trackpad's scroll has a
+    // phase: macOS gives a mouse wheel a pixel delta too, so that alone would pan where the wheel should zoom.
+    if (e->phase() != Qt::NoScrollPhase && !(e->modifiers() & Qt::ControlModifier)) panBy(e->pixelDelta());
     else zoomBy(std::pow(1.0015, e->angleDelta().y()), e->position());
     e->accept();
 }

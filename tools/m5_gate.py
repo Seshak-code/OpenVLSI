@@ -163,12 +163,30 @@ def main():
 
     print("Sign-off", flush=True)
     t = m("timing_analyze", run=run)
-    check(t["state"] == "done" and t["met"], f"timing_analyze: met, WNS {t.get('wns_ns')} ns, TNS {t.get('tns_ns')} ns, parasitics {t.get('parasitics')} {t.get('error', '')}")
-    min_period = t["clocks"][0]["min_period_ns"]
-    worst_slack = t["setup"][0]["slack_ns"]
+    check(t["state"] == "done" and t["met"], f"timing_analyze: met at every corner, WNS {t.get('wns_ns')} ns, TNS {t.get('tns_ns')} ns, parasitics {t.get('parasitics')} {t.get('error', '')}")
+    corner = {c["corner"]: c for c in t["corners"]}
+    print("    " + "; ".join(f"{n}: setup {c['setup_slack_ns']:.3f} ns, hold {c['hold_slack_ns']:.3f} ns, minimum period {c['clocks'][0]['min_period_ns']:.3f} ns" for n, c in corner.items()), flush=True)
+    check(sorted(corner) == ["fast", "slow", "typ"], f"the platform's three corners: {sorted(corner)}")
+    periods_by = {n: c["clocks"][0]["min_period_ns"] for n, c in corner.items()}
+    check(periods_by["slow"] > periods_by["typ"] > periods_by["fast"], f"slow is slower than typ, and typ than fast: {periods_by}")
+    check(corner["fast"]["hold_slack_ns"] < corner["slow"]["hold_slack_ns"], "hold is tightest at the fast corner")
+    check(t["setup"][0]["corner"] == "slow" and t["hold"][0]["corner"] == "fast", f"the worst setup path is slow's, the worst hold path fast's: {t['setup'][0]['corner']}, {t['hold'][0]['corner']}")
+    check(t["clocks"][0]["corner"] == "slow" and abs(t["clocks"][0]["min_period_ns"] - periods_by["slow"]) < 1e-9, "the report's minimum period is the slowest corner's")
+    slacks = [p["slack_ns"] for p in t["setup"]]
+    check(slacks == sorted(slacks), "paths across corners come worst first")
+    min_period = periods_by["typ"]  # what the flow closed timing at, and what the tests below run with unless they say
     final = next(s for s in report["stages"] if s["stage"] == "finish")["metrics"]
-    check(abs(worst_slack - final["setup_slack_ns"]) < 0.02, f"its worst slack {worst_slack:.3f} ns agrees with the flow's own report {final['setup_slack_ns']:.3f} ns")
+    check(abs(corner["typ"]["setup_slack_ns"] - final["setup_slack_ns"]) < 0.02, f"typ's worst slack {corner['typ']['setup_slack_ns']:.3f} ns agrees with the flow's own report {final['setup_slack_ns']:.3f} ns")
     check(0 < min_period < 10, f"a minimum period of {min_period:.3f} ns under the 10 ns clock")
+    one = m("timing_analyze", run=run, corners=["typ"])
+    check([c["corner"] for c in one["corners"]] == ["typ"] and abs(one["setup"][0]["slack_ns"] - corner["typ"]["setup_slack_ns"]) < 1e-9, "one corner alone gives that corner's numbers")
+    refused = None
+    try:
+        m("timing_analyze", run=run, corners=["tepid"])
+    except RuntimeError as e:
+        refused = str(e)
+    check(refused is not None and "slow, typ, fast" in refused, f"an unknown corner is refused, naming the ones there are: {refused}")
+    t = m("timing_analyze", run=run)
     step = t["setup"][0]["steps"][-1]
     arrivals = [s["arrival_ns"] for s in t["setup"][0]["steps"]]
     check(arrivals == sorted(arrivals) and len(arrivals) > 2, f"a path's arrivals only grow, over {len(arrivals)} steps, ending at {step['pin']}")
@@ -217,6 +235,17 @@ def main():
     sweep = m("test_shmoo", name="shmoo", flow_run=run, testbench=[bench], top="tb", dut="tb.dut", periods_ns=periods, defines=["FIRST=6"])
     print("    " + ", ".join(f"{p['period_ns']} ns {'pass' if p['passed'] else 'FAIL'}" for p in sweep["points"]), flush=True)
     check(sweep["consistent"] and "fastest_pass_ns" in sweep and "slowest_fail_ns" in sweep, f"test_shmoo finds where it stops: passes down to {sweep.get('fastest_pass_ns')} ns, fails at {sweep.get('slowest_fail_ns')} ns, against STA's {min_period:.2f} ns")
+    # The same chip, slow: a finer sweep between where typ fails and where slow's STA says it is safe
+    lo, hi = sweep["slowest_fail_ns"], periods_by["slow"] * 1.2
+    fine = [round(lo + (hi - lo) * k / 7, 3) for k in range(8)]
+    by_corner = {}
+    for name in ("slow", "typ", "fast"):
+        r = m("test_shmoo", name="shmoo_" + name, flow_run=run, testbench=[bench], top="tb", dut="tb.dut", periods_ns=fine, defines=["FIRST=6"], corner=name)
+        by_corner[name] = r
+        print(f"    {name}: " + ", ".join(f"{p['period_ns']} {'pass' if p['passed'] else 'FAIL'}" for p in r["points"]), flush=True)
+    check(all(r["consistent"] for r in by_corner.values()), "each corner's sweep has one threshold")
+    check(by_corner["slow"].get("fastest_pass_ns", 1e9) > by_corner["fast"].get("fastest_pass_ns", 0), f"the slow chip stops working at a longer period than the fast one: {by_corner['slow'].get('fastest_pass_ns')} ns against {by_corner['fast'].get('fastest_pass_ns')} ns")
+    check(by_corner["slow"].get("fastest_pass_ns", 1e9) <= periods_by["slow"] * 1.2 + 1e-9, f"and works where its own STA says it does ({periods_by['slow']:.2f} ns)")
 
     if a.pdk and a.osdi:
         m("pdk_install", pdk="ihp-sg13g2", root=os.path.abspath(a.pdk), osdi=os.path.abspath(a.osdi))

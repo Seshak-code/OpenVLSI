@@ -24,7 +24,7 @@ PASSES = 0
 
 # macOS virtual key codes
 KEYCODES = {"a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35,
-            "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, "Return": 36, "Esc": 53, "Backspace": 51}
+            "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "Return": 36, "Esc": 53, "Backspace": 51}
 
 
 def check(ok, what):
@@ -290,6 +290,7 @@ def main():
     p.add_argument("--os-input", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "os_input"))
     p.add_argument("--keep")
     a = p.parse_args()
+    a.app, a.mcp, a.os_input = (os.path.abspath(x) for x in (a.app, a.mcp, a.os_input))  # before the chdir below
     if a.backend == "os":
         if not os.path.exists(a.os_input):
             print("os_input is not built: it is macOS only")
@@ -306,12 +307,12 @@ def main():
     libs = os.path.join(work, "openvlsi.libs")
     env = dict(os.environ, HOME=work)
     gpu = env.get("QT_QPA_PLATFORM") != "offscreen"
-    app = subprocess.Popen([os.path.abspath(a.app), "--window-menus", libs], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    app = subprocess.Popen([a.app, "--window-menus", libs], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         ov = None
         for _ in range(100):
             time.sleep(0.2)
-            ov = openvlsi.connect(libs, mcp=os.path.abspath(a.mcp))
+            ov = openvlsi.connect(libs, mcp=a.mcp)
             if any(t["name"] == "ui_input" for t in ov.commands()):
                 break
             ov.close()
@@ -321,7 +322,7 @@ def main():
             return 1
         ov.ui_raise()
         time.sleep(0.5)
-        run(ov, Hands(ov, a.backend, os.path.abspath(a.os_input)), gpu, work)
+        run(ov, Hands(ov, a.backend, a.os_input), gpu, work)
         ov.ui_quit()
         ov.close()
         app.wait(timeout=20)

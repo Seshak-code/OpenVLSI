@@ -37,10 +37,14 @@ struct Platform {
     std::string tech;         // the layout process (layout/tech.h) a run's layout attaches; "" none
     double supplyVolts;       // its core supply
     std::vector<std::string> cellGds;  // the standard cells' layouts, to stream any stage
+    // Timing corners, slowest first: each a name and its Liberty files. `liberty` above is the one the flow closes timing at.
+    std::vector<std::pair<std::string, std::vector<std::string>>> corners;
 };
 
 const std::vector<Platform>& platforms();
 const Platform* findPlatform(const std::string& name);  // nullptr: unknown
+// A corner's Liberty files; "" is the flow's own. An unknown corner throws, naming the ones there are.
+const std::vector<std::string>& libertyFor(const Platform& p, const std::string& corner);
 std::string knownPlatforms();                           // their names, comma separated
 std::string platformFile(const Platform& p, const std::string& flowDir, const std::string& file);
 std::vector<std::string> missingFiles(const Platform& p, const std::string& flowDir);  // what a flow run needs and is not there
@@ -145,6 +149,7 @@ struct TestbenchConfig {
     std::string results;                 // ORFS results dir of the routed design
     std::string platform;
     std::string dut;                     // gate level: the design's instance, as tb.dut, for the delays
+    std::string corner;                  // gate level: whose delays; "" the flow's own
     std::vector<std::string> defines;    // NAME or NAME=VALUE
     std::string passPattern = "PASS";
     double timeLimitNs = 1e6;
