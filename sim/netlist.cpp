@@ -59,12 +59,12 @@ struct Netlister {
                 continue;
             }
             for (const auto& info : l.views(cell))
-                if (info.name == v && info.type == "schematic") return v;
+                if (info.name == v && (info.type == "schematic" || info.type == "extracted")) return v;
         }
         std::string list;
         for (const auto& v : tries) list += (list.empty() ? "" : " ") + v;
         throw Error("netlist: " + lib + "/" + cell + (b != bindings.end() ? " is bound to '" + list + "', which is not" : " has none of the views")
-                    + " (" + list + ") a netlist can use: a schematic view, or spice with a spice cell property");
+                    + " (" + list + ") a netlist can use: a schematic or extracted view, or spice with a spice cell property");
     }
 
     // a net's SPICE node
@@ -126,6 +126,12 @@ struct Netlister {
 
     std::vector<std::string> ports(const std::string& lib, const std::string& cell, const std::string& view) {
         std::vector<std::string> out;
+        if (ws.library(lib).viewType(cell, view) == "extracted") {  // as its extraction recorded them: its schematic's
+            const auto stored = ws.library(lib).prop(cell, view, "ports");
+            if (!stored) throw Error("netlist: " + lib + "/" + cell + "/" + view + " has no ports: extract it again (verify_extract)");
+            for (const auto& p : parsed(*stored).toArray()) out.push_back(p.toString().toStdString());
+            return out;
+        }
         for (const auto& p : ws.library(lib).pins(cell, view)) out.push_back(p.name);  // sorted by name
         return out;
     }
@@ -195,9 +201,24 @@ struct Netlister {
             if (it->second != key) throw Error("netlist: " + it->second + " and " + key + " would both be subcircuit " + cell);
             return cell;
         }
-        stack.push_back(key);
-        const std::string lines = body(lib, cell, view);
-        stack.pop_back();
+        std::string lines;
+        if (ws.library(lib).viewType(cell, view) == "extracted") {
+            // A layout's own netlist, as verify_extract wrote it: its elements, and the model files and parameters they need
+            oadb::Library& l = ws.library(lib);
+            const auto text = l.prop(cell, view, "netlist");
+            if (!text) throw Error("netlist: " + key + " holds no netlist: extract it again (verify_extract)");
+            lines = parsed(*text).toString().toStdString();
+            for (const auto& m : parsed(l.prop(cell, view, "models").value_or("[]")).toArray()) {
+                const Model md{m.toObject()["file"].toString().toStdString(), m.toObject()["section"].toString().toStdString()};
+                if (std::none_of(models.begin(), models.end(), [&](const Model& x) { return x.file == md.file; })) models.push_back(md);
+            }
+            const QJsonObject g = parsed(l.prop(cell, view, "globals").value_or("{}")).toObject();
+            for (auto it = g.begin(); it != g.end(); ++it) params[it.key().toStdString()] = str(it.value());
+        } else {
+            stack.push_back(key);
+            lines = body(lib, cell, view);
+            stack.pop_back();
+        }
         names[upper(cell)] = key;
         std::string head = ".subckt " + cell;
         for (const auto& p : ports(lib, cell, view)) head += " " + node(p, key);
@@ -212,6 +233,18 @@ std::string modelCard(const Model& m) {
     const bool osdi = m.file.size() > 5 && m.file.compare(m.file.size() - 5, 5, ".osdi") == 0;
     if (osdi) return ".osdi \"" + m.file + "\"";
     return m.section.empty() ? ".include \"" + m.file + "\"" : ".lib \"" + m.file + "\" " + m.section;
+}
+
+std::string primitiveLine(oadb::Workspace& ws, const oadb::Instance& i, const std::map<std::string, std::string>& nets) {
+    const std::string where = "instance " + i.name + " of " + i.lib + "/" + i.cell;
+    const auto stored = ws.library(i.lib).cellProp(i.cell, "spice");
+    if (!stored) throw Error("netlist: " + where + ": the cell has no spice property");
+    const QJsonObject spice = parsed(*stored).toObject();
+    const std::string prefix = spice["prefix"].toString().toStdString(), tmpl = spice["template"].toString().toStdString();
+    if (prefix.empty() || tmpl.empty()) throw Error("netlist: " + where + ": its spice property needs a prefix and a template");
+    const auto d = ws.library(i.lib).cellProp(i.cell, "params");
+    Netlister n{ws};
+    return (startsWith(i.name, prefix) ? i.name : prefix + i.name) + " " + n.expand(tmpl, i, nets, d ? parsed(*d).toObject() : QJsonObject(), where);
 }
 
 std::string netlist(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {

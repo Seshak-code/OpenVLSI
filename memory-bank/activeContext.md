@@ -1,5 +1,25 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-14 — extraction of hand-drawn layout, on `rebuild/extract` (after #51, merged)**
+
+- **Done:**
+  - `verify_extract {run}`: from an LVS run that matched, an `extracted` view of the cell. Its netlist: the transistors through their own `spice`
+    templates at the W, L and diffusion areas LVS measured (fingers and multiples joined into `ng`), on the schematic's net names; a capacitor to
+    ground per net from the tech LEF's `CPERSQDIST` and `EDGECAPACITANCE` per metal (`flow::Platform::techLef`).
+  - LVS's deck does not name its layers: the script finds each metal's by its shapes being the drawn metal's (`layout.gds` of the run).
+  - The netlister takes an `extracted` view where it took a schematic: a config's `viewList` or a binding picks it. `sim::primitiveLine` is the
+    template expansion for a netlist built outside a schematic.
+  - Verify panel: **Extract** on the selected LVS run.
+- **Inverter (SG13G2, 1u/2u):** in 0.54 fF, out 0.79 fF; delay 13.54 ps as a schematic, 15.08 ps extracted, 16.96 ps with a 10 x 1 um Metal1 stub
+  (which adds 9.951 um2 and 1.011 fF).
+- **Limits:** capacitance to ground only (no R, no coupling, no shielding); a flat layout; MOS only; no global nets in the cell; no GUI yet for
+  config views (they are made with `view_create` and `prop_set`) nor a viewer for an extracted view.
+- **Gates:** M3 46/46, `test_simulation` (the netlister's part, no tools needed). Extract pressed with real clicks.
+- **Next:** a hierarchy editor (config views in the window); device generators, FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations;
+  LVS cross-probe of devices and flow runs; corners at transistor level.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-14 — wire resistance in the transistor-level test, on `rebuild/spice-rc` (after #50, merged)**
 
 - **Done:**

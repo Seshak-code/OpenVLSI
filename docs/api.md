@@ -1710,6 +1710,15 @@ The electrical rule check: gates that nothing drives, wells with no tap, bulks o
 | `run` | string |  | a verification run: <library>_<cell>/drc.N or lvs.N |
 | `schematic` | string |  | with library and cell: the schematic view (default "schematic") |
 
+### `verify_extract`
+
+Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors with the sizes and diffusion areas LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values per metal. A config view whose viewList puts that view first then simulates the layout in place of the schematic. Returns each net's capacitance by metal and the netlist. Capacitance only: no wire resistance or coupling yet.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `run` | string | yes | a verification run: <library>_<cell>/drc.N or lvs.N |
+| `to` | string |  | the view to write (default "extracted") |
+
 ### `verify_list`
 
 The verification runs on disk, per layout oldest first.
