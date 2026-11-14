@@ -448,7 +448,7 @@ int ViewEditor::selectNet(const QString& net) {
     for (const char* kind : {"wire", "label"}) {
         const QJsonObject nets = k[QString(kind) + "s"].toObject();
         for (auto it = nets.begin(); it != nets.end(); ++it)
-            if (it.value().toString() == net) selection_.insert({kind, it.key()});
+            if (it.value().toString().compare(net, Qt::CaseInsensitive) == 0) selection_.insert({kind, it.key()});  // as SPICE, and LVS, name nets
     }
     redraw();
     return (int)selection_.size();

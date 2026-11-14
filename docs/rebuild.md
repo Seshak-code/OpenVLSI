@@ -283,7 +283,7 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
    rulers; hierarchy; a transistor Pcell; GDS export; connectivity from the schematic (M3). `tools/m3_gate.py`: generators
    and a routed inverter against IHP's DRC and LVS decks. Still to come for M3: FinFET Pcells, edit-in-place, resistors
    and capacitors, device abutment.
-6. **Verify stage:** DRC and LVS (KLayout decks) as commands and views: a marker browser over the layout canvas; ASAP7 as
+6. **Verify stage:** DRC and LVS (KLayout decks) as commands and views: a marker browser over the layout canvas, LVS's differences among its markers (`verify_lvs_report`); ASAP7 as
    in M2 slice 5's notes. Extraction (OpenRCX) to a post-layout netlist simulated on TreeSPICE, from ADE (M3).
 7. **Timing views (done):** OpenSTA through OpenROAD with the run's SPEF: slack summary, path reports, cross-probe to the layout (M5). Every corner of the platform at once (slow, typ, fast), each path naming its corner; `test_shmoo` sweeps the chip at a corner.
 8. **IR and EM (done):** OpenROAD PSM: IR-drop maps over the layout canvas, the largest grid currents (M6). Static analysis; EM limits against the process's are still to come.
@@ -310,7 +310,7 @@ Honest parity: each row is what a designer gets now, checked by the gate named, 
 | Place and route | Innovus | OpenROAD through ORFS: pipeline, metrics, any ORFS setting (`settings`), the layout at each stage (`m5_gate`) | Editing mid-flow, interactive floorplan and power-grid editing, ECO, MMMC |
 | Timing | Tempus | OpenSTA with SPEF at every corner in parallel: WNS, TNS, paths worst-first across corners, cross-probe (`m5_gate`: each corner agrees with its own simulation) | Multi-mode, per-corner RC, SI, OCV/AOCV/POCV |
 | Power grid | Voltus | PSM static IR and grid currents, map on layout (`m5_gate`) | Dynamic IR, EM against process limits, vectors from activity |
-| Physical verification | Pegasus | KLayout's DRC and LVS decks, marker browser (`m3_gate`, flow) | ERC, LVS mismatch browser, ASAP7 LVS (no open deck) |
+| Physical verification | Pegasus | KLayout's DRC and LVS decks, marker browser; LVS differences by kind, named on both sides, marked on the layout, cross-probed to the schematic (`m3_gate`, flow) | ERC, LVS cross-probe of devices and of flow runs to their netlist, ASAP7 LVS (no open deck) |
 | Extraction | Quantus | OpenRCX's SPEF in timing; each net's total C in the transistor-level test | RC networks in the transistor test, extraction of hand-drawn layout |
 | Custom layout | Virtuoso Layout | Viewer, editing tools, transistor generator, layout from schematic, flight lines (`m3_gate`, `ui_test`) | Other devices, FinFET cells, abutment, edit-in-place, constraint-driven routing, guard rings |
 | Schematic, ADE, RF | Virtuoso, ADE, Spectre, Spectre RF | Editors, ADE L/XL/Verifier, TreeSPICE with PSS, PAC, PNoise, HB (`m1_gate`, `m2_gate`, `test_verifier`) | Buses, inherited nets, CDF callbacks, Library Manager copy and locks |

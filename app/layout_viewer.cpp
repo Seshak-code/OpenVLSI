@@ -531,6 +531,17 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     connect(markerTree_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* i) {
         if (i && i->data(0, Qt::UserRole).isValid()) showMarker(i->data(0, Qt::UserRole).toInt());
     });
+    // An LVS marker of a net cross-probes to the schematic it was compared with
+    auto* probe = new QAction("Show in Schematic", markerTree_);
+    markerTree_->addAction(probe);
+    markerTree_->setContextMenuPolicy(Qt::ActionsContextMenu);
+    connect(probe, &QAction::triggered, this, [this] {
+        const QTreeWidgetItem* i = markerTree_->currentItem();
+        const QString net = i ? i->data(0, Qt::UserRole + 1).toString() : QString();
+        if (net.isEmpty()) return hint("Choose a net that LVS found in the schematic");
+        const cmd::Result r = session_.call("editor_select_net", {{"library", lib_}, {"cell", cell_}, {"view", markerReport_["schematic_view"].toString("schematic")}, {"net", net}});
+        hint(r.ok ? "Selected " + net + " in the schematic" : r.error);
+    });
 
     status_ = new QLabel(this);
     position_ = new QLabel(this);
@@ -622,7 +633,8 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
                        {"Polygon", "layout_view_tool"}, {"Via", "layout_view_tool"}, {"Label…", "layout_view_tool"}, {"Pin…", "layout_view_tool"}, {"Instance…", "layout_view_tool"},
                        {"Transistor…", "layout_pcell_mos"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
                        {"Show Top Level Only", "layout_view_levels"}, {"Zoom In", "layout_view_zoom"}, {"Zoom Out", "layout_view_zoom"}, {"Ruler", "layout_view_ruler"},
-                       {"Clear Rulers", "layout_view_rulers_clear"}, {"Show All", "layout_view_layers_all"}, {"Hide All", "layout_view_layers_all"}});
+                       {"Clear Rulers", "layout_view_rulers_clear"}, {"Show All", "layout_view_layers_all"}, {"Hide All", "layout_view_layers_all"},
+                       {"Show in Schematic", "editor_select_net"}});
 }
 
 LayoutViewer::~LayoutViewer() = default;
@@ -915,13 +927,21 @@ int LayoutViewer::setMarkers(const QJsonObject& report) {
         for (const auto& mv : rule["markers"].toArray()) {
             const QJsonObject m = mv.toObject();
             const QString cell = m["cell"].toString();
-            if (m["points"].toArray().isEmpty()) continue;
+            if (m["points"].toArray().isEmpty()) {  // nowhere in the layout (LVS: only in the schematic), yet it can be cross-probed
+                if (!m.contains("label")) continue;
+                auto* item = new QTreeWidgetItem(top, {m["label"].toString()});
+                item->setData(0, Qt::UserRole + 1, m["schematic_net"].toString());
+                item->setToolTip(0, m["description"].toString());
+                continue;
+            }
             const size_t places = cell.isEmpty() ? 1 : hierarchy_->placements(cell.toStdString()).size();
             for (size_t k = 0; k < places; ++k, ++at) {
                 const QRectF r = canvas_->markers[at];
-                auto* item = new QTreeWidgetItem(top, {QString("%1, %2 µm").arg((r.center().x() + flat_.originX) / dbuPerUm, 0, 'f', 2).arg((r.center().y() + flat_.originY) / dbuPerUm, 0, 'f', 2)});
+                const QString where = QString("%1, %2 µm").arg((r.center().x() + flat_.originX) / dbuPerUm, 0, 'f', 2).arg((r.center().y() + flat_.originY) / dbuPerUm, 0, 'f', 2);
+                auto* item = new QTreeWidgetItem(top, {m.contains("label") ? m["label"].toString() + "  at " + where : where});  // an LVS marker names its net or device
                 item->setData(0, Qt::UserRole, at);
-                item->setToolTip(0, rule["description"].toString() + (cell.isEmpty() ? QString() : "\nin " + cell));
+                item->setData(0, Qt::UserRole + 1, m["schematic_net"].toString());
+                item->setToolTip(0, m.contains("description") ? m["description"].toString() : rule["description"].toString() + (cell.isEmpty() ? QString() : "\nin " + cell));
             }
         }
     }

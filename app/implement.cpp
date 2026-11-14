@@ -203,6 +203,7 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     stop_ = new QPushButton("Stop", central);
     layout_ = new QPushButton("Open layout", central);
     markers_ = new QPushButton("Show DRC markers", central);
+    lvs_ = new QPushButton("Show LVS differences", central);
     timing_ = new QPushButton("Timing", central);
     power_ = new QPushButton("IR drop", central);
     top->addWidget(title_);
@@ -211,6 +212,7 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     top->addStretch(1);
     top->addWidget(stop_);
     top->addWidget(markers_);
+    top->addWidget(lvs_);
     top->addWidget(timing_);
     top->addWidget(power_);
     top->addWidget(layout_);
@@ -246,12 +248,13 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
         refresh();
     });
     connect(layout_, &QPushButton::clicked, this, [this] { emit openLayoutRequested(run_); });
-    connect(markers_, &QPushButton::clicked, this, [this] { emit showMarkersRequested(run_); });
+    connect(markers_, &QPushButton::clicked, this, [this] { emit showMarkersRequested(run_, "drc"); });
+    connect(lvs_, &QPushButton::clicked, this, [this] { emit showMarkersRequested(run_, "lvs"); });
     pipeline_->setToolTip("Click a finished stage to see the layout at that point");
     connect(pipeline_, &StagePipeline::stageClicked, this, [this](const QString& stage) { emit stageRequested(run_, stage); });
     connect(timing_, &QPushButton::clicked, this, [this] { emit signoffRequested(run_, true); });
     connect(power_, &QPushButton::clicked, this, [this] { emit signoffRequested(run_, false); });
-    bindActions(this, {{"Stop", "flow_stop"}, {"Open layout", "flow_open_layout"}, {"Show DRC markers", "layout_view_markers"}, {"Timing", "timing_view"}, {"IR drop", "power_view"}});
+    bindActions(this, {{"Stop", "flow_stop"}, {"Open layout", "flow_open_layout"}, {"Show DRC markers", "layout_view_markers"}, {"Show LVS differences", "layout_view_markers"}, {"Timing", "timing_view"}, {"IR drop", "power_view"}});
 
     poll_ = new QTimer(this);
     poll_->setInterval(1000);
@@ -349,9 +352,14 @@ void FlowRunView::fillReport(const QJsonObject& report) {
     for (const auto& s : stages) hasGds = hasGds || s.toObject()["metrics"].toObject().contains("gds");
     layout_->setEnabled(hasGds);
     int violations = 0;
-    for (const auto& s : stages)
-        if (s.toObject()["stage"] == "drc") violations = s.toObject()["metrics"].toObject()["violations"].toInt();
+    bool lvsDiffers = false;
+    for (const auto& s : stages) {
+        const QJsonObject m = s.toObject()["metrics"].toObject();
+        if (s.toObject()["stage"] == "drc") violations = m["violations"].toInt();
+        if (s.toObject()["stage"] == "lvs") lvsDiffers = m.contains("matched") && !m["matched"].toBool();
+    }
     markers_->setVisible(hasGds && violations > 0);
+    lvs_->setVisible(hasGds && lvsDiffers);
     timing_->setEnabled(hasGds);
     power_->setEnabled(hasGds);
     if (state == "running") return;

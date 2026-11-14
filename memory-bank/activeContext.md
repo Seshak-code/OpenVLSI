@@ -1,5 +1,20 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-14 — the LVS mismatch browser, on `rebuild/lvs-debug` (after #47, merged)**
+
+- **Done:**
+  - `verify_lvs_report`: LVS's cross-reference, read from the `.lvsdb` by KLayout's own API (a script the command writes beside the report; cached).
+    Each net, device, pin and subcircuit on both sides with its status, what a net joins on each side, and where it lies in the layout.
+  - `verify_markers` and `layout_view_markers` take an LVS run, or `flow_run` with `check: lvs`. Markers are grouped by kind of difference.
+  - The Verify panel opens an LVS that differs on its layout and says what differs. Markers panel: right-click a net, **Show in Schematic**.
+  - An implementation run whose LVS differs shows **Show LVS differences**.
+- **Fixed on the way:** `m3_gate.py`'s own KLayout call had no `pmap` shim on its PATH, so IHP's LVS deck crashed there.
+- **Gates:** M3 26/26. The window was checked with real clicks (`os_input`): group expanded, VDD right-clicked, schematic's vdd selected.
+- **Next:** ERC; RC per corner and multi-mode; RC in the transistor-level test and a real failing `test_spice`; extraction of hand-drawn layout;
+  device generators, FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-13 — timing at every corner; real macOS input, on `rebuild/corners`**
 
 - **Done:**

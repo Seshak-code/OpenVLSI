@@ -142,11 +142,12 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                                  connect(view, &FlowRunView::signoffRequested, this, [this](const QString& r, bool timing) {
                                      session_.call(timing ? "timing_view" : "power_view", {{"run", r}});
                                  });
-                                 connect(view, &FlowRunView::showMarkersRequested, this, [this](const QString& r) {
+                                 connect(view, &FlowRunView::showMarkersRequested, this, [this](const QString& r, const QString& check) {
                                      const cmd::Result layout = session_.call("flow_open_layout", {{"run", r}});
                                      if (!layout.ok) return;
                                      QJsonObject a = layout.value.toObject();
                                      a["flow_run"] = r;
+                                     a["check"] = check;
                                      session_.call("layout_view_markers", a);
                                  });
                                  connect(view, &FlowRunView::openLayoutRequested, this, [this](const QString& r) {
@@ -216,12 +217,15 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                              return QJsonValue(true);
                          },
                          true});
-    session_.addCommand({"layout_view_markers", "Shows what a DRC found in a layout's viewer (opened if need be): the run of verify_drc, or flow_run for an implementation's. Returns how many landed.",
-                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}}, {{"run", cmd::param("string", "a verification run")}, {"flow_run", cmd::param("string", "an implementation run")}}),
+    session_.addCommand({"layout_view_markers", "Shows what a check found in a layout's viewer (opened if need be): the run of verify_drc or verify_lvs, or flow_run for an "
+                                                "implementation's, with check drc (default) or lvs. An LVS's markers name what differs. Returns how many landed.",
+                         cmd::object({{"library", kLib}, {"cell", kCell}, {"view", kView}}, {{"run", cmd::param("string", "a verification run")}, {"flow_run", cmd::param("string", "an implementation run")},
+                                                                                         {"check", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"drc", "lvs"}}, {"description", "for flow_run: which check's (default drc)"}}}}),
                          [this, openLayout](cmd::Context&, const QJsonObject& a) {
                              QJsonObject which;
                              if (a.contains("run")) which["run"] = a["run"];
                              if (a.contains("flow_run")) which["flow_run"] = a["flow_run"];
+                             if (a.contains("check")) which["check"] = a["check"];
                              const cmd::Result markers = session_.call("verify_markers", which);
                              if (!markers.ok) throw std::runtime_error(markers.error.toStdString());
                              return QJsonValue(openLayout(a)->setMarkers(markers.value.toObject()));

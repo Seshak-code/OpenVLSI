@@ -87,7 +87,8 @@ def run_lvs(klayout, platform, gds, cdl, top, work):
     text = text.replace("# %include rule_decks/", "# %include " + os.path.join(deck_dir, "rule_decks") + "/")
     open(deck, "w").write(text)
     out = subprocess.run([klayout, "-b", "-rd", "input=" + gds, "-rd", "schematic=" + cdl, "-rd", "topcell=" + top, "-rd", "report=" + os.path.join(work, top + ".lvsdb"),
-                          "-rd", "target_netlist=" + os.path.join(work, top + "_extracted.cir"), "-rd", "run_mode=deep", "-r", deck], capture_output=True, text=True)
+                          "-rd", "target_netlist=" + os.path.join(work, top + "_extracted.cir"), "-rd", "run_mode=deep", "-r", deck], capture_output=True, text=True,
+                         env=dict(os.environ, PATH=os.path.dirname(klayout) + os.pathsep + os.environ["PATH"]))  # the deck logs memory with pmap: a shim lies beside klayout
     log = out.stdout + out.stderr
     if "Netlists" not in log:
         raise RuntimeError("the LVS deck did not finish:\n" + log[-2000:])
@@ -285,6 +286,27 @@ def step_inverter(m, a, work):
     m("layout_export_gds", library="design", cell="inv", file=gds)
     matched, _ = run_lvs(a.klayout, a.platform, gds, cdl, "inv", work)
     check(not matched, "and LVS no longer matches")
+    lvs = m("verify_lvs", library="design", cell="inv")
+    check(lvs.get("matched") is False, "verify_lvs says so too")
+    report = m("verify_lvs_report", run=lvs["run"])
+    items = [it for c in report["circuits"] for it in c["items"]]
+    vdd = next((it for it in items if it["kind"] == "net" and (it["schematic"] or "").lower() == "vdd"), None)
+    check(vdd is not None and vdd["layout"] is None and sorted(c[1].split(".")[1] for c in vdd["connections"]) == ["B", "S"],
+          f"verify_lvs_report: the schematic's vdd, at the PMOS's source and bulk, has no net in the layout: {vdd}")
+    strays = [it for it in items if it["kind"] == "net" and it["schematic"] is None]
+    joined = sorted(c[0].split(".")[1] for it in strays for c in it["connections"])
+    check(joined == ["B", "S"] and all(len(it["connections"]) == 1 for it in strays),
+          f"and in the layout the source and the bulk are each a net of their own: {[(it['layout'], it['connections']) for it in strays]}")
+    pmos = next((it for it in items if it["kind"] == "device" and it["status"] != "match"), {})
+    rail = bounds(longest["points"])
+    check(pmos.get("class", "").endswith("pmos") and all(it["box"][1] * 1000 <= rail[3] and it["box"][3] * 1000 >= rail[1] for it in strays),
+          f"the PMOS differs, and both stray nets reach the rail's height: {[it['box'] for it in strays]}, rail from y {rail[1] / 1000} to {rail[3] / 1000} um")
+    markers = m("verify_markers", run=lvs["run"])
+    groups = {r["rule"]: r for r in markers["rules"]}
+    check({"nets only in the layout", "nets only in the schematic"} <= set(groups) and groups["nets only in the layout"]["count"] == 2,
+          f"verify_markers groups LVS's differences: {sorted(groups)}")
+    probe = next(mk for mk in groups["nets only in the schematic"]["markers"])
+    check(probe["schematic_net"].lower() == "vdd" and probe["points"] == [], "its vdd marker names the schematic's net to cross-probe to, and has no place in the layout")
     m("edit_undo", library="design")
     check(connectivity(m)["clean"], "undo restores it")
 

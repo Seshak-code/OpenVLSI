@@ -111,10 +111,35 @@ bool VerifyPanel::open(const QString& run) {
         details_->setText(shown.ok ? (o["clean"].toBool() ? "No violations" : QString::number(o["violations"].toInt()) + " violations, marked on the layout") : shown.error);
         return shown.ok;
     }
-    details_->setText(QString(o["matched"].toBool() ? "Layout and schematic match" : "Layout and schematic differ") +
-                      QString(": %1 devices in the layout, %2 in the schematic; %3 nets, %4; %5 mismatches.")
-                          .arg(o["devices_layout"].toInt()).arg(o["devices_schematic"].toInt()).arg(o["nets_layout"].toInt()).arg(o["nets_schematic"].toInt()).arg(o["mismatches"].toInt()));
-    return true;
+    QString text = QString(o["matched"].toBool() ? "Layout and schematic match" : "Layout and schematic differ") +
+                   QString(": %1 devices in the layout, %2 in the schematic; %3 nets, %4; %5 mismatches.")
+                       .arg(o["devices_layout"].toInt()).arg(o["devices_schematic"].toInt()).arg(o["nets_layout"].toInt()).arg(o["nets_schematic"].toInt()).arg(o["mismatches"].toInt());
+    if (o["matched"].toBool()) {
+        details_->setText(text);
+        return true;
+    }
+    // What differs, in words, and on the layout
+    const cmd::Result report = session_.call("verify_lvs_report", {{"run", run}});
+    if (report.ok) {
+        const auto side = [](const QJsonValue& v) { return v.isNull() ? QString("(none)") : v.toString(); };
+        int shown = 0;
+        for (const auto& cv : report.value.toObject()["circuits"].toArray())
+            for (const auto& iv : cv.toObject()["items"].toArray()) {
+                const QJsonObject it = iv.toObject();
+                if (it["kind"] == "pin" || it["status"] == "warning" || ++shown > 12) continue;
+                QStringList layout, schematic;
+                for (const auto& cn : it["connections"].toArray()) {
+                    if (!cn.toArray()[0].isNull()) layout << cn.toArray()[0].toString();
+                    if (!cn.toArray()[1].isNull()) schematic << cn.toArray()[1].toString();
+                }
+                text += QString("\n%1 %2 / %3").arg(it["kind"].toString(), side(it["layout"]), side(it["schematic"]));
+                if (it["kind"] == "net") text += QString(": joins %1 in the layout, %2 in the schematic").arg(layout.isEmpty() ? "nothing" : layout.join(", "), schematic.isEmpty() ? "nothing" : schematic.join(", "));
+            }
+        if (shown > 12) text += QString("\nand %1 more, on the layout").arg(shown - 12);
+    }
+    const cmd::Result shown = session_.call("layout_view_markers", {{"library", o["library"]}, {"cell", o["cell"]}, {"view", o["view"]}, {"run", run}});
+    details_->setText(shown.ok ? text : text + "\n" + shown.error);
+    return shown.ok;
 }
 
 }  // namespace app
