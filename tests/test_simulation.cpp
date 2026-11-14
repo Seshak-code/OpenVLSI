@@ -209,6 +209,33 @@ int main() {
     must("prop_set", {{"library", "sims"}, {"cell", "rload"}, {"view", "extracted"}, {"key", "ports"}, {"value", QJsonArray{"A", "B"}}});
     check(has(error("netlist", sc("cfgtb", "post")), "differ"), "an extracted view whose ports are not the symbol's is refused");
 
+    // ── a config as a hierarchy editor reads and writes it ──
+    const auto cellOf = [](const QJsonObject& config, const char* name) {
+        for (const auto& v : config["cells"].toArray())
+            if (v.toObject()["cell"] == name) return v.toObject();
+        return QJsonObject();
+    };
+    QJsonObject got = must("config_get", sc("cfgtb", "post")).toObject();
+    check(got["top"] == "sims/cfgtb/schematic" && got["viewList"].toArray() == QJsonArray{"extracted", "schematic", "spice"} && got["cells"].toArray().size() == 3,
+          "config_get: the top, the view list, and the three cells the test bench places");
+    check(cellOf(got, "rload")["uses"] == "extracted" && cellOf(got, "rload")["views"].toArray() == QJsonArray{"spice", "extracted", "schematic"} && !cellOf(got, "rload")["bound"].toBool() &&
+              cellOf(got, "res")["uses"] == "spice" && cellOf(got, "res")["placed"] == 1,
+          "each with the views a netlist could use and the one it gets");
+    check(cellOf(must("config_get", sc("cfgtb")).toObject(), "rload")["uses"] == "spice", "a schematic resolves under the default list: a primitive first");
+    got = must("config_set", with(sc("cfgtb", "made"), {{"top", "sims/cfgtb/schematic"}, {"viewList", QJsonArray{"schematic", "spice"}}})).toObject();
+    check(cellOf(got, "rload")["uses"] == "schematic" && cellOf(got, "res")["placed"] == 3, "config_set makes a config, and its walk descends: the three resistors placed in all");
+    got = must("config_set", with(sc("cfgtb", "made"), {{"bindings", QJsonObject{{"sims/rload", "extracted"}}}})).toObject();
+    check(cellOf(got, "rload")["uses"] == "extracted" && cellOf(got, "rload")["bound"].toBool() && got["viewList"].toArray() == QJsonArray{"schematic", "spice"},
+          "a binding goes ahead of the list, and what was not given stays");
+    got = must("config_set", with(sc("cfgtb", "made"), {{"bindings", QJsonObject{{"sims/rload", "layout"}}}})).toObject();
+    check(has(cellOf(got, "rload")["error"].toString().toStdString(), "bound to 'layout'") && cellOf(got, "res")["uses"] == "spice", "a cell bound to a view it lacks says so, and the rest still resolve");
+    check(has(error("config_set", with(sc("cfgtb", "made"), {{"top", "sims/rload/symbol"}})), "not a schematic") && has(error("config_set", with(sc("cfgtb"), {{"viewList", QJsonArray{"spice"}}})), "not a config") &&
+              has(error("config_set", with(sc("cfgtb", "made"), {{"viewList", QJsonArray{}}})), "at least one") && has(error("config_set", with(sc("cfgtb", "made"), {{"bindings", QJsonObject{{"rload", "spice"}}}})), "is not"),
+          "config_set refuses a top that is no schematic, a view that is no config, an empty list and a binding that names no cell");
+    must("view_create", {{"library", "sims"}, {"cell", "cfgtb"}, {"view", "blank"}, {"type", "config"}});
+    check(must("config_get", sc("cfgtb", "blank")).toObject()["top"] == "" && must("config_get", sc("cfgtb", "blank")).toObject()["cells"].toArray().isEmpty() && has(error("netlist", sc("cfgtb", "blank")), "needs a top"),
+          "a config with no top yet reads as empty, and still cannot be netlisted");
+
     // ── pdk_install of a FinFET PDK (a stand-in ASAP7 tree): M primitives on the cards, corners as sections ──
     {
         const fs::path a7 = dir / "asap7", cards = a7 / "models" / "hspice";

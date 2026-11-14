@@ -2,6 +2,7 @@
 // the palette finds every command and view; a schema form runs a command and refuses a bad value; the theme is a command.
 #include "app/navigator.h"
 #include "app/palette.h"
+#include "app/netlist_view.h"
 #include "app/shell.h"
 #include "app/view_editor.h"
 
@@ -10,6 +11,7 @@
 #include <QJsonArray>
 #include <QLineEdit>
 #include <QSettings>
+#include <QTableWidget>
 #include <QTabWidget>
 #include <QTreeWidget>
 
@@ -119,6 +121,66 @@ int main(int argc, char** argv) {
         check(!shell.ciw()->isWindow() && shell.consoleVisible(), "the command window sits in the shell");
         shell.showConsole(false);
         check(!shell.consoleVisible(), "and can be hidden");
+
+        // The hierarchy editor: a config view's top, view list and bindings, and an extracted view read only
+        const auto ok = [&](const QString& c, QJsonObject a) {
+            const cmd::Result r = session.call(c, a);
+            if (!r.ok) std::printf("    %s: %s\n", qPrintable(c), qPrintable(r.error));
+            return r.ok;
+        };
+        bool built = ok("cell_create", {{"library", "analog"}, {"cell", "r"}}) && ok("view_create", {{"library", "analog"}, {"cell", "r"}, {"view", "symbol"}, {"type", "symbol"}});
+        for (auto [pin, y] : {std::pair{"P", 100}, std::pair{"N", -100}})
+            built = built && ok("pin_add", {{"library", "analog"}, {"cell", "r"}, {"view", "symbol"}, {"name", pin}, {"direction", "inputOutput"}, {"x", 0}, {"y", y}});
+        built = built && ok("cell_prop_set", {{"library", "analog"}, {"cell", "r"}, {"key", "spice"}, {"value", QJsonObject{{"prefix", "R"}, {"template", "[|P] [|N] 1k"}}}});
+        built = built && ok("cell_create", {{"library", "analog"}, {"cell", "div"}}) && ok("view_create", {{"library", "analog"}, {"cell", "div"}, {"view", "schematic"}, {"type", "schematic"}});
+        for (auto [name, y, top, bottom] : {std::tuple{"R1", 300, "a", "m"}, std::tuple{"R2", -300, "m", "b"}}) {
+            built = built && ok("instance_add", {{"library", "analog"}, {"cell", "div"}, {"view", "schematic"}, {"master_library", "analog"}, {"master_cell", "r"}, {"name", name}, {"x", 0}, {"y", y}});
+            built = built && ok("label_add", {{"library", "analog"}, {"cell", "div"}, {"view", "schematic"}, {"name", top}, {"x", 0}, {"y", y + 100}});
+            built = built && ok("label_add", {{"library", "analog"}, {"cell", "div"}, {"view", "schematic"}, {"name", bottom}, {"x", 0}, {"y", y - 100}});
+        }
+        for (auto [pin, y] : {std::pair{"a", 600}, std::pair{"b", -600}})
+            built = built && ok("pin_add", {{"library", "analog"}, {"cell", "div"}, {"view", "schematic"}, {"name", pin}, {"direction", "inputOutput"}, {"x", -500}, {"y", y}});
+        built = built && ok("symbol_generate", {{"library", "analog"}, {"cell", "div"}});
+        built = built && ok("cell_create", {{"library", "analog"}, {"cell", "bench"}}) && ok("view_create", {{"library", "analog"}, {"cell", "bench"}, {"view", "schematic"}, {"type", "schematic"}});
+        built = built && ok("instance_add", {{"library", "analog"}, {"cell", "bench"}, {"view", "schematic"}, {"master_library", "analog"}, {"master_cell", "div"}, {"name", "X1"}, {"x", 0}, {"y", 0}});
+        for (const auto& p : session.call("view_get", {{"library", "analog"}, {"cell", "div"}, {"view", "symbol"}}).value.toObject()["pins"].toArray())
+            built = built && ok("label_add", {{"library", "analog"}, {"cell", "bench"}, {"view", "schematic"}, {"name", "n_" + p.toObject()["name"].toString()},
+                                              {"x", p.toObject()["at"].toArray()[0]}, {"y", p.toObject()["at"].toArray()[1]}});
+        built = built && ok("view_create", {{"library", "analog"}, {"cell", "bench"}, {"view", "config"}, {"type", "config"}});
+        check(built, "a two-level bench and an empty config for it");
+        check(call("editor_open", {{"library", "analog"}, {"cell", "bench"}, {"view", "config"}}).value == "config", "editor_open on a config view");
+        auto* hier = shell.ciw()->netlistView("analog", "bench", "config");
+        check(hier && shell.current() == hier && hier->isConfig() && shell.tabs()->tabText(shell.tabs()->currentIndex()) == "bench config", "opens the hierarchy editor as a tab");
+        check(hier && hier->status().contains("no top yet") && hier->top()->text() == "analog/bench/schematic" && hier->viewList()->text() == "spice schematic" && hier->table()->rowCount() == 0,
+              "a new config offers its own cell's schematic as the top, and holds nothing until applied");
+        const auto rowOf = [&](const QString& name) {
+            for (int k = 0; hier && k < hier->table()->rowCount(); ++k)
+                if (hier->table()->item(k, 0)->text() == name) return k;
+            return -1;
+        };
+        check(hier && hier->apply() && hier->table()->rowCount() == 2 && hier->table()->item(rowOf("analog/div"), 2)->text() == "schematic" &&
+                  hier->table()->item(rowOf("analog/r"), 2)->text() == "spice" && hier->table()->item(rowOf("analog/r"), 1)->text() == "2",
+              "Apply writes it: the bench's cells, each with the view it gets (" + (hier ? hier->status().toStdString() : "") + ")");
+        check(hier && hier->showNetlist() && hier->text().contains(".subckt div a b") && hier->text().contains("R1 a m 1k"), "Netlist shows what it simulates");
+        // An extraction of div, by hand, and the config bound to it
+        built = ok("view_create", {{"library", "analog"}, {"cell", "div"}, {"view", "extracted"}, {"type", "extracted"}});
+        for (auto [key, value] : {std::pair{"ports", QJsonValue(QJsonArray{"a", "b"})}, std::pair{"netlist", QJsonValue("Rlayout a b 2.2k\nCpar1 a 0 1.5f\n")},
+                                  std::pair{"extraction", QJsonValue(QJsonObject{{"run", "analog_div/lvs.1"}, {"devices", 2}, {"metals", QJsonArray{"Metal1"}}, {"total_ff", 1.5}, {"method", "by hand"},
+                                                                                 {"nets", QJsonArray{QJsonObject{{"name", "a"}, {"c_ff", 1.5}, {"layers", QJsonObject{{"Metal1", QJsonObject{{"c_ff", 1.5}}}}}}}}})}})
+            built = built && ok("prop_set", {{"library", "analog"}, {"cell", "div"}, {"view", "extracted"}, {"key", key}, {"value", value}});
+        check(built && hier && hier->bind(rowOf("analog/div"), "extracted") && hier->table()->item(rowOf("analog/div"), 2)->text() == "extracted" && hier->table()->rowCount() == 1,
+              "Bind to puts a cell on its extracted view, and the cells under its schematic leave the hierarchy");
+        check(hier && hier->showNetlist() && hier->text().contains("Rlayout a b 2.2k") && !hier->text().contains("R1 a m 1k"), "and the netlist is the layout's");
+        check(hier && hier->bind(rowOf("analog/div"), "layout") && hier->table()->item(rowOf("analog/div"), 2)->text() == "none" && hier->status().contains("get no view") && !hier->showNetlist(),
+              "a cell bound to a view it lacks shows as having none, and the netlist fails with why");
+        check(hier && hier->bind(rowOf("analog/div"), "") && hier->table()->item(rowOf("analog/div"), 2)->text() == "schematic" && hier->table()->rowCount() == 2, "unbound, the view list decides again");
+        check(call("edit_undo", {{"library", "analog"}}).ok && hier->table()->item(rowOf("analog/div"), 2)->text() == "none", "each change is an undo step");
+        call("edit_redo", {{"library", "analog"}});
+        check(call("editor_open", {{"library", "analog"}, {"cell", "div"}, {"view", "extracted"}}).value == "extracted", "editor_open on an extracted view");
+        auto* ext = shell.ciw()->netlistView("analog", "div", "extracted");
+        check(ext && !ext->isConfig() && ext->table()->rowCount() == 1 && ext->table()->item(0, 0)->text() == "a" && ext->table()->item(0, 1)->text() == "1.500" &&
+                  ext->text().contains("Rlayout a b 2.2k") && ext->status().contains("analog_div/lvs.1"),
+              "shows its nets' capacitance and its netlist");
     }
     QSettings().clear();
     fs::remove_all(dir);

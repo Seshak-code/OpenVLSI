@@ -22,6 +22,7 @@ class ViewEditor;
 class AdeExplorer;
 class WaveformViewer;
 class LayoutViewer;
+class NetlistView;
 class Verifier;
 class FlowRunView;
 class TestRunView;
@@ -41,6 +42,7 @@ public:
     AdeExplorer* explorer(const QString& lib, const QString& cell, const QString& view) const;
     LayoutViewer* layout(const QString& lib, const QString& cell, const QString& view) const;
     Verifier* verifier(const QString& lib, const QString& cell, const QString& view) const;
+    NetlistView* netlistView(const QString& lib, const QString& cell, const QString& view) const;  // an open config or extracted view
     FlowRunView* flowView(const QString& run) const;
     TestRunView* testView(const QString& run) const;
     RtlEditor* rtlEditor(const QString& file, const QString& design);  // opened, and shown, if need be

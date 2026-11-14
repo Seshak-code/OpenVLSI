@@ -7,6 +7,7 @@
 #include "app/rtl_stage.h"
 #include "app/test_stage.h"
 #include "app/ui_commands.h"
+#include "app/netlist_view.h"
 #include "app/verifier.h"
 #include "app/view_editor.h"
 #include "app/waveform_viewer.h"
@@ -52,19 +53,20 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                     : "<span style='color:#c0392b'>✗ " + r.error.toHtmlEscaped() + "</span>");
     });
 
-    session_.addCommand({"editor_open", "Opens a view's tool (the GUI's command): the schematic or symbol editor, or ADE Explorer on a "
-                                        "maestro view; returns the view's type.",
+    session_.addCommand({"editor_open", "Opens a view's tool (the GUI's command): the schematic or symbol editor, the layout editor, ADE Explorer on a maestro view, "
+                                        "the Verifier, the hierarchy editor on a config view, or an extracted view's netlist; returns the view's type.",
                          cmd::object({{"library", cmd::param("string", "library name")}, {"cell", cmd::param("string", "cell name")},
                                       {"view", cmd::param("string", "view name")}}),
                          [this](cmd::Context& c, const QJsonObject& a) {
                              const QString lib = a["library"].toString(), cell = a["cell"].toString(), view = a["view"].toString();
                              const std::string type = c.workspace.library(lib.toStdString()).viewType(cell.toStdString(), view.toStdString());
-                             if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout" && type != "verifier")
-                                 throw std::runtime_error("no tool for a " + type + " view yet (schematic, symbol, maestro, layout and verifier)");
+                             if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout" && type != "verifier" && type != "config" && type != "extracted")
+                                 throw std::runtime_error("no tool for a " + type + " view yet (schematic, symbol, maestro, layout, verifier, config and extracted)");
                              QPointer<QWidget>& e = editors_[lib + "/" + cell + "/" + view];
                              if (!e && type == "maestro") e = new AdeExplorer(session_, lib, cell, view, this);
                              else if (!e && type == "layout") e = new LayoutViewer(session_, lib, cell, view, this);
                              else if (!e && type == "verifier") e = new Verifier(session_, lib, cell, view, this);
+                             else if (!e && (type == "config" || type == "extracted")) e = new NetlistView(session_, lib, cell, view, this);
                              else if (!e) e = new ViewEditor(session_, lib, cell, view, this);
                              present(e);
                              return QJsonValue(QString::fromStdString(type));
@@ -349,6 +351,11 @@ TestRunView* Ciw::testView(const QString& run) const {
 FlowRunView* Ciw::flowView(const QString& run) const {
     const auto it = flowViews_.find(run);
     return it == flowViews_.end() ? nullptr : it->second.data();
+}
+
+NetlistView* Ciw::netlistView(const QString& lib, const QString& cell, const QString& view) const {
+    const auto it = editors_.find(lib + "/" + cell + "/" + view);
+    return it == editors_.end() ? nullptr : qobject_cast<NetlistView*>(it->second.data());
 }
 
 Verifier* Ciw::verifier(const QString& lib, const QString& cell, const QString& view) const {

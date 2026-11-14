@@ -277,6 +277,55 @@ def run(ov, hands, gpu, work):
     check(ov.ui_state()["active_title"] == "c layout", "a click on a tab switches to it")
     hands.press("tab_close", text="c schematic")
     check("c schematic" not in ov.ui_state()["tabs"], "its close button closes it")
+
+    print("The hierarchy editor", flush=True)
+    part = lambda cell, view="schematic": dict(library="d", cell=cell, view=view)  # noqa: E731
+    ov.cell_create(library="d", cell="r")
+    ov.view_create(**part("r", "symbol"), type="symbol")
+    for pin, y in (("P", 100), ("N", -100)):
+        ov.pin_add(**part("r", "symbol"), name=pin, direction="inputOutput", x=0, y=y)
+    ov.cell_prop_set(library="d", cell="r", key="spice", value={"prefix": "R", "template": "[|P] [|N] 1k"})
+    ov.cell_create(library="d", cell="div")
+    ov.view_create(**part("div"), type="schematic")
+    for name, y, top, bottom in (("R1", 300, "a", "m"), ("R2", -300, "m", "b")):
+        ov.instance_add(**part("div"), master_library="d", master_cell="r", name=name, x=0, y=y)
+        ov.label_add(**part("div"), name=top, x=0, y=y + 100)
+        ov.label_add(**part("div"), name=bottom, x=0, y=y - 100)
+    for pin, y in (("a", 600), ("b", -600)):
+        ov.pin_add(**part("div"), name=pin, direction="inputOutput", x=-500, y=y)
+    ov.symbol_generate(library="d", cell="div")
+    ov.view_create(**part("div", "extracted"), type="extracted")
+    ov.prop_set(**part("div", "extracted"), key="ports", value=["a", "b"])
+    ov.prop_set(**part("div", "extracted"), key="netlist", value="Rlayout a b 2.2k\n")
+    ov.cell_create(library="d", cell="bench")
+    ov.view_create(**part("bench"), type="schematic")
+    ov.instance_add(**part("bench"), master_library="d", master_cell="div", name="X1", x=0, y=0)
+    for pin in ov.view_get(**part("div", "symbol"))["pins"]:
+        ov.label_add(**part("bench"), name="n_" + pin["name"], x=pin["at"][0], y=pin["at"][1])
+    ov.view_create(**part("bench", "config"), type="config")
+    cfg = part("bench", "config")
+    uses = lambda cell: next((c.get("uses", "none") for c in ov.config_get(**cfg)["cells"] if c["cell"] == cell), None)  # noqa: E731
+    ov.editor_open(**cfg)
+    check(ov.ui_state()["active_title"] == "bench config" and ov.config_get(**cfg)["top"] == "", "a config view opens as a tab, with no top yet")
+    hands.press("button", text="Apply")
+    check(ov.config_get(**cfg)["top"] == "d/bench/schematic" and uses("div") == "schematic" and uses("r") == "spice",
+          f"Apply writes the top it offered, and the cells resolve: {ov.config_get(**cfg)}")
+    hands.press("field", text="Bind div")
+    check(ov.ui_state()["popup"] != "", f"a click on a cell's Bind to opens its list: {ov.ui_state()['popup']!r}")
+    hands.press("option", text="extracted")
+    check(ov.ui_state()["popup"] == "" and ov.config_get(**cfg)["bindings"] == {"d/div": "extracted"} and uses("div") == "extracted" and uses("r") is None,
+          f"a click on extracted binds the cell: {ov.config_get(**cfg)['bindings']}")
+    check("Rlayout a b 2.2k" in ov.netlist(**cfg), "and the netlist is the extraction's")
+    hands.press("field", text="Bind div")
+    hands.press("option", text="(view list)")
+    check(ov.config_get(**cfg)["bindings"] == {} and uses("div") == "schematic", "choosing (view list) unbinds it")
+    hands.press("field", text="View list")
+    hands.key("Ctrl+A")
+    ov.ui_input(action="type", text="extracted schematic spice")
+    hands.settle()
+    hands.key("Return")
+    check(ov.config_get(**cfg)["viewList"] == ["extracted", "schematic", "spice"] and uses("div") == "extracted", f"a view list typed and entered is written: {ov.config_get(**cfg)['viewList']}")
+    hands.press("tab_close", text="bench config")
     unbound = [x["text"] for x in ov.ui_actions() if not x["command"]]
     check(unbound == [], f"and every control there names its command {unbound}")
     check(ov.ui_input_dropped() == 0, f"no input went nowhere: {ov.ui_input_dropped()} dropped")

@@ -55,6 +55,24 @@ QJsonObject summary(const sim::Plot& p, int index) {
     return o;
 }
 
+// A config as a netlist resolves it (config_get, and what config_set returns)
+QJsonObject configJson(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {
+    const sim::ConfigInfo info = sim::configInfo(ws, lib, cell, view);
+    QJsonArray list, cells;
+    for (const auto& v : info.viewList) list.append(q(v));
+    QJsonObject bindings;
+    for (const auto& [key, v] : info.bindings) bindings[q(key)] = q(v);
+    for (const auto& entry : info.cells) {
+        QJsonArray views;
+        for (const auto& v : entry.views) views.append(q(v));
+        QJsonObject o{{"library", q(entry.lib)}, {"cell", q(entry.cell)}, {"placed", entry.placed}, {"views", views}, {"bound", entry.bound}};
+        if (entry.error.empty()) o["uses"] = q(entry.uses);
+        else o["error"] = q(entry.error);
+        cells.append(o);
+    }
+    return {{"top", q(info.top)}, {"viewList", list}, {"bindings", bindings}, {"cells", cells}};
+}
+
 }  // namespace
 
 std::string runDirectory(Context& c, const std::string& run) {
@@ -70,6 +88,54 @@ void addSimulationCommands(Registry& r) {
            object({{"library", kLib}, {"cell", kCell}, {"view", kView}}),
            [](Context& c, const QJsonObject& a) { return QJsonValue(q(sim::netlist(c.workspace, s(a, "library"), s(a, "cell"), s(a, "view")))); },
            true});
+    r.add({"config_get", "A config view as a netlist resolves it (a hierarchy editor's table): its top, view list and bindings, and every cell its hierarchy places with the "
+                         "views a netlist could use for it (schematic and extracted views, spice for a primitive), the one it gets, whether a binding chose it, and the reason "
+                         "when it gets none. On a schematic view: the same under the default view list.",
+           object({{"library", kLib}, {"cell", kCell}, {"view", kView}}),
+           [](Context& c, const QJsonObject& a) { return QJsonValue(configJson(c.workspace, s(a, "library"), s(a, "cell"), s(a, "view"))); },
+           true});
+    r.add({"config_set", "Writes a config view, creating it when the cell has none of that name: its top (the schematic a netlist starts from), its view list (the order "
+                         "views are tried in for each cell), and its bindings (a cell's view ahead of the list; the whole map, so one left out is unbound). What is not "
+                         "given stays. One undo step. Returns it as config_get does.",
+           object({{"library", kLib}, {"cell", kCell}, {"view", kView}},
+                  {{"top", param("string", "the schematic it starts from: lib/cell/view")},
+                   {"viewList", QJsonObject{{"type", "array"}, {"description", "view names in the order tried, as [\"extracted\", \"schematic\", \"spice\"]"}, {"items", QJsonObject{{"type", "string"}}}}},
+                   {"bindings", QJsonObject{{"type", "object"}, {"description", "a cell's view ahead of the list: {\"lib/cell\": \"view\"}"}}}}),
+           [](Context& c, const QJsonObject& a) {
+               oadb::Library& l = c.workspace.library(s(a, "library"));
+               const std::string cell = s(a, "cell"), view = s(a, "view");
+               bool exists = false;
+               for (const auto& v : l.views(cell))
+                   if (v.name == view) {
+                       if (v.type != "config") throw std::invalid_argument(view + " is a " + v.type + " view of " + cell + ", not a config");
+                       exists = true;
+                   }
+               if (a.contains("top")) {
+                   const QStringList parts = a["top"].toString().split('/');
+                   if (parts.size() != 3) throw std::invalid_argument("top is lib/cell/view");
+                   if (c.workspace.library(parts[0].toStdString()).viewType(parts[1].toStdString(), parts[2].toStdString()) != "schematic")
+                       throw std::invalid_argument("the top " + s(a, "top") + " is not a schematic");
+               }
+               if (a.contains("viewList")) {
+                   if (a["viewList"].toArray().isEmpty()) throw std::invalid_argument("a view list names at least one view");
+                   for (const auto& v : a["viewList"].toArray())
+                       if (v.toString().isEmpty()) throw std::invalid_argument("a view list holds view names");
+               }
+               const QJsonObject bindings = a["bindings"].toObject();
+               for (auto it = bindings.begin(); it != bindings.end(); ++it)
+                   if (it.key().split('/').size() != 2 || !it.value().isString() || it.value().toString().isEmpty())
+                       throw std::invalid_argument("a binding is \"lib/cell\": \"view\", and '" + it.key().toStdString() + "' is not");
+               const auto text = [](const QJsonValue& v) {
+                   const QByteArray j = QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact);
+                   return j.mid(1, j.size() - 2).toStdString();
+               };
+               l.change("config " + cell + "/" + view, [&] {
+                   if (!exists) l.createView(cell, view, "config");
+                   for (const char* key : {"top", "viewList", "bindings"})
+                       if (a.contains(key)) l.setProp(cell, view, key, text(a[key]));
+               });
+               return QJsonValue(configJson(c.workspace, s(a, "library"), cell, view));
+           }});
     r.add({"simulate", "Netlists a schematic or config, adds the cards (analyses, .options, .include, ...) and runs it on TreeSPICE "
                        "in a worker process; returns the run directory and each analysis' vectors (an operating point's values).",
            object({{"library", kLib}, {"cell", kCell}, {"view", kView},
