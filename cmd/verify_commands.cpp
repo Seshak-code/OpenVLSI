@@ -220,6 +220,148 @@ QJsonObject readMarkers(const fs::path& lyrdb) {
 
 }  // namespace
 
+// LVS's cross-reference, read by KLayout's own API from its database: every circuit, net, device, pin and subcircuit paired
+// layout to schematic with its status, a net's connections on each side, and where each item that differs lies in the layout.
+const char* kXrefScript = R"PY(
+import json, pya
+lvs = pya.LayoutVsSchematic()
+lvs.read(lvsdb)
+x, ly = lvs.xref(), lvs.internal_layout()
+dbu = ly.dbu
+status = {x.Match: "match", x.MatchWithWarning: "warning", x.Mismatch: "mismatch", x.NoMatch: "nomatch", x.Skipped: "skipped", x.None_: "none"}
+top = lvs.internal_top_cell().name
+def name(o): return o.expanded_name() if o else None
+def um(b): return [round(b.left * dbu, 4), round(b.bottom * dbu, 4), round(b.right * dbu, 4), round(b.top * dbu, 4)]
+def term(t): return "%s.%s" % (t.device().expanded_name(), t.terminal_def().name) if t else None
+def scpin(t): return "%s.%s" % (t.subcircuit().expanded_name(), t.pin().name()) if t else None
+circuits = []
+for cp in x.each_circuit_pair():
+    a, b = cp.first(), cp.second()
+    items, counts = [], {}
+    def add(kind, pair, extra):
+        st = status[pair.status()]
+        counts.setdefault(kind, {}).setdefault(st, 0)
+        counts[kind][st] += 1
+        it = {"kind": kind, "layout": name(pair.first()), "schematic": name(pair.second()), "status": st}
+        if st != "match":
+            it.update(extra(pair))
+        items.append(it)
+    def net(n):
+        out = {"connections": [[term(t.first()), term(t.second())] for t in x.each_net_terminal_pair(n)] +
+                              [[scpin(t.first()), scpin(t.second())] for t in x.each_net_subcircuit_pin_pair(n)],
+               "pins": [[p.first() and p.first().pin().name(), p.second() and p.second().pin().name()] for p in x.each_net_pin_pair(n)]}
+        if n.first():
+            box, shapes = pya.Box(), []
+            for i in lvs.layer_indexes():  # merged layer by layer: across them, a well would swallow the wires in it
+                region = lvs.shapes_of_net(n.first(), lvs.layer_by_index(i), True).merged()
+                box += region.bbox()
+                shapes += [um(p.bbox()) for p in region.each()]
+            if not box.empty():
+                out["box"] = um(box)
+                out["shapes"] = shapes[:200]  # ponytail: a chip-wide net is cut at 200 boxes; its box is still whole
+        return out
+    def device(d):
+        out = {}
+        f, g = d.first(), d.second()
+        if f:
+            out["class"] = f.device_class().name
+            if f.device_abstract:
+                bb = ly.cell(f.device_abstract.cell_index()).dbbox().transformed(f.trans)
+                out["box"] = [round(bb.left, 4), round(bb.bottom, 4), round(bb.right, 4), round(bb.top, 4)]
+        elif g:
+            out["class"] = g.device_class().name
+        params = {}
+        for side, dev in ((0, f), (1, g)):
+            if dev:
+                for p in dev.device_class().parameter_definitions():
+                    params.setdefault(p.name, [None, None])[side] = dev.parameter(p.name)
+        out["parameters"] = params
+        return out
+    def subcircuit(sc):
+        out = {}
+        f = sc.first()
+        ci = f and f.circuit_ref() and f.circuit_ref().cell_index
+        ci = ci() if callable(ci) else ci
+        if ci is not None and ci is not False:
+            bb = ly.cell(ci).dbbox().transformed(f.trans)
+            out["box"] = [round(bb.left, 4), round(bb.bottom, 4), round(bb.right, 4), round(bb.top, 4)]
+            out["cell"] = f.circuit_ref().name
+        return out
+    if a and b:
+        for n in x.each_net_pair(cp): add("net", n, net)
+        for d in x.each_device_pair(cp): add("device", d, device)
+        for p in x.each_pin_pair(cp): add("pin", p, lambda p: {})
+        for sc in x.each_subcircuit_pair(cp): add("subcircuit", sc, subcircuit)
+    circuits.append({"layout": a.name if a else None, "schematic": b.name if b else None, "status": status[cp.status()],
+                     "top": bool(a and a.name == top), "counts": counts, "items": items})
+json.dump({"top": top, "circuits": circuits}, open(out, "w"))
+)PY";
+
+// Cached beside the database, until the database changes
+QJsonObject lvsCrossReference(const fs::path& lvsdb) {
+    if (!fs::exists(lvsdb)) throw std::invalid_argument("no LVS report: " + lvsdb.string());
+    const fs::path cache = lvsdb.string() + ".xref.json", script = lvsdb.string() + ".xref.py";
+    if (fs::exists(cache) && fs::last_write_time(cache) >= fs::last_write_time(lvsdb)) return readJson(cache);
+    const RtlFlowTools tools = RtlFlowTools::detect();
+    if (tools.klayout.empty()) throw std::runtime_error("KLayout reads LVS's report: " + tools.missing());
+    std::ofstream(script) << kXrefScript;
+    const fs::path tmp = cache.string() + ".tmp";
+    acutesim::orchestration::Subprocess p(tools.klayout, {"-b", "-rd", "lvsdb=" + lvsdb.string(), "-rd", "out=" + tmp.string(), "-r", script.string()});
+    const auto r = p.run();
+    if (r.exit_code != 0 || !fs::exists(tmp)) throw std::runtime_error("KLayout could not read the LVS report: " + r.stdout_output + r.stderr_output);
+    fs::rename(tmp, cache);
+    return readJson(cache);
+}
+
+// The LVS report of a verification run or an implementation run
+fs::path lvsdbOf(Context& c, const QJsonObject& a) {
+    if (a.contains("run") == a.contains("flow_run")) throw std::invalid_argument("give run, or flow_run");
+    if (a.contains("run")) {
+        if (!a["run"].toString().contains("/lvs.")) throw std::invalid_argument("not an LVS run: " + s(a, "run"));
+        return runPath(c, a) / "report.lvsdb";
+    }
+    static const QRegularExpression name("^[A-Za-z0-9_]+/run\\.[0-9]+$");
+    if (!name.match(a["flow_run"].toString()).hasMatch()) throw std::invalid_argument("an implementation run is named <design>/run.N");
+    const fs::path dir = base(c) / "implementation" / s(a, "flow_run");
+    const QJsonObject rec = readJson(dir / "run.json");
+    return dir / "results" / s(rec, "platform") / s(rec, "design") / "base" / "6_lvs.lvsdb";
+}
+
+// What differs, as markers the layout viewer walks: one group per kind of difference, each marker named
+QJsonObject lvsMarkers(const QJsonObject& xref) {
+    std::map<QString, QJsonArray> groups;
+    int total = 0;
+    for (const auto& cv : xref["circuits"].toArray()) {
+        const QJsonObject circuit = cv.toObject();
+        for (const auto& iv : circuit["items"].toArray()) {
+            const QJsonObject it = iv.toObject();
+            if (it["status"] == "match" || it["status"] == "warning") continue;
+            const QString kind = it["kind"].toString();
+            const QString group = it["schematic"].isNull() ? kind + "s only in the layout" : it["layout"].isNull() ? kind + "s only in the schematic" : kind + "s that differ";
+            QStringList joins;
+            for (const auto& cn : it["connections"].toArray()) {
+                const QJsonArray pair = cn.toArray();
+                joins << (pair[0].isNull() ? "(none)" : pair[0].toString()) + " / " + (pair[1].isNull() ? "(none)" : pair[1].toString());
+            }
+            const QString label = (it["layout"].isNull() ? "(none)" : it["layout"].toString()) + " / " + (it["schematic"].isNull() ? "(none)" : it["schematic"].toString());
+            QJsonObject marker{{"cell", circuit["top"].toBool() ? QString() : circuit["layout"].toString()}, {"label", label}, {"schematic_net", kind == "net" ? it["schematic"] : QJsonValue()},
+                               {"description", joins.isEmpty() ? QString("layout / schematic") : "joins, layout / schematic: " + joins.join(", ")}};
+            if (it.contains("box")) {
+                const QJsonArray b = it["box"].toArray();
+                marker["points"] = QJsonArray{QJsonArray{b[0], b[1]}, QJsonArray{b[2], b[3]}};
+            } else {
+                marker["points"] = QJsonArray{};
+            }
+            groups[group].append(marker);
+            ++total;
+        }
+    }
+    QJsonArray rules;
+    for (const auto& [group, markers] : groups)
+        rules.append(QJsonObject{{"rule", group}, {"count", markers.size()}, {"description", "LVS: " + group + ", named layout / schematic"}, {"markers", markers}});
+    return {{"total", total}, {"rules", rules}};
+}
+
 void addVerifyCommands(Registry& r) {
     r.add({"verify_drc", "Runs the process's DRC deck over a layout view; returns the run with its violation count (verify_markers lists them). Density rules are off by default: "
                          "they judge a whole chip with its fill. Waits, or with wait false starts it in the background (poll verify_status).",
@@ -294,7 +436,8 @@ void addVerifyCommands(Registry& r) {
                    }
                    std::ofstream(dir / "deck.lvs") << text;
                }
-               QJsonObject rec{{"run", q(run)}, {"kind", "lvs"}, {"library", a["library"]}, {"cell", a["cell"]}, {"view", q(viewOf(a))}, {"state", "running"}, {"started", now()}};
+               QJsonObject rec{{"run", q(run)}, {"kind", "lvs"}, {"library", a["library"]}, {"cell", a["cell"]}, {"view", q(viewOf(a))},
+                               {"schematic", a.contains("schematic") ? a["schematic"] : QJsonValue("schematic")}, {"state", "running"}, {"started", now()}};
                writeRecord(dir, rec);
                const std::vector<std::string> args{"-b", "-rd", "input=" + (dir / "layout.gds").string(), "-rd", "schematic=" + (dir / "schematic.cdl").string(), "-rd", "topcell=" + s(a, "cell"),
                                                    "-rd", "report=" + (dir / "report.lvsdb").string(), "-rd", "target_netlist=" + (dir / "extracted.cir").string(), "-rd", "run_mode=deep",
@@ -367,10 +510,45 @@ void addVerifyCommands(Registry& r) {
                return QJsonValue(out);
            },
            true});
-    r.add({"verify_markers", "What a DRC found, rule by rule: run, or flow_run for an implementation run's. Each marker gives its cell and points, in microns in that cell.",
-           object({}, {{"run", kRun}, {"flow_run", param("string", "an implementation run: <design>/run.N")}}),
+    r.add({"verify_lvs_report", "LVS's cross-reference, read from its report by KLayout: each circuit layout to schematic with its status and counts, and its nets, devices, "
+                                "pins and subcircuits, each named on both sides with its status (match, warning, mismatch, nomatch). One that differs says what it joins on "
+                                "each side (device.terminal, subcircuit.pin), its parameters on each side, and where it lies in the layout, in microns in its circuit's cell. "
+                                "Only what differs, unless all.",
+           object({}, {{"run", kRun}, {"flow_run", param("string", "an implementation run: <design>/run.N")}, {"all", param("boolean", "every item, matched ones too")}}),
+           [](Context& c, const QJsonObject& a) {
+               QJsonObject xref = lvsCrossReference(lvsdbOf(c, a));
+               bool matched = true;
+               QJsonArray circuits;
+               for (const auto& cv : xref["circuits"].toArray()) {
+                   QJsonObject circuit = cv.toObject();
+                   matched = matched && (circuit["status"] == "match" || circuit["status"] == "warning");
+                   if (!a["all"].toBool()) {
+                       QJsonArray differ;
+                       for (const auto& iv : circuit["items"].toArray())
+                           if (iv.toObject()["status"] != "match") differ.append(iv);
+                       circuit["items"] = differ;
+                   }
+                   circuits.append(circuit);
+               }
+               xref["circuits"] = circuits;
+               xref["matched"] = matched;
+               return QJsonValue(xref);
+           },
+           true});
+    r.add({"verify_markers", "What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic). run, or flow_run with "
+                             "check drc (default) or lvs for an implementation run's. Each marker gives its cell and points, in microns in that cell.",
+           object({}, {{"run", kRun}, {"flow_run", param("string", "an implementation run: <design>/run.N")},
+                       {"check", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"drc", "lvs"}}, {"description", "for flow_run: which check's (default drc)"}}}}),
            [](Context& c, const QJsonObject& a) {
                if (a.contains("run") == a.contains("flow_run")) throw std::invalid_argument("give run, or flow_run");
+               if (a.contains("check") && a.contains("run")) throw std::invalid_argument("check is for flow_run: a verification run is one check");
+               if ((a.contains("run") && a["run"].toString().contains("/lvs.")) || a["check"] == "lvs") {
+                   QJsonObject which = a;
+                   which.remove("check");
+                   QJsonObject markers = lvsMarkers(lvsCrossReference(lvsdbOf(c, which)));
+                   if (a.contains("run")) markers["schematic_view"] = readJson(runPath(c, a) / "run.json")["schematic"].toString("schematic");
+                   return QJsonValue(markers);
+               }
                if (a.contains("run")) {
                    const fs::path dir = runPath(c, a);
                    if (!fs::exists(dir / "report.lyrdb")) throw std::invalid_argument("this run has no DRC report");

@@ -1194,11 +1194,12 @@ Shows one marker of a layout's viewer: zooms to it and marks it.
 
 ### `layout_view_markers`
 
-Shows what a DRC found in a layout's viewer (opened if need be): the run of verify_drc, or flow_run for an implementation's. Returns how many landed.
+Shows what a check found in a layout's viewer (opened if need be): the run of verify_drc or verify_lvs, or flow_run for an implementation's, with check drc (default) or lvs. An LVS's markers name what differs. Returns how many landed.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
 | `cell` | string | yes | cell name |
+| `check` | string |  | for flow_run: which check's (default drc) |
 | `flow_run` | string |  | an implementation run |
 | `library` | string | yes | library name |
 | `run` | string |  | a verification run |
@@ -1711,12 +1712,23 @@ Compares a layout view with its schematic through the process's LVS deck; return
 | `view` | string |  | the layout view (default "layout") |
 | `wait` | boolean |  | wait for it (default true) |
 
-### `verify_markers`
+### `verify_lvs_report`
 
-What a DRC found, rule by rule: run, or flow_run for an implementation run's. Each marker gives its cell and points, in microns in that cell.
+LVS's cross-reference, read from its report by KLayout: each circuit layout to schematic with its status and counts, and its nets, devices, pins and subcircuits, each named on both sides with its status (match, warning, mismatch, nomatch). One that differs says what it joins on each side (device.terminal, subcircuit.pin), its parameters on each side, and where it lies in the layout, in microns in its circuit's cell. Only what differs, unless all.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
+| `all` | boolean |  | every item, matched ones too |
+| `flow_run` | string |  | an implementation run: <design>/run.N |
+| `run` | string |  | a verification run: <library>_<cell>/drc.N or lvs.N |
+
+### `verify_markers`
+
+What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker gives its cell and points, in microns in that cell.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `check` | string |  | for flow_run: which check's (default drc) |
 | `flow_run` | string |  | an implementation run: <design>/run.N |
 | `run` | string |  | a verification run: <library>_<cell>/drc.N or lvs.N |
 

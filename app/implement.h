@@ -53,7 +53,7 @@ public:
 
 signals:
     void openLayoutRequested(const QString& run);
-    void showMarkersRequested(const QString& run);
+    void showMarkersRequested(const QString& run, const QString& check);  // drc or lvs
     void signoffRequested(const QString& run, bool timing);
     void stageRequested(const QString& run, const QString& stage);
 
@@ -70,6 +70,7 @@ private:
     QPushButton* stop_;
     QPushButton* layout_;
     QPushButton* markers_;
+    QPushButton* lvs_;
     QPushButton* timing_;
     QPushButton* power_;
     QTimer* poll_;

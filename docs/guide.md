@@ -71,7 +71,7 @@ A testbench on the **routed netlist** runs with the delays of its own layout. It
 | I, Shift+I | Instance, transistor | F | Fit |
 | Esc | End the tool | Shift+F, Ctrl+F | All levels, top only |
 
-Choose the layer to draw on in the panel. **Verify > Run DRC** and **Run LVS** check a view with the process's own decks; a DRC opens on its layout with its markers.
+Choose the layer to draw on in the panel. **Verify > Run DRC** and **Run LVS** check a view with the process's own decks; a DRC opens on its layout with its markers. An LVS that differs opens on its layout too: the Markers panel lists each net, device and pin that differs, named layout / schematic, and the Verify panel says what each joins on both sides. Right-click a net there and choose **Show in Schematic** to select it in the schematic.
 
 ## Driving it from outside
 
