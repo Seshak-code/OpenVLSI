@@ -9,6 +9,7 @@
 #include "app/api_server.h"
 #include "app/ui_commands.h"
 #include "app/verify_stage.h"
+#include "app/netlist_view.h"
 #include "app/verifier.h"
 #include "app/library_manager.h"
 #include "app/navigator.h"
@@ -65,6 +66,7 @@ QString tabTitle(QWidget* tool) {
     if (auto* w = qobject_cast<WaveformViewer*>(tool)) return QFileInfo(w->run()).fileName();
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->cell() + " " + l->view();
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->cell() + " " + r->view();
+    if (auto* n = qobject_cast<NetlistView*>(tool)) return n->cell() + " " + n->view();
     if (auto* f = qobject_cast<FlowRunView*>(tool)) return f->run().replace('/', ' ');
     if (auto* v = qobject_cast<TestRunView*>(tool)) return v->run().replace('/', ' ');
     if (auto* e = qobject_cast<RtlEditor*>(tool)) return QFileInfo(e->file()).fileName();
@@ -78,6 +80,7 @@ QString crumbOf(QWidget* tool) {
     if (auto* w = qobject_cast<WaveformViewer*>(tool)) return (w->design().isEmpty() ? QString() : w->design() + "  ›  ") + QFileInfo(w->run()).fileName();
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) return l->library() + "  ›  " + l->cell() + "  ›  " + l->view();
     if (auto* r = qobject_cast<Verifier*>(tool)) return r->library() + "  ›  " + r->cell() + "  ›  " + r->view();
+    if (auto* n = qobject_cast<NetlistView*>(tool)) return n->library() + "  ›  " + n->cell() + "  ›  " + n->view();
     if (auto* f = qobject_cast<FlowRunView*>(tool)) return "Implement  ›  " + f->design() + "  ›  " + f->run().section('/', 1);
     if (auto* v = qobject_cast<TestRunView*>(tool)) return "Test  ›  " + v->run().section('/', 0, 0) + "  ›  " + v->run().section('/', 1);
     if (auto* e = qobject_cast<RtlEditor*>(tool)) return "RTL  ›  " + (e->design().isEmpty() ? QString() : e->design() + "  ›  ") + QFileInfo(e->file()).fileName();
@@ -405,6 +408,7 @@ void Shell::host(QWidget* tool) {
     if (auto* a = qobject_cast<AdeExplorer*>(tool)) noteRecent(a->library() + "/" + a->cell() + "/" + a->view());
     if (auto* l = qobject_cast<LayoutViewer*>(tool)) noteRecent(l->library() + "/" + l->cell() + "/" + l->view());
     if (auto* r = qobject_cast<Verifier*>(tool)) noteRecent(r->library() + "/" + r->cell() + "/" + r->view());
+    if (auto* n = qobject_cast<NetlistView*>(tool)) noteRecent(n->library() + "/" + n->cell() + "/" + n->view());
 }
 
 void Shell::closeTab(int index) {
@@ -529,6 +533,7 @@ QJsonObject Shell::context() const {
     if (auto* a = qobject_cast<AdeExplorer*>(current())) c = {{"library", a->library()}, {"cell", a->cell()}, {"view", a->view()}};
     if (auto* l = qobject_cast<LayoutViewer*>(current())) c = {{"library", l->library()}, {"cell", l->cell()}, {"view", l->view()}};
     if (auto* r = qobject_cast<Verifier*>(current())) c = {{"library", r->library()}, {"cell", r->cell()}, {"view", r->view()}};
+    if (auto* n = qobject_cast<NetlistView*>(current())) c = {{"library", n->library()}, {"cell", n->cell()}, {"view", n->view()}};
     return c;
 }
 
@@ -555,7 +560,7 @@ CommandPalette* Shell::newPalette() {
             const QString cell = c.toString();
             for (const auto& v : session_.call("view_list", {{"library", lib}, {"cell", cell}}).value.toArray()) {
                 const QString view = v.toObject()["view"].toString(), type = v.toObject()["type"].toString();
-                if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout" && type != "verifier") continue;
+                if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout" && type != "verifier" && type != "config" && type != "extracted") continue;
                 entries.push_back({cell + " " + view, lib + "/" + cell + "/" + view + " (" + type + ")", type, [this, lib, cell, view] {
                                        session_.call("editor_open", {{"library", lib}, {"cell", cell}, {"view", view}});
                                    }});

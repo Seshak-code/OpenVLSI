@@ -44,6 +44,23 @@ Deck deck(oadb::Workspace& ws, const std::string& lib, const std::string& cell, 
 // and its own parameters. For a netlist built from elsewhere than a schematic (a layout's extraction).
 std::string primitiveLine(oadb::Workspace& ws, const oadb::Instance& i, const std::map<std::string, std::string>& nets);
 
+// What a config view (or a schematic, under the default list) resolves to: every cell its hierarchy places, the views a netlist
+// could use for it, and the one it gets. A cell with none it can use carries the reason and the walk goes on: an editor shows it.
+struct ConfigCell {
+    std::string lib, cell;
+    int placed = 0;                  // instances of it in the schematics walked, each schematic once
+    std::vector<std::string> views;  // schematic and extracted views, and "spice" when it is a primitive
+    std::string uses, error;         // the view used; or why none
+    bool bound = false;              // by a binding, not the view list
+};
+struct ConfigInfo {
+    std::string top;                 // "lib/cell/view"; "" when a config names none yet
+    std::vector<std::string> viewList;
+    std::map<std::string, std::string> bindings;
+    std::vector<ConfigCell> cells;   // in the order met, top down
+};
+ConfigInfo configInfo(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view);
+
 // The deck whole: its text, the globals as .params, its models. It ends before .end (a test bench adds its cards).
 std::string netlist(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view);
 

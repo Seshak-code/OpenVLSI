@@ -1,5 +1,21 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-14 — the hierarchy editor, on `rebuild/hierarchy` (after #52, merged)**
+
+- **Done:**
+  - `config_get`: a config (or a schematic under the default list) as a netlist resolves it: top, view list, bindings, and every cell placed with the
+    views a netlist could use, the one it gets, and the reason when none (`sim::configInfo`, which shares the config's reading with `deck()`).
+  - `config_set`: top, view list, bindings (the whole map) in one undo step; makes the view when the cell has none.
+  - `app/netlist_view`: a config view opens as the hierarchy editor (Top, View list, Apply, Netlist; a row per cell with **Bind to**);
+    an extracted view opens read only (nets by metal, the netlist). `editor_open` and the palette take both types.
+  - `ui_locate` kinds `field` (an input by its accessible name) and `option` (an entry of the open selection list), for real clicks on forms and
+    drop-downs.
+- **Gates:** `test_shell` (the editor offscreen), `test_simulation` (the commands), `ui_test.py` 55/55 offscreen and 57/57 with real macOS input.
+- **Next:** device generators, FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations; LVS cross-probe of devices and flow runs; corners at
+  transistor level; wire resistance and coupling for hand-drawn layout.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-14 — extraction of hand-drawn layout, on `rebuild/extract` (after #51, merged)**
 
 - **Done:**

@@ -77,7 +77,7 @@ Opens the Library Manager.
 
 ### `ui_locate`
 
-Where a control is on the screen, in global points, with its centre: kind rail (text a stage), console, menu (a menu bar title), menu_item (in the open menu), button, tab, tab_close, tree_item (any visible list's row holding text), layout_point (x, y database units in the active layout), or editor_point (in the active schematic or symbol).
+Where a control is on the screen, in global points, with its centre: kind rail (text a stage), console, menu (a menu bar title), menu_item (in the open menu), button, tab, tab_close, tree_item (any visible list's row holding text), field (an input by its name: a text field, a selection box), option (an entry of the selection list that is open), layout_point (x, y database units in the active layout), or editor_point (in the active schematic or symbol).
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -562,7 +562,7 @@ Fits a view in its editor.
 
 ### `editor_open`
 
-Opens a view's tool (the GUI's command): the schematic or symbol editor, or ADE Explorer on a maestro view; returns the view's type.
+Opens a view's tool (the GUI's command): the schematic or symbol editor, the layout editor, ADE Explorer on a maestro view, the Verifier, the hierarchy editor on a config view, or an extracted view's netlist; returns the view's type.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -1919,6 +1919,29 @@ A recorded signal's value at a time, as hex, and its changes up to a limit.
 | `time` | number |  | in the dump's units (default its end) |
 
 ## Other
+
+### `config_get`
+
+A config view as a netlist resolves it (a hierarchy editor's table): its top, view list and bindings, and every cell its hierarchy places with the views a netlist could use for it (schematic and extracted views, spice for a primitive), the one it gets, whether a binding chose it, and the reason when it gets none. On a schematic view: the same under the default view list.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | cell name |
+| `library` | string | yes | library name |
+| `view` | string | yes | view name: a schematic, or a config naming one |
+
+### `config_set`
+
+Writes a config view, creating it when the cell has none of that name: its top (the schematic a netlist starts from), its view list (the order views are tried in for each cell), and its bindings (a cell's view ahead of the list; the whole map, so one left out is unbound). What is not given stays. One undo step. Returns it as config_get does.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `bindings` | object |  | a cell's view ahead of the list: {"lib/cell": "view"} |
+| `cell` | string | yes | cell name |
+| `library` | string | yes | library name |
+| `top` | string |  | the schematic it starts from: lib/cell/view |
+| `view` | string | yes | view name: a schematic, or a config naming one |
+| `viewList` | array |  | view names in the order tried, as ["extracted", "schematic", "spice"] |
 
 ### `power_analyze`
 

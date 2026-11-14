@@ -150,8 +150,9 @@ void addInputCommands(Session& session, Shell& shell) {
     };
 
     add({"ui_locate", "Where a control is on the screen, in global points, with its centre: kind rail (text a stage), console, menu (a menu bar title), menu_item (in the open menu), "
-                      "button, tab, tab_close, tree_item (any visible list's row holding text), layout_point (x, y database units in the active layout), or editor_point (in the active schematic or symbol).",
-         cmd::object({{"kind", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"window", "rail", "console", "menu", "menu_item", "button", "tab", "tab_close", "tree_item", "layout_point", "editor_point"}}, {"description", "what to find"}}}},
+                      "button, tab, tab_close, tree_item (any visible list's row holding text), field (an input by its name: a text field, a selection box), option (an entry of the selection "
+                      "list that is open), layout_point (x, y database units in the active layout), or editor_point (in the active schematic or symbol).",
+         cmd::object({{"kind", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"window", "rail", "console", "menu", "menu_item", "button", "tab", "tab_close", "tree_item", "field", "option", "layout_point", "editor_point"}}, {"description", "what to find"}}}},
                      {{"text", cmd::param("string", "its text")}, {"x", cmd::param("number", "x, database units")}, {"y", cmd::param("number", "y, database units")}}),
          [sh](cmd::Context&, const QJsonObject& a) {
              const QString kind = a["kind"].toString(), text = a["text"].toString();
@@ -207,6 +208,23 @@ void addInputCommands(Session& session, Shell& shell) {
                      }
                  }
                  refuse("no visible row holds '" + text + "'");
+             }
+             if (kind == "field") {
+                 for (QWidget* w : top->findChildren<QWidget*>())
+                     if (w->isVisible() && !w->accessibleName().isEmpty() && w->accessibleName() == text) return QJsonValue(globalRect(w, w->rect()));
+                 refuse("no visible field named '" + text + "'");
+             }
+             if (kind == "option") {
+                 QWidget* popup = QApplication::activePopupWidget();
+                 auto* list = popup ? popup->findChild<QAbstractItemView*>() : nullptr;
+                 if (!list) refuse("no selection list is open");
+                 for (int r = 0; r < list->model()->rowCount(); ++r) {
+                     const QModelIndex i = list->model()->index(r, 0);
+                     if (i.data().toString() != text) continue;
+                     list->scrollTo(i);
+                     return QJsonValue(globalRect(list->viewport(), list->visualRect(i)));
+                 }
+                 refuse("no option '" + text + "' in the open list");
              }
              if (kind == "layout_point") {
                  auto* v = qobject_cast<LayoutViewer*>(sh->current());

@@ -1,5 +1,7 @@
 #include "sim/netlist.h"
 
+#include <functional>
+
 #include "sch/schematic.h"
 
 #include <QJsonArray>
@@ -255,17 +257,20 @@ std::string netlist(oadb::Workspace& ws, const std::string& lib, const std::stri
     return out;
 }
 
-Deck deck(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {
+namespace {
+// lib/cell/view's netlister and the schematic it starts from; needTop false leaves a config with no top as tl "" for an editor
+Netlister configured(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, std::string& tl, std::string& tc, std::string& tv, bool needTop) {
     Netlister n{ws};
-    std::string tl = lib, tc = cell, tv = view;
+    tl = lib, tc = cell, tv = view;
     const std::string type = ws.library(lib).viewType(cell, view);
     if (type == "config") {
         oadb::Library& l = ws.library(lib);
         const auto top = l.prop(cell, view, "top");
         const QString t = top ? parsed(*top).toString() : QString();
         const QStringList parts = t.split('/');
-        if (parts.size() != 3) throw Error("netlist: config " + lib + "/" + cell + "/" + view + " needs a top: \"lib/cell/view\"");
-        tl = parts[0].toStdString(), tc = parts[1].toStdString(), tv = parts[2].toStdString();
+        if (parts.size() != 3 && (needTop || !t.isEmpty())) throw Error("netlist: config " + lib + "/" + cell + "/" + view + " needs a top: \"lib/cell/view\"");
+        if (parts.size() == 3) tl = parts[0].toStdString(), tc = parts[1].toStdString(), tv = parts[2].toStdString();
+        else tl.clear();
         if (const auto vl = l.prop(cell, view, "viewList")) {
             n.viewList.clear();
             for (const auto& v : parsed(*vl).toArray()) n.viewList.push_back(v.toString().toStdString());
@@ -278,7 +283,49 @@ Deck deck(oadb::Workspace& ws, const std::string& lib, const std::string& cell, 
     } else if (type != "schematic") {
         throw Error("netlist: " + lib + "/" + cell + "/" + view + " is a " + type + " view, not a schematic or config");
     }
-    if (ws.library(tl).viewType(tc, tv) != "schematic") throw Error("netlist: the top " + tl + "/" + tc + "/" + tv + " is not a schematic");
+    if (!tl.empty() && ws.library(tl).viewType(tc, tv) != "schematic") throw Error("netlist: the top " + tl + "/" + tc + "/" + tv + " is not a schematic");
+    return n;
+}
+}  // namespace
+
+ConfigInfo configInfo(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {
+    std::string tl, tc, tv;
+    Netlister n = configured(ws, lib, cell, view, tl, tc, tv, false);
+    ConfigInfo info{tl.empty() ? std::string() : tl + "/" + tc + "/" + tv, n.viewList, n.bindings, {}};
+    if (tl.empty()) return info;
+    std::map<std::string, size_t> at;
+    std::set<std::string> walked;
+    const std::function<void(const std::string&, const std::string&, const std::string&)> walk = [&](const std::string& l, const std::string& c, const std::string& v) {
+        if (!walked.insert(l + "/" + c + "/" + v).second) return;
+        for (const auto& i : ws.library(l).instances(c, v)) {
+            const std::string key = i.lib + "/" + i.cell;
+            const auto [slot, fresh] = at.emplace(key, info.cells.size());
+            if (fresh) {
+                ConfigCell cellInfo{i.lib, i.cell, 0, {}, "", "", n.bindings.count(key) > 0};
+                oadb::Library& master = ws.library(i.lib);
+                if (master.cellProp(i.cell, "spice")) cellInfo.views.push_back("spice");
+                for (const auto& known : master.views(i.cell))
+                    if (known.type == "schematic" || known.type == "extracted") cellInfo.views.push_back(known.name);
+                try {
+                    cellInfo.uses = n.switchView(i.lib, i.cell);
+                } catch (const std::exception& e) {
+                    cellInfo.error = e.what();
+                }
+                info.cells.push_back(cellInfo);
+            }
+            ConfigCell& entry = info.cells[slot->second];
+            ++entry.placed;
+            const std::string uses = entry.uses;
+            if (!uses.empty() && uses != "spice" && ws.library(i.lib).viewType(i.cell, uses) == "schematic") walk(i.lib, i.cell, uses);
+        }
+    };
+    walk(tl, tc, tv);
+    return info;
+}
+
+Deck deck(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {
+    std::string tl, tc, tv;
+    Netlister n = configured(ws, lib, cell, view, tl, tc, tv, true);
     n.stack.push_back(tl + "/" + tc + "/" + tv);
     const std::string top = n.body(tl, tc, tv);
     std::string out = "* " + tl + "/" + tc + "/" + tv + " (OpenVLSI)\n";
