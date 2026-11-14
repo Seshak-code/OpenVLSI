@@ -12,6 +12,7 @@ namespace sim {
 struct ChipDeckConfig {
     std::string cdl;       // OpenROAD's write_cdl: the top and its cells' transistors
     std::string spef;      // "": no parasitics
+    bool wireResistance = true;  // each net's RC network from the SPEF; false: its capacitance alone, at one node
     std::string verilog;   // the routed netlist, for its ports' directions
     std::string top;
     std::string dut;       // the design's instance in the recording, as tb.dut
@@ -28,7 +29,9 @@ struct ChipDeck {
     std::string text;
     std::vector<ChipPort> ports;
     std::string clockPort;
-    long transistors = 0, nets = 0;
+    long transistors = 0, nets = 0;  // nets: those given parasitics
+    long resistors = 0;              // wire resistors, on the nets with their RC network
+    long lumpedNets = 0;             // nets left with one capacitor: no network asked for, or one that does not fit the netlist
     double capacitanceFarads = 0;  // from the SPEF, added to the nets
     double stopSeconds = 0;
 };

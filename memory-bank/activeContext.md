@@ -1,5 +1,21 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-14 — wire resistance in the transistor-level test, on `rebuild/spice-rc` (after #50, merged)**
+
+- **Done:**
+  - `test_spice` builds each net's RC network from the SPEF: a node per instance pin, the SPEF's resistors between them, its capacitors at their nodes
+    (`sim/chip_deck.cpp`). `wire_resistance: false` keeps the old lumped capacitor. The record adds `wire_resistors` and `lumped_nets`.
+  - A net keeps one capacitor when its network does not fit the netlist (its pins differ, or its resistors leave a node apart): never a net cut in two.
+  - Coupling capacitors are grounded at their own net; the SPEF names either side first.
+- **gcd, 60 ns at 10 ns:** 2,034 resistors on 533 nets, none lumped; passes, 229 s against 177 s lumped. `req_rdy`'s edge arrives 10 ps later with the resistance.
+- **A failing run:** the RTL's 1 ns recording replayed on the transistors fails, 436 of 1,046 samples in 60 ns, first `req_rdy` at 15.5 ns.
+  It is slow: a 1 ns clock takes about 390 steps per ns against 48 at 10 ns (39 minutes for 60 ns). The gate replays 18 ns of it.
+- **Gates:** `test_chip_test` (the deck by hand), M5 with `--pdk --osdi`.
+- **Next:** extraction of hand-drawn layout; device generators, FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations; LVS cross-probe of devices
+  and flow runs; corners at transistor level.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-13 — timing modes and RC derates, on `rebuild/mmmc` (after #49, merged)**
 
 - **Done:**

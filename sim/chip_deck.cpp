@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -29,6 +30,12 @@ std::vector<std::string> words(const std::string& line) {
 
 std::string lower(std::string s) {
     for (auto& c : s) c = (char)std::tolower((unsigned char)c);
+    return s;
+}
+
+// A name without the backslashes SPEF and CDL put before characters their grammars use
+std::string plainName(std::string s) {
+    s.erase(std::remove(s.begin(), s.end(), '\\'), s.end());
     return s;
 }
 
@@ -85,37 +92,141 @@ ChipDeck buildChipDeck(const ChipDeckConfig& cfg, const flow::Vcd& recording, co
     }
     if (direction.empty()) throw std::invalid_argument("the routed netlist declares no ports");
 
+    // The netlist's cells and their pins, and which instance pins the top joins to each of its nets
+    const std::vector<std::string> lines = logicalLines(cfg.cdl);
+    std::map<std::string, std::vector<std::string>> cellPins;
+    for (const std::string& raw : lines) {
+        const auto w = words(raw);
+        if (w.size() >= 2 && lower(w[0]) == ".subckt") cellPins[w[1]] = std::vector<std::string>(w.begin() + 2, w.end());
+    }
+    std::map<std::string, std::set<std::string>> attached;  // a top net's node -> what is on it, as instance:pin
+    {
+        bool top = false;
+        for (const std::string& raw : lines) {
+            const auto w = words(raw);
+            if (w.empty()) continue;
+            const std::string head = lower(w[0]);
+            if (head == ".subckt") top = w.size() > 1 && w[1] == cfg.top;
+            else if (head == ".ends") top = false;
+            else if (top && head[0] == 'x') {
+                const auto pins = cellPins.find(w.back());
+                for (size_t k = 1; k + 1 < w.size(); ++k)
+                    attached[spiceNode(w[k])].insert(pins != cellPins.end() && pins->second.size() == w.size() - 2 ? plainName(w[0].substr(1)) + ":" + pins->second[k - 1] : "?");
+            } else if (top && head[0] != '.' && head[0] != '*') {
+                for (size_t k = 1; k < w.size(); ++k) attached[spiceNode(w[k])].insert("?");  // a device in the top itself: the SPEF names no pin for it
+            }
+        }
+    }
+
+    // Parasitics, from the SPEF. A net's own RC network where it can stand in for the net: its pins are the netlist's, and its resistors
+    // join every node of it. Any other net keeps its total capacitance at one node, to ground.
+    // ponytail: coupling capacitance is grounded at its own net (no crosstalk); a resistor of 0 ohm becomes 1 milliohm.
     std::ostringstream parasitics;
-    // Parasitics: each net's total capacitance from the SPEF, to ground
-    // ponytail: lumped C with no wire resistance: the upgrade is the SPEF's RC network itself, which on this design adds 5 to 10 x the elements
+    std::map<std::string, std::string> pinNode;  // instance:pin -> its own node, on a net with its RC network
     if (!cfg.spef.empty()) {
+        struct Net {
+            std::string node;
+            double total = 0;
+            bool port = false;
+            std::map<std::string, std::string> pins;  // instance:pin -> node
+            std::vector<std::tuple<std::string, std::string, double>> caps;  // a node (and for coupling the other net's, in either order), farads
+            std::vector<std::tuple<std::string, std::string, double>> res;
+        };
         std::map<std::string, std::string> names;
+        std::vector<Net> nets;
         std::istringstream in(cfg.spef);
         std::string line;
         bool inMap = false;
-        long index = 0;
-        double scale = 1e-12;
+        char section = 0;
+        double cScale = 1e-12, rScale = 1;
+        const auto mappedName = [&](const std::string& token) {
+            const auto mapped = names.find(token);
+            return mapped == names.end() ? token : mapped->second;
+        };
+        // A node of a net: a port by its name, instance:pin, or net:number
+        const auto nodeOf = [&](const std::string& token) {
+            const auto colon = token.find(':');
+            if (token[0] != '*' || colon == std::string::npos) return spiceNode(mappedName(token));
+            return spiceNode(mappedName(token.substr(0, colon))) + ":" + token.substr(colon + 1);
+        };
         while (std::getline(in, line)) {
-            if (line.rfind("*C_UNIT", 0) == 0) {
-                const auto w = words(line);
-                if (w.size() == 3) scale = std::stod(w[1]) * (w[2] == "PF" ? 1e-12 : w[2] == "FF" ? 1e-15 : w[2] == "NF" ? 1e-9 : 1.0);
-            } else if (line.rfind("*NAME_MAP", 0) == 0) {
+            if (line.empty()) continue;
+            const auto w = words(line);
+            if (w.empty()) continue;
+            if (w[0] == "*C_UNIT" && w.size() == 3) {
+                cScale = std::stod(w[1]) * (w[2] == "PF" ? 1e-12 : w[2] == "FF" ? 1e-15 : w[2] == "NF" ? 1e-9 : 1.0);
+            } else if (w[0] == "*R_UNIT" && w.size() == 3) {
+                rScale = std::stod(w[1]) * (w[2] == "KOHM" ? 1e3 : 1.0);
+            } else if (w[0] == "*NAME_MAP") {
                 inMap = true;
-            } else if (inMap && line[0] == '*' && line.size() > 1 && std::isdigit((unsigned char)line[1])) {
-                const auto w = words(line);
-                if (w.size() == 2) names[w[0]] = w[1];
-            } else if (line.rfind("*D_NET", 0) == 0) {
+            } else if (w[0] == "*D_NET") {
                 inMap = false;
-                const auto w = words(line);
+                section = 0;
                 if (w.size() != 3) continue;
-                const auto mapped = names.find(w[1]);
-                const std::string net = spiceNode(mapped == names.end() ? w[1] : mapped->second);
-                const double c = std::stod(w[2]) * scale;
-                if (lower(net) == "vdd" || lower(net) == "vss" || c <= 0) continue;
-                // Inside the top subcircuit, where these names are its nets
-                parasitics << "Cnet" << ++index << " " << net << " 0 " << c << "\n";
-                deck.capacitanceFarads += c;
+                nets.push_back({});
+                nets.back().node = spiceNode(mappedName(w[1]));
+                nets.back().total = std::stod(w[2]) * cScale;
+            } else if (inMap && line[0] == '*' && line.size() > 1 && std::isdigit((unsigned char)line[1])) {
+                if (w.size() == 2) names[w[0]] = w[1];
+            } else if (w[0] == "*CONN" || w[0] == "*CAP" || w[0] == "*RES" || w[0] == "*END") {
+                section = w[0][2];  // O, A, E or N
+            } else if (nets.empty() || !section) {
+                continue;
+            } else if (section == 'O' && w.size() >= 3) {
+                const auto colon = w[1].find(':');
+                if (w[0] == "*P") nets.back().port = true;
+                if (w[0] == "*P" && nodeOf(w[1]) != nets.back().node) nets.back().pins["?"] = "?";  // a port under another name: not understood
+                if (w[0] == "*I" && colon != std::string::npos) nets.back().pins[plainName(mappedName(w[1].substr(0, colon))) + ":" + w[1].substr(colon + 1)] = nodeOf(w[1]);
+            } else if (section == 'A' && (w.size() == 3 || w.size() == 4)) {
+                if (std::stod(w.back()) > 0) nets.back().caps.push_back({nodeOf(w[1]), w.size() == 4 ? nodeOf(w[2]) : std::string(), std::stod(w.back()) * cScale});
+            } else if (section == 'E' && w.size() >= 4) {
+                nets.back().res.push_back({nodeOf(w[1]), nodeOf(w[2]), std::max(1e-3, std::stod(w[3]) * rScale)});
+            }
+        }
+        long index = 0;
+        for (const Net& net : nets) {
+            if (lower(net.node) == "vdd" || lower(net.node) == "vss") continue;
+            // Its network stands in for the net when its pins are exactly the netlist's and its resistors leave no node apart
+            bool whole = cfg.wireResistance && !net.res.empty();
+            if (whole) {
+                std::set<std::string> pins;
+                for (const auto& [pin, node] : net.pins) pins.insert(pin);
+                const auto on = attached.find(net.node);
+                whole = on != attached.end() ? pins == on->second : pins.empty();
+            }
+            if (whole) {
+                std::map<std::string, std::string> parent;
+                const std::function<std::string(const std::string&)> find = [&](const std::string& n) {
+                    const auto it = parent.find(n);
+                    if (it == parent.end() || it->second == n) return n;
+                    return it->second = find(it->second);
+                };
+                for (const auto& [a, b, ohms] : net.res) parent[find(a)] = find(b);
+                const std::string root = find(std::get<0>(net.res.front()));
+                for (const auto& [pin, node] : net.pins) whole = whole && find(node) == root;
+                for (const auto& [node, other, farads] : net.caps) whole = whole && (find(node) == root || (!other.empty() && find(other) == root));
+                if (net.port) whole = whole && find(net.node) == root;
+            }
+            if (whole) {
+                std::set<std::string> own;
+                for (const auto& [a, b, ohms] : net.res) {
+                    own.insert(a);
+                    own.insert(b);
+                    parasitics << "Rw" << ++index << " " << a << " " << b << " " << ohms << "\n";
+                }
+                for (const auto& [pin, node] : net.pins) pinNode[pin] = node;
+                for (const auto& [node, other, farads] : net.caps) {
+                    parasitics << "Cw" << ++index << " " << (own.count(node) ? node : other) << " 0 " << farads << "\n";
+                    deck.capacitanceFarads += farads;
+                }
+                deck.resistors += (long)net.res.size();
                 ++deck.nets;
+            } else if (net.total > 0) {
+                // Inside the top subcircuit, where these names are its nets
+                parasitics << "Cnet" << ++index << " " << net.node << " 0 " << net.total << "\n";
+                deck.capacitanceFarads += net.total;
+                ++deck.nets;
+                ++deck.lumpedNets;
             }
         }
     }
@@ -127,7 +238,7 @@ ChipDeck buildChipDeck(const ChipDeckConfig& cfg, const flow::Vcd& recording, co
     bool inTop = false;
     std::string current;
     std::map<std::string, long> inCell, placed;
-    for (const std::string& raw : logicalLines(cfg.cdl)) {
+    for (const std::string& raw : lines) {
         const auto w = words(raw);
         if (w.empty() || w[0][0] == '*') continue;
         const std::string head = lower(w[0]);
@@ -156,7 +267,12 @@ ChipDeck buildChipDeck(const ChipDeckConfig& cfg, const flow::Vcd& recording, co
             ++inCell[current];
         } else if (head[0] == 'x') {
             out << w[0];
-            for (size_t k = 1; k + 1 < w.size(); ++k) out << " " << spiceNode(w[k]);
+            const auto pins = cellPins.find(w.back());
+            for (size_t k = 1; k + 1 < w.size(); ++k) {
+                // On a net with its RC network, each pin is a node of its own
+                const auto own = inTop && pins != cellPins.end() && pins->second.size() == w.size() - 2 ? pinNode.find(plainName(w[0].substr(1)) + ":" + pins->second[k - 1]) : pinNode.end();
+                out << " " << (own != pinNode.end() ? own->second : spiceNode(w[k]));
+            }
             out << " " << w.back() << "\n";
             if (inTop) ++placed[w.back()];
         } else if (head[0] == '.') {

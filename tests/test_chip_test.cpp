@@ -79,7 +79,33 @@ int main(int argc, char** argv) {
         check(deck.text.find("d_x_3_") != std::string::npos && deck.text.find('$') == std::string::npos && deck.text.find('[') == std::string::npos, "names SPICE would misread are rewritten");
         check(deck.nets == 1 && std::abs(deck.capacitanceFarads - 0.5e-12) < 1e-18, "a net takes its SPEF capacitance, the supply does not");
         check(deck.text.find("Cnet1 d_x_3_ 0 5e-13") < deck.text.find(".ends\nXchip"), "inside the top subcircuit, where its names are nets");
+        check(deck.resistors == 0 && deck.lumpedNets == 1, "a net whose SPEF has no resistors keeps one capacitor");
         check(deck.text.find("Vsupply VDD 0 dc 1.2") != std::string::npos, "the supply is driven");
+        {   // A net's RC network: each pin a node of its own, joined through the wire
+            sim::ChipDeckConfig rc = cfg;
+            rc.cdl = ".SUBCKT t clk d q[0] q[1]\n+ VDD VSS\nX_1_ d n\[1\] VDD VSS inv\nX_2_ n\[1\] q[0] VDD VSS inv\nX_3_ clk q[1] VDD VSS inv\n.ENDS t\n"
+                     ".SUBCKT inv A Y VDD VSS\nMN0 Y A VSS VSS sg13_lv_nmos m=1 w=640.00n l=130.00n ng=1\nMP0 Y A VDD VDD sg13_lv_pmos m=1 w=1.00u l=130.00n ng=1\n.ENDS\n";
+            const std::string head = "*C_UNIT 1 FF\n*R_UNIT 1 KOHM\n*NAME_MAP\n*1 n\\[1\\]\n*2 _1_\n*3 _2_\n*4 d\n*5 q\\[0\\]\n";
+            const std::string mid = "*D_NET *1 3.0\n*CONN\n*I *2:Y O *D inv\n*I *3:A I *D inv\n*CAP\n1 *2:Y 1.0\n2 *1:7 1.5\n3 *4:2 *3:A 0.5\n*RES\n1 *2:Y *1:7 0.2\n2 *1:7 *3:A 0\n*END\n";
+            const std::string port = "*D_NET *4 2.0\n*CONN\n*P d I\n*I *2:A I *D inv\n*CAP\n1 d 1.0\n2 *2:A 1.0\n*RES\n1 d *2:A 0.05\n*END\n";
+            const std::string open = "*D_NET *5 4.0\n*CONN\n*P q[0] O\n*I *3:Y O *D inv\n*CAP\n1 q[0] 2.0\n2 *3:Y 2.0\n*RES\n1 *5:1 *3:Y 0.05\n*END\n";
+            rc.spef = head + mid + port + open;
+            const sim::ChipDeck d = sim::buildChipDeck(rc, v, "clk");
+            check(d.text.find("X_1_ _1_:A _1_:Y VDD VSS inv") != std::string::npos && d.text.find("X_2_ _2_:A q_0_ VDD VSS inv") != std::string::npos,
+                  "pins on a net with its network are nodes of their own; a net whose network leaves its port apart keeps the net's node");
+            check(d.text.find("Rw1 _1_:Y n_1_:7 200\n") != std::string::npos && d.text.find(" n_1_:7 _2_:A 0.001\n") != std::string::npos, "its resistors join them, in ohms, and none is zero");
+            check(d.text.find(" _2_:A 0 5e-16") != std::string::npos, "coupling capacitance is grounded at its own net's node, whichever side the SPEF names first");
+            check(d.text.find(" d _1_:A 50\n") != std::string::npos, "a port is the net's own node");
+            check(d.resistors == 3 && d.nets == 3 && d.lumpedNets == 1 && d.text.find(" q_0_ 0 4e-15") != std::string::npos && std::abs(d.capacitanceFarads - 9e-15) < 1e-21,
+                  "counted: " + std::to_string(d.resistors) + " resistors, " + std::to_string(d.lumpedNets) + " net lumped, " + std::to_string(d.capacitanceFarads * 1e15) + " fF");
+            rc.wireResistance = false;
+            const sim::ChipDeck lumped = sim::buildChipDeck(rc, v, "clk");
+            check(lumped.resistors == 0 && lumped.lumpedNets == 3 && lumped.text.find("X_1_ d n_1_ VDD VSS inv") != std::string::npos && std::abs(lumped.capacitanceFarads - 9e-15) < 1e-21,
+                  "without wire resistance every net is one capacitor of the same total");
+            rc.wireResistance = true;
+            rc.spef = head + "*D_NET *1 3.0\n*CONN\n*I *2:Y O *D inv\n*CAP\n1 *2:Y 3.0\n*RES\n1 *2:Y *1:7 0.2\n*END\n";
+            check(sim::buildChipDeck(rc, v, "clk").resistors == 0, "a network that misses one of the netlist's pins is not used: the net would come apart");
+        }
         check(deck.text.find("V_d d 0 pwl(0 0 2e-08 0 2.005e-08 1.2)") != std::string::npos, "an input replays its recording, with an edge: " + deck.text.substr(deck.text.find("V_d"), 60));
         check(deck.text.find("Cload_q_0_ q_0_ 0 5e-15") != std::string::npos, "an output is loaded");
 

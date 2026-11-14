@@ -113,6 +113,7 @@ def main():
     p.add_argument("--pdk", help="ihp-sg13g2: with --osdi, the chip also runs at transistor level")
     p.add_argument("--osdi")
     p.add_argument("--spice-ns", type=float, default=300.0)
+    p.add_argument("--spice-fail-ns", type=float, default=18.0)  # the first sample that differs on gcd is at 15.5 ns
     p.add_argument("--settings-run", action="store_true", help="also run the flow once more with a setting (about 2 minutes)")
     a = p.parse_args()
     gcd = os.path.join(a.flowdir, "designs/src/gcd/gcd.v")
@@ -306,10 +307,18 @@ def main():
     check(by_corner["slow"].get("fastest_pass_ns", 1e9) <= periods_by["slow"] * 1.2 + 1e-9, f"and works where its own STA says it does ({periods_by['slow']:.2f} ns)")
 
     if a.pdk and a.osdi:
-        m("pdk_install", pdk="ihp-sg13g2", root=os.path.abspath(a.pdk), osdi=os.path.abspath(a.osdi))
+        if "sg13g2" not in m("workspace_libraries"):  # a reused workspace may have it already
+            m("pdk_install", pdk="ihp-sg13g2", root=os.path.abspath(a.pdk), osdi=os.path.abspath(a.osdi))
         spice = m("test_spice", name="chip", flow_run=run, recording=gate["run"], dut="tb.dut", stop_ns=a.spice_ns)
         print(f"    {spice.get('transistors'):.0f} transistors, {spice.get('parasitic_pf', 0):.1f} pF on {spice.get('parasitic_nets', 0):.0f} nets, {spice.get('stop_ns')} ns of chip time in {spice.get('seconds', 0):.1f} s, {spice.get('steps', 0):.0f} steps", flush=True)
         check(spice.get("passed") is True, f"TreeSPICE, on the routed transistors, gives the recording's outputs: {spice.get('samples')} samples, {spice.get('mismatches')} differ {spice.get('error', '')}")
+        check(spice.get("wire_resistors", 0) > 1000 and spice.get("lumped_nets") == 0,
+              f"every net carries its own RC network from the SPEF: {spice.get('wire_resistors', 0):.0f} resistors, {spice.get('lumped_nets')} nets left as one capacitor")
+        # It must be able to fail: the RTL's recording at 1 ns asks the chip for what its delays cannot give
+        hurried = m("test_spice", name="chip_hurried", flow_run=run, recording=fast_rtl["run"], dut="tb.dut", stop_ns=a.spice_fail_ns)
+        print(f"    {hurried.get('stop_ns')} ns of chip time in {hurried.get('seconds', 0):.1f} s: {hurried.get('error', '')}", flush=True)
+        check(hurried.get("passed") is False and hurried.get("mismatches", 0) > 0 and "differ; first" in hurried.get("error", ""),
+              f"replaying the RTL's 1 ns recording, the transistors do not keep up: {hurried.get('mismatches')} of {hurried.get('samples')} samples differ")
 
     wrong = test("wrong", "rtl", 10, first=7)
     check(not wrong["passed"] and "failure" in wrong.get("error", ""), "a wrong expectation fails")

@@ -53,7 +53,7 @@ From a run's tab:
 
 A testbench on the **routed netlist** runs with the delays of its own layout. It shows the chip failing at a clock its timing cannot meet, where the RTL still passes.
 - **Clock sweep** tries a testbench across periods and reports where it stops working. Write its clock as `` `PERIOD `` in the testbench.
-- **Run at transistor level**, in a routed test's tab, is the closest thing to the chip: the layout's own netlist in TreeSPICE, with each net's capacitance from extraction, driven by what the testbench recorded, every output compared at the end of each clock cycle. It is slow (about 3 minutes per 60 ns of a 5,000-transistor design). Wires have capacitance here but no resistance yet.
+- **Run at transistor level**, in a routed test's tab, is the closest thing to the chip: the layout's own netlist in TreeSPICE, with each net's wire resistance and capacitance from extraction (its RC network, a node per pin), driven by what the testbench recorded, every output compared at the end of each clock cycle. It is slow (about 4 minutes per 60 ns of a 5,000-transistor design at a 10 ns clock; a 1 ns clock takes ten times that). A recording the chip cannot keep up with fails, and says the first output and time that differ: run it on an RTL test's tab to see where the real chip parts from the RTL.
 - **Firmware** on an implemented RISC-V core: `test_firmware`, for now only as a command.
 
 ## An analog design

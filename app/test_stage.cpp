@@ -315,7 +315,8 @@ void TestRunView::refresh() {
     title_->setText(what);
     transistor_->setVisible(st.contains("flow_run") && st.contains("vcd") && state != "running");
     if (st["kind"] == "spice") {
-        title_->setText(run_ + " at transistor level, " + QLocale().toString((qlonglong)st["transistors"].toDouble()) + " transistors");
+        title_->setText(run_ + " at transistor level, " + QLocale().toString((qlonglong)st["transistors"].toDouble()) + " transistors, " +
+                        (st["wire_resistors"].toDouble() > 0 ? QLocale().toString((qlonglong)st["wire_resistors"].toDouble()) + " wire resistors" : QString("wires as capacitance alone")));
         transistor_->hide();
     }
     if (state == "running") {
