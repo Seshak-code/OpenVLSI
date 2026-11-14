@@ -74,6 +74,8 @@ void addPdkCommands(Registry& r);         // pdk_install
 QJsonObject importGds(oadb::Library& l, const std::string& file, const std::string& lyp);
 // A layout view and all it places to a GDS file (layout_export_gds, verify_*); returns the structures written.
 int exportGds(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, const std::string& file);
+// How many electrical rule violations an LVS report's two netlists have (verify_erc; cached beside the report)
+int ercViolations(const std::string& lvsdb);
 void addLayoutCommands(Registry& r);      // layout_import_gds, layout_export_gds, layout_layers, layout_info
 void addVerifierCommands(Registry& r);    // verifier_setup_get/set, verifier_requirement_add/remove, verifier_map, verifier_check
 void addLayoutEditCommands(Registry& r);  // layout_shape_add, ..., layout_pcell_mos, layout_generate, layout_connectivity

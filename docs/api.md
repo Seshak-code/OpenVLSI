@@ -1696,13 +1696,27 @@ Runs the process's DRC deck over a layout view; returns the run with its violati
 | `view` | string |  | the layout view (default "layout") |
 | `wait` | boolean |  | wait for it (default true) |
 
+### `verify_erc`
+
+The electrical rule check: gates that nothing drives, wells with no tap, bulks on the wrong supply, nets that join one terminal, nodes with no path to a supply or a pin, a missing supply. Of the layout's and the schematic's netlists in an LVS run (run) or an implementation run (flow_run), each flat, or of a schematic alone (library, cell). Supplies are nets named like vdd, vcc, vpwr and vss, gnd, unless power and ground name them. Returns rules with their violations: the side, the net, the devices, why, and each device's box in the layout in microns.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string |  | cell name |
+| `flow_run` | string |  | an implementation run: <design>/run.N |
+| `ground` | array |  | the ground nets' names |
+| `library` | string |  | library name |
+| `power` | array |  | the power nets' names |
+| `run` | string |  | a verification run: <library>_<cell>/drc.N or lvs.N |
+| `schematic` | string |  | with library and cell: the schematic view (default "schematic") |
+
 ### `verify_list`
 
 The verification runs on disk, per layout oldest first.
 
 ### `verify_lvs`
 
-Compares a layout view with its schematic through the process's LVS deck; returns whether they match, with device and net counts on each side. Waits, or with wait false starts it in the background.
+Compares a layout view with its schematic through the process's LVS deck; returns whether they match, with device and net counts on each side, and how many electrical rule violations the two netlists have (verify_erc lists them). Waits, or with wait false starts it in the background.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -1724,7 +1738,7 @@ LVS's cross-reference, read from its report by KLayout: each circuit layout to s
 
 ### `verify_markers`
 
-What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker gives its cell and points, in microns in that cell.
+What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic) and then its electrical rule violations (rules named ERC: ...). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker gives its cell and points, in microns in that cell.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|

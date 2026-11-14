@@ -317,6 +317,15 @@ QJsonObject report(const fs::path& dir, const QJsonObject& rec) {
             if (lvs.success) m = {{"matched", lvs.matched}, {"mismatches", lvs.mismatchCount}, {"devices_layout", lvs.deviceCountLayout},
                                   {"devices_schematic", lvs.deviceCountSchematic}, {"nets_layout", lvs.netCountLayout},
                                   {"nets_schematic", lvs.netCountSchematic}};
+            if (lvs.success) {
+                try {
+                    const int erc = ercViolations((results / "6_lvs.lvsdb").string());
+                    m["erc_violations"] = erc;
+                    if (erc > 0) notClean.append(QString::number(erc) + " electrical rule violations");
+                } catch (const std::exception& e) {
+                    errors.append(q(e.what()));
+                }
+            }
         }
         add(kLvs, m, errors);
     }

@@ -136,6 +136,15 @@ def main():
         check(st["state"] == "done", f"flow_run finishes: {st['state']}")
     report = m("flow_report", run=run)
     check(report["clean"], f"{run} is clean: timing met, DRC clean, LVS matched {report['not_clean']}")
+    lvs_stage = next(s for s in report["stages"] if s["stage"] == "lvs")["metrics"]
+    erc = m("verify_erc", flow_run=run)
+    sides = erc["sides"]
+    check(lvs_stage.get("erc_violations") == 0 and erc["clean"] and sides["layout"]["devices"] == sides["schematic"]["devices"] > 1000,
+          f"the electrical rules pass on the whole chip, flat: {sides['layout']['devices']} transistors a side, supplies {sides['layout']['power']} and {sides['layout']['ground']}")
+    swapped = m("verify_erc", flow_run=run, power=sides["layout"]["ground"], ground=sides["layout"]["power"])
+    bulks = [v for r in swapped["rules"] if r["rule"] == "bulk_supply" for v in r["violations"]]
+    check(len(bulks) == sides["layout"]["devices"] + sides["schematic"]["devices"] and all(len(v["boxes"]) == (v["side"] == "layout") for v in bulks),
+          f"with the supplies' names swapped, every transistor's bulk is on the wrong one, each layout one with its place: {len(bulks)}")
     bench = os.path.join(work, "tb_gcd.v")
     with open(bench, "w") as f:
         f.write(TESTBENCH)

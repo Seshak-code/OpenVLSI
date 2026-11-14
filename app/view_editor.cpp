@@ -135,6 +135,15 @@ void ViewEditor::buildMenus() {
             for (const auto& w : r["warnings"].toArray()) lines << "warning: " + w.toString();
             if (!lines.isEmpty()) QMessageBox::information(this, "Check", lines.join("\n"));
         });
+        act(checkMenu, "Electrical Rules", QKeySequence("Shift+X"), [this] {
+            const cmd::Result r = session_.call("verify_erc", {{"library", lib_}, {"cell", cell_}, {"schematic", view_}});
+            QStringList lines;
+            for (const auto& rule : r.value.toObject()["rules"].toArray())
+                for (const auto& v : rule.toObject()["violations"].toArray())
+                    lines << rule.toObject()["description"].toString() + (v.toObject()["net"].isNull() ? QString() : ", net " + v.toObject()["net"].toString()) + ": " + v.toObject()["detail"].toString();
+            status_->setText(r.ok ? QString("Electrical rules: %1 violation(s)").arg(lines.size()) : "✗ " + r.error);
+            if (!r.ok || !lines.isEmpty()) QMessageBox::information(this, "Electrical Rules", r.ok ? lines.join("\n") : r.error);
+        });
         QMenu* simMenu = menuBar()->addMenu("&Simulation");
         act(simMenu, "Plot Net", QKeySequence("Shift+V"), [this] { plotSelectedNets(); });
         QMenu* hier = menuBar()->addMenu("&Hierarchy");
@@ -162,7 +171,7 @@ void ViewEditor::buildMenus() {
     act(viewMenu, "Zoom Out", QKeySequence("["), [this] { canvas_->zoomBy(0.5); });
     bindActions(this, {{"Undo", "edit_undo"}, {"Redo", "edit_redo"}, {"Move", "editor_tool"}, {"Delete", "editor_delete"}, {"Cancel", "editor_escape"}, {"Rotate", "editor_rotate"},
                        {"Properties…", "instance_set_params"}, {"Instance…", "editor_tool"}, {"Wire", "editor_tool"}, {"Wire Name…", "editor_tool"}, {"Pin…", "editor_tool"},
-                       {"Symbol from Schematic", "symbol_generate"}, {"Check", "schematic_check"}, {"Plot Net", "editor_plot_nets"}, {"Descend", "editor_descend"}, {"Line", "editor_tool"},
+                       {"Symbol from Schematic", "symbol_generate"}, {"Check", "schematic_check"}, {"Electrical Rules", "verify_erc"}, {"Plot Net", "editor_plot_nets"}, {"Descend", "editor_descend"}, {"Line", "editor_tool"},
                        {"Rectangle", "editor_tool"}, {"Polygon", "editor_tool"}, {"Ellipse", "editor_tool"}, {"Label…", "editor_tool"}, {"Fit", "editor_fit"}, {"Zoom In", "editor_zoom"},
                        {"Zoom Out", "editor_zoom"}});
 }

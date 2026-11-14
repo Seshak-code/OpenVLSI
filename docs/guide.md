@@ -34,7 +34,7 @@ So a silent testbench does not pass. Every signal is recorded, and the run's tab
 
 **Implement** in the editor, or **New run** in the Implement stage, runs synthesis, floorplan, placement, clock tree, routing, DRC and LVS. The tab shows:
 - each stage's progress and metrics, with the log beneath;
-- the verdict. "Finished" does not mean clean: **Clean** requires timing met, no DRC violations and LVS matched, and otherwise every reason is listed;
+- the verdict. "Finished" does not mean clean: **Clean** requires timing met, no DRC violations, LVS matched and no electrical rule violations, and otherwise every reason is listed;
 - the layout at any stage: click a finished stage in the pipeline. **Open layout** shows the final GDS.
 
 Settings beyond clock and utilization are any ORFS variable, as `PLACE_DENSITY=0.6` in the run's Settings field.
@@ -72,6 +72,8 @@ A testbench on the **routed netlist** runs with the delays of its own layout. It
 | Esc | End the tool | Shift+F, Ctrl+F | All levels, top only |
 
 Choose the layer to draw on in the panel. **Verify > Run DRC** and **Run LVS** check a view with the process's own decks; a DRC opens on its layout with its markers. An LVS that differs opens on its layout too: the Markers panel lists each net, device and pin that differs, named layout / schematic, and the Verify panel says what each joins on both sides. Right-click a net there and choose **Show in Schematic** to select it in the schematic.
+
+Every LVS also checks the electrical rules (ERC) on both netlists, because a mistake the schematic and the layout share passes LVS: a gate that nothing drives, a well with no tap, a bulk on the wrong supply, a net that joins one terminal, nodes with no path to a supply or a pin, a missing supply. The run's line says how many it found, the Verify panel lists them, and the Markers panel groups them under **ERC:** at the devices they name. In a schematic, **Check > Electrical Rules** runs the same rules before any layout exists. Supplies are nets named like vdd, vcc, vpwr and vss, gnd; `verify_erc` takes other names. An implementation run counts its chip's violations in its LVS stage, and is not clean with any.
 
 ## Driving it from outside
 

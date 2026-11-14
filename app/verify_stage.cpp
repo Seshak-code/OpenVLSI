@@ -84,6 +84,10 @@ void VerifyPanel::refresh() {
         } else {
             result = o["kind"] == "lvs" ? "does not match" : QString::number(o["violations"].toInt()) + " violations";
         }
+        if (o["erc_violations"].toInt() > 0 || o.contains("erc_error")) {  // an LVS checks the electrical rules too
+            result += o.contains("erc_error") ? QString(", ERC did not run") : QString(", %1 ERC").arg(o["erc_violations"].toInt());
+            if (colour == t.pass) colour = t.warn;
+        }
         auto* item = new QTreeWidgetItem(it->second, {run.section('/', 1) + "  " + result});
         item->setData(0, Qt::UserRole, run);
         item->setForeground(0, colour);
@@ -114,12 +118,14 @@ bool VerifyPanel::open(const QString& run) {
     QString text = QString(o["matched"].toBool() ? "Layout and schematic match" : "Layout and schematic differ") +
                    QString(": %1 devices in the layout, %2 in the schematic; %3 nets, %4; %5 mismatches.")
                        .arg(o["devices_layout"].toInt()).arg(o["devices_schematic"].toInt()).arg(o["nets_layout"].toInt()).arg(o["nets_schematic"].toInt()).arg(o["mismatches"].toInt());
-    if (o["matched"].toBool()) {
+    if (o.contains("erc_error")) text += "\nThe electrical rules were not checked: " + o["erc_error"].toString();
+    const int erc = o["erc_violations"].toInt();
+    if (o["matched"].toBool() && erc == 0) {
         details_->setText(text);
         return true;
     }
     // What differs, in words, and on the layout
-    const cmd::Result report = session_.call("verify_lvs_report", {{"run", run}});
+    const cmd::Result report = o["matched"].toBool() ? cmd::Result{} : session_.call("verify_lvs_report", {{"run", run}});
     if (report.ok) {
         const auto side = [](const QJsonValue& v) { return v.isNull() ? QString("(none)") : v.toString(); };
         int shown = 0;
@@ -136,6 +142,19 @@ bool VerifyPanel::open(const QString& run) {
                 if (it["kind"] == "net") text += QString(": joins %1 in the layout, %2 in the schematic").arg(layout.isEmpty() ? "nothing" : layout.join(", "), schematic.isEmpty() ? "nothing" : schematic.join(", "));
             }
         if (shown > 12) text += QString("\nand %1 more, on the layout").arg(shown - 12);
+    }
+    if (erc > 0) {
+        text += QString("\n%1 electrical rule violation%2:").arg(erc).arg(erc == 1 ? "" : "s");
+        const cmd::Result rules = session_.call("verify_erc", {{"run", run}});
+        int listed = 0;
+        for (const auto& rv : rules.value.toObject()["rules"].toArray())
+            for (const auto& vv : rv.toObject()["violations"].toArray()) {
+                const QJsonObject v = vv.toObject();
+                if (++listed > 8) continue;
+                text += QString("\n%1, %2%3: %4").arg(rv.toObject()["description"].toString(), v["side"].toString(), v["net"].isNull() ? QString() : ", net " + v["net"].toString(), v["detail"].toString());
+            }
+        if (listed > 8) text += QString("\nand %1 more, on the layout").arg(listed - 8);
+        if (!rules.ok) text += "\n" + rules.error;
     }
     const cmd::Result shown = session_.call("layout_view_markers", {{"library", o["library"]}, {"cell", o["cell"]}, {"view", o["view"]}, {"run", run}});
     details_->setText(shown.ok ? text : text + "\n" + shown.error);
