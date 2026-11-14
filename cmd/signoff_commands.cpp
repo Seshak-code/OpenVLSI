@@ -74,14 +74,49 @@ Run runOf(Context& c, const QJsonObject& a) {
 }
 
 // The script's common start: libraries, the routed design, its constraints, and the best parasitics the run has
-std::string loadDesign(const Run& r, const RtlFlowTools& tools, bool* spef, const std::string& corner = {}) {
+// (sdc: other constraints than the run's own; parasitics: another SPEF than the run's own)
+std::string loadDesign(const Run& r, const RtlFlowTools& tools, bool* spef, const std::string& corner = {}, const fs::path& sdc = {}, const fs::path& parasitics = {}) {
     std::ostringstream t;
     for (const auto& lib : flow::libertyFor(*r.pdk, corner)) t << "read_liberty " << flow::platformFile(*r.pdk, tools.flowDir, lib) << "\n";
-    t << "read_db " << (r.results / "6_final.odb").string() << "\nread_sdc " << (r.results / "6_final.sdc").string() << "\nsource " << flow::platformFile(*r.pdk, tools.flowDir, r.pdk->setRC) << "\n";
+    t << "read_db " << (r.results / "6_final.odb").string() << "\nread_sdc {" << (sdc.empty() ? r.results / "6_final.sdc" : sdc).string() << "}\nsource "
+      << flow::platformFile(*r.pdk, tools.flowDir, r.pdk->setRC) << "\n";
     *spef = fs::exists(r.results / "6_final.spef");
-    if (*spef) t << "read_spef " << (r.results / "6_final.spef").string() << "\n";
+    if (*spef) t << "read_spef " << (parasitics.empty() ? r.results / "6_final.spef" : parasitics).string() << "\n";
     else t << "estimate_parasitics -global_routing\n";
     return t.str();
+}
+
+// One analysis view: a mode's constraints at a corner's libraries, with the extracted parasitics derated
+struct View {
+    std::string mode, corner;
+    fs::path sdc;       // empty: the run's own
+    double r = 1, c = 1;  // what the extracted resistance and capacitance are multiplied by
+};
+
+// The run's SPEF with every resistance and capacitance scaled, by its unit lines: the values themselves stay as extracted.
+// ponytail: one factor for all layers, and a copy of the file per derated view; a rule file per RC corner in the platform's
+// extraction is the upgrade, when a PDK ships one.
+void derateSpef(const fs::path& from, const fs::path& to, double r, double c) {
+    std::ifstream in(from);
+    std::ofstream out(to);
+    out.precision(12);
+    std::string line;
+    int scaled = 0;
+    while (std::getline(in, line)) {
+        const bool res = line.rfind("*R_UNIT ", 0) == 0, cap = line.rfind("*C_UNIT ", 0) == 0;
+        if (res || cap) {
+            std::istringstream parts(line.substr(8));
+            double value = 0;
+            std::string unit;
+            if (!(parts >> value >> unit) || !(value > 0)) throw std::runtime_error("the SPEF's unit line does not read: " + line);
+            out << line.substr(0, 8) << value * (res ? r : c) << " " << unit << "\n";
+            ++scaled;
+        } else {
+            out << line << "\n";
+        }
+    }
+    if (scaled != 2) throw std::runtime_error("the SPEF has no *R_UNIT and *C_UNIT to scale: " + from.string());
+    if (!out.flush()) throw std::runtime_error("cannot write " + to.string());
 }
 
 bool openroad(const RtlFlowTools& tools, const fs::path& dir, const std::string& script, const std::atomic<bool>* cancel, std::string* log, std::string* why) {
@@ -119,16 +154,24 @@ QJsonArray pathsIn(const fs::path& file) {
     return out;
 }
 
-// One corner, in its own OpenROAD: its libraries, the routed design and its parasitics. Throws why it could not.
-// ponytail: a process per corner, and one set of parasitics for all (the flow extracts one RC corner); define_corners in one process
-// with a SPEF per corner is the upgrade when the platform's extraction has corners.
-QJsonObject timingAt(const Run& r, const std::string& corner, int paths, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
+// One view, in its own OpenROAD: its libraries, the routed design, its constraints and its parasitics. Throws why it could not.
+// ponytail: a process per view; define_corners and one process per mode is the upgrade when runs get long.
+QJsonObject timingAt(const Run& r, const View& view, int paths, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
     bool spef = false;
     std::string log, why;
-    const std::string script = loadDesign(r, tools, &spef, corner) + "report_wns\nreport_tns\nreport_clock_min_period\nreport_checks -path_delay max -group_path_count " + std::to_string(paths) +
+    const std::string& corner = view.corner;
+    const std::string label = view.mode + " " + corner;
+    const fs::path dir = r.signoff / "timing" / view.mode / corner;
+    fs::create_directories(dir);
+    const bool derated = view.r != 1 || view.c != 1;
+    if (derated) {
+        if (!fs::exists(r.results / "6_final.spef")) throw std::runtime_error(label + ": the run has no extracted parasitics to derate");
+        derateSpef(r.results / "6_final.spef", dir / "derated.spef", view.r, view.c);
+    }
+    const std::string script = loadDesign(r, tools, &spef, corner, view.sdc, derated ? dir / "derated.spef" : fs::path()) +
+                               "report_wns\nreport_tns\nreport_clock_min_period\nreport_checks -path_delay max -group_path_count " + std::to_string(paths) +
                                " -format json > setup.json\nreport_checks -path_delay min -group_path_count " + std::to_string(paths) + " -format json > hold.json\n";
-    const fs::path dir = r.signoff / "timing" / corner;
-    if (!openroad(tools, dir, script, cancel, &log, &why)) throw std::runtime_error(corner + ": " + why);
+    if (!openroad(tools, dir, script, cancel, &log, &why)) throw std::runtime_error(label + ": " + why);
     const double unit = r.pdk->nsPerTimeUnit;
     static const QRegularExpression wns("wns max (-?[0-9.eE+-]+)"), tns("tns max (-?[0-9.eE+-]+)"), period("(\\S+) period_min = (-?[0-9.eE+-]+) fmax = (-?[0-9.eE+-]+)");
     const QString text = q(log);
@@ -141,36 +184,39 @@ QJsonObject timingAt(const Run& r, const std::string& corner, int paths, const R
         const double ns = m.captured(2).toDouble() * unit;
         clocks.append(QJsonObject{{"clock", m.captured(1)}, {"min_period_ns", ns}, {"fmax_mhz", ns > 0 ? 1000.0 / ns : 0.0}});
     }
-    if (!wm.hasMatch() || !tm.hasMatch()) throw std::runtime_error(corner + ": OpenSTA printed no WNS or TNS");
-    if (clocks.isEmpty()) throw std::runtime_error(corner + ": OpenSTA printed no clock period");
+    if (!wm.hasMatch() || !tm.hasMatch()) throw std::runtime_error(label + ": OpenSTA printed no WNS or TNS");
+    if (clocks.isEmpty()) throw std::runtime_error(label + ": OpenSTA printed no clock period (do its constraints create a clock?)");
     const auto tagged = [&](const fs::path& file) {
         QJsonArray out;
         for (const auto& v : pathsIn(file)) {
             QJsonObject p = v.toObject();
             p["corner"] = q(corner);
+            p["mode"] = q(view.mode);
             out.append(p);
         }
         return out;
     };
     const QJsonArray setup = tagged(dir / "setup.json"), hold = tagged(dir / "hold.json");
-    if (setup.isEmpty() || hold.isEmpty()) throw std::runtime_error(corner + ": OpenSTA reported no paths");
+    if (setup.isEmpty() || hold.isEmpty()) throw std::runtime_error(label + ": OpenSTA reported no paths");
     QJsonArray libs;
     for (const auto& lib : flow::libertyFor(*r.pdk, corner)) libs.append(q(fs::path(lib).filename().string()));
-    return {{"corner", q(corner)}, {"liberty", libs}, {"wns_ns", wm.captured(1).toDouble() * unit}, {"tns_ns", tm.captured(1).toDouble() * unit}, {"clocks", clocks},
+    return {{"mode", q(view.mode)}, {"corner", q(corner)}, {"liberty", libs}, {"rc", QJsonObject{{"r", view.r}, {"c", view.c}}},
+            {"wns_ns", wm.captured(1).toDouble() * unit}, {"tns_ns", tm.captured(1).toDouble() * unit}, {"clocks", clocks},
             {"setup_slack_ns", setup[0].toObject()["slack_ns"]}, {"hold_slack_ns", hold[0].toObject()["slack_ns"]},
             {"met", setup[0].toObject()["slack_ns"].toDouble() >= 0 && hold[0].toObject()["slack_ns"].toDouble() >= 0}, {"setup", setup}, {"hold", hold},
             {"parasitics", spef ? "extracted (SPEF)" : "estimated from global routing"}};
 }
 
-// Every corner asked for, at once; the report's top level is the worst of them, and each path says whose it is
-void analyzeTiming(const Run& r, const std::vector<std::string>& corners, int paths, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
-    std::vector<QJsonObject> results(corners.size());
-    std::vector<std::string> errors(corners.size());
+// Every view asked for, at once; the report's top level is the worst of them, and each path says whose it is. `analysis` is
+// what was asked, kept with the result so that it can be run again.
+void analyzeTiming(const Run& r, const std::vector<View>& views, int paths, const QJsonObject& analysis, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
+    std::vector<QJsonObject> results(views.size());
+    std::vector<std::string> errors(views.size());
     std::vector<std::thread> threads;
-    for (size_t k = 0; k < corners.size(); ++k)
+    for (size_t k = 0; k < views.size(); ++k)
         threads.emplace_back([&, k] {
             try {
-                results[k] = timingAt(r, corners[k], paths, tools, cancel);
+                results[k] = timingAt(r, views[k], paths, tools, cancel);
             } catch (const std::exception& e) {
                 errors[k] = e.what();
             }
@@ -178,8 +224,8 @@ void analyzeTiming(const Run& r, const std::vector<std::string>& corners, int pa
     for (auto& t : threads) t.join();
     QJsonObject out;
     for (const auto& e : errors)
-        if (!e.empty()) {  // a corner that did not report is no pass: the whole analysis fails with its reason
-            writeJson(r.signoff / "timing.json", {{"state", cancel && *cancel ? "stopped" : "failed"}, {"error", q(e)}});
+        if (!e.empty()) {  // a view that did not report is no pass: the whole analysis fails with its reason
+            writeJson(r.signoff / "timing.json", {{"state", cancel && *cancel ? "stopped" : "failed"}, {"error", q(e)}, {"analysis", analysis}});
             return;
         }
     QJsonArray perCorner, setup, hold;
@@ -198,6 +244,7 @@ void analyzeTiming(const Run& r, const std::vector<std::string>& corners, int pa
         for (const auto& v : c["clocks"].toArray()) {
             QJsonObject clock = v.toObject();
             clock["corner"] = c["corner"];
+            clock["mode"] = c["mode"];
             auto [it, fresh] = clocks.try_emplace(clock["clock"].toString(), clock);
             if (!fresh && clock["min_period_ns"].toDouble() > it->second["min_period_ns"].toDouble()) it->second = clock;
         }
@@ -213,7 +260,7 @@ void analyzeTiming(const Run& r, const std::vector<std::string>& corners, int pa
     QJsonArray clockList;
     for (const auto& [name, clock] : clocks) clockList.append(clock);
     writeJson(r.signoff / "timing.json", {{"state", "done"}, {"parasitics", results[0]["parasitics"]}, {"corners", perCorner}, {"wns_ns", wns}, {"tns_ns", tns}, {"clocks", clockList},
-                                          {"setup", worstFirst(allSetup)}, {"hold", worstFirst(allHold)}, {"met", met}});
+                                          {"setup", worstFirst(allSetup)}, {"hold", worstFirst(allHold)}, {"met", met}, {"analysis", analysis}});
 }
 
 void analyzePower(const Run& r, double supply, const RtlFlowTools& tools, const std::atomic<bool>* cancel) {
@@ -277,11 +324,17 @@ void analyzePower(const Run& r, double supply, const RtlFlowTools& tools, const 
 }  // namespace
 
 void addSignoffCommands(Registry& r) {
-    r.add({"timing_analyze", "Static timing of a run's routed design through OpenSTA at every corner of its platform (or those named), with its extracted parasitics: per corner WNS, TNS, each clock's minimum "
-                             "period and whether it is met; overall the worst of them, and the worst setup and hold paths across corners step by step, each saying its corner. "
+    r.add({"timing_analyze", "Static timing of a run's routed design through OpenSTA, in every mode at every corner of its platform (or those named), with its extracted parasitics: "
+                             "per mode and corner (the entries of corners) WNS, TNS, each clock's minimum period and whether it is met; overall the worst of them, and the worst setup "
+                             "and hold paths across them step by step, each saying its mode and corner. A mode is a set of constraints (an SDC file); with none given there is one, "
+                             "func, the run's own. rc derates the extracted resistance and capacitance at a corner. analysis in the result is what was asked, to run it again. "
                              "Waits and returns it, or with wait false starts it in the background (poll timing_report).",
            object({{"run", kRun}}, {{"paths", param("integer", "how many paths per group (default 20)")},
                                     {"corners", QJsonObject{{"type", "array"}, {"description", "corner names, as slow, typ, fast (default all the platform has)"}, {"items", QJsonObject{{"type", "string"}}}}},
+                                    {"rc", QJsonObject{{"type", "object"}, {"description", "per corner, what to multiply the extracted resistance and capacitance by, as {\"slow\": {\"r\": 1.15, \"c\": 1.1}}; "
+                                                                                           "a corner not named keeps what was extracted"}}},
+                                    {"modes", QJsonObject{{"type", "array"}, {"description", "the modes, as [{\"name\": \"func\"}, {\"name\": \"scan\", \"sdc\": \"/abs/scan.sdc\"}]; sdc left out is the run's own constraints"},
+                                                          {"items", object({{"name", param("string", "the mode's name: letters, digits, _")}}, {{"sdc", param("string", "its constraints: an absolute path")}})}}},
                                     {"wait", param("boolean", "wait for it (default true)")}}),
            [](Context& c, const QJsonObject& a) {
                const Run run = runOf(c, a);
@@ -298,13 +351,51 @@ void addSignoffCommands(Registry& r) {
                if (corners.empty())
                    for (const auto& [name, files] : run.pdk->corners) corners.push_back(name);
                if (corners.empty()) throw std::runtime_error("platform " + run.pdk->name + " has no timing corners");
+               const QJsonObject rc = a["rc"].toObject();
+               for (auto it = rc.begin(); it != rc.end(); ++it) {
+                   if (std::find(corners.begin(), corners.end(), it.key().toStdString()) == corners.end()) throw std::invalid_argument("rc names " + it.key().toStdString() + ", which is not a corner analysed");
+                   const QJsonObject f = it.value().toObject();
+                   for (const QString& k : f.keys())
+                       if (k != "r" && k != "c") throw std::invalid_argument("rc." + it.key().toStdString() + " takes r and c");
+                   for (const char* k : {"r", "c"})
+                       if (f.contains(k) && !(f[k].isDouble() && f[k].toDouble() > 0 && f[k].toDouble() <= 10)) throw std::invalid_argument("rc." + it.key().toStdString() + "." + k + " is a factor above 0, to 10");
+                   if (f.isEmpty()) throw std::invalid_argument("rc." + it.key().toStdString() + " takes r and c");
+               }
+               static const QRegularExpression modeName("^[A-Za-z0-9_]+$");
+               std::vector<std::pair<std::string, fs::path>> modes;
+               for (const auto& v : a["modes"].toArray()) {
+                   const QJsonObject m = v.toObject();
+                   const std::string name = s(m, "name");
+                   if (!modeName.match(m["name"].toString()).hasMatch()) throw std::invalid_argument("a mode's name is letters, digits and _: '" + name + "'");
+                   for (const auto& [other, file] : modes)
+                       if (other == name) throw std::invalid_argument("modes are named once each: " + name);
+                   fs::path sdc;
+                   if (m.contains("sdc")) {
+                       sdc = s(m, "sdc");
+                       if (!sdc.is_absolute() || !fs::is_regular_file(sdc)) throw std::invalid_argument("mode " + name + ": no constraints file at the absolute path '" + sdc.string() + "'");
+                       if (sdc.string().find_first_of("{}") != std::string::npos) throw std::invalid_argument("mode " + name + ": a path with braces cannot be passed to the tool");
+                   }
+                   modes.emplace_back(name, sdc);
+               }
+               if (a.contains("modes") && modes.empty()) throw std::invalid_argument("modes names at least one");
+               if (modes.empty()) modes.emplace_back("func", fs::path());
+               std::vector<View> views;
+               for (const auto& [mode, sdc] : modes)
+                   for (const auto& corner : corners) {
+                       const QJsonObject f = rc[q(corner)].toObject();
+                       views.push_back({mode, corner, sdc, f["r"].toDouble(1), f["c"].toDouble(1)});
+                   }
+               if (!rc.isEmpty() && !fs::exists(run.results / "6_final.spef")) throw std::runtime_error("the run has no extracted parasitics to derate");
+               QJsonObject analysis{{"paths", paths}};
+               for (const char* k : {"corners", "rc", "modes"})
+                   if (a.contains(k)) analysis[k] = a[k];
                fs::create_directories(run.signoff);
-               writeJson(run.signoff / "timing.json", {{"state", "running"}});
+               writeJson(run.signoff / "timing.json", {{"state", "running"}, {"analysis", analysis}});
                if (!a.contains("wait") || a["wait"].toBool()) {
-                   analyzeTiming(run, corners, paths, tools, nullptr);
+                   analyzeTiming(run, views, paths, analysis, tools, nullptr);
                    return QJsonValue(readJson(run.signoff / "timing.json"));
                }
-               jobs(c).start((run.signoff / "timing").string(), [run, corners, paths, tools](const std::atomic<bool>& cancel) { analyzeTiming(run, corners, paths, tools, &cancel); });
+               jobs(c).start((run.signoff / "timing").string(), [run, views, paths, analysis, tools](const std::atomic<bool>& cancel) { analyzeTiming(run, views, paths, analysis, tools, &cancel); });
                return QJsonValue(QJsonObject{{"state", "running"}});
            },
            true});

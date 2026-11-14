@@ -1,5 +1,21 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-13 — timing modes and RC derates, on `rebuild/mmmc` (after #49, merged)**
+
+- **Done:**
+  - `timing_analyze` takes `modes` (`[{name, sdc}]`; none given is one mode, `func`, the run's own constraints) and `rc` (per corner, factors on the
+    extracted R and C). Every mode runs at every corner; the report's `corners` has an entry per mode and corner, and each path names its mode.
+  - A derate is a copy of the run's SPEF with its `*R_UNIT`/`*C_UNIT` lines scaled (OpenSTA honours them). The open PDKs ship one extraction corner.
+  - The report keeps `analysis` (what was asked). The Timing window's **Analyze** runs it again; **Setup…** is a form on `timing_analyze`.
+    Forms now prefill array and object parameters.
+- **gcd:** slow 3.67 ns as extracted, 3.82 ns with R and C up 20 %; fast 1.54 to 1.48 ns with both down 20 %.
+- **Not done:** the chip tests' SDF (`test_run`, `test_shmoo`) is still written with the parasitics as extracted.
+- **Gates:** M5 50/50 (reusing a gcd run). The Setup form was filled and Analyze pressed with real clicks.
+- **Next:** RC in the transistor-level test and a real failing `test_spice`; extraction of hand-drawn layout; device generators, FinFET Pcells,
+  an ASAP7 LVS deck, ASAP7's DRC violations; LVS cross-probe of devices and flow runs.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-13 — ERC, on `rebuild/erc` (after #48, merged)**
 
 - **Done:**

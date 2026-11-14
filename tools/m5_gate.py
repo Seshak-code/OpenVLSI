@@ -195,7 +195,56 @@ def main():
     except RuntimeError as e:
         refused = str(e)
     check(refused is not None and "slow, typ, fast" in refused, f"an unknown corner is refused, naming the ones there are: {refused}")
+
+    def refusal(**args):
+        try:
+            m("timing_analyze", run=run, **args)
+        except RuntimeError as e:
+            return str(e)
+        return ""
+
+    # The open PDKs extract one RC corner: each timing corner derates it
+    rc = {"slow": {"r": 1.2, "c": 1.2}, "fast": {"r": 0.8, "c": 0.8}}
+    derated = m("timing_analyze", run=run, rc=rc)
+    by = {c["corner"]: c for c in derated["corners"]}
+    derated_period = {n: c["clocks"][0]["min_period_ns"] for n, c in by.items()}
+    print("    " + "; ".join(f"{n}: R x{c['rc']['r']} C x{c['rc']['c']}, minimum period {derated_period[n]:.3f} ns (as extracted {periods_by[n]:.3f})" for n, c in by.items()), flush=True)
+    check(derated_period["slow"] > periods_by["slow"] and derated_period["fast"] < periods_by["fast"] and abs(derated_period["typ"] - periods_by["typ"]) < 1e-9,
+          "with R and C 20 % up at slow and down at fast, slow is slower, fast faster, and typ as it was")
+    check(by["slow"]["rc"] == rc["slow"] and by["typ"]["rc"] == {"r": 1, "c": 1} and derated["analysis"]["rc"] == rc and m("timing_report", run=run)["analysis"]["rc"] == rc,
+          "each corner says its derate, and the report keeps what was asked")
+    c_only = m("timing_analyze", run=run, corners=["slow"], rc={"slow": {"c": 1.2}})["corners"][0]
+    check(c_only["rc"] == {"r": 1, "c": 1.2} and periods_by["slow"] < c_only["clocks"][0]["min_period_ns"] <= derated_period["slow"] + 1e-9,
+          f"capacitance alone accounts for part of it: {c_only['clocks'][0]['min_period_ns']:.3f} ns")
+    check("not a corner analysed" in refusal(rc={"tepid": {"r": 1.1}}) and "factor above 0" in refusal(rc={"slow": {"r": 0}}) and "takes r and c" in refusal(rc={"slow": {"l": 2}}),
+          "a derate for no corner, of zero, or of something else is refused")
+    # Modes: the same chip under other constraints
+    own = os.path.join(work, "implementation", run, "results", a.platform, "gcd", "base", "6_final.sdc")
+    turbo = os.path.join(work, "turbo.sdc")
+    text = open(own).read()
+    check("-period 10.0000" in text, "the run's constraints give its 10 ns clock")
+    open(turbo, "w").write(text.replace("-period 10.0000", "-period 6.0000"))
+    mm = m("timing_analyze", run=run, modes=[{"name": "func"}, {"name": "turbo", "sdc": turbo}])
+    views = {(c["mode"], c["corner"]): c for c in mm["corners"]}
+    check(sorted(views) == sorted((mode, n) for mode in ("func", "turbo") for n in ("slow", "typ", "fast")), f"two modes at three corners are six views: {sorted(views)}")
+    gaps = [views[("func", n)]["setup_slack_ns"] - views[("turbo", n)]["setup_slack_ns"] for n in ("slow", "typ", "fast")]
+    check(all(abs(g - 4.0) < 1e-3 for g in gaps), f"a clock 4 ns shorter leaves 4 ns less slack at each corner: {[round(g, 4) for g in gaps]}")
+    check(all(abs(views[("func", n)]["hold_slack_ns"] - views[("turbo", n)]["hold_slack_ns"]) < 1e-9 for n in ("slow", "typ", "fast")), "and hold does not move with the period")
+    check(mm["setup"][0]["mode"] == "turbo" and mm["setup"][0]["corner"] == "slow" and abs(mm["wns_ns"] - min(0, views[("turbo", "slow")]["setup_slack_ns"])) < 1e-6,
+          f"the worst path is turbo's at slow: {mm['setup'][0]['mode']} {mm['setup'][0]['corner']}, slack {mm['setup'][0]['slack_ns']:.3f} ns")
+    tight = os.path.join(work, "tight.sdc")
+    open(tight, "w").write(text.replace("-period 10.0000", "-period 3.0000"))
+    failing = m("timing_analyze", run=run, modes=[{"name": "func"}, {"name": "tight", "sdc": tight}])
+    check(failing["met"] is False and failing["wns_ns"] < 0 and all(c["met"] == (c["mode"] == "func") for c in failing["corners"]),
+          f"a mode whose clock is too fast is not met while func still is: WNS {failing['wns_ns']:.3f} ns")
+    check("named once each" in refusal(modes=[{"name": "a"}, {"name": "a"}]) and "no constraints file" in refusal(modes=[{"name": "a", "sdc": os.path.join(work, "none.sdc")}])
+          and "letters, digits" in refusal(modes=[{"name": "a b"}]) and "at least one" in refusal(modes=[]), "a mode named twice, with no file, with a bad name, or none at all is refused")
+    empty = os.path.join(work, "empty.sdc")
+    open(empty, "w").write("# no clock\n")
+    noclock = m("timing_analyze", run=run, modes=[{"name": "idle", "sdc": empty}])
+    check(noclock["state"] == "failed" and "idle" in noclock.get("error", ""), f"constraints with no clock are an error, not a pass: {noclock.get('error')}")
     t = m("timing_analyze", run=run)
+    check(t["analysis"] == {"paths": 20} and [c["mode"] for c in t["corners"]] == ["func"] * 3, "with nothing asked, one mode, func, as extracted")
     step = t["setup"][0]["steps"][-1]
     arrivals = [s["arrival_ns"] for s in t["setup"][0]["steps"]]
     check(arrivals == sorted(arrivals) and len(arrivals) > 2, f"a path's arrivals only grow, over {len(arrivals)} steps, ending at {step['pin']}")
