@@ -5,6 +5,7 @@
 
 #include <QHBoxLayout>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QLabel>
 #include <QPushButton>
 #include <QTimer>
@@ -27,8 +28,17 @@ VerifyPanel::VerifyPanel(Session& session, Actions actions, QWidget* parent) : Q
     connect(lvs, &QPushButton::clicked, this, [this] { if (actions_.form) actions_.form("verify_lvs"); });
     drc->setProperty("api", "verify_drc");
     lvs->setProperty("api", "verify_lvs");
+    auto* extract = new QPushButton("Extract", this);
+    extract->setToolTip("The selected LVS run's layout as an extracted view of its cell: its transistors as drawn, and its wiring's capacitance");
+    extract->setProperty("api", "verify_extract");
+    connect(extract, &QPushButton::clicked, this, [this] {
+        const QString run = tree_->currentItem() ? tree_->currentItem()->data(0, Qt::UserRole).toString() : QString();
+        if (run.isEmpty()) details_->setText("Select an LVS run that matched, then Extract.");
+        else this->extract(run);
+    });
     row->addWidget(drc);
     row->addWidget(lvs);
+    row->addWidget(extract);
     layout->addLayout(row);
     tree_ = new QTreeWidget(this);
     tree_->setHeaderHidden(true);
@@ -93,6 +103,22 @@ void VerifyPanel::refresh() {
         item->setForeground(0, colour);
         if (run == keep) tree_->setCurrentItem(item);
     }
+}
+
+bool VerifyPanel::extract(const QString& run) {
+    const cmd::Result r = session_.call("verify_extract", {{"run", run}});
+    if (!r.ok) {
+        details_->setText(r.error);
+        return false;
+    }
+    const QJsonObject o = r.value.toObject();
+    QStringList nets;
+    for (const auto& n : o["nets"].toArray()) nets << QString("%1 %2 fF").arg(n.toObject()["name"].toString()).arg(n.toObject()["c_ff"].toDouble(), 0, 'f', 3);
+    details_->setText(QString("Extracted to %1/%2/%3: %4 transistors as drawn, %5 fF of wiring on %6 (to ground; no wire resistance or coupling yet).\n%7.\n"
+                              "To simulate it, put %3 first in a config view's viewList.")
+                          .arg(o["library"].toString(), o["cell"].toString(), o["view"].toString()).arg(o["devices"].toInt()).arg(o["total_ff"].toDouble(), 0, 'f', 3)
+                          .arg(QJsonDocument(o["metals"].toArray()).toVariant().toStringList().join(", "), nets.join(", ")));
+    return true;
 }
 
 bool VerifyPanel::open(const QString& run) {

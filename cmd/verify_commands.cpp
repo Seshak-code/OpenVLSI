@@ -7,6 +7,7 @@
 #include "oadb/oadb.h"
 #include "sch/schematic.h"
 #include "sim/ade.h"
+#include "sim/netlist.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -495,6 +496,101 @@ QJsonObject ercCheck(const fs::path& lvsdb, const fs::path& cdl, const QJsonObje
 
 int ercViolations(const std::string& lvsdb) { return ercCheck(lvsdb, {})["total"].toInt(); }
 
+// A layout's own netlist, read from a matched LVS: its devices as LVS measured them, on the schematic's net names, and each
+// net's wiring by metal: area and perimeter.
+// ponytail: a flat layout, metals only, each net's capacitance to ground from the tech LEF's area and edge values: no wire
+// resistance, no coupling, no shielding by the metal below. A field solver's rule deck per process is the upgrade.
+const char* kExtractScript = R"PY(
+import json, pya
+lvs = pya.LayoutVsSchematic()
+lvs.read(lvsdb)
+ly, top, x = lvs.internal_layout(), lvs.internal_top_cell(), lvs.xref()
+dbu = ly.dbu
+src = pya.Layout()
+src.read(gds)
+# Which of LVS's layers holds each metal's wiring: those whose shapes are the drawn metal's (its deck does not name them)
+metals = []
+for m in json.load(open(layers)):
+    at = src.find_layer(m["layer"], m["datatype"])
+    drawn = pya.Region(src.top_cell().begin_shapes_rec(at)).merged() if at is not None else pya.Region()
+    if drawn.is_empty():
+        continue
+    found = []
+    for i in lvs.layer_indexes():
+        r = pya.Region(top.begin_shapes_rec(i)).merged()
+        if not r.is_empty() and (r - drawn).is_empty() and r.area() >= 0.9 * drawn.area():
+            found.append(i)
+    if not found:
+        raise RuntimeError("none of LVS's layers is the drawn " + m["name"] + ": its wiring cannot be measured")
+    metals.append((m, found))
+pair = None
+for cp in x.each_circuit_pair():
+    if cp.first() and cp.second() and cp.first().name == top.name:
+        pair = cp
+if pair is None:
+    raise RuntimeError("LVS paired no top circuit")
+if any(True for _ in pair.first().each_subcircuit()):
+    raise RuntimeError("the layout's netlist has subcircuits: only a flat one is extracted yet")
+names, nets = {}, []
+for n in x.each_net_pair(pair):
+    f, g = n.first(), n.second()
+    if not f or not g:
+        continue  # metal on no device (fill, a stray shape) has no net in the schematic, and no part in the circuit
+    names[f.cluster_id] = g.expanded_name()
+    per, total = {}, 0.0
+    for m, found in metals:
+        region = pya.Region()
+        for i in found:
+            region += lvs.shapes_of_net(f, lvs.layer_by_index(i), True)
+        region = region.merged()
+        if region.is_empty():
+            continue
+        area, edge = region.area() * dbu * dbu, region.perimeter() * dbu
+        c = area * m["area_ff_um2"] + edge * m["edge_ff_um"]
+        per[m["name"]] = {"area_um2": round(area, 6), "perimeter_um": round(edge, 6), "c_ff": c}
+        total += c
+    nets.append({"name": g.expanded_name(), "layout": f.expanded_name(), "c_ff": total, "layers": per})
+devices = []
+for d in x.each_device_pair(pair):
+    f, g = d.first(), d.second()
+    if not f or not g:
+        raise RuntimeError("a device has no counterpart: " + (f or g).expanded_name())
+    dc = f.device_class()
+    terminals = {}
+    for t in dc.terminal_definitions():
+        net = f.net_for_terminal(t.id())
+        if net is None or net.cluster_id not in names:
+            raise RuntimeError("terminal " + t.name + " of " + f.expanded_name() + " is on no net of the schematic")
+        terminals[t.name] = names[net.cluster_id]
+    devices.append({"layout": f.expanded_name(), "schematic": g.expanded_name(), "class": dc.name, "terminals": terminals,
+                    "params": {p.name: f.parameter(p.name) for p in dc.parameter_definitions()}})
+json.dump({"top": top.name, "metals": [m["name"] for m, found in metals], "nets": nets, "devices": devices}, open(out, "w"))
+)PY";
+
+// The tech LEF's routing layers with a capacitance: fF per um2 of area and per um of edge (LEF's are pF)
+std::map<std::string, std::pair<double, double>> lefCapacitance(const fs::path& lef) {
+    std::ifstream in(lef);
+    if (!in) throw std::runtime_error("cannot read the process's tech LEF: " + lef.string());
+    std::map<std::string, std::pair<double, double>> out;
+    std::string word, layer;
+    double perPf = 1;
+    while (in >> word) {
+        if (word == "LAYER") in >> layer;
+        else if (word == "END") in >> word, layer.clear();
+        else if (word == "PICOFARADS") in >> perPf;
+        else if (word == "CPERSQDIST" && !layer.empty()) in >> out[layer].first;
+        else if (word == "EDGECAPACITANCE" && !layer.empty()) in >> out[layer].second;
+    }
+    if (!(perPf > 0)) throw std::runtime_error(lef.string() + ": its capacitance unit does not read");
+    for (auto& [name, c] : out) c = {c.first * 1e3 / perPf, c.second * 1e3 / perPf};
+    return out;
+}
+
+std::string jsonText(const QJsonValue& v) {  // a value as oadb stores a property
+    const QByteArray a = QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact);
+    return a.mid(1, a.size() - 2).toStdString();
+}
+
 // An electrical check's violations as markers: a layout one at each device it names, a schematic one by name only
 QJsonArray ercMarkers(const QJsonObject& erc) {
     QJsonArray rules;
@@ -770,6 +866,129 @@ void addVerifyCommands(Registry& r) {
                return QJsonValue(ercCheck({}, cdl, a));
            },
            true});
+    r.add({"verify_extract", "Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors with the sizes and "
+                             "diffusion areas LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values "
+                             "per metal. A config view whose viewList puts that view first then simulates the layout in place of the schematic. Returns each net's capacitance "
+                             "by metal and the netlist. Capacitance only: no wire resistance or coupling yet.",
+           object({{"run", kRun}}, {{"to", param("string", "the view to write (default \"extracted\")")}}),
+           [](Context& c, const QJsonObject& a) {
+               if (!a["run"].toString().contains("/lvs.")) throw std::invalid_argument("not an LVS run: " + s(a, "run"));
+               const fs::path dir = runPath(c, a);
+               const QJsonObject rec = readJson(dir / "run.json");
+               if (rec["state"] != "done" || !rec["matched"].toBool()) throw std::invalid_argument("that LVS did not match: an extraction of it would be another circuit than the schematic");
+               const std::string lib = s(rec, "library"), cell = s(rec, "cell"), schematic = rec["schematic"].toString("schematic").toStdString();
+               const std::string to = a.contains("to") ? s(a, "to") : "extracted";
+               static const QRegularExpression viewName("^[A-Za-z0-9_]+$");
+               if (!viewName.match(q(to)).hasMatch()) throw std::invalid_argument("a view's name is letters, digits and _");
+               oadb::Library& l = c.workspace.library(lib);
+               for (const auto& v : l.views(cell))
+                   if (v.name == to && v.type != "extracted") throw std::invalid_argument(to + " is a " + v.type + " view of " + cell + ": it is not replaced by an extraction");
+               const flow::Platform& pdk = platformOf(l);
+               const RtlFlowTools tools = RtlFlowTools::detect();
+               if (pdk.techLef.empty() || tools.flowDir.empty()) throw std::runtime_error("the process's tech LEF gives the wiring's capacitance, and " + pdk.name + " has none here");
+               const layout::Tech* tech = layout::findTech(pdk.tech);
+               if (!tech) throw std::runtime_error("process " + pdk.tech + " has no layer table");
+               const auto caps = lefCapacitance(flow::platformFile(pdk, tools.flowDir, pdk.techLef));
+               QJsonArray layers;
+               for (const auto& m : tech->metals) {
+                   const auto at = caps.find(m.name);
+                   if (at != caps.end() && (at->second.first > 0 || at->second.second > 0))
+                       layers.append(QJsonObject{{"name", q(m.name)}, {"layer", m.layer}, {"datatype", 0}, {"area_ff_um2", at->second.first}, {"edge_ff_um", at->second.second}});
+               }
+               if (layers.isEmpty()) throw std::runtime_error("the tech LEF gives no capacitance for any of the process's metals");
+               std::ofstream(dir / "extract.layers.json") << QJsonDocument(layers).toJson().toStdString();
+               const QJsonObject found = klayoutJson(kExtractScript, dir / "extract.py", dir / "extract.json",
+                                                     {"lvsdb=" + (dir / "report.lvsdb").string(), "gds=" + (dir / "layout.gds").string(), "layers=" + (dir / "extract.layers.json").string()});
+
+               // The schematic's own names for its nets and instances: LVS's reader holds them in upper case
+               const sch::Connectivity con = sch::extract(c.workspace, lib, cell, schematic);
+               const auto upper = [](std::string t) {
+                   for (auto& ch : t) ch = (char)std::toupper((unsigned char)ch);
+                   return t;
+               };
+               std::map<std::string, std::string> netNamed;
+               for (const auto& n : con.nets) {
+                   if (!n.name.empty() && n.name.back() == '!') throw std::invalid_argument("the schematic has the global net " + n.name + ": a cell with global nets is not extracted yet");
+                   netNamed[upper(n.name)] = n.name;
+               }
+               const auto net = [&](const QString& name) {
+                   const auto at = netNamed.find(upper(name.toStdString()));
+                   if (at == netNamed.end()) throw std::runtime_error("LVS names net " + name.toStdString() + ", which the schematic does not have");
+                   return at->second;
+               };
+               std::map<std::string, oadb::Instance> instanceNamed;
+               for (const auto& i : l.instances(cell, schematic)) instanceNamed[upper(i.name)] = i;
+
+               std::ostringstream body;
+               QJsonArray models;
+               QJsonObject globals;
+               const auto number = [](double v, const char* unit) { return QString::number(v, 'g', 9).toStdString() + unit; };
+               for (const auto& dv : found["devices"].toArray()) {
+                   const QJsonObject d = dv.toObject(), params = d["params"].toObject(), terminals = d["terminals"].toObject();
+                   const auto at = instanceNamed.find(upper(s(d, "schematic")));
+                   if (at == instanceNamed.end()) throw std::runtime_error("LVS names device " + s(d, "schematic") + ", which the schematic does not have");
+                   oadb::Instance i = at->second;
+                   if (upper(i.cell) != upper(s(d, "class"))) throw std::runtime_error(i.name + " is a " + i.cell + " in the schematic and a " + s(d, "class") + " in the layout");
+                   if (!params.contains("W") || !params.contains("L")) throw std::runtime_error("extraction knows transistors only yet, and " + i.name + " (" + i.cell + ") has no W and L");
+                   const QJsonObject defaults = QJsonDocument::fromJson(QByteArray::fromStdString(c.workspace.library(i.lib).cellProp(i.cell, "params").value_or("{}"))).object();
+                   const auto whole = [&](const char* p) {
+                       const auto it = i.params.find(p);
+                       const std::string text = it != i.params.end() ? it->second : defaults[p].toVariant().toString().toStdString();
+                       char* end = nullptr;
+                       const long v = std::strtol(text.c_str(), &end, 10);
+                       if (end == text.c_str() || *end || v < 1) throw std::runtime_error(i.name + "'s " + p + " '" + text + "' is not a whole number");
+                       return v;
+                   };
+                   // LVS joins fingers and multiples into one device of their whole width
+                   i.params["ng"] = std::to_string(whole("ng") * whole("m"));
+                   i.params["m"] = "1";
+                   i.params["w"] = number(params["W"].toDouble(), "u");
+                   i.params["l"] = number(params["L"].toDouble(), "u");
+                   std::map<std::string, std::string> nets;
+                   for (auto t = terminals.begin(); t != terminals.end(); ++t) nets[t.key().toStdString()] = net(t.value().toString());
+                   body << sim::primitiveLine(c.workspace, i, nets);
+                   // ponytail: by these names, as IHP's transistors take the drawn diffusion; another PDK's primitives may name them otherwise
+                   for (const auto& [key, unit] : {std::pair{"AS", "p"}, {"AD", "p"}, {"PS", "u"}, {"PD", "u"}})
+                       if (params.contains(key)) body << " " << QString(key).toLower().toStdString() << "=" << number(params[key].toDouble(), unit);
+                   body << "\n";
+                   const QJsonObject spice = QJsonDocument::fromJson(QByteArray::fromStdString(*c.workspace.library(i.lib).cellProp(i.cell, "spice"))).object();
+                   for (const auto& m : spice["models"].toArray())
+                       if (!models.contains(m)) models.append(m);
+                   const QJsonObject g = spice["globals"].toObject();
+                   for (auto it = g.begin(); it != g.end(); ++it) globals[it.key()] = it.value();
+               }
+               QJsonArray nets;
+               double total = 0;
+               int index = 0;
+               for (const auto& nv : found["nets"].toArray()) {
+                   QJsonObject n = nv.toObject();
+                   n["name"] = q(net(n["name"].toString()));
+                   const double ff = n["c_ff"].toDouble();
+                   if (ff > 0) body << "Cpar" << ++index << " " << s(n, "name") << " 0 " << number(ff, "f") << "\n";
+                   total += ff;
+                   nets.append(n);
+               }
+               QJsonArray ports;
+               for (const auto& p : l.pins(cell, schematic)) ports.append(q(p.name));
+               const QJsonObject summary{{"run", a["run"]}, {"devices", found["devices"].toArray().size()}, {"metals", found["metals"]}, {"total_ff", total}, {"nets", nets},
+                                         {"method", "capacitance to ground per metal, area and edge, from the tech LEF"}};
+               l.change("extract " + cell, [&] {
+                   for (const auto& v : l.views(cell))
+                       if (v.name == to) l.deleteView(cell, to);
+                   l.createView(cell, to, "extracted");
+                   l.setProp(cell, to, "netlist", jsonText(q(body.str())));
+                   l.setProp(cell, to, "ports", jsonText(ports));
+                   l.setProp(cell, to, "models", jsonText(models));
+                   l.setProp(cell, to, "globals", jsonText(globals));
+                   l.setProp(cell, to, "extraction", jsonText(summary));
+               });
+               QJsonObject out = summary;
+               out["library"] = q(lib);
+               out["cell"] = q(cell);
+               out["view"] = q(to);
+               out["netlist"] = q(body.str());
+               return QJsonValue(out);
+           }});
     r.add({"verify_markers", "What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic) and then its "
                              "electrical rule violations (rules named ERC: ...). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker "
                              "gives its cell and points, in microns in that cell.",

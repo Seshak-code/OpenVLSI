@@ -78,6 +78,8 @@ Choose the layer to draw on in the panel. **Verify > Run DRC** and **Run LVS** c
 
 Every LVS also checks the electrical rules (ERC) on both netlists, because a mistake the schematic and the layout share passes LVS: a gate that nothing drives, a well with no tap, a bulk on the wrong supply, a net that joins one terminal, nodes with no path to a supply or a pin, a missing supply. The run's line says how many it found, the Verify panel lists them, and the Markers panel groups them under **ERC:** at the devices they name. In a schematic, **Check > Electrical Rules** runs the same rules before any layout exists. Supplies are nets named like vdd, vcc, vpwr and vss, gnd; `verify_erc` takes other names. An implementation run counts its chip's violations in its LVS stage, and is not clean with any.
 
+**Extract**, with an LVS run that matched selected, writes the layout's own netlist as an `extracted` view of the cell (`verify_extract`): its transistors at the sizes and diffusion areas LVS measured, on the schematic's net names, and a capacitor to ground on every net for its wiring, from the process's own area and edge values per metal. To simulate the layout in place of the schematic, give the test bench a config view whose `viewList` puts `extracted` first (`view_create` with type `config`, then `prop_set` `top` and `viewList`), and run that view. It is capacitance only: no wire resistance or coupling yet, and a flat layout.
+
 ## Driving it from outside
 
 Everything above is a command, in three ways in:

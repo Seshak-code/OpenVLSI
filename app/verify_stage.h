@@ -25,6 +25,7 @@ public:
     QTreeWidget* runs() const { return tree_; }
     QString details() const;
     bool open(const QString& run);  // a DRC on its layout, an LVS's summary
+    bool extract(const QString& run);  // a matched LVS's layout into an extracted view; what it found, in words
 
 private:
     Session& session_;
