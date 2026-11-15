@@ -498,12 +498,17 @@ void addPdkCommands(Registry& r) {
                const std::string cell = a.contains("cell") ? a["cell"].toString().toStdString() : design;
                if (!oadb::validName(cell) || !oadb::validName(library)) throw std::invalid_argument("a library's and a cell's names are letters, digits and _");
 
-               // The layout: the standard cells by reference, the rest renamed under the cell
+               // The layout: the PDK's cells by reference (the standard cells, and the SRAM macros and IO cells when their libraries are
+               // installed), the rest renamed under the cell
                oadb::Library& std = c.workspace.library(cells);
-               std::set<std::string> standard;
-               for (const auto& name : std.cells())
-                   for (const auto& v : std.views(name))
-                       if (v.name == "layout") standard.insert(name);
+               std::map<std::string, std::string> standard;  // cell -> its library
+               for (const std::string pdkLib : {cells, std::string("sg13g2_sram"), std::string("sg13g2_io")}) {
+                   if (std::find(known.begin(), known.end(), pdkLib) == known.end()) continue;
+                   oadb::Library& from = c.workspace.library(pdkLib);
+                   for (const auto& name : from.cells())
+                       for (const auto& v : from.views(name))
+                           if (v.name == "layout") standard.emplace(name, pdkLib);
+               }
                layout::GdsLibrary g = layout::readGds(gds.string());
                std::map<std::string, std::string> renamed;
                bool hasTop = false;
@@ -526,8 +531,8 @@ void addPdkCommands(Registry& r) {
                    gc.name = renamed[gc.name];
                    for (auto& i : gc.instances) {
                        if (standard.count(i.cell)) {
-                           i.lib = cells;
-                           ++placedStandard;
+                           i.lib = standard.at(i.cell);
+                           placedStandard += i.lib == cells;
                        } else {
                            i.cell = renamed.at(i.cell);
                        }
@@ -583,6 +588,16 @@ void addPdkCommands(Registry& r) {
                    l.setCellProp(cell, "params", "{}");
                    l.setCellProp(cell, "instNamePrefix", propText(QString("X")));
                    l.setCellProp(cell, "macro", propText(QJsonObject{{"run", a["run"]}, {"design", q(design)}, {"top", q(top)}}));
+                   // Its Verilog for a test of a chip that places it (netlist_verilog): the routed netlist and the models of the cells it places
+                   QJsonArray verilogFiles{q(verilog.string())};
+                   std::set<std::string> usedLibs;
+                   for (const auto& gc : g.cells)
+                       for (const auto& i : gc.instances)
+                           if (!i.lib.empty() && usedLibs.insert(i.lib + "/" + i.cell).second)
+                               if (const auto files = c.workspace.library(i.lib).cellProp(i.cell, "verilog"))
+                                   for (const auto& f : QJsonDocument::fromJson(QByteArray::fromStdString("[" + *files + "]")).array()[0].toArray())
+                                       if (!verilogFiles.contains(f)) verilogFiles.append(f);
+                   l.setCellProp(cell, "verilog", propText(verilogFiles));
                });
                c.workspace.save();
                QJsonArray pins;
@@ -684,6 +699,26 @@ void addPdkCommands(Registry& r) {
                        for (auto& [m, pins] : lefAbstracts(lef, *tech, dbuPerMicron)) abstracts[m] = pins;
                    }
                }
+               // Each cell's Verilog model, for a test of a chip that places it (netlist_verilog): the standard cells' gate models, the IO
+               // cells', an SRAM macro's wrapper and IHP's behavioural core when it is in ~/eda/ihp-verilog
+               std::map<std::string, QJsonArray> verilogOf;
+               {
+                   const char* home = std::getenv("HOME");
+                   const auto expand = [&](const std::string& f) { return f.rfind("~/", 0) == 0 ? std::string(home ? home : "") + f.substr(1) : f; };
+                   QJsonArray files;
+                   if (set == "stdcell")
+                       for (const auto& f : pdk->cellVerilog) files.append(q(expand(f)));
+                   if (set == "io") files.append(q((platform / "verilog" / "sg13g2_io.v").string()));
+                   for (const auto& cell : cells) {
+                       QJsonArray mine = files;
+                       if (set == "sram" && cell.name.rfind("RM_IHPSG13", 0) == 0) {
+                           mine.append(q((platform / "verilog" / (cell.name + ".v")).string()));
+                           const std::string core = expand("~/eda/ihp-verilog/RM_IHPSG13_1P_core_behavioral_bm_bist.v");
+                           if (fs::is_regular_file(core)) mine.append(q(core));
+                       }
+                       if (!mine.isEmpty()) verilogOf[cell.name] = mine;
+                   }
+               }
                QJsonArray names, simulated;
                l.change("install " + name, [&] {
                    for (const auto& cell : cells) {
@@ -698,6 +733,7 @@ void addPdkCommands(Registry& r) {
                        l.setCellProp(cell.name, "cdl", json(QString::fromStdString(text)));
                        l.setCellProp(cell.name, "params", "{}");
                        l.setCellProp(cell.name, "instNamePrefix", json(QString("X")));
+                       if (const auto vf = verilogOf.find(cell.name); vf != verilogOf.end()) l.setCellProp(cell.name, "verilog", json(vf->second));
                        if (set != "stdcell") {  // compared by its pins in a top's LVS: its abstract stands for it there
                            l.setCellProp(cell.name, "lvs", json(QString("blackbox")));
                            if (const auto ab = abstracts.find(cell.name); ab != abstracts.end()) l.setCellProp(cell.name, "abstract", json(ab->second));
@@ -824,6 +860,109 @@ void addPdkCommands(Registry& r) {
                const int64_t core = offset + depth;
                return QJsonValue(QJsonObject{{"pads", placed}, {"fillers", filled},
                                              {"core", QJsonArray{(double)core, (double)core, (double)(w - core), (double)(h - core)}}});
+           }});
+    r.add({"layout_seal_ring", "Places IHP SG13G2's seal ring around a die: on each of its layers a ring stepped at the corners (four 4.2 um steps), "
+                              "as IHP's sealring cell draws it: passivation from 25 um in, Activ, pSD, EdgeSeal and every metal from 32.2 um, 4.2 um wide, "
+                              "contacts and vias as trenches inside them, Metal1 filler outside (in pieces of at most 5 um), and the die's boundary. Metal fill goes inside it. "
+                              "Makes the cell sealring_<w>x<h> in the library and places it at the origin; returns its name.",
+           object({{"library", param("string", "the library")}, {"cell", param("string", "the cell")},
+                   {"die", param("array", "the die's width and height, [w, h] in microns (whole microns)")}},
+                  {{"view", param("string", "the layout view (default layout)")}}),
+           [](Context& c, const QJsonObject& a) {
+               // ponytail: IHP's sealring at its own dimensions, read off its cell for a 1050 um die; another process needs its own table
+               constexpr int64_t um = 1000, step = 4200;
+               const std::string lib = a["library"].toString().toStdString(), cell = a["cell"].toString().toStdString();
+               const std::string view = a.contains("view") ? a["view"].toString().toStdString() : "layout";
+               oadb::Library& l = c.workspace.library(lib);
+               if (l.viewType(cell, view) != "layout") throw std::invalid_argument(lib + "/" + cell + "/" + view + " is no layout view");
+               const QJsonArray die = a["die"].toArray();
+               if (die.size() != 2) throw std::invalid_argument("die is [w, h] in microns");
+               for (const auto& v : die)
+                   if (v.toDouble(-1) < 200 || v.toDouble() != std::floor(v.toDouble())) throw std::invalid_argument("the die's sides are whole microns, 200 or more");
+               const int64_t w = (int64_t)die[0].toDouble() * um, h = (int64_t)die[1].toDouble() * um;
+               // A stepped octagon d in from the die's edges, counter-clockwise from the south-west corner's top
+               const std::vector<std::pair<int, int>> stair = {{0, 4}, {1, 4}, {1, 3}, {2, 3}, {2, 2}, {3, 2}, {3, 1}, {4, 1}, {4, 0}};
+               struct Corners { std::vector<Point> sw, se, ne, nw; };
+               const auto octagon = [&](int64_t d) {
+                   Corners k;
+                   for (const auto& [x, y] : stair) {
+                       k.sw.push_back({d + x * step, d + y * step});
+                       k.ne.push_back({w - d - x * step, h - d - y * step});
+                   }
+                   for (auto it = stair.rbegin(); it != stair.rend(); ++it) {
+                       k.se.push_back({w - d - it->first * step, d + it->second * step});
+                       k.nw.push_back({d + it->first * step, h - d - it->second * step});
+                   }
+                   return k;
+               };
+               // The ring between d and d + width as one polygon, as IHP's cell has it (Seal.m counts EdgeSeal's polygons): the outer edge
+               // counter-clockwise from the south side's middle, a cut to the inner edge, and the inner edge clockwise
+               const auto ring = [&](int64_t d, int64_t width) {
+                   const Corners o = octagon(d), i = octagon(d + width);
+                   const Point a{w / 2, d}, b{w / 2, d + width};
+                   std::vector<Point> pts{a};
+                   for (const auto* part : {&o.se, &o.ne, &o.nw, &o.sw}) pts.insert(pts.end(), part->begin(), part->end());
+                   pts.push_back(a);
+                   pts.push_back(b);
+                   for (const auto* part : {&i.sw, &i.nw, &i.ne, &i.se}) pts.insert(pts.end(), part->rbegin(), part->rend());
+                   pts.push_back(b);
+                   return pts;
+               };
+               struct Layer { int layer, datatype; int64_t d, width; };
+               std::vector<Layer> layers = {{9, 0, 25000, 4200}, {6, 0, 34200, 160}, {125, 0, 34200, 420}, {133, 0, 34200, 900}};
+               for (int ly : {1, 14, 39, 8, 10, 30, 50, 67, 126, 134}) layers.push_back({ly, 0, 32200, 4200});
+               for (int ly : {19, 29, 49, 66}) layers.push_back({ly, 0, 34200, 190});
+               const std::string name = "sealring_" + std::to_string(w / um) + "x" + std::to_string(h / um);
+               l.change("seal ring around " + cell, [&] {
+                   const auto cells = l.cells();
+                   if (std::find(cells.begin(), cells.end(), name) == cells.end()) {
+                       l.createCell(name);
+                       l.createView(name, "layout", "layout");
+                       // A ring one step wide as IHP's cell draws it: a bar per side and five boxes per corner (Seal.m counts EdgeSeal's
+                       // pieces with minimum coherence, and a polygon cut to its hole counts twice)
+                       const auto boxes = [&](int64_t d) {
+                           std::vector<layout::Rect> out;
+                           const auto at = [&](int64_t x0, int64_t y0, int64_t x1, int64_t y1) {  // south-west corner frame, mirrored to all four
+                               out.push_back({x0, y0, x1, y1});
+                               out.push_back({w - x1, y0, w - x0, y1});
+                               out.push_back({x0, h - y1, x1, h - y0});
+                               out.push_back({w - x1, h - y1, w - x0, h - y0});
+                           };
+                           for (int k = 0; k < 5; ++k) at(d + k * step, d + (4 - k) * step, d + (k + 1) * step, d + std::min(5, 6 - k) * step);
+                           out.push_back({d, d + 5 * step, d + step, h - d - 5 * step});
+                           out.push_back({w - d - step, d + 5 * step, w - d, h - d - 5 * step});
+                           out.push_back({d + 5 * step, d, w - d - 5 * step, d + step});
+                           out.push_back({d + 5 * step, h - d - step, w - d - 5 * step, h - d});
+                           return out;
+                       };
+                       for (const auto& ly : layers) {
+                           if (ly.width == step) {
+                               for (const auto& r : boxes(ly.d)) l.addLayoutShape(name, "layout", layout::rectShape({ly.layer, ly.datatype}, r));
+                               continue;
+                           }
+                           oadb::LayoutShape sh;
+                           sh.layer = ly.layer;
+                           sh.datatype = ly.datatype;
+                           sh.kind = "polygon";
+                           sh.points = ring(ly.d, ly.width);
+                           l.addLayoutShape(name, "layout", sh);
+                       }
+                       // Metal1 filler outside the ring, where IHP's cell has a strip, in pieces of 4.2 x 4.5 um 0.5 um apart (M1Fil.a2: at most
+                       // 5 um either way)
+                       const int64_t f0 = 25000, f1 = 29200, e = 53200;
+                       for (int64_t x = e; x + 4500 <= w - e; x += 5000)
+                           for (const layout::Rect& r : {layout::Rect{x, f0, x + 4500, f1}, layout::Rect{x, h - f1, x + 4500, h - f0}})
+                               l.addLayoutShape(name, "layout", layout::rectShape({8, 22}, r));
+                       for (int64_t y = e; y + 4500 <= h - e; y += 5000)
+                           for (const layout::Rect& r : {layout::Rect{f0, y, f1, y + 4500}, layout::Rect{w - f1, y, w - f0, y + 4500}})
+                               l.addLayoutShape(name, "layout", layout::rectShape({8, 22}, r));
+                       l.addLayoutShape(name, "layout", layout::rectShape({39, 4}, {0, 0, w, h}));
+                   }
+                   oadb::LayoutInstance i;
+                   i.cell = name;
+                   l.addLayoutInstance(cell, view, i);
+               });
+               return QJsonValue(QString::fromStdString(name));
            }});
     r.add({"pdk_install", "Creates the libraries analogLib (ideal sources and passives) and a PDK's device library (sg13g2 for "
                           "IHP SG13G2: lv/hv MOS, MIM cap, poly resistors; asap7 / asap5 for the FinFET and nanowire PDKs: "

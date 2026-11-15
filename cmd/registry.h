@@ -75,9 +75,10 @@ void addPdkCommands(Registry& r);         // pdk_install
 // keepExisting: a structure whose cell already has a layout is skipped (files of one set that share their via cells), not refused.
 QJsonObject importGds(oadb::Library& l, const std::string& file, const std::string& lyp, bool keepExisting = false);
 // A layout view and all it places to a GDS file (layout_export_gds, verify_*); returns the structures written.
-// abstracts: cells (below the top) written as their abstract cell property, their pins alone, for LVS's black boxes
+// For LVS: abstracts, cells (below the top) written as their abstract cell property, their pins alone (its black boxes); withoutFill,
+// no instance of a fill cell (layout_fill's, whose Activ and GatPoly fill IHP's deck would extract as transistors)
 int exportGds(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, const std::string& file,
-              const std::set<std::string>& abstracts = {});
+              const std::set<std::string>& abstracts = {}, bool withoutFill = false);
 // How many electrical rule violations an LVS report's two netlists have (verify_erc; cached beside the report)
 int ercViolations(const std::string& lvsdb);
 void addLayoutCommands(Registry& r);      // layout_import_gds, layout_export_gds, layout_layers, layout_info

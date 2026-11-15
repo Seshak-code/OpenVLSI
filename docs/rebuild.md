@@ -321,8 +321,16 @@ first, then the GUI, with a check that runs.
    .SUBCKT once (a block's CDL and the cell library's both hold the standard cells) and strips what IHP's reader strips from
    element lines (`[ ] $ \ /`) from its .SUBCKT lines, so a bus port meets its net. `m7_gate`: gcd as a block, LVS'd alone and
    under a top in a third library, simulated out of reset. Still to come: its timing as a Liberty abstract.
-4. **Top-level assembly.** A pad ring, supply rails and a seal ring around the core; whole-chip DRC (density and
-   latch-up included) and LVS.
+4. **Top-level assembly (done).** `layout_pad_ring` places sg13g2_io's corners, pads, fillers and bond pads around a die as
+   ORFS's pad.tcl does; `layout_seal_ring` draws IHP's seal ring for any die (XOR-identical to IHP's cell at 1050 um, its Metal1
+   filler cut to 5 um pieces); `layout_fill` runs IHP's filler inside it. Top-level LVS compares the IO cells and SRAM macros as
+   black boxes: IHP's deck does not extract the pads' ESD structures as their CDL says, and their labels name the pad metal
+   iovss, so a black box the schematic places is written as its LEF abstract (pins joined by name, no substrate pin) and blanked
+   on both sides; taps that tie nothing (the ring's corners and fillers, with the pads abstracted) are dropped. `verify_drc`
+   takes `recommended`: IHP's own pad and bond pad cells break two recommended rules. Layout editor: Create > Pad Ring…,
+   Seal Ring…, Fill…. `m7_gate`: the AND2 in a 1.4 mm pad ring, wired by hand: DRC clean with density and latch-up but for Seal.m,
+   which this deck also reports on IHP's own seal ring cell alone; LVS matched, not when a wire is cut or two pads' core nets trade
+   places.
 5. **Testing the hand-built chip.** `test_spice` for any cell, not only a flow run: its schematic, extraction or layout
    netlist, driven by a recording or a hand-written stimulus; mixed RTL and transistor-level runs for the parts that are
    too big for SPICE.

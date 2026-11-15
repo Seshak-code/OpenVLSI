@@ -237,8 +237,8 @@ std::string RtlFlowTools::simMissing(const std::string& platform) const {
 }
 
 std::string rtlFlowConfigError(const RtlFlowConfig& cfg, const RtlFlowTools& tools) {
-    // They reach make: a name of capitals, a value with nothing make or a shell would read further. What this app sets itself stays its own.
-    static const std::regex settingName("^[A-Z][A-Z0-9_]*$"), settingValue("^[A-Za-z0-9_.+ -]*$");
+    // They reach make: a name of capitals, a value with nothing make or a shell would read further (a path's slashes are fine). What this app sets itself stays its own.
+    static const std::regex settingName("^[A-Z][A-Z0-9_]*$"), settingValue("^[A-Za-z0-9_./+ -]*$");
     static const std::set<std::string> reserved = {"DESIGN_NAME", "DESIGN_NICKNAME", "PLATFORM", "VERILOG_FILES", "SDC_FILE", "WORK_HOME", "FLOW_HOME", "CORE_UTILIZATION"};
     for (const auto& [key, value] : cfg.settings) {
         if (!std::regex_match(key, settingName)) return "the flow setting '" + key + "' is not an ORFS variable's name";
@@ -382,8 +382,10 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
     std::ofstream mkFile(mk);
     mkFile << "export DESIGN_NICKNAME = " << cfg.design << "\nexport DESIGN_NAME = " << cfg.top
            << "\nexport PLATFORM = " << cfg.platform << "\nexport VERILOG_FILES =" << verilog
-           << "\nexport SDC_FILE = " << sdc.string() << "\nexport CORE_UTILIZATION = " << cfg.coreUtilization
-           << "\nexport PLACE_DENSITY_LB_ADDON = 0.2\nexport TNS_END_PERCENT = 100\n";
+           << "\nexport SDC_FILE = " << sdc.string();
+    // A floorplan of its own (DIE_AREA and CORE_AREA: a block sized to its macros) replaces the utilization: ORFS takes one or the other
+    if (!cfg.settings.count("DIE_AREA") && !cfg.settings.count("CORE_AREA")) mkFile << "\nexport CORE_UTILIZATION = " << cfg.coreUtilization;
+    mkFile << "\nexport PLACE_DENSITY_LB_ADDON = 0.2\nexport TNS_END_PERCENT = 100\n";
     for (const auto& line : pdk.orfsConfig) mkFile << "export " << line << "\n";
     for (const auto& [key, value] : cfg.settings) mkFile << "export " << key << " = " << value << "\n";
     mkFile.close();
@@ -480,10 +482,21 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
     // transistors between VDD and VSS), then the platform's KLayout LVS deck
     if (stage) stage("LVS", 0.95);
     const fs::path cdl = results / "6_lvs.cdl", cdlTcl = results / "6_lvs_cdl.tcl";
-    std::ofstream(cdlTcl) << "read_db " << (results / "6_final.odb").string() << "\nwrite_cdl -include_fillers -masters "
-                          << file(pdk.cdl) << " " << cdl.string() << "\n";
+    // A macro's netlist (an SRAM's, say) comes in the run's ADDITIONAL_CDL, as its LEF in ADDITIONAL_LEFS
+    std::vector<std::string> masters{file(pdk.cdl)};
+    if (const auto more = cfg.settings.find("ADDITIONAL_CDL"); more != cfg.settings.end()) {
+        std::istringstream words(more->second);
+        for (std::string f; words >> f;) {
+            if (!fs::is_regular_file(f)) return fail("RTL flow: ADDITIONAL_CDL names " + f + ", which is no file");
+            masters.push_back(f);
+        }
+    }
+    std::string list;
+    for (const auto& m : masters) list += (list.empty() ? "" : " ") + m;
+    std::ofstream(cdlTcl) << "read_db " << (results / "6_final.odb").string() << "\nwrite_cdl -include_fillers -masters {"
+                          << list << "} " << cdl.string() << "\n";
     if (!runTool(tools.openroad, {"-no_init", "-exit", cdlTcl.string()})) return fail("RTL flow: CDL netlist " + res.error);
-    std::ofstream(cdl, std::ios::app) << slurp(file(pdk.cdl));
+    for (const auto& m : masters) std::ofstream(cdl, std::ios::app) << slurp(m);
     // IHP's deck extracts an antenna cell's diodes in the parent (the cell's wells merge with
     // its row's), so the layout cell comes out empty, simplify purges it after align, and the
     // schematic's antenna instances are left without a counterpart. A copy of the deck
@@ -497,8 +510,30 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
         return fail("RTL flow: the LVS deck changed (no rule_decks includes or align): update rtl_flow.cpp");
     for (size_t at = 0; (at = deckText.find(inc, at)) != std::string::npos; at += inc.size())
         deckText.replace(at, inc.size(), "# %include " + (lvsDir / "rule_decks").string() + "/");
+    // A macro of the run's (ADDITIONAL_LEFS: an SRAM, say) is compared by its pins: IHP's deck does not match an SRAM macro's own cells to
+    // its CDL. Blanked on both sides before align (the schematic's reader upper-cases names), its pins kept through simplification.
+    std::string black;
+    if (const auto lefs = cfg.settings.find("ADDITIONAL_LEFS"); lefs != cfg.settings.end()) {
+        std::istringstream files(lefs->second);
+        for (std::string f; files >> f;) {
+            std::ifstream lef(f);
+            for (std::string w; lef >> w;)
+                if (w == "MACRO" && lef >> w) black += (black.empty() ? "\"" : ", \"") + w + "\"";
+        }
+    }
+    std::string blank;
+    if (!black.empty()) {
+        blank = "black = [" + black + "]\n[netlist, schematic].each { |nl| nl.each_circuit.map(&:name).select { |n| black.any? { |b| b.casecmp?(n) } }"
+                ".each { |n| nl.blank_circuit(n) } }\n";
+        const std::string simplify = "netlist.simplify if SIMPLIFY\nschematic.simplify if SIMPLIFY\n";
+        if (deckText.find(simplify) == std::string::npos) return fail("RTL flow: the LVS deck changed (not its simplify lines): update rtl_flow.cpp");
+        deckText.replace(deckText.find(simplify), simplify.size(),
+                         "[netlist, schematic].each { |nl| nl.make_top_level_pins; nl.combine_devices; nl.each_circuit { |cc| cc.purge_nets_keep_pins }\n"
+                         "  loop { gone = nl.each_circuit.select { |cc| !cc.has_refs? && cc.name.downcase != $topcell.to_s.downcase }; break if gone.empty?; "
+                         "gone.each { |cc| nl.purge_circuit(cc) } } } if SIMPLIFY\n");
+    }
     deckText.replace(deckText.find(align), align.size(),
-                     "\nnetlist.flatten_circuit(\"" + pdk.lvsFlatten + "\")\nschematic.flatten_circuit(\"" + pdk.lvsFlatten + "\")\nalign\n");
+                     "\nnetlist.flatten_circuit(\"" + pdk.lvsFlatten + "\")\nschematic.flatten_circuit(\"" + pdk.lvsFlatten + "\")\n" + blank + "align\n");
     std::ofstream(deck) << deckText;
     std::string lvsLog;
     if (!runTool(tools.klayout, {"-b", "-rd", "input=" + res.gds, "-rd", "topcell=" + cfg.top, "-rd", "schematic=" + cdl.string(),

@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QXmlStreamReader>
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <set>
@@ -58,7 +59,7 @@ const char* kView = "layout";
 
 }  // namespace
 
-int exportGds(oadb::Workspace& ws, const std::string& libName, const std::string& cell, const std::string& view, const std::string& file, const std::set<std::string>& abstracts) {
+int exportGds(oadb::Workspace& ws, const std::string& libName, const std::string& cell, const std::string& view, const std::string& file, const std::set<std::string>& abstracts, bool withoutFill) {
     layout::GdsLibrary gds;
     gds.name = libName;
     // A GDS file has one namespace of structures: a cell is written once, and two libraries' cells of one name cannot both be
@@ -112,6 +113,10 @@ int exportGds(oadb::Workspace& ws, const std::string& libName, const std::string
         } else {
             g.shapes = l.layoutShapes(name, v);
             g.instances = l.layoutInstances(name, v);
+            if (withoutFill)
+                g.instances.erase(std::remove_if(g.instances.begin(), g.instances.end(), [&](const oadb::LayoutInstance& i) {
+                                      return ws.library(i.lib.empty() ? lib : i.lib).cellProp(i.cell, "fill").has_value();
+                                  }), g.instances.end());
         }
         if (const auto u = l.prop(name, v, "metersPerDbu")) gds.metersPerDbu = std::stod(*u);
         for (const auto& i : g.instances) add(i.lib.empty() ? lib : i.lib, i.cell, i.view.empty() ? kView : i.view);
