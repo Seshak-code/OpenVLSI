@@ -1,5 +1,18 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — corners at transistor level, on `rebuild/spice-corners` (after #55, merged)**
+
+- **Done:**
+  - `flow::SpiceCorner` / `Platform::spiceCorners`: ihp-sg13g2 slow (mos_ss, 1.08 V, 125 C), typ (mos_tt, 1.2 V, 25 C), fast (mos_ff, 1.32 V,
+    -40 C), as its Liberty corners. `test_spice {corner}` swaps the MOS section, the supply and adds `.temp`; the record keeps them.
+  - Test tab: a corner box beside Run at transistor level. `wave_eval`/`results_get` also read a test run's directory under testing/.
+- **gcd, 30 ns:** passes at all three. Clock to req_rdy (first edge after reset): slow 779 ps, typ 502 ps, fast 338 ps; ratios 1.55 and 0.67
+  against STA's 1.58 and 0.66. (The first output edges before reset differ by power-up state: not a delay.)
+- **Gates:** M5 59/59 with `--pdk --osdi` (three corner runs, about 4 minutes).
+- **Next:** serpentine resistors; FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations; LVS cross-probe of devices and flow runs.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — MIM capacitors, on `rebuild/mim` (after #54, merged)**
 
 - **Done:**

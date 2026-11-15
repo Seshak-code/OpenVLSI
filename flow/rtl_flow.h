@@ -17,6 +17,13 @@
 
 namespace flow {
 
+// A corner for simulating the chip's transistors: the device library's MOS model section, the supply and the temperature,
+// as the timing corner of the same name characterises its cells
+struct SpiceCorner {
+    std::string name, mosSection;
+    double volts, celsius;
+};
+
 // What the flow needs of one ORFS platform. Files are relative to its directory (platforms/<name>), or to $HOME with ~/.
 struct Platform {
     std::string name;
@@ -40,6 +47,7 @@ struct Platform {
     // Timing corners, slowest first: each a name and its Liberty files. `liberty` above is the one the flow closes timing at.
     std::vector<std::pair<std::string, std::vector<std::string>>> corners;
     std::string techLef;      // its routing layers' area and edge capacitance, for extracting hand-drawn layout; "" none
+    std::vector<SpiceCorner> spiceCorners;  // test_spice's corners; none: the device library's typical models at supplyVolts
 };
 
 const std::vector<Platform>& platforms();

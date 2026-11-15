@@ -75,12 +75,17 @@ QJsonObject configJson(oadb::Workspace& ws, const std::string& lib, const std::s
 
 }  // namespace
 
+// A simulation's directory: under simulation/, or a transistor-level test's under testing/ (test_spice). Nowhere else.
 std::string runDirectory(Context& c, const std::string& run) {
     std::error_code e;
-    const fs::path root = fs::weakly_canonical(simulationRoot(c), e), dir = fs::weakly_canonical(fs::path(run), e);
-    const auto [r, d] = std::mismatch(root.begin(), root.end(), dir.begin(), dir.end());
-    if (e || r != root.end() || !fs::is_regular_file(dir / "out.raw")) throw std::invalid_argument("no run '" + run + "' under " + root.string());
-    return dir.string();
+    const fs::path dir = fs::weakly_canonical(fs::path(run), e);
+    for (const fs::path& base : {simulationRoot(c), simulationRoot(c).parent_path() / "testing"}) {
+        std::error_code b;
+        const fs::path root = fs::weakly_canonical(base, b);
+        const auto [r, d] = std::mismatch(root.begin(), root.end(), dir.begin(), dir.end());
+        if (!e && !b && r == root.end() && fs::is_regular_file(dir / "out.raw")) return dir.string();
+    }
+    throw std::invalid_argument("no run '" + run + "' under " + simulationRoot(c).string() + " or a transistor-level test's under testing/");
 }
 
 void addSimulationCommands(Registry& r) {
