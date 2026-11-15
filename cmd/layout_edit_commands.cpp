@@ -125,7 +125,11 @@ int64_t nanometres(const std::string& text, const std::string& what, int64_t gri
 
 void addLayoutEditCommands(Registry& r) {
     r.add({"layout_tech_set", "Attaches a process to a library: its layers, metals, vias and generators become available to its layouts.",
-           object({{"library", kLib}, {"tech", param("string", "the process (layout_tech_get lists them)")}}),
+           object({{"library", kLib}, {"tech", [] {
+                       QJsonArray names;
+                       for (const auto& t : layout::techNames()) names.append(q(t));
+                       return QJsonObject{{"type", "string"}, {"enum", names}, {"description", "the process"}};
+                   }()}}),
            [](Context& c, const QJsonObject& a) {
                if (!layout::findTech(str(a, "tech"))) throw std::invalid_argument("no process '" + str(a, "tech") + "'");
                libOf(c, a).setLibraryProp("tech", QJsonDocument(QJsonArray{a["tech"]}).toJson(QJsonDocument::Compact).mid(1).chopped(1).toStdString());

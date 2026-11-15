@@ -54,8 +54,17 @@ QWidget* windowAt(const QPoint& at) {
         if (modal->frameGeometry().contains(at)) return modal;
         return modal;
     }
-    if (QWidget* top = QApplication::topLevelAt(at)) return top;
-    return QApplication::activeWindow();
+    if (QWidget* top = QApplication::topLevelAt(at); top && top->isVisible() && top->windowHandle()) return top;
+    if (QWidget* active = QApplication::activeWindow(); active && active->isVisible() && active->windowHandle()) return active;  // not a dialog just closed
+    // A platform with no window manager (offscreen) may have no active window after a dialog closes, and does not hit-test:
+    // the visible window under the point, the main window last
+    QWidget* shell = nullptr;
+    for (QWidget* top : QApplication::topLevelWidgets()) {
+        if (!top->isVisible() || !top->frameGeometry().contains(at)) continue;
+        if (qobject_cast<Shell*>(top)) shell = top;
+        else return top;
+    }
+    return shell;
 }
 
 Qt::MouseButton buttonNamed(const QString& name) {
@@ -150,7 +159,7 @@ void addInputCommands(Session& session, Shell& shell) {
     };
 
     add({"ui_locate", "Where a control is on the screen, in global points, with its centre: kind rail (text a stage), console, menu (a menu bar title), menu_item (in the open menu), "
-                      "button, tab, tab_close, tree_item (any visible list's row holding text), field (an input by its name: a text field, a selection box), option (an entry of the selection "
+                      "button, tab, tab_close, tree_item (any visible list's row: exactly the text first, else holding it; or a path, \"cell > view\"), field (an input by its name: a text field, a selection box), option (an entry of the selection "
                       "list that is open), layout_point (x, y database units in the active layout), or editor_point (in the active schematic or symbol).",
          cmd::object({{"kind", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"window", "rail", "console", "menu", "menu_item", "button", "tab", "tab_close", "tree_item", "field", "option", "layout_point", "editor_point"}}, {"description", "what to find"}}}},
                      {{"text", cmd::param("string", "its text")}, {"x", cmd::param("number", "x, database units")}, {"y", cmd::param("number", "y, database units")}}),
@@ -197,11 +206,42 @@ void addInputCommands(Session& session, Shell& shell) {
                  }
                  refuse("no tab '" + text + "'");
              }
+             if (kind == "tree_item" && text.contains(" > ")) {  // a path: each row exactly, under the one before
+                 const QStringList path = text.split(" > ");
+                 for (QTreeWidget* tree : top->findChildren<QTreeWidget*>()) {
+                     if (!tree->isVisible()) continue;
+                     for (QTreeWidgetItem* i : tree->findItems(path[0], Qt::MatchExactly | Qt::MatchCaseSensitive | Qt::MatchRecursive)) {
+                         QTreeWidgetItem* at = i;
+                         for (int k = 1; at && k < path.size(); ++k) {
+                             QTreeWidgetItem* next = nullptr;
+                             for (int c = 0; c < at->childCount() && !next; ++c)
+                                 if (at->child(c)->text(0) == path[k]) next = at->child(c);
+                             if (next) at->setExpanded(true);
+                             at = next;
+                         }
+                         if (!at) continue;
+                         tree->scrollToItem(at);
+                         const QRect r = tree->visualItemRect(at);
+                         if (!r.isEmpty()) return QJsonValue(globalRect(tree->viewport(), r));
+                     }
+                 }
+                 refuse("no visible row at '" + text + "'");
+             }
              if (kind == "tree_item") {
                  for (QTreeWidget* tree : top->findChildren<QTreeWidget*>()) {
                      if (!tree->isVisible()) continue;
-                     const auto found = tree->findItems(text, Qt::MatchContains | Qt::MatchRecursive);
+                     // the row that is exactly the text first, in any tree; then one that holds it
+                     auto found = tree->findItems(text, Qt::MatchExactly | Qt::MatchCaseSensitive | Qt::MatchRecursive);
+                     if (found.isEmpty()) continue;
                      for (QTreeWidgetItem* i : found) {
+                         tree->scrollToItem(i);
+                         const QRect r = tree->visualItemRect(i);
+                         if (!r.isEmpty()) return QJsonValue(globalRect(tree->viewport(), r));
+                     }
+                 }
+                 for (QTreeWidget* tree : top->findChildren<QTreeWidget*>()) {
+                     if (!tree->isVisible()) continue;
+                     for (QTreeWidgetItem* i : tree->findItems(text, Qt::MatchContains | Qt::MatchRecursive)) {
                          tree->scrollToItem(i);
                          const QRect r = tree->visualItemRect(i);
                          if (!r.isEmpty()) return QJsonValue(globalRect(tree->viewport(), r));
@@ -221,7 +261,7 @@ void addInputCommands(Session& session, Shell& shell) {
                  for (int r = 0; r < list->model()->rowCount(); ++r) {
                      const QModelIndex i = list->model()->index(r, 0);
                      if (i.data().toString() != text) continue;
-                     list->scrollTo(i);
+                     list->scrollTo(i, QAbstractItemView::PositionAtCenter);  // away from the edges, where a hovering mouse scrolls the list
                      return QJsonValue(globalRect(list->viewport(), list->visualRect(i)));
                  }
                  refuse("no option '" + text + "' in the open list");

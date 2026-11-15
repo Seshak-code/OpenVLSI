@@ -38,6 +38,9 @@ bool pickMaster(QWidget* parent, Session& s, QString& lib, QString& cell, QStrin
     d.setWindowTitle("Add Instance");
     auto* form = new QFormLayout(&d);
     auto *libs = new QComboBox(&d), *cells = new QComboBox(&d), *views = new QComboBox(&d);
+    libs->setAccessibleName("Library");
+    cells->setAccessibleName("Cell");
+    views->setAccessibleName("View");
     form->addRow("Library", libs);
     form->addRow("Cell", cells);
     form->addRow("View", views);

@@ -74,6 +74,7 @@ CommandForm::CommandForm(const cmd::Command& c, const QJsonObject& prefill, QWid
             w = line;
         }
         w->setToolTip(schema["description"].toString());
+        w->setAccessibleName(name);  // a form's field is found by its parameter's name (ui_locate field)
         w->setMinimumWidth(320);
         form->addRow(name, w);
         if (const QString d = schema["description"].toString(); !d.isEmpty()) {

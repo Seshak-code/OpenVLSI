@@ -2,6 +2,7 @@
 // The layout viewer: a view's geometry through its hierarchy on a QRhi canvas, a layer panel, levels, rulers and
 // selection. Geometry goes to the GPU once; panning and zooming change one matrix, so a routed block moves smoothly.
 #include "app/session.h"
+#include "layout/pcell.h"
 #include "layout/flatten.h"
 
 #include <QMainWindow>
@@ -130,7 +131,7 @@ public:
     void startTool(Tool t);
     Tool tool() const { return tool_; }
     void setToolText(const QString& text) { toolText_ = text; }  // what Label writes, what Pin names
-    void setInstanceMaster(const QString& cell) { instanceMaster_ = cell; }
+    void setInstanceMaster(const QString& cell, const QString& library = {}) { instanceMaster_ = cell; instanceLib_ = library; }
     void setCurrentLayer(int layer, int datatype);
     void clickDbu(double x, double y, bool extend = false);      // what a click there does, in the current tool
     void finishTool();                                           // Enter: ends a path or a polygon
@@ -175,6 +176,8 @@ private:
     QString currentLayerName() const;
     void askPlaceInstance();
     void askDevice(const QString& command, const QJsonObject& prefill);
+    std::optional<layout::Rect> boundaryOf(const QString& lib, const QString& cell) const;  // "" lib: this one
+    oadb::Point abutted(oadb::Point at) const;  // an instance's origin, snapped so its boundary abuts a neighbour's
     void askLabel(Tool t);
     Session& session_;
     QString lib_, cell_, view_;
@@ -197,7 +200,7 @@ private:
     std::set<int64_t> selection_;
     std::map<layout::LayerKey, bool> shown_;
     std::optional<layout::LayerKey> current_;
-    QString toolText_, instanceMaster_, lastError_;
+    QString toolText_, instanceMaster_, instanceLib_, lastError_;  // instanceLib_: the master's library, when not this one
     int64_t grid_ = 1, lastRevision_ = -1;
     bool flightShown_ = true;
     std::vector<int64_t> stretchShapes_;
