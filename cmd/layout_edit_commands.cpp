@@ -99,6 +99,7 @@ std::string ensureMaster(oadb::Library& l, const layout::Generated& g, const std
 }
 
 bool isPolyResistor(const std::string& cell) { return cell == "rsil" || cell == "rppd" || cell == "rhigh"; }
+std::string capName(int64_t w, int64_t l) { return "cmim_w" + std::to_string(w) + "_l" + std::to_string(l); }
 std::string resName(const std::string& kind, int64_t w, int64_t l) { return kind + "_w" + std::to_string(w) + "_l" + std::to_string(l); }
 std::string mosName(bool pmos, int64_t w, int64_t l, int ng) {
     return std::string(pmos ? "pmos" : "nmos") + "_w" + std::to_string(w) + "_l" + std::to_string(l) + "_ng" + std::to_string(ng);
@@ -398,6 +399,18 @@ void addLayoutEditCommands(Registry& r) {
                l.change("generate " + type, [&] { name = ensureMaster(l, g, resName(type, w, len), t); });
                return QJsonValue(q(name));
            }});
+    r.add({"layout_pcell_cap", "Generates a MIM capacitor master (cap_cmim) from the process's rules (once per size) and returns its cell's name: the MIM w by l, "
+                               "Metal5 under it as MINUS, TopMetal1 over it as PLUS.",
+           object({{"library", kLib}, {"w", param("number", "width, database units")}, {"l", param("number", "length, database units")}}),
+           [](Context& c, const QJsonObject& a) {
+               oadb::Library& l = libOf(c, a);
+               const layout::Tech& t = needTech(l);
+               const int64_t w = whole(a["w"], "w"), len = whole(a["l"], "l");
+               const layout::Generated g = layout::capCell(t, w, len);
+               std::string name;
+               l.change("generate cap_cmim", [&] { name = ensureMaster(l, g, capName(w, len), t); });
+               return QJsonValue(q(name));
+           }});
     r.add({"layout_pcell_tap", "Generates a body tie master (ptap in pSD, ntap in NWell) and returns its cell's name.",
            object({{"library", kLib}, {"type", param("string", "ptap or ntap")}}),
            [](Context& c, const QJsonObject& a) {
@@ -410,7 +423,7 @@ void addLayoutEditCommands(Registry& r) {
                return QJsonValue(q(name));
            }});
 
-    r.add({"layout_generate", "Generates a layout view from a schematic: a master per transistor or poly resistor size, n-devices and resistors in one row and p-devices above, a tie per transistor body net, a labelled pin per schematic pin, and each terminal's net recorded. The wiring is left to route; layout_connectivity tells what remains.",
+    r.add({"layout_generate", "Generates a layout view from a schematic: a master per transistor, poly resistor or MIM capacitor size, n-devices, resistors and capacitors in one row and p-devices above, a tie per transistor body net, a labelled pin per schematic pin, and each terminal's net recorded. The wiring is left to route; layout_connectivity tells what remains.",
            object({{"library", kLib}, {"cell", kCell}}, {{"view", kView}, {"schematic", param("string", "the schematic view (default \"schematic\")")}}),
            [](Context& c, const QJsonObject& a) {
                oadb::Library& l = libOf(c, a);
@@ -425,10 +438,10 @@ void addLayoutEditCommands(Registry& r) {
                struct Device { std::string name; bool pmos; int64_t w, len; int ng; std::map<std::string, std::string> nets; layout::Generated g; std::string resistor; };
                std::vector<Device> devices;
                for (const auto& i : l.instances(cell, schematic)) {
-                   const bool nmos = i.cell == "sg13_lv_nmos", pmos = i.cell == "sg13_lv_pmos", res = isPolyResistor(i.cell);
-                   if (!nmos && !pmos && !res) {
+                   const bool nmos = i.cell == "sg13_lv_nmos", pmos = i.cell == "sg13_lv_pmos", res = isPolyResistor(i.cell), cap = i.cell == "cap_cmim";
+                   if (!nmos && !pmos && !res && !cap) {
                        if (i.cell == "vdc" || i.cell == "vsin" || i.cell == "vpulse" || i.cell == "gnd" || i.cell == "idc") continue;  // the testbench's: no mask
-                       throw std::invalid_argument("no generator for instance " + i.name + " of " + i.cell + " (sg13_lv_nmos, sg13_lv_pmos, rsil, rppd and rhigh, in a flat schematic)");
+                       throw std::invalid_argument("no generator for instance " + i.name + " of " + i.cell + " (sg13_lv_nmos, sg13_lv_pmos, rsil, rppd, rhigh and cap_cmim, in a flat schematic)");
                    }
                    oadb::Library& master = c.workspace.library(i.lib);
                    const QJsonObject defaults = QJsonDocument::fromJson(QByteArray::fromStdString(master.cellProp(i.cell, "params").value_or("{}"))).object();
@@ -436,13 +449,13 @@ void addLayoutEditCommands(Registry& r) {
                        const auto it = i.params.find(p);
                        return it != i.params.end() ? it->second : defaults[p].toVariant().toString().toStdString();
                    };
-                   if (value("m") != "1") throw std::invalid_argument(i.name + " has m=" + value("m") + ": draw it as fingers (ng), or several instances");
+                   if (!value("m").empty() && value("m") != "1") throw std::invalid_argument(i.name + " has m=" + value("m") + ": draw it as fingers (ng), or several instances");
                    Device d{i.name, pmos, nanometres(value("w"), i.name + "'s w", t.grid), nanometres(value("l"), i.name + "'s l", t.grid), res ? 1 : std::atoi(value("ng").c_str()), {}, {},
-                            res ? i.cell : std::string()};
+                            res || cap ? i.cell : std::string()};
                    const auto nets = con.instanceNets.find(i.name);
                    if (nets == con.instanceNets.end()) throw std::invalid_argument(i.name + " has no connections");
                    d.nets = nets->second;
-                   d.g = res ? layout::resCell(t, i.cell, d.w, d.len) : layout::mosCell(t, pmos, d.w, d.len, d.ng);
+                   d.g = cap ? layout::capCell(t, d.w, d.len) : res ? layout::resCell(t, i.cell, d.w, d.len) : layout::mosCell(t, pmos, d.w, d.len, d.ng);
                    devices.push_back(std::move(d));
                }
                if (devices.empty()) throw std::invalid_argument(cell + "/" + schematic + " has no transistors or resistors to draw");
@@ -478,14 +491,14 @@ void addLayoutEditCommands(Registry& r) {
                    };
                    for (const auto& d : devices) {
                        if (!d.resistor.empty()) {
-                           // Its two ends; its body is the substrate under it, which has no terminal in the layout
+                           // Two ends (a resistor's body, the substrate under it, has no terminal in the layout)
                            QJsonObject nets;
                            for (const char* term : {"PLUS", "MINUS"}) {
                                const auto n = d.nets.find(term);
                                if (n == d.nets.end()) throw std::invalid_argument(d.name + " has no net on " + term);
                                nets[term] = q(n->second);
                            }
-                           place(ensureMaster(l, d.g, resName(d.resistor, d.w, d.len), t), d.g, false, QJsonObject{{"instance", q(d.name)}, {"nets", nets}});
+                           place(ensureMaster(l, d.g, d.resistor == "cap_cmim" ? capName(d.w, d.len) : resName(d.resistor, d.w, d.len), t), d.g, false, QJsonObject{{"instance", q(d.name)}, {"nets", nets}});
                            continue;
                        }
                        const std::string master = ensureMaster(l, d.g, mosName(d.pmos, d.w, d.len, d.ng), t);

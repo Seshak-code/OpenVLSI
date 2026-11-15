@@ -31,6 +31,9 @@ Generated mosCell(const Tech& t, bool pmos, int64_t w, int64_t l, int ng);
 // process's LVS deck measures exactly w and l: its PolyRes marker is the body.
 // ponytail: no bends, so a long resistor is a long cell; the upgrade is a serpentine (the deck's b and ps parameters).
 Generated resCell(const Tech& t, const std::string& kind, int64_t w, int64_t l);
+// SG13G2 MIM capacitor (cap_cmim): a MIM rectangle w by l in database units, Metal5 under it as the bottom plate (MINUS),
+// TopMetal1 over it as the top (PLUS), joined through a Vmim array. The process's LVS deck measures w and l as drawn.
+Generated capCell(const Tech& t, int64_t w, int64_t l);
 // The tie of a body: a contact in Activ, in pSD for the substrate (ntap false), or in NWell (ntap true)
 Generated tapCell(const Tech& t, bool ntap);
 

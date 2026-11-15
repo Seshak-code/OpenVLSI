@@ -1360,7 +1360,7 @@ Writes a layout view and everything it places to a GDSII file; returns the struc
 
 ### `layout_generate`
 
-Generates a layout view from a schematic: a master per transistor or poly resistor size, n-devices and resistors in one row and p-devices above, a tie per transistor body net, a labelled pin per schematic pin, and each terminal's net recorded. The wiring is left to route; layout_connectivity tells what remains.
+Generates a layout view from a schematic: a master per transistor, poly resistor or MIM capacitor size, n-devices, resistors and capacitors in one row and p-devices above, a tie per transistor body net, a labelled pin per schematic pin, and each terminal's net recorded. The wiring is left to route; layout_connectivity tells what remains.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -1466,6 +1466,16 @@ Moves shapes and instances of a layout view by dx, dy (one undo step).
 | `library` | string | yes | library name |
 | `shapes` | array |  | object ids (layout_objects_get) |
 | `view` | string |  | the layout view (default "layout") |
+
+### `layout_pcell_cap`
+
+Generates a MIM capacitor master (cap_cmim) from the process's rules (once per size) and returns its cell's name: the MIM w by l, Metal5 under it as MINUS, TopMetal1 over it as PLUS.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `l` | number | yes | length, database units |
+| `library` | string | yes | library name |
+| `w` | number | yes | width, database units |
 
 ### `layout_pcell_mos`
 
@@ -1723,7 +1733,7 @@ The electrical rule check: gates that nothing drives, wells with no tap, bulks o
 
 ### `verify_extract`
 
-Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors and poly resistors with the sizes (and diffusion areas) LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values per metal. A config view whose viewList puts that view first then simulates the layout in place of the schematic. Returns each net's capacitance by metal and the netlist. Capacitance only: no wire resistance or coupling yet.
+Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors, poly resistors and MIM capacitors with the sizes (and diffusion areas) LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values per metal. A config view whose viewList puts that view first then simulates the layout in place of the schematic. Returns each net's capacitance by metal and the netlist. Capacitance only: no wire resistance or coupling yet.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|

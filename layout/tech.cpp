@@ -16,6 +16,7 @@ Tech sg13g2() {
     t.textDatatype = 25;
     t.layers = {
         {"NWell", 31, 0, "#268c6b"},    {"Activ", 1, 0, "#00ff00"},       {"pSD", 14, 0, "#ccb899"},        {"GatPoly", 5, 0, "#bf4026"},
+        {"MIM", 36, 0, "#268c6b"},       {"Vmim", 129, 0, "#ffe6bf"},
         {"nSD", 7, 0, "#99ccb8"},       {"SalBlock", 28, 0, "#8066cc"},   {"RES", 24, 0, "#e6b800"},        {"PolyRes", 128, 0, "#e67a00"},   {"EXTBlock", 111, 0, "#5c7a99"},
         {"Cont", 6, 0, "#00ffff"},      {"Metal1", 8, 0, "#39bfff"},      {"Metal1.pin", 8, 2, "#39bfff"},  {"Metal1.text", 8, 25, "#39bfff"},
         {"Via1", 19, 0, "#ccccff"},     {"Metal2", 10, 0, "#ccccd9"},     {"Metal2.pin", 10, 2, "#ccccd9"}, {"Metal2.text", 10, 25, "#ccccd9"},
@@ -33,6 +34,7 @@ Tech sg13g2() {
         {"Metal3", 30, 200, 210, 144000},
         {"Metal4", 50, 200, 210, 144000},
         {"Metal5", 67, 200, 210, 144000},
+        {"TopMetal1", 126, 1640, 1640, 0},  // TM1.a, TM1.b
     };
     // V1.a, V1.b, V1.c, V1.c1; M2.c, M2.c1. Via2 to Via4 keep the upper metal's numbers on their lower metal too (V2.c).
     t.vias = {
@@ -40,6 +42,7 @@ Tech sg13g2() {
         {"Via2", 29, 1, 2, 190, 220, 5, 50, 5, 50},
         {"Via3", 49, 2, 3, 190, 220, 5, 50, 5, 50},
         {"Via4", 66, 3, 4, 190, 220, 5, 50, 5, 50},
+        {"TopVia1", 125, 4, 5, 420, 420, 100, 100, 420, 420},  // TV1.a, TV1.b, TV1.c, TV1.d
     };
     return t;
 }

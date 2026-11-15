@@ -281,9 +281,9 @@ with a check that runs. Nothing is shown as working before it is: a stage appear
    RV32I against KLayout, layer by layer. DEF and LEF import wait until something needs them.
 5. **Layout editing (Virtuoso Layout's role, done for SG13G2 low-voltage MOS):** create and stretch shapes, vias, pins,
    rulers; hierarchy; a transistor Pcell; GDS export; connectivity from the schematic (M3). `tools/m3_gate.py`: generators
-   and a routed inverter against IHP's DRC and LVS decks. Poly resistors (rsil, rppd, rhigh), DRC-clean,
-   matched by LVS at their drawn width and length, extracted and simulated. Still to come for M3: FinFET Pcells, edit-in-place,
-   MIM capacitors, serpentine resistors, device abutment.
+   and a routed inverter against IHP's DRC and LVS decks. Poly resistors (rsil, rppd, rhigh) and MIM capacitors,
+   DRC-clean, matched by LVS at their drawn size, extracted and simulated. Still to come for M3: FinFET Pcells, edit-in-place,
+   serpentine resistors, device abutment.
 6. **Verify stage:** DRC and LVS (KLayout decks) as commands and views: a marker browser over the layout canvas, LVS's differences among its markers (`verify_lvs_report`), the electrical rules with every LVS (`verify_erc`); ASAP7 as
    in M2 slice 5's notes. Extraction (OpenRCX) to a post-layout netlist simulated on TreeSPICE, from ADE (M3).
 7. **Timing views (done):** OpenSTA through OpenROAD with the run's SPEF: slack summary, path reports, cross-probe to the layout (M5). Every corner of the platform at once (slow, typ, fast), each path naming its corner; modes (an SDC each) and per-corner RC derates (`timing_analyze`'s `modes` and `rc`); `test_shmoo` sweeps the chip at a corner.
@@ -313,7 +313,7 @@ Honest parity: each row is what a designer gets now, checked by the gate named, 
 | Power grid | Voltus | PSM static IR and grid currents, map on layout (`m5_gate`) | Dynamic IR, EM against process limits, vectors from activity |
 | Physical verification | Pegasus | KLayout's DRC and LVS decks, marker browser; LVS differences by kind, named on both sides, marked on the layout, cross-probed to the schematic (`m3_gate`, flow); ERC with every LVS, on both netlists flat, and on a schematic alone (`verify_erc`: floating gates and wells, wrong-supply bulks, dangling terminals, unpowered islands) | ERC from the PDK's own rules (soft connections, antenna, voltage classes), LVS cross-probe of devices and of flow runs to their netlist, ASAP7 LVS (no open deck) |
 | Extraction | Quantus | OpenRCX's SPEF in timing; each net's RC network in the transistor-level test, a node per pin (gcd: 2,034 wire resistors on 533 nets) and of hand-drawn layout an `extracted` view: LVS's devices as drawn and each net's wiring capacitance from the tech LEF, simulated through a config view (`verify_extract`; `m3_gate`: inverter 13.5 ps as a schematic, 15.1 ps extracted) | Coupling as coupling (it is grounded); for hand-drawn layout wire resistance, coupling, hierarchy, devices other than MOS |
-| Custom layout | Virtuoso Layout | Viewer, editing tools, transistor and poly resistor generators, layout from schematic, flight lines (`m3_gate`, `ui_test`) | Capacitors, serpentine resistors, FinFET cells, abutment, edit-in-place, constraint-driven routing, guard rings |
+| Custom layout | Virtuoso Layout | Viewer, editing tools, transistor, poly resistor and MIM capacitor generators, layout from schematic, flight lines (`m3_gate`, `ui_test`) | Serpentine resistors, MOM and RF MIM capacitors, FinFET cells, abutment, edit-in-place, constraint-driven routing, guard rings |
 | Schematic, ADE, RF | Virtuoso, ADE, Spectre, Spectre RF | Editors, ADE L/XL/Verifier, the hierarchy editor on config views (view list, a binding per cell, its netlist; `test_shell`, `ui_test`), TreeSPICE with PSS, PAC, PNoise, HB (`m1_gate`, `m2_gate`, `test_verifier`) | Buses, inherited nets, CDF callbacks, Library Manager copy and locks; bindings per instance in a config |
 | The chip under test | (Xcelium, Spectre, Palladium) | Testbenches at gate level with layout's delays, clock sweep, firmware, and the routed chip at transistor level on TreeSPICE with its wires' resistance and capacitance, which fails on a recording the chip cannot keep up with (`m5_gate`) | Corners at transistor level, emulation speed |
 
