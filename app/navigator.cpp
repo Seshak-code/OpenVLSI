@@ -162,6 +162,7 @@ void Navigator::contextMenu(const QPoint& at) {
     if (mode_ == Mode::Design) {
         menu.addAction("Create library…", this, [this] { actions_.form("library_create", {}); });
         if (hasLib) menu.addAction("Create cell…", this, [this, s] { actions_.form("cell_create", s); });
+        if (hasLib && !hasCell) menu.addAction("Attach Process…", this, [this, s] { actions_.form("layout_tech_set", s); });
         if (hasCell) menu.addAction("Create view…", this, [this, s] { actions_.form("view_create", s); });
         if (hasCell && !hasView) {
             menu.addSeparator();

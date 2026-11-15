@@ -15,6 +15,10 @@
 #include <memory>
 
 int main(int argc, char** argv) {
+    // Every window composites through the GPU from the start. The editors' canvases are GPU widgets made as windows of their
+    // own and then placed in the main window's tabs; a window that began with raster composition never shows their texture,
+    // only what is painted over it (their labels), while a grab of the window, which renders the texture itself, looks right.
+    if (!qEnvironmentVariableIsSet("QT_WIDGETS_RHI")) qputenv("QT_WIDGETS_RHI", "1");
     QApplication qapp(argc, argv);
     QApplication::setOrganizationName("OpenVLSI");
     QApplication::setApplicationName("OpenVLSI");
