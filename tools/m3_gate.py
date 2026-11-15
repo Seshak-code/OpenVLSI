@@ -430,6 +430,101 @@ def step_extract(m, a, work, lvs):
     check("not replaced" in refusals[0] and "not an LVS run" in refusals[1], "verify_extract will not overwrite a schematic, nor read a DRC run")
 
 
+def step_hierarchy(m, a, work):
+    """Two inverters in a buffer, by hand: placed and joined in layout, checked as a hierarchy, extracted cell by cell, simulated."""
+    print("Hierarchy: a buffer of two inverters, by hand", flush=True)
+    lib = dict(library="design", cell="buf")
+    m("cell_create", **lib)
+    m("view_create", **lib, view="schematic", type="schematic")
+    place(m, "design", "buf", "X1", "design", "inv", 0, 0, {"in": "a", "out": "m", "vdd": "vdd", "vss": "vss"})
+    place(m, "design", "buf", "X2", "design", "inv", 2000, 0, {"in": "m", "out": "y", "vdd": "vdd", "vss": "vss"})
+    for k, (pin, d) in enumerate([("a", "input"), ("y", "output"), ("vdd", "inputOutput"), ("vss", "inputOutput")]):
+        m("pin_add", **lib, view="schematic", name=pin, direction=d, x=-2000, y=1000 - 300 * k)
+    # The layout: the inverter's own layout twice, 6 um apart, joined on Metal3 over via stacks at its pins
+    m("view_create", **lib, view="layout", type="layout")
+    inv = m("layout_objects_get", library="design", cell="inv")
+    pins = {s["text"]: tuple(s["points"][0]) for s in inv["shapes"] if s["kind"] == "text"}
+    dx = 6000
+    m("layout_instance_add", **lib, master="inv", at=[0, 0])
+    m("layout_instance_add", **lib, master="inv", at=[dx, 0])
+
+    def stack(x, y):
+        m("layout_via_add", **lib, **{"from": "Metal1"}, at=[x, y])
+        m("layout_via_add", **lib, **{"from": "Metal2"}, at=[x, y])
+        m("layout_shape_add", **lib, layer="Metal2", kind="rect", points=[[x - 200, y - 200], [x + 200, y + 200]])  # M2.d: a stack's pad carries its own area
+
+    def metal3(x0, y0, x1, y1):
+        return m("layout_shape_add", **lib, layer="Metal3", kind="rect", points=[[min(x0, x1) - 150, min(y0, y1) - 150], [max(x0, x1) + 150, max(y0, y1) + 150]])
+
+    out1, in2 = pins["out"], (pins["in"][0] + dx, pins["in"][1])
+    stack(*out1)
+    stack(*in2)
+    joint = metal3(out1[0], out1[1], in2[0], out1[1])
+    metal3(in2[0], in2[1], in2[0], out1[1])
+    for n in ("vdd", "vss"):
+        p, q = pins[n], (pins[n][0] + dx, pins[n][1])
+        stack(*p)
+        stack(*q)
+        metal3(p[0], p[1], q[0], q[1])
+    for name, (x, y), off in (("a", pins["in"], 0), ("y", pins["out"], dx), ("vdd", pins["vdd"], 0), ("vss", pins["vss"], 0)):
+        m("layout_pin_add", **lib, name=name, metal="Metal1", box=[x + off - 130, y - 175, x + off + 130, y + 175])
+    drc = m("verify_drc", **lib)
+    rules = [r["rule"] for r in m("verify_markers", run=drc["run"])["rules"]] if not drc.get("clean") else []
+    check(drc.get("clean") is True, f"IHP's DRC deck over the hierarchy: clean {rules} {drc.get('error', '')}")
+    lvs = m("verify_lvs", **lib)
+    check(lvs.get("matched") is True and lvs.get("erc_violations") == 0, f"IHP's LVS deck: the buffer matches its two-level schematic {lvs.get('error', '')}")
+    cdl = open(os.path.join(work, "verification", lvs["run"], "schematic.cdl")).read()
+    check(".SUBCKT inv in out vdd vss" in cdl and "XX1 a m vdd vss inv" in cdl and cdl.index(".SUBCKT inv") < cdl.index(".SUBCKT buf"),
+          "LVS's reference is hierarchical: inv a subcircuit, placed twice in buf")
+    circuits = {c["schematic"]: c["status"] for c in m("verify_lvs_report", run=lvs["run"], all=True)["circuits"]}
+    check(circuits.get("INV") == "match" and circuits.get("BUF") == "match", f"and LVS pairs each circuit: {circuits}")
+    # An open between the two: the buffer differs, the inverter does not
+    m("layout_objects_delete", **lib, shapes=[joint])
+    opened = m("verify_lvs", **lib)
+    circuits = {c["schematic"]: c["status"] for c in m("verify_lvs_report", run=opened["run"], all=True)["circuits"]}
+    check(opened.get("matched") is False and circuits.get("BUF") != "match" and circuits.get("INV") == "match",
+          f"with the joint between them deleted, LVS finds the buffer different and its inverters still right: {circuits}")
+    m("edit_undo", library="design")
+    # Extracted cell by cell: the buffer's own wiring, and its inverters through their own extraction
+    ext = m("verify_extract", run=lvs["run"])
+    nets = {n["name"]: n["c_ff"] for n in ext["nets"]}
+    check("X1 a m vdd vss inv" in ext["netlist"] and "X2 m y vdd vss inv" in ext["netlist"] and nets.get("m", 0) > 0.5,
+          f"verify_extract writes the buffer's two inverters as subcells, and its own wiring: m {nets.get('m', 0):.3f} fF")
+    inv_own = m("prop_get", library="design", cell="inv", view="extracted", key="extraction")
+    inv_out = next(n["c_ff"] for n in inv_own["nets"] if n["name"] == "out")
+    check(nets.get("m", 0) < 3 * inv_out, f"the inverters' own metal is not counted again in the buffer's: m {nets.get('m'):.3f} fF, an inverter's out {inv_out:.3f} fF")
+    m("symbol_generate", **lib)
+    m("cell_create", library="design", cell="btb")
+    m("view_create", library="design", cell="btb", view="schematic", type="schematic")
+    place(m, "design", "btb", "X1", "design", "buf", 0, 0, {"a": "a", "y": "y", "vdd": "vdd", "vss": "gnd!"})
+    place(m, "design", "btb", "VDD", "analogLib", "vdc", -1500, 0, {"PLUS": "vdd", "MINUS": "gnd!"}, {"vdc": "1.2"})
+    place(m, "design", "btb", "VIN", "analogLib", "vpulse", -2500, 0, {"PLUS": "a", "MINUS": "gnd!"}, {"v1": "0", "v2": "1.2", "td": "100p", "tr": "20p", "tf": "20p", "pw": "400p", "per": "1n"})
+    got = m("config_set", library="design", cell="btb", view="post", top="design/btb/schematic", viewList=["extracted", "schematic", "spice"])
+    uses = {c["cell"]: c.get("uses") for c in got["cells"]}
+    check(uses.get("buf") == "extracted" and uses.get("inv") == "extracted", f"a config reaches both levels' extractions: {uses}")
+    delay = {}
+    for view in ("schematic", "post"):
+        run = m("simulate", library="design", cell="btb", view=view, cards=[".tran 1p 1n"])
+        delay[view] = m("wave_eval", run=run["run"], expression="delay(VT(a), 0.6, VT(y), 0.6)") * 1e12
+    print(f"    buffer delay: schematic {delay['schematic']:.2f} ps, extracted {delay['post']:.2f} ps", flush=True)
+    check(delay["schematic"] < delay["post"] < 2 * delay["schematic"], "the extracted buffer is slower than its schematic, by its wiring")
+    # Across libraries: a top in a library of its own places the buffer from design, and one GDS file holds them all
+    m("library_create", library="top", path=os.path.join(work, "top.oalib"))
+    m("layout_tech_set", library="top", tech="sg13g2")
+    m("cell_create", library="top", cell="chip")
+    m("view_create", library="top", cell="chip", view="layout", type="layout")
+    m("layout_instance_add", library="top", cell="chip", master="buf", masterLibrary="design", at=[0, 0])
+    gds = os.path.join(work, "chip.gds")
+    written = m("layout_export_gds", library="top", cell="chip", file=gds)
+    masters = {i["cell"] for i in m("layout_objects_get", library="design", cell="inv")["instances"]}
+    check(written == 3 + len(masters), f"layout_export_gds follows a master into another library: chip, buf, inv and inv's {len(masters)} device masters in one file ({written})")
+    m("cell_create", library="top", cell="inv")
+    m("view_create", library="top", cell="inv", view="layout", type="layout")
+    m("layout_instance_add", library="top", cell="chip", master="inv", at=[20000, 0])
+    refused = m.refused("layout_export_gds", library="top", cell="chip", file=gds)
+    check("one GDS file cannot hold both" in refused, f"and refuses two libraries' cells of one name: {refused}")
+
+
 def step_resistors(m, a, work):
     """Three poly resistors in a chain, one of each kind: generated, joined by hand, checked by the decks, extracted and simulated."""
     print("Poly resistors: a chain drawn, checked, extracted and simulated", flush=True)
@@ -580,6 +675,7 @@ def main():
     step_sweep(m, a, work)
     lvs = step_inverter(m, a, work)
     step_extract(m, a, work, lvs)
+    step_hierarchy(m, a, work)
     step_resistors(m, a, work)
     step_capacitor(m, a, work)
     m.p.stdin.close()

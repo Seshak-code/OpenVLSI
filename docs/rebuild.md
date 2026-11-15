@@ -299,6 +299,31 @@ simulated chip afterwards, with feature parity or better. So a **Test** stage fo
 RTL and on the routed netlist with its layout's delays, with waveforms. "Parity" is tracked below, tool by tool, as what really
 runs and what does not yet.
 
+## Milestone 7: a SoC by hand (owner, 2026-11-15)
+
+The owner's next end state: the suite works for building a SoC **by hand from cells and libraries**, through to testing it.
+A designer composes the chip themselves: standard cells, IO pads and SRAM macros from the PDK, analog blocks they draw, and
+digital blocks the flow built, placed and wired in a top layout, verified as a whole, and simulated. Each slice is commands
+first, then the GUI, with a check that runs.
+
+1. **Hierarchy through verification (done).** GDS export of a layout that places cells of other libraries. LVS against a
+   hierarchical schematic: each schematic cell a `.SUBCKT`, a cell with a netlist of its own (a `cdl` cell property, as a
+   standard cell will have) taken as it is. Extraction cell by cell: a parent's view holds its own wiring and a line per
+   cell it places, which the netlist resolves through its config. `m3_gate`: a buffer of two inverters by hand.
+2. **The PDK's cells as libraries.** `pdk_install` brings in the standard cells, IO cells and SRAM macros: each with a
+   symbol (pins and directions from its Liberty or LEF), its layout (from the PDK's GDS), its CDL for LVS and its netlist for
+   simulation.
+3. **A flow run as a hard macro.** A design the flow built becomes a cell: its GDS as layout, its CDL as reference, a
+   symbol from its ports, its timing from its Liberty abstract.
+4. **Top-level assembly.** A pad ring, supply rails and a seal ring around the core; whole-chip DRC (density and
+   latch-up included) and LVS.
+5. **Testing the hand-built chip.** `test_spice` for any cell, not only a flow run: its schematic, extraction or layout
+   netlist, driven by a recording or a hand-written stimulus; mixed RTL and transistor-level runs for the parts that are
+   too big for SPICE.
+
+**Gate (`tools/m7_gate.py`):** a small SoC built by hand through MCP alone: a standard-cell counter, an analog block, an SRAM
+macro and a flow-built block under a pad ring; DRC and LVS clean; a test that runs the chip.
+
 ## What runs today, tool by tool (2026-11-05)
 
 Honest parity: each row is what a designer gets now, checked by the gate named, and what the Cadence tool has that this does not.

@@ -117,50 +117,113 @@ std::string plainValue(const std::string& value, const std::string& what) {
     return value;
 }
 
-// The schematic as LVS's reference: its transistors, on the deck's model names. Fails closed on anything else with a mask.
+// A cell's own LVS netlist (a "cdl" cell property: its .SUBCKT, as a PDK's standard cell has): its ports in order
+std::vector<std::string> cdlPorts(const std::string& cdl, const std::string& cell) {
+    std::istringstream in(cdl);
+    std::string line, joined;
+    bool inHead = false;
+    while (std::getline(in, line)) {
+        if (inHead && !line.empty() && line[0] == '+') { joined += " " + line.substr(1); continue; }
+        if (inHead) break;
+        std::istringstream w(line);
+        std::string head, name;
+        w >> head >> name;
+        for (auto& ch : head) ch = (char)std::toupper((unsigned char)ch);
+        if (head == ".SUBCKT" && name == cell) { joined = line; inHead = true; }
+    }
+    if (joined.empty()) throw std::invalid_argument("the cdl of " + cell + " holds no .SUBCKT " + cell);
+    std::istringstream w(joined);
+    std::vector<std::string> ports;
+    std::string word;
+    w >> word >> word;  // .SUBCKT name
+    while (w >> word)
+        if (word.find('=') == std::string::npos) ports.push_back(word);
+    return ports;
+}
+
+// The schematic as LVS's reference, its hierarchy as .SUBCKTs (each cell once, after the cells it places): transistors,
+// poly resistors and MIM capacitors on the deck's model names; a cell with a "cdl" property as that netlist; any other cell
+// through its schematic view. Fails closed on anything else with a mask.
 std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {
-    oadb::Library& l = ws.library(lib);
-    const sch::Connectivity con = sch::extract(ws, lib, cell, view);
-    if (!con.ok()) throw std::invalid_argument("the schematic has errors: " + con.errors.front());
-    const auto net = [](std::string n) {
+    std::ostringstream out;
+    std::map<std::string, std::string> defined;  // .SUBCKT name -> lib/cell/view it came from
+    std::vector<std::string> stack;
+    const auto plain = [](std::string n) {
         if (!n.empty() && n.back() == '!') n.pop_back();
         return n;
     };
-    std::ostringstream out;
-    out << ".SUBCKT " << cell;
-    for (const auto& p : l.pins(cell, view)) out << " " << net(p.name);
-    out << "\n";
-    for (const auto& i : l.instances(cell, view)) {
-        const bool resistor = i.cell == "rsil" || i.cell == "rppd" || i.cell == "rhigh", capacitor = i.cell == "cap_cmim";
-        if (i.cell != "sg13_lv_nmos" && i.cell != "sg13_lv_pmos" && !resistor && !capacitor) {
+    std::function<void(const std::string&, const std::string&, const std::string&, bool)> define = [&](const std::string& dl, const std::string& dc, const std::string& dv, bool top) {
+        const std::string key = dl + "/" + dc + "/" + dv;
+        if (std::find(stack.begin(), stack.end(), key) != stack.end()) throw std::invalid_argument(key + " places itself");
+        if (const auto it = defined.find(dc); it != defined.end()) {
+            if (it->second != key) throw std::invalid_argument("two cells would both be .SUBCKT " + dc + ": " + it->second + " and " + key);
+            return;
+        }
+        stack.push_back(key);
+        oadb::Library& l = ws.library(dl);
+        const sch::Connectivity con = sch::extract(ws, dl, dc, dv);
+        if (!con.ok()) throw std::invalid_argument(key + " has errors: " + con.errors.front());
+        // A global net (name!) is the top's alone: below it, a cell must take its supplies through its pins, as its layout does
+        const auto net = [&](const std::string& n) {
+            if (!top && !n.empty() && n.back() == '!') throw std::invalid_argument(key + " uses the global net " + n + ": give the cell a pin for it, as its layout has one");
+            return plain(n);
+        };
+        std::ostringstream body;
+        for (const auto& i : l.instances(dc, dv)) {
+            const bool resistor = i.cell == "rsil" || i.cell == "rppd" || i.cell == "rhigh", capacitor = i.cell == "cap_cmim";
+            const bool mos = i.cell == "sg13_lv_nmos" || i.cell == "sg13_lv_pmos";
             if (i.cell == "vdc" || i.cell == "vsin" || i.cell == "vpulse" || i.cell == "gnd" || i.cell == "idc") continue;  // the testbench's: no mask
-            throw std::invalid_argument("LVS has no reference for instance " + i.name + " of " + i.cell + " yet (sg13_lv_nmos, sg13_lv_pmos, rsil, rppd, rhigh and cap_cmim, in a flat schematic)");
+            const auto nets = con.instanceNets.find(i.name);
+            if (nets == con.instanceNets.end()) throw std::invalid_argument(key + ": " + i.name + " has no connections");
+            const auto term = [&](const std::string& t) {
+                const auto it = nets->second.find(t);
+                if (it == nets->second.end()) throw std::invalid_argument(key + ": " + i.name + " has no net on " + t);
+                return net(it->second);
+            };
+            if (!mos && !resistor && !capacitor) {
+                // A cell: its own netlist, or its schematic, as a subcircuit
+                oadb::Library& ml = ws.library(i.lib);
+                std::vector<std::string> ports;
+                if (const auto cdl = ml.cellProp(i.cell, "cdl")) {
+                    const std::string text = QJsonDocument::fromJson(QByteArray::fromStdString("[" + *cdl + "]")).array()[0].toString().toStdString();
+                    ports = cdlPorts(text, i.cell);
+                    if (const auto [it, fresh] = defined.emplace(i.cell, i.lib + "/" + i.cell + "/cdl"); fresh) out << text << "\n";
+                    else if (it->second != i.lib + "/" + i.cell + "/cdl") throw std::invalid_argument("two cells would both be .SUBCKT " + i.cell + ": " + it->second + " and " + i.lib + "/" + i.cell);
+                } else {
+                    std::string sv;
+                    for (const auto& v : ml.views(i.cell))
+                        if (v.type == "schematic" && (sv.empty() || v.name == "schematic")) sv = v.name;
+                    if (sv.empty()) throw std::invalid_argument("LVS has no reference for " + i.lib + "/" + i.cell + " (instance " + i.name + " in " + key + "): it has no schematic and no cdl");
+                    define(i.lib, i.cell, sv, false);
+                    for (const auto& p : ml.pins(i.cell, sv)) ports.push_back(p.name);
+                }
+                body << "X" << i.name;
+                for (const auto& p : ports) body << " " << term(p);
+                body << " " << i.cell << "\n";
+                continue;
+            }
+            const QJsonObject defaults = QJsonDocument::fromJson(QByteArray::fromStdString(ws.library(i.lib).cellProp(i.cell, "params").value_or("{}"))).object();
+            const auto value = [&](const char* p) {
+                const auto it = i.params.find(p);
+                return plainValue(it != i.params.end() ? it->second : defaults[p].toVariant().toString().toStdString(), i.name + "'s " + p);
+            };
+            if (capacitor) {
+                body << "C" << i.name << " " << term("PLUS") << " " << term("MINUS") << " cap_cmim w=" << value("w") << " l=" << value("l") << " m=1\n";
+            } else if (resistor) {
+                // Two ends, as the deck extracts it: its body under it is no terminal there. One straight strip: no bends.
+                body << "R" << i.name << " " << term("PLUS") << " " << term("MINUS") << " " << i.cell << " w=" << value("w") << " l=" << value("l") << " m=" << value("m") << " b=0 ps=0\n";
+            } else {
+                body << "M" << i.name << " " << term("D") << " " << term("G") << " " << term("S") << " " << term("B") << " " << i.cell << " w=" << value("w") << " l=" << value("l")
+                     << " ng=" << value("ng") << " m=" << value("m") << "\n";
+            }
         }
-        const QJsonObject defaults = QJsonDocument::fromJson(QByteArray::fromStdString(ws.library(i.lib).cellProp(i.cell, "params").value_or("{}"))).object();
-        const auto value = [&](const char* p) {
-            const auto it = i.params.find(p);
-            return plainValue(it != i.params.end() ? it->second : defaults[p].toVariant().toString().toStdString(), i.name + "'s " + p);
-        };
-        const auto nets = con.instanceNets.find(i.name);
-        if (nets == con.instanceNets.end()) throw std::invalid_argument(i.name + " has no connections");
-        const auto term = [&](const char* t) {
-            const auto it = nets->second.find(t);
-            if (it == nets->second.end()) throw std::invalid_argument(i.name + " has no net on " + t);
-            return net(it->second);
-        };
-        if (capacitor) {
-            out << "C" << i.name << " " << term("PLUS") << " " << term("MINUS") << " cap_cmim w=" << value("w") << " l=" << value("l") << " m=1\n";
-            continue;
-        }
-        if (resistor) {
-            // Two ends, as the deck extracts it: its body under it is no terminal there. One straight strip: no bends.
-            out << "R" << i.name << " " << term("PLUS") << " " << term("MINUS") << " " << i.cell << " w=" << value("w") << " l=" << value("l") << " m=" << value("m") << " b=0 ps=0\n";
-            continue;
-        }
-        out << "M" << i.name << " " << term("D") << " " << term("G") << " " << term("S") << " " << term("B") << " " << i.cell << " w=" << value("w") << " l=" << value("l")
-            << " ng=" << value("ng") << " m=" << value("m") << "\n";
-    }
-    out << ".ENDS\n";
+        out << ".SUBCKT " << dc;
+        for (const auto& p : l.pins(dc, dv)) out << " " << net(p.name);
+        out << "\n" << body.str() << ".ENDS\n";
+        defined[dc] = key;
+        stack.pop_back();
+    };
+    define(lib, cell, view, true);
     return out.str();
 }
 
@@ -509,7 +572,8 @@ int ercViolations(const std::string& lvsdb) { return ercCheck(lvsdb, {})["total"
 
 // A layout's own netlist, read from a matched LVS: its devices as LVS measured them, on the schematic's net names, and each
 // net's wiring by metal: area and perimeter.
-// ponytail: a flat layout, metals only, each net's capacitance to ground from the tech LEF's area and edge values: no wire
+// Hierarchy: each cell is extracted on its own; a parent's view holds its own wiring and a line per cell it places.
+// ponytail: metals only, each net's capacitance to ground from the tech LEF's area and edge values: no wire
 // resistance, no coupling, no shielding by the metal below. A field solver's rule deck per process is the upgrade.
 const char* kExtractScript = R"PY(
 import json, pya
@@ -540,8 +604,15 @@ for cp in x.each_circuit_pair():
         pair = cp
 if pair is None:
     raise RuntimeError("LVS paired no top circuit")
-if any(True for _ in pair.first().each_subcircuit()):
-    raise RuntimeError("the layout's netlist has subcircuits: only a flat one is extracted yet")
+# A cell placed as a subcircuit is extracted on its own: here only this cell's own wiring counts, not the metal inside it
+def own(net, layer, i):
+    region = lvs.shapes_of_net(net, layer, True)
+    for sp in net.each_subcircuit_pin():
+        sc = sp.subcircuit()
+        inner = sc.circuit_ref().net_for_pin(sp.pin_id())
+        if inner:
+            region -= lvs.shapes_of_net(inner, layer, True).transformed(sc.trans.to_itrans(dbu))
+    return region
 names, nets = {}, []
 for n in x.each_net_pair(pair):
     f, g = n.first(), n.second()
@@ -552,7 +623,7 @@ for n in x.each_net_pair(pair):
     for m, found in metals:
         region = pya.Region()
         for i in found:
-            region += lvs.shapes_of_net(f, lvs.layer_by_index(i), True)
+            region += own(f, lvs.layer_by_index(i), i)
         region = region.merged()
         if region.is_empty():
             continue
@@ -996,6 +1067,30 @@ void addVerifyCommands(Registry& r) {
                    const QJsonObject g = spice["globals"].toObject();
                    for (auto it = g.begin(); it != g.end(); ++it) globals[it.key()] = it.value();
                }
+               // The cells this one places: a line each, on the schematic's nets in their masters' port order; the netlist resolves
+               // each through its config (its own extraction, if it has one)
+               QJsonArray places;
+               for (const auto& i : l.instances(cell, schematic)) {
+                   const bool primitive = i.cell == "sg13_lv_nmos" || i.cell == "sg13_lv_pmos" || i.cell == "rsil" || i.cell == "rppd" || i.cell == "rhigh" || i.cell == "cap_cmim" ||
+                                          i.cell == "vdc" || i.cell == "vsin" || i.cell == "vpulse" || i.cell == "gnd" || i.cell == "idc";
+                   if (primitive) continue;
+                   oadb::Library& ml = c.workspace.library(i.lib);
+                   std::string sv;
+                   for (const auto& v : ml.views(i.cell))
+                       if (v.type == "schematic" && (sv.empty() || v.name == "schematic")) sv = v.name;
+                   if (sv.empty()) throw std::runtime_error(i.name + " places " + i.lib + "/" + i.cell + ", which has no schematic to extract against");
+                   const auto own = con.instanceNets.find(i.name);
+                   if (own == con.instanceNets.end()) throw std::runtime_error(i.name + " has no connections");
+                   body << (i.name.rfind('X', 0) == 0 || i.name.rfind('x', 0) == 0 ? i.name : "X" + i.name);
+                   for (const auto& p : ml.pins(i.cell, sv)) {
+                       const auto n = own->second.find(p.name);
+                       if (n == own->second.end()) throw std::runtime_error(i.name + " has no net on " + p.name);
+                       body << " " << n->second;
+                   }
+                   body << " " << i.cell << "\n";
+                   const QJsonObject where{{"library", q(i.lib)}, {"cell", q(i.cell)}};
+                   if (!places.contains(where)) places.append(where);
+               }
                QJsonArray nets;
                double total = 0;
                int index = 0;
@@ -1020,6 +1115,7 @@ void addVerifyCommands(Registry& r) {
                    l.setProp(cell, to, "models", jsonText(models));
                    l.setProp(cell, to, "globals", jsonText(globals));
                    l.setProp(cell, to, "extraction", jsonText(summary));
+                   l.setProp(cell, to, "places", jsonText(places));
                });
                QJsonObject out = summary;
                out["library"] = q(lib);

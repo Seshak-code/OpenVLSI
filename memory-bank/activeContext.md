@@ -1,5 +1,21 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — M7 (a SoC by hand) planned; slice 1, hierarchy through verification, on `rebuild/hier-lvs`**
+
+- **Owner (2026-11-15):** the suite must work for building a SoC by hand from cells and libraries, through testing. Plan: `docs/rebuild.md`,
+  Milestone 7 (hierarchy; the PDK's stdcells, IO and SRAM as libraries; a flow run as a hard macro; top-level assembly; testing).
+- **Done (slice 1):**
+  - `exportGds` follows masters into other libraries (one GDS namespace: two libraries' cells of one name are refused).
+  - `schematicCdl` is hierarchical: a `.SUBCKT` per schematic cell, children first; a cell with a `cdl` cell property is included as
+    that netlist (for the PDK's cells, slice 2). A global net below the top is refused (give the cell a pin).
+  - `verify_extract` on a hierarchy: a cell's own wiring only (its subcells' metal subtracted), a line per subcell on the schematic's
+    nets, `places` recorded; the netlister and `config_get` resolve those subcells through the config.
+- **Gate:** M3 76/76: a buffer of two inverters by hand, joined on Metal3: DRC clean, LVS matched level by level (the joint deleted: BUF
+  nomatch, INV match), extracted (m 1.07 fF), simulated 35.86 ps schematic, 43.83 ps extracted; a top in another library exports.
+- **Next:** M7 slice 2, the PDK's standard cells, IO cells and SRAM macros as libraries.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — LVS cross-probe of devices, on `rebuild/xprobe-devices` (after #56, merged)**
 
 - **Done:** LVS's device markers carry `schematic_instance` (a schematic-side ERC finding names its first device too). New app command
