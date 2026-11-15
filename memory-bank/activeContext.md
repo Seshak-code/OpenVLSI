@@ -1,5 +1,20 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — MIM capacitors, on `rebuild/mim` (after #54, merged)**
+
+- **Done:**
+  - `layout::capCell` / `layout_pcell_cap {w, l}`: the MIM w x l, TopMetal1 over it (PLUS), Metal5 0.6 um around it (MINUS), a Vmim array
+    between (Vmim, not TopVia1: over a MIM the deck does not count TopVia1 as joining the plates, and neither does our connectivity).
+    1.64 um to 5625 um2. The process table gained TopMetal1 and TopVia1 (a sixth metal), the palette MIM and Vmim.
+  - `layout_generate`, LVS's CDL reference (`C... PLUS MINUS cap_cmim w= l= m=1`), `verify_extract` (mim_top/mim_btm to PLUS/MINUS), ERC
+    (MIM plates are plates). Create > Capacitor… (Shift+C).
+- **Gate:** M3 64/64: four sizes DRC-clean; a 10 x 8 um capacitor pinned on its plates, DRC clean, LVS matched (not at 12 um), extracted,
+  and simulated: 121.5 fF (1.52 fF/um2), extracted 1.9 % slower from its pins' wiring.
+- **Next:** serpentine resistors; FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations; LVS cross-probe of devices and flow runs;
+  corners at transistor level.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-14 — poly resistors, on `rebuild/pcells` (after #53, merged)**
 
 - **Done:**

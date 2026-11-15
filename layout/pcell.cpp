@@ -212,6 +212,37 @@ Generated resCell(const Tech& t, const std::string& kind, int64_t w, int64_t l) 
     return g;
 }
 
+Generated capCell(const Tech& t, int64_t w, int64_t l) {
+    if (t.name != "sg13g2") throw std::invalid_argument("no capacitor generator for process " + t.name);
+    const LayerKey kMim{36, 0}, kVmim{129, 0}, kMetal5{67, 0}, kTopMetal1{126, 0};
+    constexpr int64_t kTopWidth = 1640;     // TM1.a: the top plate is the MIM itself
+    constexpr int64_t kVia = 420, kViaSpace = 420, kTopOverVia = 420;  // TV1.a, TV1.b, TV1.d
+    constexpr int64_t kBottomOverMim = 600;  // the LVS deck's bottom plate: Metal5 within 0.6 um of the MIM
+    constexpr double kMaxArea = 5625e6;      // MIM.g, nm2
+    if (w < kTopWidth || l < kTopWidth) throw std::invalid_argument("a MIM capacitor is at least 1640 nm a side here (its TopMetal1 plate's minimum width)");
+    if ((double)w * (double)l > kMaxArea) throw std::invalid_argument("a MIM capacitor is at most 5625 um2 (MIM.g)");
+    if (w % t.grid || l % t.grid) throw std::invalid_argument("width and length must be on the " + std::to_string(t.grid) + " nm grid");
+    Generated g;
+    auto add = [&](const LayerKey& k, const Rect& r) { g.shapes.push_back(rectShape(k, r)); };
+    const Rect mim{0, 0, w, l};
+    add(kMim, mim);
+    const Rect top = mim, bottom{-kBottomOverMim, -kBottomOverMim, w + kBottomOverMim, l + kBottomOverMim};
+    add(kTopMetal1, top);
+    add(kMetal5, bottom);
+    // As many vias as fit kTopOverVia inside the plate, centred
+    const auto count = [&](int64_t span) { return (int)std::max<int64_t>(1, (span - 2 * kTopOverVia + kViaSpace) / (kVia + kViaSpace)); };
+    const int cols = count(w), rows = count(l);
+    const int64_t x0 = floorToGrid((w - (cols * kVia + (cols - 1) * kViaSpace)) / 2, t.grid), y0 = floorToGrid((l - (rows * kVia + (rows - 1) * kViaSpace)) / 2, t.grid);
+    for (int c = 0; c < cols; ++c)
+        for (int r = 0; r < rows; ++r) {
+            const int64_t x = x0 + c * (kVia + kViaSpace), y = y0 + r * (kVia + kViaSpace);
+            add(kVmim, {x, y, x + kVia, y + kVia});
+        }
+    g.terminals["PLUS"].push_back({metalIndex(t, "TopMetal1"), top});
+    g.terminals["MINUS"].push_back({metalIndex(t, "Metal5"), bottom});
+    return g;
+}
+
 Generated tapCell(const Tech& t, bool ntap) {
     if (t.name != "sg13g2") throw std::invalid_argument("no tie generator for process " + t.name);
     Generated g;

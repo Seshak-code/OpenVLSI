@@ -122,10 +122,12 @@ def step_sweep(m, a, work):
     for k, (t, w, l) in enumerate(RESISTORS):
         name = m("layout_pcell_res", library="sweep", type=t, w=w, l=l)
         m("layout_instance_add", library="sweep", cell="top", master=name, at=[k * 5000, 45000])
+    for k, (w, l) in enumerate(((1640, 1640), (2105, 1645), (7000, 7000), (10000, 3000))):
+        m("layout_instance_add", library="sweep", cell="top", master=m("layout_pcell_cap", library="sweep", w=w, l=l), at=[k * 15000, 60000])
     gds = os.path.join(work, "sweep.gds")
     m("layout_export_gds", library="sweep", cell="top", file=gds)
     total, rules, report = run_drc(a.klayout, a.platform, gds, work, latch_up=False)  # ties are placement's, in the inverter below
-    check(total == 0, f"{len(SWEEP)} transistor sizes, {len(RESISTORS)} poly resistors and both ties: {total} DRC errors" + (f" ({rules}; {report})" if total else ""))
+    check(total == 0, f"{len(SWEEP)} transistor sizes, {len(RESISTORS)} poly resistors, 4 MIM capacitors and both ties: {total} DRC errors" + (f" ({rules}; {report})" if total else ""))
     check("below the process" in m.refused("layout_pcell_res", library="sweep", type="rsil", w=400, l=1000) and "rsil, rppd or rhigh" in m.refused("layout_pcell_res", library="sweep", type="rpoly", w=500, l=1000),
           "a resistor narrower than 500 nm, or of no such kind, is refused")
     check("below the process" in m.refused("layout_pcell_mos", library="sweep", type="nmos", w=1000, l=100), "a gate below 130 nm is refused")
@@ -497,6 +499,61 @@ def step_resistors(m, a, work):
     check(current["schematic"] > 1e-7 and abs(current["post"] / current["schematic"] - 1) < 1e-6, "simulated, the extracted chain draws the schematic's current: the same three resistors")
 
 
+def step_capacitor(m, a, work):
+    """A MIM capacitor: generated from a schematic, pinned on its two plates, checked by the decks, extracted and simulated."""
+    print("A MIM capacitor: drawn, checked, extracted and simulated", flush=True)
+    lib = dict(library="design", cell="cap")
+    m("cell_create", **lib)
+    m("view_create", **lib, view="schematic", type="schematic")
+    place(m, "design", "cap", "C1", "sg13g2", "cap_cmim", 0, 0, {"PLUS": "p", "MINUS": "n"}, {"w": "10u", "l": "8u"})
+    for k, pin in enumerate(["p", "n"]):
+        m("pin_add", **lib, view="schematic", name=pin, direction="inputOutput", x=-2000, y=1000 - 300 * k)
+    made = m("layout_generate", **lib)
+    check(made["devices"] == 1, f"layout_generate draws it: {made}")
+    objects = m("layout_objects_get", **lib)
+    inst = objects["instances"][0]
+    terms = m("prop_get", library="design", cell=inst["cell"], view="layout", key="terminals")
+    terms = json.loads(terms) if isinstance(terms, str) else terms
+    # Its pins on the plates themselves: p on the TopMetal1 top, n on the Metal5 rim left of the MIM
+    m("layout_objects_delete", **lib, shapes=[s["id"] for s in objects["shapes"]])
+    x, y = inst["at"]
+    top, bottom = terms["PLUS"][0], terms["MINUS"][0]
+    m("layout_pin_add", **lib, name="p", metal="TopMetal1", box=[x + top[1] + 2000, y + top[2] + 2000, x + top[1] + 4000, y + top[2] + 4000])
+    m("layout_pin_add", **lib, name="n", metal="Metal5", box=[x + bottom[1] + 100, y + bottom[2] + 2000, x + bottom[1] + 500, y + bottom[2] + 4000])
+    wired = connectivity(m, "cap")
+    check(wired["clean"], f"pinned: connectivity is clean (open {[n['net'] for n in wired['nets'] if n['groups'] > 1]}, shorts {wired['shorts']})")
+    drc = m("verify_drc", **lib)
+    rules = [r["rule"] for r in m("verify_markers", run=drc["run"])["rules"]] if not drc.get("clean") else []
+    check(drc.get("clean") is True, f"IHP's DRC deck: clean {rules} {drc.get('error', '')}")
+    lvs = m("verify_lvs", **lib)
+    differ = [(it["kind"], it["layout"], it["schematic"], it.get("parameters")) for c in m("verify_lvs_report", run=lvs["run"])["circuits"] for it in c["items"]] if lvs.get("matched") is False else []
+    check(lvs.get("matched") is True and lvs.get("devices_layout") == lvs.get("devices_schematic") == 1 and lvs.get("erc_violations") == 0,
+          f"IHP's LVS deck: it matches its schematic at 10 x 8 um, and breaks no electrical rule {differ} {lvs.get('error', '')} {lvs.get('erc_violations')}")
+    m("instance_set_params", **lib, view="schematic", instance="C1", params={"w": "12u"})
+    wider = m("verify_lvs", **lib)
+    check(wider.get("matched") is False, "a schematic asking for 12 um where 10 um is drawn does not match")
+    m("instance_set_params", **lib, view="schematic", instance="C1", params={"w": "10u"})
+    ext = m("verify_extract", run=lvs["run"])
+    line = next((x for x in ext["netlist"].splitlines() if x.startswith("XC1")), "")
+    check(line.startswith("XC1 p n cap_cmim w=10u l=8u"), f"verify_extract writes the capacitor at its drawn size, on its plates' nets: {line}")
+    # In a test bench: an RC through an ideal 10 kOhm; the extraction adds only its pins' wiring to the schematic's
+    m("symbol_generate", **lib)
+    m("cell_create", library="design", cell="ctb")
+    m("view_create", library="design", cell="ctb", view="schematic", type="schematic")
+    place(m, "design", "ctb", "X1", "design", "cap", 0, 0, {"p": "o", "n": "gnd!"})
+    place(m, "design", "ctb", "R1", "analogLib", "res", -1000, 0, {"PLUS": "i", "MINUS": "o"}, {"r": "10k"})
+    place(m, "design", "ctb", "V1", "analogLib", "vpulse", -2500, 0, {"PLUS": "i", "MINUS": "gnd!"}, {"v1": "0", "v2": "1", "td": "10p", "tr": "1p", "tf": "1p", "pw": "10u", "per": "20u"})
+    m("config_set", library="design", cell="ctb", view="post", top="design/ctb/schematic", viewList=["extracted", "schematic", "spice"])
+    tau = {}
+    for view in ("schematic", "post"):
+        run = m("simulate", library="design", cell="ctb", view=view, cards=[".tran 10p 10n"])
+        tau[view] = m("wave_eval", run=run["run"], expression="cross(VT(o), 0.6321)") - 10e-12
+    farads = tau["schematic"] / 10e3
+    print(f"    time constant: schematic {tau['schematic'] * 1e12:.2f} ps ({farads * 1e15:.1f} fF for 80 um2), extracted {tau['post'] * 1e12:.2f} ps", flush=True)
+    check(60e-15 < farads < 240e-15, f"the PDK's model gives a capacitance of the right order for 80 um2: {farads * 1e15:.1f} fF")
+    check(0 <= tau["post"] - tau["schematic"] < 0.05 * tau["schematic"], "the extracted one is the same capacitor, slower only by its pins' wiring")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--mcp", required=True)
@@ -521,6 +578,7 @@ def main():
     lvs = step_inverter(m, a, work)
     step_extract(m, a, work, lvs)
     step_resistors(m, a, work)
+    step_capacitor(m, a, work)
     m.p.stdin.close()
     m.p.wait()
     print(("PASSED" if not G_FAIL else "FAILED") + f": {G_PASS} of {G_PASS + len(G_FAIL)} checks")

@@ -131,10 +131,10 @@ std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std:
     for (const auto& p : l.pins(cell, view)) out << " " << net(p.name);
     out << "\n";
     for (const auto& i : l.instances(cell, view)) {
-        const bool resistor = i.cell == "rsil" || i.cell == "rppd" || i.cell == "rhigh";
-        if (i.cell != "sg13_lv_nmos" && i.cell != "sg13_lv_pmos" && !resistor) {
+        const bool resistor = i.cell == "rsil" || i.cell == "rppd" || i.cell == "rhigh", capacitor = i.cell == "cap_cmim";
+        if (i.cell != "sg13_lv_nmos" && i.cell != "sg13_lv_pmos" && !resistor && !capacitor) {
             if (i.cell == "vdc" || i.cell == "vsin" || i.cell == "vpulse" || i.cell == "gnd" || i.cell == "idc") continue;  // the testbench's: no mask
-            throw std::invalid_argument("LVS has no reference for instance " + i.name + " of " + i.cell + " yet (sg13_lv_nmos, sg13_lv_pmos, rsil, rppd and rhigh, in a flat schematic)");
+            throw std::invalid_argument("LVS has no reference for instance " + i.name + " of " + i.cell + " yet (sg13_lv_nmos, sg13_lv_pmos, rsil, rppd, rhigh and cap_cmim, in a flat schematic)");
         }
         const QJsonObject defaults = QJsonDocument::fromJson(QByteArray::fromStdString(ws.library(i.lib).cellProp(i.cell, "params").value_or("{}"))).object();
         const auto value = [&](const char* p) {
@@ -148,6 +148,10 @@ std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std:
             if (it == nets->second.end()) throw std::invalid_argument(i.name + " has no net on " + t);
             return net(it->second);
         };
+        if (capacitor) {
+            out << "C" << i.name << " " << term("PLUS") << " " << term("MINUS") << " cap_cmim w=" << value("w") << " l=" << value("l") << " m=1\n";
+            continue;
+        }
         if (resistor) {
             // Two ends, as the deck extracts it: its body under it is no terminal there. One straight strip: no bends.
             out << "R" << i.name << " " << term("PLUS") << " " << term("MINUS") << " " << i.cell << " w=" << value("w") << " l=" << value("l") << " m=" << value("m") << " b=0 ps=0\n";
@@ -370,6 +374,7 @@ def roles(dc):
     if {"S", "G", "D"} <= names: return {"S": "path", "D": "path", "G": "gate", "B": "bulk"}
     if {"C", "B", "E"} <= names: return {"C": "path", "E": "path", "B": "gate", "S": "bulk"}
     if isinstance(dc, (pya.DeviceClassCapacitor, pya.DeviceClassDiode)): return {"A": "plate", "B": "plate", "C": "plate", "W": "bulk"}
+    if {"mim_top", "mim_btm"} <= names: return {"mim_top": "plate", "mim_btm": "plate", "mim_sub": "bulk"}
     if isinstance(dc, (pya.DeviceClassResistor, pya.DeviceClassInductor)): return {"A": "path", "B": "path", "W": "bulk"}
     return {n: "path" for n in names}  # a class this does not know: nothing is claimed about it
 def polarity(dc):  # ponytail: by the class's name; a PDK whose names say neither gets no bulk-supply check
@@ -872,7 +877,7 @@ void addVerifyCommands(Registry& r) {
                return QJsonValue(ercCheck({}, cdl, a));
            },
            true});
-    r.add({"verify_extract", "Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors and poly resistors with the "
+    r.add({"verify_extract", "Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors, poly resistors and MIM capacitors with the "
                              "sizes (and diffusion areas) LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values "
                              "per metal. A config view whose viewList puts that view first then simulates the layout in place of the schematic. Returns each net's capacitance "
                              "by metal and the netlist. Capacitance only: no wire resistance or coupling yet.",
@@ -936,8 +941,9 @@ void addVerifyCommands(Registry& r) {
                    oadb::Instance i = at->second;
                    if (upper(i.cell) != upper(s(d, "class"))) throw std::runtime_error(i.name + " is a " + i.cell + " in the schematic and a " + s(d, "class") + " in the layout");
                    const bool transistor = params.contains("W") && params.contains("L");
-                   const bool resistor = !transistor && params.contains("w") && params.contains("l") && terminals.size() == 2;
-                   if (!transistor && !resistor) throw std::runtime_error("extraction knows transistors and poly resistors only yet, and " + i.name + " is a " + i.cell);
+                   const bool capacitor = !transistor && terminals.contains("mim_top") && terminals.contains("mim_btm") && params.contains("w") && params.contains("l");
+                   const bool resistor = !transistor && !capacitor && params.contains("w") && params.contains("l") && terminals.size() == 2;
+                   if (!transistor && !resistor && !capacitor) throw std::runtime_error("extraction knows transistors, poly resistors and MIM capacitors only yet, and " + i.name + " is a " + i.cell);
                    const QJsonObject defaults = QJsonDocument::fromJson(QByteArray::fromStdString(c.workspace.library(i.lib).cellProp(i.cell, "params").value_or("{}"))).object();
                    const auto whole = [&](const char* p) {
                        const auto it = i.params.find(p);
@@ -955,6 +961,12 @@ void addVerifyCommands(Registry& r) {
                        i.params["w"] = number(params["W"].toDouble(), "u");
                        i.params["l"] = number(params["L"].toDouble(), "u");
                        for (auto t = terminals.begin(); t != terminals.end(); ++t) nets[t.key().toStdString()] = net(t.value().toString());
+                   } else if (capacitor) {
+                       // A MIM capacitor: its plates, at the size drawn
+                       i.params["w"] = number(params["w"].toDouble(), "u");
+                       i.params["l"] = number(params["l"].toDouble(), "u");
+                       nets["PLUS"] = net(terminals["mim_top"].toString());
+                       nets["MINUS"] = net(terminals["mim_btm"].toString());
                    } else {
                        // A poly resistor as the deck extracts it: its two ends, in its own order, and the strip's width and length.
                        // Its body is no terminal in the layout: that pin keeps the schematic's net.
