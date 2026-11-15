@@ -155,7 +155,11 @@ std::vector<Cell> sg13g2(const fs::path& models, const std::string& osdi, const 
         c.tmpl = std::string("[|PLUS] [|MINUS] [|B] ") + r + " w=[@w] l=[@l] m=[@m] mm_ok={mc_mismatch}";
         c.instPrefix = "R";
         c.pins.push_back(pin("B", "inputOutput", {100, 0}));
+        // The resistor cards are r3_cmc's, a compiled model too: the one beside the transistors', when it is there. Without it a
+        // resistor still netlists, and a simulation says which model is not loaded.
+        const fs::path r3 = fs::path(osdi).parent_path() / "r3_cmc.osdi";
         c.models = {m("cornerRES.lib", "res_typ")};
+        if (fs::is_regular_file(r3)) c.models.insert(c.models.begin(), QJsonObject{{"file", QString::fromStdString(r3.string())}});
         out.push_back(c);
     }
     Cell cap = twoTerminal("cap_cmim", "X", "[|PLUS] [|MINUS] cap_cmim w=[@w] l=[@l] mm_ok={mc_mismatch}", {{"w", "7u"}, {"l", "7u"}},
@@ -246,8 +250,8 @@ void addPdkCommands(Registry& r) {
            object({{"pdk", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"ihp-sg13g2", "asap7", "asap5"}}, {"description", "the PDK"}}},
                    {"root", param("string", "the PDK's directory: ihp-sg13g2 (holding libs.tech), asap7_pdk_r1p7 or asap5PDK_r0p4 "
                                             "(holding models/hspice)")},
-                   {"osdi", param("string", "the compiled model the MOS devices load: psp103.osdi (SG13G2), bsimcmg107.osdi "
-                                            "(ASAP7, ASAP5: tests/build_osdi.sh)")}}),
+                   {"osdi", param("string", "the compiled model the MOS devices load: psp103.osdi (SG13G2; the resistors load r3_cmc.osdi from "
+                                            "beside it), bsimcmg107.osdi (ASAP7, ASAP5: tests/build_osdi.sh)")}}),
            [](Context& c, const QJsonObject& a) {
                const fs::path root(a["root"].toString().toStdString()), models = root / "libs.tech" / "ngspice" / "models";
                const std::string osdi = fs::absolute(a["osdi"].toString().toStdString()).string();

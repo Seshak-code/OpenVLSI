@@ -174,7 +174,7 @@ private:
     bool currentIsMetal(QString* name) const;
     QString currentLayerName() const;
     void askPlaceInstance();
-    void askTransistor();
+    void askDevice(const QString& command, const QJsonObject& prefill);
     void askLabel(Tool t);
     Session& session_;
     QString lib_, cell_, view_;

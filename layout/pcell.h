@@ -26,6 +26,11 @@ std::vector<oadb::LayoutShape> viaShapes(const Tech& t, int via, int64_t x, int6
 // ponytail: no dogbone, so fingers narrower than 300 nm are refused though the process allows 150 nm; the upgrade is a
 // contact landing outside the channel.
 Generated mosCell(const Tech& t, bool pmos, int64_t w, int64_t l, int ng);
+// SG13G2 poly resistors, one straight strip: rsil (silicided), rppd (p-doped, salicide blocked) or rhigh (both implants).
+// w across the current and l along it, in database units; terminals PLUS and MINUS on Metal1 at its ends. Drawn so that the
+// process's LVS deck measures exactly w and l: its PolyRes marker is the body.
+// ponytail: no bends, so a long resistor is a long cell; the upgrade is a serpentine (the deck's b and ps parameters).
+Generated resCell(const Tech& t, const std::string& kind, int64_t w, int64_t l);
 // The tie of a body: a contact in Activ, in pSD for the substrate (ntap false), or in NWell (ntap true)
 Generated tapCell(const Tech& t, bool ntap);
 

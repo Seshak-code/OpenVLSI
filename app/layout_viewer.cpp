@@ -610,7 +610,8 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     act(create, "Pin…", QKeySequence("Ctrl+P"), [this] { askLabel(Tool::Pin); });
     create->addSeparator();
     act(create, "Instance…", QKeySequence("I"), [this] { askPlaceInstance(); });
-    act(create, "Transistor…", QKeySequence("Shift+I"), [this] { askTransistor(); });
+    act(create, "Transistor…", QKeySequence("Shift+I"), [this] { askDevice("layout_pcell_mos", {{"library", lib_}, {"type", "nmos"}, {"w", 1000}, {"l", 130}, {"ng", 1}}); });
+    act(create, "Resistor…", QKeySequence("Shift+R"), [this] { askDevice("layout_pcell_res", {{"library", lib_}, {"type", "rsil"}, {"w", 500}, {"l", 2000}}); });
     QMenu* viewMenu = menuBar()->addMenu("&View");
     QAction* flight = viewMenu->addAction("Flight Lines", this, [this](bool on) { setFlightLinesShown(on); });
     flight->setCheckable(true);
@@ -631,7 +632,7 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     bindActions(this, {{"Undo", "edit_undo"}, {"Redo", "edit_redo"}, {"Move", "layout_view_tool"}, {"Copy", "layout_view_tool"}, {"Stretch", "layout_view_tool"},
                        {"Delete", "layout_view_delete"}, {"Finish", "layout_view_finish"}, {"Cancel", "layout_view_cancel"}, {"Rectangle", "layout_view_tool"}, {"Path", "layout_view_tool"},
                        {"Polygon", "layout_view_tool"}, {"Via", "layout_view_tool"}, {"Label…", "layout_view_tool"}, {"Pin…", "layout_view_tool"}, {"Instance…", "layout_view_tool"},
-                       {"Transistor…", "layout_pcell_mos"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
+                       {"Transistor…", "layout_pcell_mos"}, {"Resistor…", "layout_pcell_res"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
                        {"Show Top Level Only", "layout_view_levels"}, {"Zoom In", "layout_view_zoom"}, {"Zoom Out", "layout_view_zoom"}, {"Ruler", "layout_view_ruler"},
                        {"Clear Rulers", "layout_view_rulers_clear"}, {"Show All", "layout_view_layers_all"}, {"Hide All", "layout_view_layers_all"},
                        {"Show in Schematic", "editor_select_net"}});
@@ -1256,15 +1257,16 @@ void LayoutViewer::askPlaceInstance() {
     startTool(Tool::Instance);
 }
 
-void LayoutViewer::askTransistor() {
-    const cmd::Command* c = session_.registry().find("layout_pcell_mos");
+// A generated device: its form, then its master on the cursor to place
+void LayoutViewer::askDevice(const QString& command, const QJsonObject& prefill) {
+    const cmd::Command* c = session_.registry().find(command);
     if (!c) return;
-    CommandForm form(*c, {{"library", lib_}, {"type", "nmos"}, {"w", 1000}, {"l", 130}, {"ng", 1}}, this);
+    CommandForm form(*c, prefill, this);
     if (form.exec() != QDialog::Accepted) return;
     QJsonObject args;
     QString error;
     if (!form.arguments(&args, &error)) return hint(error);
-    const cmd::Result r = session_.call("layout_pcell_mos", args);
+    const cmd::Result r = session_.call(command, args);
     if (!r.ok) return hint(r.error);
     instanceMaster_ = r.value.toString();
     startTool(Tool::Instance);
