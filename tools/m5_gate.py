@@ -113,7 +113,8 @@ def main():
     p.add_argument("--pdk", help="ihp-sg13g2: with --osdi, the chip also runs at transistor level")
     p.add_argument("--osdi")
     p.add_argument("--spice-ns", type=float, default=300.0)
-    p.add_argument("--spice-fail-ns", type=float, default=18.0)  # the first sample that differs on gcd is at 15.5 ns
+    p.add_argument("--spice-fail-ns", type=float, default=18.0)
+    p.add_argument("--spice-corner-ns", type=float, default=30.0)  # the first sample that differs on gcd is at 15.5 ns
     p.add_argument("--settings-run", action="store_true", help="also run the flow once more with a setting (about 2 minutes)")
     a = p.parse_args()
     gcd = os.path.join(a.flowdir, "designs/src/gcd/gcd.v")
@@ -314,6 +315,20 @@ def main():
         check(spice.get("passed") is True, f"TreeSPICE, on the routed transistors, gives the recording's outputs: {spice.get('samples')} samples, {spice.get('mismatches')} differ {spice.get('error', '')}")
         check(spice.get("wire_resistors", 0) > 1000 and spice.get("lumped_nets") == 0,
               f"every net carries its own RC network from the SPEF: {spice.get('wire_resistors', 0):.0f} resistors, {spice.get('lumped_nets')} nets left as one capacitor")
+        # At each corner of the timing analysis: its MOS models, supply and temperature. The first req_rdy edge after reset is
+        # one clock-to-output path, from the same state everywhere, so its delay should follow STA's corners.
+        delays = {}
+        for name in ("slow", "typ", "fast"):
+            at = m("test_spice", name="chip_" + name, flow_run=run, recording=gate["run"], dut="tb.dut", stop_ns=a.spice_corner_ns, corner=name)
+            check(at.get("passed") is True and at.get("corner") == name, f"at {name} ({at.get('supply_v')} V, {at.get('temperature_c')} C) the transistors give the recording's outputs: {at.get('samples')} samples {at.get('error', '')}")
+            folder = os.path.dirname(at["raw"])
+            half = at["supply_v"] / 2
+            delays[name] = m("wave_eval", run=folder, expression=f"cross(VT(req_rdy), {half})") - m("wave_eval", run=folder, expression=f"cross(VT(clk), {half})")
+        print("    clock to req_rdy: " + ", ".join(f"{n} {d * 1e12:.0f} ps" for n, d in delays.items()) + f"; STA's minimum period slow/typ {periods_by['slow'] / periods_by['typ']:.2f}, fast/typ {periods_by['fast'] / periods_by['typ']:.2f}", flush=True)
+        check(delays["slow"] > delays["typ"] > delays["fast"] > 0, "slow is slower than typ, and typ than fast, at transistor level too")
+        for name in ("slow", "fast"):
+            ratio, sta = delays[name] / delays["typ"], periods_by[name] / periods_by["typ"]
+            check(abs(ratio / sta - 1) < 0.15, f"{name}'s delay over typ's, {ratio:.2f}, is STA's {sta:.2f} within 15 %")
         # It must be able to fail: the RTL's recording at 1 ns asks the chip for what its delays cannot give
         hurried = m("test_spice", name="chip_hurried", flow_run=run, recording=fast_rtl["run"], dut="tb.dut", stop_ns=a.spice_fail_ns)
         print(f"    {hurried.get('stop_ns')} ns of chip time in {hurried.get('seconds', 0):.1f} s: {hurried.get('error', '')}", flush=True)

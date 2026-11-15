@@ -262,11 +262,12 @@ void addTestCommands(Registry& r) {
            true});
 
     r.add({"test_spice", "Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's wire resistance and capacitance from the SPEF, driven at its pins by what a test run recorded, every "
-                         "output compared with that recording at the end of each clock cycle. It needs pdk_install's device library, and passes only if every sample agrees: a recording the chip "
+                         "output compared with that recording at the end of each clock cycle; its raw file is wave_eval's (run: its directory). It needs pdk_install's device library, and passes only if every sample agrees: a recording the chip "
                          "cannot keep up with fails, with the first sample that differs. Waits and returns, or with wait false starts in the background.",
            object({{"name", param("string", "the test's name")}, {"flow_run", kFlowRun}, {"recording", kRun}, {"dut", param("string", "the design's instance in the recording, as tb.dut")}},
                   {{"stop_ns", param("number", "how much of the recording to replay (default all of it)")}, {"clock_port", param("string", "the clock's port (default the run's)")},
                    {"parasitics", param("boolean", "add the SPEF's parasitics (default true)")},
+                   {"corner", param("string", "slow, typ or fast: the MOS models, supply and temperature of that timing corner (default the device library's typical models at the platform's supply, 27 C)")},
                    {"wire_resistance", param("boolean", "each net's RC network (default true); false puts its capacitance alone at one node")}, {"threads", param("integer", "TreeSPICE's threads (default all)")},
                    {"device_library", param("string", "the library holding the transistors (default sg13g2)")}, {"timeout_s", param("integer", "how long it may run (default 3600)")},
                    {"wait", param("boolean", "wait for it (default true)")}}),
@@ -295,7 +296,21 @@ void addTestCommands(Registry& r) {
                std::string cards;
                const QJsonObject globals = spiceJson["globals"].toObject();
                for (auto it = globals.begin(); it != globals.end(); ++it) cards += ".param " + it.key().toStdString() + "=" + it.value().toVariant().toString().toStdString() + "\n";
-               for (const auto& m : spiceJson["models"].toArray()) cards += sim::modelCard({m.toObject()["file"].toString().toStdString(), m.toObject()["section"].toString().toStdString()}) + "\n";
+               const flow::SpiceCorner* corner = nullptr;
+               if (a.contains("corner")) {
+                   std::string known;
+                   for (const auto& k : pdk->spiceCorners) {
+                       known += (known.empty() ? "" : ", ") + k.name;
+                       if (k.name == s(a, "corner")) corner = &k;
+                   }
+                   if (!corner) throw std::invalid_argument(pdk->name + " has no transistor-level corner '" + s(a, "corner") + "'" + (known.empty() ? std::string(" (it has none)") : " (it has " + known + ")"));
+               }
+               for (const auto& m : spiceJson["models"].toArray()) {
+                   std::string section = m.toObject()["section"].toString().toStdString();
+                   if (corner && section.rfind("mos_", 0) == 0) section = corner->mosSection;  // the MOS corner; other cards stay
+                   cards += sim::modelCard({m.toObject()["file"].toString().toStdString(), section}) + "\n";
+               }
+               if (corner) cards += ".temp " + QString::number(corner->celsius).toStdString() + "\n";
 
                sim::ChipDeckConfig cfg;
                cfg.cdl = slurp(cdlFile);
@@ -305,7 +320,7 @@ void addTestCommands(Registry& r) {
                cfg.top = s(impl.record, "top");
                cfg.dut = s(a, "dut");
                cfg.modelCards = cards;
-               cfg.supply = pdk->supplyVolts;
+               cfg.supply = corner ? corner->volts : pdk->supplyVolts;
                if (a.contains("stop_ns")) cfg.stopSeconds = a["stop_ns"].toDouble() * 1e-9;
                const std::string clock = a.contains("clock_port") ? s(a, "clock_port") : s(impl.record, "clock_port");
                const flow::Vcd vcd = flow::readVcd(recording.string());
@@ -316,7 +331,11 @@ void addTestCommands(Registry& r) {
                const double period = impl.record["clock_period_ns"].toDouble();
                QJsonObject rec{{"run", q(run)}, {"name", a["name"]}, {"kind", "spice"}, {"level", "transistor"}, {"flow_run", a["flow_run"]}, {"recording", a["recording"]}, {"state", "running"},
                                {"started", now()}, {"pid", QCoreApplication::applicationPid()}, {"transistors", (double)deck.transistors}, {"parasitic_nets", (double)deck.nets}, {"wire_resistors", (double)deck.resistors}, {"lumped_nets", (double)deck.lumpedNets},
-                               {"parasitic_pf", deck.capacitanceFarads * 1e12}, {"stop_ns", deck.stopSeconds * 1e9}};
+                               {"parasitic_pf", deck.capacitanceFarads * 1e12}, {"stop_ns", deck.stopSeconds * 1e9}, {"supply_v", cfg.supply}};
+               if (corner) {
+                   rec["corner"] = q(corner->name);
+                   rec["temperature_c"] = corner->celsius;
+               }
                writeRecord(dir, rec);
                // At most a tenth of the fastest edge between samples: the step is an upper bound, and the engine's own error control does the rest
                const double step = std::max(1e-12, std::min(50e-12, period * 1e-9 / 100));

@@ -11,6 +11,7 @@
 #include <functional>
 #include <vector>
 
+class QComboBox;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
@@ -84,6 +85,7 @@ private:
     DigitalWaves* waves_;
     QTimer* poll_;
     QPushButton* transistor_;
+    QComboBox* corner_;  // the transistor-level run's corner: "" nominal
 };
 
 class TestPanel : public QWidget {

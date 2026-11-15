@@ -245,6 +245,13 @@ TestRunView::TestRunView(Session& session, const QString& run, QWidget* parent) 
         QString why;
         if (!runTransistorLevel(&why)) verdict_->setText(why);
     });
+    corner_ = new QComboBox(central);
+    corner_->setAccessibleName("Transistor corner");
+    corner_->setToolTip("The corner the transistors run at: the MOS models, supply and temperature of that timing corner");
+    corner_->setProperty("api", "test_spice");
+    corner_->addItem("nominal", QString());
+    for (const char* name : {"slow", "typ", "fast"}) corner_->addItem(name, QString(name));
+    top->addWidget(corner_);
     top->addWidget(transistor_);
     layout->addLayout(top);
 
@@ -314,10 +321,13 @@ void TestRunView::refresh() {
     if (st.contains("flow_run")) what += " of " + st["flow_run"].toString();
     title_->setText(what);
     transistor_->setVisible(st.contains("flow_run") && st.contains("vcd") && state != "running");
+    corner_->setVisible(transistor_->isVisible());
     if (st["kind"] == "spice") {
-        title_->setText(run_ + " at transistor level, " + QLocale().toString((qlonglong)st["transistors"].toDouble()) + " transistors, " +
+        title_->setText(run_ + " at transistor level" + (st.contains("corner") ? QString(", %1 (%2 V, %3 °C)").arg(st["corner"].toString()).arg(st["supply_v"].toDouble()).arg(st["temperature_c"].toDouble()) : QString()) +
+                        ", " + QLocale().toString((qlonglong)st["transistors"].toDouble()) + " transistors, " +
                         (st["wire_resistors"].toDouble() > 0 ? QLocale().toString((qlonglong)st["wire_resistors"].toDouble()) + " wire resistors" : QString("wires as capacitance alone")));
         transistor_->hide();
+        corner_->hide();
     }
     if (state == "running") {
         verdict_->setText("Running");
@@ -346,7 +356,12 @@ bool TestRunView::runTransistorLevel(QString* why) {
         *why = "This run is not of an implemented design";
         return false;
     }
-    const cmd::Result r = session_.call("test_spice", {{"name", run_.section('/', 0, 0) + "_spice"}, {"flow_run", st.value.toObject()["flow_run"]}, {"recording", run_}, {"dut", "tb.dut"}, {"wait", false}});
+    QJsonObject args{{"name", run_.section('/', 0, 0) + "_spice"}, {"flow_run", st.value.toObject()["flow_run"]}, {"recording", run_}, {"dut", "tb.dut"}, {"wait", false}};
+    if (!corner_->currentData().toString().isEmpty()) {
+        args["corner"] = corner_->currentData().toString();
+        args["name"] = run_.section('/', 0, 0) + "_spice_" + corner_->currentData().toString();
+    }
+    const cmd::Result r = session_.call("test_spice", args);
     if (!r.ok) {
         *why = r.error;
         return false;

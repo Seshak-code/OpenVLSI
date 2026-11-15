@@ -1895,11 +1895,12 @@ The signals a test run recorded: name and width.
 
 ### `test_spice`
 
-Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's wire resistance and capacitance from the SPEF, driven at its pins by what a test run recorded, every output compared with that recording at the end of each clock cycle. It needs pdk_install's device library, and passes only if every sample agrees: a recording the chip cannot keep up with fails, with the first sample that differs. Waits and returns, or with wait false starts in the background.
+Runs the routed chip at transistor level on TreeSPICE: its layout's netlist with each net's wire resistance and capacitance from the SPEF, driven at its pins by what a test run recorded, every output compared with that recording at the end of each clock cycle; its raw file is wave_eval's (run: its directory). It needs pdk_install's device library, and passes only if every sample agrees: a recording the chip cannot keep up with fails, with the first sample that differs. Waits and returns, or with wait false starts in the background.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
 | `clock_port` | string |  | the clock's port (default the run's) |
+| `corner` | string |  | slow, typ or fast: the MOS models, supply and temperature of that timing corner (default the device library's typical models at the platform's supply, 27 C) |
 | `device_library` | string |  | the library holding the transistors (default sg13g2) |
 | `dut` | string | yes | the design's instance in the recording, as tb.dut |
 | `flow_run` | string | yes | an implementation run: <design>/run.N |
