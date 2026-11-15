@@ -800,10 +800,57 @@ QJsonObject lvsMarkers(const QJsonObject& xref) {
     return {{"total", total}, {"rules", rules}};
 }
 
+// Ruby for an LVS deck: the black boxes' abstracts made one pin per name, without the substrate (BLACK: their names, quoted), and blanked
+constexpr const char* kBlackBoxes = R"(
+black = [BLACK]
+black.each do |name|
+  c = netlist.circuit_by_name(name)
+  next unless c
+  pins = c.each_pin.to_a
+  # A pin is removed only once no parent connects it (else the comparer meets a dangling reference)
+  drop = ->(p) { c.each_ref { |sc| sc.disconnect_pin(p.id) }; c.remove_pin(p.id) }
+  pins.select { |p| p.name.to_s.empty? }.each { |p| drop.(p) }
+  pins.reject { |p| p.name.to_s.empty? }.group_by { |p| p.name }.each do |n, group|
+    keep = group[0]
+    group[1..-1].each do |pk|
+      c.each_ref do |sc|
+        a, b = sc.net_for_pin(keep.id), sc.net_for_pin(pk.id)
+        if a && b && a != b
+          sc.circuit.join_nets(a, b)
+        elsif b && !a
+          sc.connect_pin(keep.id, b)
+        end
+      end
+      a, b = c.net_for_pin(keep.id), c.net_for_pin(pk.id)
+      c.join_nets(a, b) if a && b && a != b
+      drop.(pk)
+    end
+  end
+end
+# Blank on both sides (the schematic's reader upper-cases names), before align: after it the comparer's circuits are cached
+[netlist, schematic].each { |nl| nl.each_circuit.map(&:name).select { |n| black.any? { |b| b.casecmp?(n) } }.each { |n| nl.blank_circuit(n) } }
+# A substrate or well tap whose other side reaches no other device and no top pin does nothing. The pad ring's corner and filler cells tie their
+# Metal1 rails to the substrate so; with the pads as abstracts (no Metal1) those rails reach nothing, and the schematic places no filler.
+dead = lambda do |net, seen|
+  return true if net.nil? || !seen.add?([net.circuit.name, net.cluster_id])
+  return false if net.each_terminal.any? { |t| t.device.device_class.name !~ /tap/i }
+  return false if net.pin_count > 0 && !net.circuit.has_refs?
+  net.each_subcircuit_pin.all? { |sp| dead.(sp.subcircuit.circuit_ref.net_for_pin(sp.pin_id), seen) } &&
+    (net.pin_count == 0 || net.circuit.each_ref.all? { |sc| net.each_pin.all? { |pr| dead.(sc.net_for_pin(pr.pin_id), seen) } })
+end
+netlist.each_circuit do |cc|
+  cc.each_device.to_a.each do |d|
+    next unless d.device_class.name =~ /tap/i
+    cc.remove_device(d) if d.device_class.terminal_definitions.any? { |t| n = d.net_for_terminal(t.id); n && dead.(n, Set.new) }
+  end
+end
+)";
+
 void addVerifyCommands(Registry& r) {
     r.add({"verify_drc", "Runs the process's DRC deck over a layout view; returns the run with its violation count (verify_markers lists them). Density rules are off by default: "
                          "they judge a whole chip with its fill. Waits, or with wait false starts it in the background (poll verify_status).",
-           object({{"library", kLib}, {"cell", kCell}}, {{"view", kView}, {"density", param("boolean", "apply the deck's density rules")}, {"wait", param("boolean", "wait for it (default true)")}}),
+           object({{"library", kLib}, {"cell", kCell}}, {{"view", kView}, {"density", param("boolean", "apply the deck's density rules")},
+                    {"recommended", param("boolean", "apply the deck's recommended rules (default true); IHP's own pad and bond pad cells break two of them")}, {"wait", param("boolean", "wait for it (default true)")}}),
            [](Context& c, const QJsonObject& a) {
                oadb::Library& l = c.workspace.library(s(a, "library"));
                const flow::Platform& pdk = platformOf(l);
@@ -812,10 +859,12 @@ void addVerifyCommands(Registry& r) {
                std::string run;
                const fs::path dir = newRun(c, s(a, "library"), s(a, "cell"), "drc", &run);
                exportGds(c.workspace, s(a, "library"), s(a, "cell"), viewOf(a), (dir / "layout.gds").string());
-               QJsonObject rec{{"run", q(run)}, {"kind", "drc"}, {"library", a["library"]}, {"cell", a["cell"]}, {"view", q(viewOf(a))}, {"state", "running"}, {"started", now()}};
+               QJsonObject rec{{"run", q(run)}, {"kind", "drc"}, {"library", a["library"]}, {"cell", a["cell"]}, {"view", q(viewOf(a))}, {"state", "running"}, {"started", now()},
+                               {"density", a["density"].toBool(false)}, {"recommended", a["recommended"].toBool(true)}};
                writeRecord(dir, rec);
                std::vector<std::string> args{"-b", "-rd", "in_gds=" + (dir / "layout.gds").string(), "-rd", "report_file=" + (dir / "report.lyrdb").string()};
                if (!a["density"].toBool(false)) { args.push_back("-rd"); args.push_back("densityRules=false"); }
+               if (!a["recommended"].toBool(true)) { args.push_back("-rd"); args.push_back("recommendedRules=false"); }
                for (const auto& d : pdk.drcDefines)
                    if (d.rfind("densityRules", 0) != 0) { args.push_back("-rd"); args.push_back(d); }
                args.push_back("-r");
@@ -865,7 +914,14 @@ void addVerifyCommands(Registry& r) {
                                                                                         : schematicCdl(c.workspace, s(a, "library"), s(a, "cell"), schematicView);
                std::string run;
                const fs::path dir = newRun(c, s(a, "library"), s(a, "cell"), "lvs", &run);
-               exportGds(c.workspace, s(a, "library"), s(a, "cell"), viewOf(a), (dir / "layout.gds").string());
+               // A cell marked a black box that the schematic places (the PDK's IO cells and SRAM macros: IHP's deck does not extract their ESD
+               // structures as their netlists say) is compared by its pins alone, as top-level LVS takes them: the layout writes its abstract
+               std::set<std::string> blackBoxes;
+               for (const auto& name : c.workspace.libraries())
+                   for (const auto& cl : c.workspace.library(name).cells())
+                       if (c.workspace.library(name).cellProp(cl, "lvs").value_or("") == "\"blackbox\"" && cl != s(a, "cell") && cdl.find(".SUBCKT " + cl + " ") != std::string::npos)
+                           blackBoxes.insert(cl);
+               exportGds(c.workspace, s(a, "library"), s(a, "cell"), viewOf(a), (dir / "layout.gds").string(), blackBoxes);
                std::ofstream(dir / "schematic.cdl") << cdl;
                // The deck's includes are relative to where it lies; a copy here keeps them findable
                const fs::path deckFile = flow::platformFile(pdk, tools.flowDir, pdk.lvsDeck);
@@ -877,6 +933,19 @@ void addVerifyCommands(Registry& r) {
                        const std::string to = "# %include " + (deckFile.parent_path() / "rule_decks").string() + "/";
                        text.replace(at, include.size(), to);
                        at += to.size();
+                   }
+                   // The black boxes' abstracts: their same-named pieces, which the real cell joins, become one pin (their nets joined in the parent
+                   // too), their substrate is no pin, and no side purges a black box's pins as floating
+                   std::string black;
+                   for (const auto& cl : blackBoxes) black += (black.empty() ? "\"" : ", \"") + cl + "\"";
+                   if (!black.empty()) {
+                       const std::string align = "\nalign\n", simplify = "netlist.simplify if SIMPLIFY\nschematic.simplify if SIMPLIFY\n";
+                       if (text.find(align) == std::string::npos || text.find(simplify) == std::string::npos)
+                           throw std::runtime_error("the LVS deck changed (no align, or not its simplify lines): update verify_lvs");
+                       text.replace(text.find(align), align.size(), "\n" + std::string(kBlackBoxes).replace(std::string(kBlackBoxes).find("BLACK"), 5, black) + "align\n");
+                       text.replace(text.find(simplify), simplify.size(),
+                                                                        "[netlist, schematic].each { |nl| nl.make_top_level_pins; nl.combine_devices; nl.each_circuit { |cc| cc.purge_nets_keep_pins }\n"
+                                    "  loop { gone = nl.each_circuit.select { |cc| !cc.has_refs? && cc.name.downcase != $topcell.to_s.downcase }; break if gone.empty?; gone.each { |cc| nl.purge_circuit(cc) } } } if SIMPLIFY\n");
                    }
                    std::ofstream(dir / "deck.lvs") << text;
                }

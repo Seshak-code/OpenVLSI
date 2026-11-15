@@ -3,6 +3,8 @@
 #include "cmd/registry.h"
 #include "flow/rtl_flow.h"
 #include "layout/gds.h"
+#include "layout/pcell.h"
+#include "layout/tech.h"
 #include "oadb/oadb.h"
 
 #include <QRegularExpression>
@@ -10,6 +12,7 @@
 #include <QJsonDocument>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -402,6 +405,44 @@ std::set<std::string> writeSimNetlist(const std::vector<CdlCell>& cells, const f
 QString q(const std::string& text) { return QString::fromStdString(text); }
 
 // A JSON value as a cell property holds it
+// Each macro's pins in a LEF file, as an abstract for LVS: per pin its metal rectangles on the process's GDS layers, in database units
+// (dbuPerMicron). A layer the process does not name is refused.
+std::map<std::string, QJsonArray> lefAbstracts(const fs::path& file, const layout::Tech& tech, double dbuPerMicron) {
+    std::ifstream in(file);
+    if (!in) throw std::runtime_error("cannot read " + file.string());
+    std::map<std::string, QJsonArray> out;
+    std::string word, macro, pin, layerName;
+    int layer = -1;
+    QJsonArray rects;
+    const auto flush = [&] {
+        if (!pin.empty() && !rects.isEmpty()) out[macro].append(QJsonObject{{"name", QString::fromStdString(pin)}, {"layer", layer}, {"rects", rects}});
+        rects = QJsonArray{};
+    };
+    bool inPort = false;
+    while (in >> word) {
+        if (word == "MACRO") { in >> macro; pin.clear(); }
+        else if (word == "PIN" && !macro.empty()) { flush(); in >> pin; layer = -1; }
+        else if (word == "PORT") inPort = true;
+        else if (word == "END") {
+            std::string what;
+            std::getline(in, what);
+            if (inPort && what.find_first_not_of(" \t;\r") == std::string::npos) { flush(); inPort = false; }  // END of a PORT
+            else if (!pin.empty() && what.find(pin) != std::string::npos) { flush(); pin.clear(); }
+        } else if (word == "LAYER" && inPort) {
+            flush();
+            in >> layerName;
+            const auto it = std::find_if(tech.layers.begin(), tech.layers.end(), [&](const layout::TechLayer& l) { return l.name == layerName && l.datatype == 0; });
+            if (it == tech.layers.end()) throw std::runtime_error(file.string() + ": layer " + layerName + " is no layer of " + tech.name);
+            layer = it->layer;
+        } else if (word == "RECT" && inPort && layer >= 0) {
+            double x0, y0, x1, y1;
+            in >> x0 >> y0 >> x1 >> y1;
+            rects.append(QJsonArray{std::llround(x0 * dbuPerMicron), std::llround(y0 * dbuPerMicron), std::llround(x1 * dbuPerMicron), std::llround(y1 * dbuPerMicron)});
+        }
+    }
+    return out;
+}
+
 std::string propText(const QJsonValue& v) {
     const QByteArray b = QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact);
     return b.mid(1, b.size() - 2).toStdString();
@@ -605,6 +646,11 @@ void addPdkCommands(Registry& r) {
                l.setLibraryProp("tech", "\"sg13g2\"");
                QJsonArray imported;
                for (const auto& [cdl, gds] : files) imported.append(importGds(l, gds.string(), flow::platformFile(*pdk, tools.flowDir, pdk->layerProperties), true));
+               if (set == "io") {  // the bond pad a pad ring sets on each pad: metal only, with no netlist
+                   const fs::path bond = platform / "gds" / "bondpad_70x70.gds";
+                   if (!fs::is_regular_file(bond)) throw std::runtime_error("pdk_install_cells: the platform has no " + bond.string());
+                   imported.append(importGds(l, bond.string(), flow::platformFile(*pdk, tools.flowDir, pdk->layerProperties), true));
+               }
                const auto json = [](const QJsonValue& v) {
                    const QByteArray b = QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact);
                    return b.mid(1, b.size() - 2).toStdString();
@@ -625,6 +671,19 @@ void addPdkCommands(Registry& r) {
                                }
                    text += cell.text;
                };
+               // The black boxes' abstracts: their LEF pins (IHP's IO cells' own labels and ESD structures do not extract as their netlists say)
+               std::map<std::string, QJsonArray> abstracts;
+               if (set != "stdcell") {
+                   const layout::Tech* tech = layout::findTech("sg13g2");
+                   std::vector<fs::path> lefs;
+                   if (set == "io") lefs.push_back(platform / "lef" / "sg13g2_io.lef");
+                   else for (const auto& [cdl, gds] : files) lefs.push_back(platform / "lef" / (cdl.stem().string() + ".lef"));
+                   for (const auto& lef : lefs) {
+                       const std::string top = lef.stem() == "sg13g2_io" ? "sg13g2_IOPadIn" : lef.stem().string();
+                       const double dbuPerMicron = 1e-6 / std::stod(l.prop(top, "layout", "metersPerDbu").value_or("1e-9"));
+                       for (auto& [m, pins] : lefAbstracts(lef, *tech, dbuPerMicron)) abstracts[m] = pins;
+                   }
+               }
                QJsonArray names, simulated;
                l.change("install " + name, [&] {
                    for (const auto& cell : cells) {
@@ -639,6 +698,10 @@ void addPdkCommands(Registry& r) {
                        l.setCellProp(cell.name, "cdl", json(QString::fromStdString(text)));
                        l.setCellProp(cell.name, "params", "{}");
                        l.setCellProp(cell.name, "instNamePrefix", json(QString("X")));
+                       if (set != "stdcell") {  // compared by its pins in a top's LVS: its abstract stands for it there
+                           l.setCellProp(cell.name, "lvs", json(QString("blackbox")));
+                           if (const auto ab = abstracts.find(cell.name); ab != abstracts.end()) l.setCellProp(cell.name, "abstract", json(ab->second));
+                       }
                        if (simulates.count(cell.name)) {
                            std::string tmpl;
                            for (const auto& p : cell.ports) tmpl += "[|" + p + "] ";
@@ -650,6 +713,117 @@ void addPdkCommands(Registry& r) {
                });
                c.workspace.save();
                return QJsonValue(QJsonObject{{"library", QString::fromStdString(name)}, {"cells", names}, {"simulate", simulated}, {"layouts", imported}, {"netlist", QString::fromStdString(sim.string())}});
+           }});
+    r.add({"layout_pad_ring", "Places a pad ring of sg13g2_io's cells in a layout: a corner at each corner of the die, the pads of each side spread evenly "
+                              "(their bond pad side out), fillers in every gap so the ring's supply rails run unbroken, a bond pad on each pad, and a pin "
+                              "on each bond pad named as its pad. The ring sits 140 um inside the die's edge (a 70 um bond pad and 70 um for a seal ring), "
+                              "as ORFS's pad.tcl places it. Sides run left to right (south, north) and bottom to top (east, west). Returns the core's box.",
+           object({{"library", param("string", "the library")}, {"cell", param("string", "the cell")},
+                   {"die", param("array", "the die's width and height, [w, h] in microns (whole microns)")}},
+                  {{"view", param("string", "the layout view (default layout)")},
+                   {"south", param("array", "pads along the bottom: [{name, master}], master a pad cell of sg13g2_io such as sg13g2_IOPadIn")},
+                   {"east", param("array", "pads up the right side")}, {"north", param("array", "pads along the top")}, {"west", param("array", "pads up the left side")}}),
+           [](Context& c, const QJsonObject& a) {
+               // ponytail: IHP's sg13g2_io only, at its sizes (pads 80 x 180 um, corners 180 um, fillers 1 to 50 um); no seal ring is drawn
+               constexpr int64_t um = 1000, pad = 80 * um, depth = 180 * um, offset = 140 * um, bond = 70 * um;
+               const std::string io = "sg13g2_io", lib = a["library"].toString().toStdString(), cell = a["cell"].toString().toStdString();
+               const std::string view = a.contains("view") ? a["view"].toString().toStdString() : "layout";
+               const auto isLayout = [](const oadb::Library& in, const std::string& cl, const std::string& v) {
+                   try { return in.viewType(cl, v) == "layout"; } catch (const std::exception&) { return false; }
+               };
+               oadb::Library& l = c.workspace.library(lib);
+               if (!isLayout(l, cell, view)) throw std::invalid_argument(lib + "/" + cell + "/" + view + " is no layout view");
+               oadb::Library& cells = c.workspace.library(io);  // throws when pdk_install_cells io has not run
+               for (const char* need : {"sg13g2_Corner", "bondpad_70x70"})
+                   if (!isLayout(cells, need, "layout")) throw std::invalid_argument(io + " has no " + need + ": run pdk_install_cells io again");
+               const QJsonArray die = a["die"].toArray();
+               const auto whole = [](const QJsonValue& v) {
+                   const double d = v.toDouble(-1);
+                   if (d <= 0 || d != std::floor(d)) throw std::invalid_argument("the die's sides are whole microns");
+                   return (int64_t)d * um;
+               };
+               if (die.size() != 2) throw std::invalid_argument("die is [w, h] in microns");
+               const int64_t w = whole(die[0]), h = whole(die[1]);
+               struct Pad { std::string name, master; };
+               struct Side { const char* key; int64_t length; double angle; };
+               const std::vector<Side> sides = {{"south", w, 0}, {"east", h, 90}, {"north", w, 180}, {"west", h, 270}};
+               std::set<std::string> names;
+               std::map<std::string, std::vector<Pad>> pads;
+               for (const auto& s : sides)
+                   for (const auto& v : a[s.key].toArray()) {
+                       const QJsonObject o = v.toObject();
+                       Pad p{o["name"].toString().toStdString(), o["master"].toString().toStdString()};
+                       if (p.name.empty() || p.master.empty()) throw std::invalid_argument(std::string("each pad of ") + s.key + " has a name and a master");
+                       if (!names.insert(p.name).second) throw std::invalid_argument("two pads are named " + p.name);
+                       if (p.master.rfind("sg13g2_IOPad", 0) != 0 || !isLayout(cells, p.master, "layout"))
+                           throw std::invalid_argument(p.master + " is no pad cell of " + io);
+                       pads[s.key].push_back(p);
+                   }
+               // Where a cell of `along` microns starting `x` along a side goes: its origin and the side's rotation
+               const auto place = [&](const Side& s, int64_t x, int64_t along) -> std::pair<Point, double> {
+                   if (s.angle == 0) return {{x, offset}, 0};
+                   if (s.angle == 90) return {{w - offset, x}, 90};
+                   if (s.angle == 180) return {{x + along, h - offset}, 180};
+                   return {{offset, x + along}, 270};
+               };
+               const std::vector<std::pair<std::string, int64_t>> fillers = {{"sg13g2_Filler10000", 50}, {"sg13g2_Filler4000", 20}, {"sg13g2_Filler2000", 10},
+                                                                            {"sg13g2_Filler1000", 5}, {"sg13g2_Filler400", 2}, {"sg13g2_Filler200", 1}};
+               int placed = 0, filled = 0;
+               l.change("pad ring in " + cell, [&] {
+                   const auto add = [&](const std::string& master, Point at, double angle) {
+                       oadb::LayoutInstance i;
+                       i.lib = io;
+                       i.cell = master;
+                       i.at = at;
+                       i.angle = angle;
+                       l.addLayoutInstance(cell, view, i);
+                   };
+                   const Point corners[] = {{offset, offset}, {w - offset, offset}, {w - offset, h - offset}, {offset, h - offset}};
+                   for (int k = 0; k < 4; ++k) add("sg13g2_Corner", corners[k], 90.0 * k);
+                   for (const auto& s : sides) {
+                       const int64_t start = offset + depth, end = s.length - offset - depth;
+                       const auto& row = pads[s.key];
+                       const int64_t room = end - start - (int64_t)row.size() * pad;
+                       if (room < 0) throw std::invalid_argument(std::string("the ") + s.key + " side holds " + std::to_string((end - start) / pad) + " pads at most");
+                       // Evenly spread, each gap whole microns so the fillers close it exactly
+                       int64_t x = start;
+                       const auto fill = [&](int64_t to) {
+                           for (const auto& [master, size] : fillers)
+                               while (to - x >= size * um) {
+                                   const auto [at, angle] = place(s, x, size * um);
+                                   add(master, at, angle);
+                                   x += size * um;
+                                   ++filled;
+                               }
+                       };
+                       for (size_t k = 0; k < row.size(); ++k) {
+                           const int64_t gap = room / (int64_t)(row.size() + 1) / um * um;
+                           fill(start + (int64_t)(k + 1) * gap + (int64_t)k * pad);
+                           const auto [at, angle] = place(s, x, pad);
+                           add(row[k].master, at, angle);
+                           // The bond pad over the pad's pin (5 um in from its sides), outside the ring
+                           const int64_t b0 = x + 5 * um;
+                           Point bat = s.angle == 0 ? Point{b0, offset - bond} : s.angle == 90 ? Point{w - offset, b0} : s.angle == 180 ? Point{b0, h - offset} : Point{offset - bond, b0};
+                           add("bondpad_70x70", bat, 0);
+                           const layout::Rect r{bat.x, bat.y, bat.x + bond, bat.y + bond};
+                           l.addLayoutShape(cell, view, layout::rectShape({126, 0}, r));
+                           l.addLayoutShape(cell, view, layout::rectShape({126, 2}, r));
+                           oadb::LayoutShape text;
+                           text.layer = 126;
+                           text.datatype = 25;
+                           text.kind = "text";
+                           text.points = {{bat.x + bond / 2, bat.y + bond / 2}};
+                           text.text = row[k].name;
+                           l.addLayoutShape(cell, view, text);
+                           x += pad;
+                           ++placed;
+                       }
+                       fill(end);
+                   }
+               });
+               const int64_t core = offset + depth;
+               return QJsonValue(QJsonObject{{"pads", placed}, {"fillers", filled},
+                                             {"core", QJsonArray{(double)core, (double)core, (double)(w - core), (double)(h - core)}}});
            }});
     r.add({"pdk_install", "Creates the libraries analogLib (ideal sources and passives) and a PDK's device library (sg13g2 for "
                           "IHP SG13G2: lv/hv MOS, MIM cap, poly resistors; asap7 / asap5 for the FinFET and nanowire PDKs: "
