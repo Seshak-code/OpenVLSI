@@ -531,15 +531,24 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     connect(markerTree_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* i) {
         if (i && i->data(0, Qt::UserRole).isValid()) showMarker(i->data(0, Qt::UserRole).toInt());
     });
-    // An LVS marker of a net cross-probes to the schematic it was compared with
+    // An LVS marker of a net or a device cross-probes to the schematic it was compared with
     auto* probe = new QAction("Show in Schematic", markerTree_);
     markerTree_->addAction(probe);
     markerTree_->setContextMenuPolicy(Qt::ActionsContextMenu);
     connect(probe, &QAction::triggered, this, [this] {
         const QTreeWidgetItem* i = markerTree_->currentItem();
-        const QString net = i ? i->data(0, Qt::UserRole + 1).toString() : QString();
-        if (net.isEmpty()) return hint("Choose a net that LVS found in the schematic");
-        const cmd::Result r = session_.call("editor_select_net", {{"library", lib_}, {"cell", cell_}, {"view", markerReport_["schematic_view"].toString("schematic")}, {"net", net}});
+        const QString net = i ? i->data(0, Qt::UserRole + 1).toString() : QString(), instance = i ? i->data(0, Qt::UserRole + 2).toString() : QString();
+        const QJsonObject where{{"library", lib_}, {"cell", cell_}, {"view", markerReport_["schematic_view"].toString("schematic")}};
+        if (!instance.isEmpty()) {
+            QJsonObject a = where;
+            a["instance"] = instance;
+            const cmd::Result r = session_.call("editor_select_instance", a);
+            return hint(r.ok ? "Selected " + r.value.toString() + " in the schematic" : r.error);
+        }
+        if (net.isEmpty()) return hint("Choose a net or a device that LVS found in the schematic");
+        QJsonObject a = where;
+        a["net"] = net;
+        const cmd::Result r = session_.call("editor_select_net", a);
         hint(r.ok ? "Selected " + net + " in the schematic" : r.error);
     });
 
@@ -933,6 +942,7 @@ int LayoutViewer::setMarkers(const QJsonObject& report) {
                 if (!m.contains("label")) continue;
                 auto* item = new QTreeWidgetItem(top, {m["label"].toString()});
                 item->setData(0, Qt::UserRole + 1, m["schematic_net"].toString());
+                item->setData(0, Qt::UserRole + 2, m["schematic_instance"].toString());
                 item->setToolTip(0, m["description"].toString());
                 continue;
             }
@@ -943,6 +953,7 @@ int LayoutViewer::setMarkers(const QJsonObject& report) {
                 auto* item = new QTreeWidgetItem(top, {m.contains("label") ? m["label"].toString() + "  at " + where : where});  // an LVS marker names its net or device
                 item->setData(0, Qt::UserRole, at);
                 item->setData(0, Qt::UserRole + 1, m["schematic_net"].toString());
+                item->setData(0, Qt::UserRole + 2, m["schematic_instance"].toString());
                 item->setToolTip(0, m.contains("description") ? m["description"].toString() : rule["description"].toString() + (cell.isEmpty() ? QString() : "\nin " + cell));
             }
         }

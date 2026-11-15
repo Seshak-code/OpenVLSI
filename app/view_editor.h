@@ -57,6 +57,7 @@ public:
     bool generateSymbol();  // symbol_generate from this schematic, then opens it
     bool descend();         // opens the selected instance's master (its schematic if it has one)
     int selectNet(const QString& net);  // a schematic's wires and labels of that net, selected; how many
+    bool selectInstance(const QString& name);  // that instance alone, selected (any case); false when there is none
     QStringList plotSelectedNets();     // Plot Net: each selected wire's or label's net, probed; the nets
     void fit();
 

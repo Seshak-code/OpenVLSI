@@ -590,6 +590,17 @@ Turns what is being placed, or the one selected instance, by 90 degrees.
 | `library` | string | yes | library name |
 | `view` | string | yes | the view |
 
+### `editor_select_instance`
+
+Selects an instance in a schematic's editor (opened if need be), its name matched in any case, as LVS reports devices; returns its name.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | cell name |
+| `instance` | string | yes | instance name |
+| `library` | string | yes | library name |
+| `view` | string | yes | the schematic view |
+
 ### `editor_select_net`
 
 Selects a net's wires and labels in a schematic's editor (opened if need be); returns how many.
@@ -1768,7 +1779,7 @@ LVS's cross-reference, read from its report by KLayout: each circuit layout to s
 
 ### `verify_markers`
 
-What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic) and then its electrical rule violations (rules named ERC: ...). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker gives its cell and points, in microns in that cell.
+What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic, with the schematic's net or instance to cross-probe to) and then its electrical rule violations (rules named ERC: ...). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker gives its cell and points, in microns in that cell.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
