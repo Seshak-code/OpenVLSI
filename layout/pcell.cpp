@@ -31,6 +31,14 @@ constexpr int64_t kPsdOverActiv = 180;  // pSD.c
 constexpr int64_t kNwellOverActiv = 310;  // NW.c
 constexpr int64_t kMetalSpace = 180;    // M1.b
 constexpr int64_t kMetalArea = 90000;   // M1.d
+// Poly resistors
+const LayerKey kNsd{7, 0}, kRes{24, 0}, kSalBlock{28, 0}, kExtBlock{111, 0}, kPolyRes{128, 0};
+constexpr int64_t kResWidth = 500;       // Rsil.a, Rppd.a, Rhi.a
+constexpr int64_t kResLength = 500;      // Rsil.f, Rppd.e, Rhi.f
+constexpr int64_t kResToCont = 120;      // Rsil.b
+constexpr int64_t kSalToCont = 200;      // Rppd.c, Rhi.d: exactly
+constexpr int64_t kSalOverPoly = 200;    // Sal.c
+constexpr int64_t kImplantOverPoly = 180;  // Rsil.e, Rppd.b, Rppd.d, Rhi.c, Rhi.e
 
 int64_t floorToGrid(int64_t v, int64_t grid) { return (v >= 0 ? v : v - grid + 1) / grid * grid; }
 int64_t ceilToGrid(int64_t v, int64_t grid) { return floorToGrid(v + grid - 1, grid); }
@@ -162,6 +170,44 @@ Generated mosCell(const Tech& t, bool pmos, int64_t w, int64_t l, int ng) {
     if (pmos) {
         add(kPsd, {-kPsdOverActiv, -kPsdOverGate, activX1 + kPsdOverActiv, wf + kPsdOverGate});
         add(kNwell, {-kNwellOverActiv, -kNwellOverActiv, activX1 + kNwellOverActiv, wf + kNwellOverActiv});
+    }
+    return g;
+}
+
+Generated resCell(const Tech& t, const std::string& kind, int64_t w, int64_t l) {
+    if (t.name != "sg13g2") throw std::invalid_argument("no resistor generator for process " + t.name);
+    const bool sil = kind == "rsil", high = kind == "rhigh";
+    if (!sil && !high && kind != "rppd") throw std::invalid_argument("a poly resistor is rsil, rppd or rhigh");
+    if (w < kResWidth) throw std::invalid_argument("width " + std::to_string(w) + " nm is below the process's 500 nm");
+    if (l < kResLength) throw std::invalid_argument("length " + std::to_string(l) + " nm is below the process's 500 nm");
+    if (w % t.grid || l % t.grid) throw std::invalid_argument("width and length must be on the " + std::to_string(t.grid) + " nm grid");
+
+    Generated g;
+    auto add = [&](const LayerKey& k, const Rect& r) { g.shapes.push_back(rectShape(k, r)); };
+    // The body from y = 0 to l; a head at each end, long enough for its contacts past the body's blocking layer
+    const int64_t gap = sil ? kResToCont : kSalToCont;
+    const int64_t head = gap + kContSize + kPolyOverCont;
+    add(kGatPoly, {0, -head, w, l + head});
+    add(kPolyRes, {0, 0, w, l});
+    if (sil) add(kRes, {0, 0, w, l});
+    else add(kSalBlock, {-kSalOverPoly, 0, w + kSalOverPoly, l});
+    const Rect around{-kImplantOverPoly, -head - kImplantOverPoly, w + kImplantOverPoly, l + head + kImplantOverPoly};
+    add(kExtBlock, around);
+    if (!sil) add(kPsd, around);
+    if (high) add(kNsd, around);
+
+    const int cols = (int)std::max<int64_t>(1, (w - 2 * kPolyOverCont + kContSpace) / (kContSize + kContSpace));
+    const int64_t row = cols * kContSize + (cols - 1) * kContSpace;
+    const int64_t x0 = floorToGrid((w - row) / 2, t.grid);
+    for (const bool top : {false, true}) {
+        const int64_t cy = top ? l + gap : -gap - kContSize;
+        for (int c = 0; c < cols; ++c) add(kCont, {x0 + c * (kContSize + kContSpace), cy, x0 + c * (kContSize + kContSpace) + kContSize, cy + kContSize});
+        Rect metal{x0 - kMetalOverCont, cy - kMetalOverCont, x0 + row + kMetalOverCont, cy + kContSize + kMetalOverCont};
+        // Its minimum area, grown away from the body
+        const int64_t height = ceilToGrid(kMetalArea / (metal.x1 - metal.x0) + 1, t.grid);
+        if (metal.y1 - metal.y0 < height) (top ? metal.y1 : metal.y0) = top ? metal.y0 + height : metal.y1 - height;
+        add(kMetal1, metal);
+        g.terminals[top ? "PLUS" : "MINUS"].push_back({0, metal});
     }
     return g;
 }

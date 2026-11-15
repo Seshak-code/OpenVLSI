@@ -61,7 +61,7 @@ A testbench on the **routed netlist** runs with the delays of its own layout. It
 - **Schematic and symbol** (Design stage): the keys are Virtuoso's: I instance, W wire, L wire name, P pin, M move, Q properties, X check, Shift+E descend.
 - **ADE** (Simulate stage): tests, corners, sweeps, Monte Carlo, specs; results open in the waveform viewer. A test's Acceleration column takes `threads=8` and `array=1`, which solves identical instances once.
 - **Verifier:** a `verifier` view holds requirements mapped to outputs; a requirement passes only on what was measured.
-- **Layout:** attach a process (`layout_tech_set`). `layout_generate` draws a layout from the schematic: its transistors in two rows, ties, pins and flight lines showing what remains to route. The keys:
+- **Layout:** attach a process (`layout_tech_set`). `layout_generate` draws a layout from the schematic: its transistors in two rows, its poly resistors (rsil, rppd, rhigh) beside the n-row, ties, pins and flight lines showing what remains to route. **Create > Transistor…** and **Create > Resistor…** (Shift+R) generate one device of the size you type and put it on the cursor to place. The keys:
 
 | Key | Does | Key | Does |
 |---|---|---|---|

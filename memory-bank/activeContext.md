@@ -1,5 +1,23 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-14 — poly resistors, on `rebuild/pcells` (after #53, merged)**
+
+- **Done:**
+  - `layout::resCell` / `layout_pcell_res {type: rsil|rppd|rhigh, w, l}`: one straight strip, PLUS/MINUS on Metal1 at its ends, the PolyRes
+    marker exactly the body so IHP's deck measures w and l as drawn. 15 sizes DRC-clean. Layer palette gained nSD, SalBlock, RES, PolyRes, EXTBlock.
+  - `layout_generate` places resistors; LVS's CDL reference writes them (`R... PLUS MINUS rsil w= l= m= b=0 ps=0`); `verify_extract` writes
+    them back with the schematic's body net. ERC treats a terminal it does not know as conducting.
+  - `pdk_install` adds `r3_cmc.osdi` (beside the transistors' OSDI) to the resistors' models: without it they did not simulate.
+  - Layout editor: Create > Resistor… (Shift+R).
+- **Gate:** M3 56/56: a three-resistor chain generated, joined, DRC clean, LVS matched (and not when the schematic asks 3 um for a 2 um strip),
+  extracted, and simulated: 161.128 uA either way.
+- **Machine note:** this Mac idles to sleep with the screen locked; gate steps then took 8 to 20 minutes or a deck died with exit -1. Keep it
+  awake for long runs (the app's keep-awake). With the screen locked, `ui_test.py --backend os` cannot click; the qt backend can.
+- **Next:** MIM capacitors and serpentine resistors; FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations; LVS cross-probe of devices and
+  flow runs; corners at transistor level.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-14 — the hierarchy editor, on `rebuild/hierarchy` (after #52, merged)**
 
 - **Done:**

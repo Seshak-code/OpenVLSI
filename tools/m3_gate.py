@@ -102,6 +102,9 @@ SWEEP = [
 ]
 
 
+RESISTORS = [(kind, w, l) for kind in ("rsil", "rppd", "rhigh") for w, l in ((500, 500), (500, 2000), (845, 505), (1000, 1000), (2000, 10000))]
+
+
 def step_sweep(m, a, work):
     print("Generators against the DRC deck", flush=True)
     m("library_create", library="sweep", path=os.path.join(work, "sweep.oalib"))
@@ -116,10 +119,15 @@ def step_sweep(m, a, work):
     for k, (t, w, l, ng) in enumerate(SWEEP):
         name = m("layout_pcell_mos", library="sweep", type=t, w=w, l=l, ng=ng)
         m("layout_instance_add", library="sweep", cell="top", master=name, at=[(k % 5) * 12000, 3000 + (k // 5) * 12000])
+    for k, (t, w, l) in enumerate(RESISTORS):
+        name = m("layout_pcell_res", library="sweep", type=t, w=w, l=l)
+        m("layout_instance_add", library="sweep", cell="top", master=name, at=[k * 5000, 45000])
     gds = os.path.join(work, "sweep.gds")
     m("layout_export_gds", library="sweep", cell="top", file=gds)
     total, rules, report = run_drc(a.klayout, a.platform, gds, work, latch_up=False)  # ties are placement's, in the inverter below
-    check(total == 0, f"{len(SWEEP)} transistor sizes and both ties: {total} DRC errors" + (f" ({rules}; {report})" if total else ""))
+    check(total == 0, f"{len(SWEEP)} transistor sizes, {len(RESISTORS)} poly resistors and both ties: {total} DRC errors" + (f" ({rules}; {report})" if total else ""))
+    check("below the process" in m.refused("layout_pcell_res", library="sweep", type="rsil", w=400, l=1000) and "rsil, rppd or rhigh" in m.refused("layout_pcell_res", library="sweep", type="rpoly", w=500, l=1000),
+          "a resistor narrower than 500 nm, or of no such kind, is refused")
     check("below the process" in m.refused("layout_pcell_mos", library="sweep", type="nmos", w=1000, l=100), "a gate below 130 nm is refused")
     check("narrower" in m.refused("layout_pcell_mos", library="sweep", type="nmos", w=200, l=130), "a finger narrower than its contact is refused")
     check("grid" in m.refused("layout_pcell_mos", library="sweep", type="nmos", w=1003, l=130), "an off-grid width is refused")
@@ -417,6 +425,78 @@ def step_extract(m, a, work, lvs):
     check("not replaced" in refusals[0] and "not an LVS run" in refusals[1], "verify_extract will not overwrite a schematic, nor read a DRC run")
 
 
+def step_resistors(m, a, work):
+    """Three poly resistors in a chain, one of each kind: generated, joined by hand, checked by the decks, extracted and simulated."""
+    print("Poly resistors: a chain drawn, checked, extracted and simulated", flush=True)
+    lib = dict(library="design", cell="chain")
+    m("cell_create", **lib)
+    m("view_create", **lib, view="schematic", type="schematic")
+    for k, (name, master, plus, minus) in enumerate([("R1", "rsil", "a", "m"), ("R2", "rppd", "b", "m"), ("R3", "rhigh", "b", "c")]):
+        place(m, "design", "chain", name, "sg13g2", master, 1000 * k, 0, {"PLUS": plus, "MINUS": minus, "B": "c"}, {"w": "0.5u", "l": "2u"})
+    for k, pin in enumerate(["a", "c"]):
+        m("pin_add", **lib, view="schematic", name=pin, direction="inputOutput", x=-2000, y=1000 - 300 * k)
+    made = m("layout_generate", **lib)
+    check(made["devices"] == 3 and made["pins"] == 2, f"layout_generate draws the three resistors and two pins: {made}")
+    objects = m("layout_objects_get", **lib)
+    inst = {i["cell"].split("_")[0]: i for i in objects["instances"]}
+
+    def terminal(kind, name):
+        terms = m("prop_get", library="design", cell=inst[kind]["cell"], view="layout", key="terminals")
+        terms = json.loads(terms) if isinstance(terms, str) else terms
+        r = terms[name][0]
+        return inst[kind]["at"][0] + r[1], inst[kind]["at"][1] + r[2], inst[kind]["at"][0] + r[3], inst[kind]["at"][1] + r[4]
+
+    def join(p, q):  # one Metal1 slab over both ends
+        m("layout_shape_add", **lib, layer="Metal1", kind="rect", points=[[min(p[0], q[0]), min(p[1], q[1])], [max(p[2], q[2]), max(p[3], q[3])]])
+
+    def move_pin(name, to):
+        text = next(s for s in objects["shapes"] if s["kind"] == "text" and s["text"] == name)
+        tx, ty = text["points"][0]
+        ids = [s["id"] for s in objects["shapes"] if s["kind"] == "polygon" and bounds(s["points"])[0] <= tx <= bounds(s["points"])[2] and bounds(s["points"])[1] <= ty <= bounds(s["points"])[3]] + [text["id"]]
+        m("layout_objects_move", **lib, shapes=ids, dx=(to[0] + to[2]) // 2 // 5 * 5 - tx, dy=(to[1] + to[3]) // 2 // 5 * 5 - ty)
+
+    unrouted = sorted(n["net"] for n in connectivity(m, "chain")["nets"] if n["groups"] > 1)
+    check(unrouted == ["a", "b", "c", "m"], f"before joining, every net is flight lines: {unrouted}")
+    join(terminal("rsil", "MINUS"), terminal("rppd", "MINUS"))
+    join(terminal("rppd", "PLUS"), terminal("rhigh", "PLUS"))
+    move_pin("a", terminal("rsil", "PLUS"))
+    move_pin("c", terminal("rhigh", "MINUS"))
+    wired = connectivity(m, "chain")
+    check(wired["clean"], f"joined: connectivity is clean (open {[n['net'] for n in wired['nets'] if n['groups'] > 1]}, shorts {wired['shorts']})")
+    drc = m("verify_drc", **lib)
+    rules = [r["rule"] for r in m("verify_markers", run=drc["run"])["rules"]] if not drc.get("clean") else []
+    check(drc.get("clean") is True, f"IHP's DRC deck: clean {rules} {drc.get('error', '')}")
+    lvs = m("verify_lvs", **lib)
+    differ = [(it["kind"], it["layout"], it["schematic"], it.get("parameters")) for c in m("verify_lvs_report", run=lvs["run"])["circuits"] for it in c["items"]] if lvs.get("matched") is False else []
+    check(lvs.get("matched") is True and lvs.get("devices_layout") == lvs.get("devices_schematic") == 3 and lvs.get("erc_violations") == 0,
+          f"IHP's LVS deck: the chain matches its schematic, three devices a side, at the widths and lengths drawn {differ} {lvs.get('error', '')}")
+    # The size is compared, not only the wiring: the schematic asking for a longer resistor than was drawn does not match
+    m("instance_set_params", **lib, view="schematic", instance="R1", params={"l": "3u"})
+    longer = m("verify_lvs", **lib)
+    lengths = [it["parameters"].get("l") for c in m("verify_lvs_report", run=longer["run"])["circuits"] for it in c["items"] if it["kind"] == "device" and it.get("parameters")] if longer.get("matched") is False else []
+    check(longer.get("matched") is False and any(v and abs(v[0] - 2.0) < 1e-6 and abs(v[1] - 3.0) < 1e-6 for v in lengths),
+          f"a schematic asking for 3 um where 2 um is drawn does not match, and the report gives both lengths: {lengths}")
+    m("instance_set_params", **lib, view="schematic", instance="R1", params={"l": "2u"})
+    ext = m("verify_extract", run=lvs["run"])
+    lines = [x for x in ext["netlist"].splitlines() if x.startswith("X")]
+    check(ext["devices"] == 3 and len(lines) == 3 and all(" w=0.5u l=2u " in x for x in lines) and {x.split()[4] for x in lines} == {"rsil", "rppd", "rhigh"} and all(x.split()[3] == "c" for x in lines),
+          f"verify_extract writes the three resistors at their drawn sizes, each body on the schematic's net: {lines}")
+    m("symbol_generate", **lib)
+    m("cell_create", library="design", cell="rtb")
+    m("view_create", library="design", cell="rtb", view="schematic", type="schematic")
+    place(m, "design", "rtb", "X1", "design", "chain", 0, 0, {"a": "top", "c": "gnd!"})
+    place(m, "design", "rtb", "V1", "analogLib", "vdc", -1500, 0, {"PLUS": "top", "MINUS": "gnd!"}, {"vdc": "1.2"})
+    got = m("config_set", library="design", cell="rtb", view="post", top="design/rtb/schematic", viewList=["extracted", "schematic", "spice"])
+    check(next(c["uses"] for c in got["cells"] if c["cell"] == "chain") == "extracted", "a config puts the chain on its extraction")
+    current = {}
+    for view in ("schematic", "post"):
+        run = m("simulate", library="design", cell="rtb", view=view, cards=[".op"])
+        values = run["plots"][0]["values"]
+        current[view] = abs(values["i(v1)"])
+    print(f"    supply current through the chain: schematic {current['schematic'] * 1e6:.3f} uA, extracted {current['post'] * 1e6:.3f} uA", flush=True)
+    check(current["schematic"] > 1e-7 and abs(current["post"] / current["schematic"] - 1) < 1e-6, "simulated, the extracted chain draws the schematic's current: the same three resistors")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--mcp", required=True)
@@ -440,6 +520,7 @@ def main():
     step_sweep(m, a, work)
     lvs = step_inverter(m, a, work)
     step_extract(m, a, work, lvs)
+    step_resistors(m, a, work)
     m.p.stdin.close()
     m.p.wait()
     print(("PASSED" if not G_FAIL else "FAILED") + f": {G_PASS} of {G_PASS + len(G_FAIL)} checks")

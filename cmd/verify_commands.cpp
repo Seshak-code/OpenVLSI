@@ -131,9 +131,10 @@ std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std:
     for (const auto& p : l.pins(cell, view)) out << " " << net(p.name);
     out << "\n";
     for (const auto& i : l.instances(cell, view)) {
-        if (i.cell != "sg13_lv_nmos" && i.cell != "sg13_lv_pmos") {
+        const bool resistor = i.cell == "rsil" || i.cell == "rppd" || i.cell == "rhigh";
+        if (i.cell != "sg13_lv_nmos" && i.cell != "sg13_lv_pmos" && !resistor) {
             if (i.cell == "vdc" || i.cell == "vsin" || i.cell == "vpulse" || i.cell == "gnd" || i.cell == "idc") continue;  // the testbench's: no mask
-            throw std::invalid_argument("LVS has no reference for instance " + i.name + " of " + i.cell + " yet (sg13_lv_nmos and sg13_lv_pmos, in a flat schematic)");
+            throw std::invalid_argument("LVS has no reference for instance " + i.name + " of " + i.cell + " yet (sg13_lv_nmos, sg13_lv_pmos, rsil, rppd and rhigh, in a flat schematic)");
         }
         const QJsonObject defaults = QJsonDocument::fromJson(QByteArray::fromStdString(ws.library(i.lib).cellProp(i.cell, "params").value_or("{}"))).object();
         const auto value = [&](const char* p) {
@@ -147,6 +148,11 @@ std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std:
             if (it == nets->second.end()) throw std::invalid_argument(i.name + " has no net on " + t);
             return net(it->second);
         };
+        if (resistor) {
+            // Two ends, as the deck extracts it: its body under it is no terminal there. One straight strip: no bends.
+            out << "R" << i.name << " " << term("PLUS") << " " << term("MINUS") << " " << i.cell << " w=" << value("w") << " l=" << value("l") << " m=" << value("m") << " b=0 ps=0\n";
+            continue;
+        }
         out << "M" << i.name << " " << term("D") << " " << term("G") << " " << term("S") << " " << term("B") << " " << i.cell << " w=" << value("w") << " l=" << value("l")
             << " ng=" << value("ng") << " m=" << value("m") << "\n";
     }
@@ -408,7 +414,7 @@ for side, netlist in sides:
         for d in c.each_device():
             dc = d.device_class()
             rl = roles(dc)
-            ends = [d.net_for_terminal(t.id()) for t in dc.terminal_definitions() if rl.get(t.name) == "path"]
+            ends = [d.net_for_terminal(t.id()) for t in dc.terminal_definitions() if rl.get(t.name, "path") == "path"]  # a terminal this does not know conducts
             ends = [key(n) for n in ends if n]
             for a in ends:
                 for b in ends:
@@ -421,7 +427,7 @@ for side, netlist in sides:
         for d in c.each_device():
             dc = d.device_class()
             rl = roles(dc)
-            ends = [d.net_for_terminal(t.id()) for t in dc.terminal_definitions() if rl.get(t.name) == "path"]
+            ends = [d.net_for_terminal(t.id()) for t in dc.terminal_definitions() if rl.get(t.name, "path") == "path"]  # a terminal this does not know conducts
             ends = [key(n) for n in ends if n]
             for a in ends:
                 if kinds[a] is None:
@@ -866,8 +872,8 @@ void addVerifyCommands(Registry& r) {
                return QJsonValue(ercCheck({}, cdl, a));
            },
            true});
-    r.add({"verify_extract", "Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors with the sizes and "
-                             "diffusion areas LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values "
+    r.add({"verify_extract", "Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors and poly resistors with the "
+                             "sizes (and diffusion areas) LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values "
                              "per metal. A config view whose viewList puts that view first then simulates the layout in place of the schematic. Returns each net's capacitance "
                              "by metal and the netlist. Capacitance only: no wire resistance or coupling yet.",
            object({{"run", kRun}}, {{"to", param("string", "the view to write (default \"extracted\")")}}),
@@ -929,7 +935,9 @@ void addVerifyCommands(Registry& r) {
                    if (at == instanceNamed.end()) throw std::runtime_error("LVS names device " + s(d, "schematic") + ", which the schematic does not have");
                    oadb::Instance i = at->second;
                    if (upper(i.cell) != upper(s(d, "class"))) throw std::runtime_error(i.name + " is a " + i.cell + " in the schematic and a " + s(d, "class") + " in the layout");
-                   if (!params.contains("W") || !params.contains("L")) throw std::runtime_error("extraction knows transistors only yet, and " + i.name + " (" + i.cell + ") has no W and L");
+                   const bool transistor = params.contains("W") && params.contains("L");
+                   const bool resistor = !transistor && params.contains("w") && params.contains("l") && terminals.size() == 2;
+                   if (!transistor && !resistor) throw std::runtime_error("extraction knows transistors and poly resistors only yet, and " + i.name + " is a " + i.cell);
                    const QJsonObject defaults = QJsonDocument::fromJson(QByteArray::fromStdString(c.workspace.library(i.lib).cellProp(i.cell, "params").value_or("{}"))).object();
                    const auto whole = [&](const char* p) {
                        const auto it = i.params.find(p);
@@ -939,13 +947,29 @@ void addVerifyCommands(Registry& r) {
                        if (end == text.c_str() || *end || v < 1) throw std::runtime_error(i.name + "'s " + p + " '" + text + "' is not a whole number");
                        return v;
                    };
-                   // LVS joins fingers and multiples into one device of their whole width
-                   i.params["ng"] = std::to_string(whole("ng") * whole("m"));
-                   i.params["m"] = "1";
-                   i.params["w"] = number(params["W"].toDouble(), "u");
-                   i.params["l"] = number(params["L"].toDouble(), "u");
                    std::map<std::string, std::string> nets;
-                   for (auto t = terminals.begin(); t != terminals.end(); ++t) nets[t.key().toStdString()] = net(t.value().toString());
+                   if (transistor) {
+                       // LVS joins fingers and multiples into one device of their whole width
+                       i.params["ng"] = std::to_string(whole("ng") * whole("m"));
+                       i.params["m"] = "1";
+                       i.params["w"] = number(params["W"].toDouble(), "u");
+                       i.params["l"] = number(params["L"].toDouble(), "u");
+                       for (auto t = terminals.begin(); t != terminals.end(); ++t) nets[t.key().toStdString()] = net(t.value().toString());
+                   } else {
+                       // A poly resistor as the deck extracts it: its two ends, in its own order, and the strip's width and length.
+                       // Its body is no terminal in the layout: that pin keeps the schematic's net.
+                       if (params["b"].toDouble() != 0) throw std::runtime_error(i.name + " has bends in the layout: only a straight resistor is extracted yet");
+                       i.params["w"] = number(params["w"].toDouble(), "u");
+                       i.params["l"] = number(params["l"].toDouble(), "u");
+                       const QString ends = d["class"].toString();
+                       if (!terminals.contains(ends + "_1") || !terminals.contains(ends + "_2")) throw std::runtime_error(i.name + "'s ends are not named as the deck names a resistor's");
+                       nets["PLUS"] = net(terminals[ends + "_1"].toString());
+                       nets["MINUS"] = net(terminals[ends + "_2"].toString());
+                       const auto own = con.instanceNets.find(i.name);
+                       if (own != con.instanceNets.end())
+                           for (const auto& [pin, name] : own->second)
+                               if (!nets.count(pin)) nets[pin] = name;
+                   }
                    body << sim::primitiveLine(c.workspace, i, nets);
                    // ponytail: by these names, as IHP's transistors take the drawn diffusion; another PDK's primitives may name them otherwise
                    for (const auto& [key, unit] : {std::pair{"AS", "p"}, {"AD", "p"}, {"PS", "u"}, {"PD", "u"}})

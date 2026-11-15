@@ -1064,7 +1064,7 @@ Creates the libraries analogLib (ideal sources and passives) and a PDK's device 
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
-| `osdi` | string | yes | the compiled model the MOS devices load: psp103.osdi (SG13G2), bsimcmg107.osdi (ASAP7, ASAP5: tests/build_osdi.sh) |
+| `osdi` | string | yes | the compiled model the MOS devices load: psp103.osdi (SG13G2; the resistors load r3_cmc.osdi from beside it), bsimcmg107.osdi (ASAP7, ASAP5: tests/build_osdi.sh) |
 | `pdk` | string | yes | the PDK |
 | `root` | string | yes | the PDK's directory: ihp-sg13g2 (holding libs.tech), asap7_pdk_r1p7 or asap5PDK_r0p4 (holding models/hspice) |
 
@@ -1360,7 +1360,7 @@ Writes a layout view and everything it places to a GDSII file; returns the struc
 
 ### `layout_generate`
 
-Generates a layout view from a schematic: a master per transistor size, n-devices in one row and p-devices above, a tie per body net, a labelled pin per schematic pin, and each terminal's net recorded. The wiring is left to route; layout_connectivity tells what remains.
+Generates a layout view from a schematic: a master per transistor or poly resistor size, n-devices and resistors in one row and p-devices above, a tie per transistor body net, a labelled pin per schematic pin, and each terminal's net recorded. The wiring is left to route; layout_connectivity tells what remains.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -1478,6 +1478,17 @@ Generates a transistor master from the process's rules (once per size) and retur
 | `ng` | integer |  | fingers |
 | `type` | string | yes | nmos or pmos |
 | `w` | number | yes | total width, database units |
+
+### `layout_pcell_res`
+
+Generates a poly resistor master from the process's rules (once per size) and returns its cell's name: one straight strip, with PLUS and MINUS on Metal1 at its ends.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `l` | number | yes | length along it, database units |
+| `library` | string | yes | library name |
+| `type` | string | yes | rsil, rppd or rhigh |
+| `w` | number | yes | width across the current, database units |
 
 ### `layout_pcell_tap`
 
@@ -1712,7 +1723,7 @@ The electrical rule check: gates that nothing drives, wells with no tap, bulks o
 
 ### `verify_extract`
 
-Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors with the sizes and diffusion areas LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values per metal. A config view whose viewList puts that view first then simulates the layout in place of the schematic. Returns each net's capacitance by metal and the netlist. Capacitance only: no wire resistance or coupling yet.
+Extracts a hand-drawn layout from an LVS run that matched, into an extracted view of its cell: the layout's own transistors and poly resistors with the sizes (and diffusion areas) LVS measured, on the schematic's net names, and each net's wiring capacitance to ground from the process's own area and edge values per metal. A config view whose viewList puts that view first then simulates the layout in place of the schematic. Returns each net's capacitance by metal and the netlist. Capacitance only: no wire resistance or coupling yet.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|

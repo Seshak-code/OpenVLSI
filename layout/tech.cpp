@@ -16,6 +16,7 @@ Tech sg13g2() {
     t.textDatatype = 25;
     t.layers = {
         {"NWell", 31, 0, "#268c6b"},    {"Activ", 1, 0, "#00ff00"},       {"pSD", 14, 0, "#ccb899"},        {"GatPoly", 5, 0, "#bf4026"},
+        {"nSD", 7, 0, "#99ccb8"},       {"SalBlock", 28, 0, "#8066cc"},   {"RES", 24, 0, "#e6b800"},        {"PolyRes", 128, 0, "#e67a00"},   {"EXTBlock", 111, 0, "#5c7a99"},
         {"Cont", 6, 0, "#00ffff"},      {"Metal1", 8, 0, "#39bfff"},      {"Metal1.pin", 8, 2, "#39bfff"},  {"Metal1.text", 8, 25, "#39bfff"},
         {"Via1", 19, 0, "#ccccff"},     {"Metal2", 10, 0, "#ccccd9"},     {"Metal2.pin", 10, 2, "#ccccd9"}, {"Metal2.text", 10, 25, "#ccccd9"},
         {"Via2", 29, 0, "#ff3736"},     {"Metal3", 30, 0, "#d80000"},     {"Metal3.pin", 30, 2, "#d80000"}, {"Metal3.text", 30, 25, "#d80000"},
