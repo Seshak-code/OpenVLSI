@@ -216,6 +216,15 @@ struct Netlister {
             }
             const QJsonObject g = parsed(l.prop(cell, view, "globals").value_or("{}")).toObject();
             for (auto it = g.begin(); it != g.end(); ++it) params[it.key().toStdString()] = str(it.value());
+            // The cells its lines place, each resolved through the config as any instance is
+            stack.push_back(key);
+            for (const auto& p : parsed(l.prop(cell, view, "places").value_or("[]")).toArray()) {
+                const std::string pl = p.toObject()["library"].toString().toStdString(), pc = p.toObject()["cell"].toString().toStdString();
+                const std::string sw = switchView(pl, pc);
+                if (sw == "spice") throw Error("netlist: " + key + " places " + pl + "/" + pc + " as a subcircuit, and the config makes it a primitive");
+                define(pl, pc, sw);
+            }
+            stack.pop_back();
         } else {
             stack.push_back(key);
             lines = body(lib, cell, view);
@@ -295,29 +304,35 @@ ConfigInfo configInfo(oadb::Workspace& ws, const std::string& lib, const std::st
     if (tl.empty()) return info;
     std::map<std::string, size_t> at;
     std::set<std::string> walked;
-    const std::function<void(const std::string&, const std::string&, const std::string&)> walk = [&](const std::string& l, const std::string& c, const std::string& v) {
-        if (!walked.insert(l + "/" + c + "/" + v).second) return;
-        for (const auto& i : ws.library(l).instances(c, v)) {
-            const std::string key = i.lib + "/" + i.cell;
-            const auto [slot, fresh] = at.emplace(key, info.cells.size());
-            if (fresh) {
-                ConfigCell cellInfo{i.lib, i.cell, 0, {}, "", "", n.bindings.count(key) > 0};
-                oadb::Library& master = ws.library(i.lib);
-                if (master.cellProp(i.cell, "spice")) cellInfo.views.push_back("spice");
-                for (const auto& known : master.views(i.cell))
-                    if (known.type == "schematic" || known.type == "extracted") cellInfo.views.push_back(known.name);
-                try {
-                    cellInfo.uses = n.switchView(i.lib, i.cell);
-                } catch (const std::exception& e) {
-                    cellInfo.error = e.what();
-                }
-                info.cells.push_back(cellInfo);
+    std::function<void(const std::string&, const std::string&, const std::string&)> walk;
+    // A cell met through its schematic (each instance) or its extraction (each cell its netlist places, counted once)
+    const auto meet = [&](const std::string& l, const std::string& c, int count) {
+        const std::string key = l + "/" + c;
+        const auto [slot, fresh] = at.emplace(key, info.cells.size());
+        if (fresh) {
+            ConfigCell cellInfo{l, c, 0, {}, "", "", n.bindings.count(key) > 0};
+            oadb::Library& master = ws.library(l);
+            if (master.cellProp(c, "spice")) cellInfo.views.push_back("spice");
+            for (const auto& known : master.views(c))
+                if (known.type == "schematic" || known.type == "extracted") cellInfo.views.push_back(known.name);
+            try {
+                cellInfo.uses = n.switchView(l, c);
+            } catch (const std::exception& e) {
+                cellInfo.error = e.what();
             }
-            ConfigCell& entry = info.cells[slot->second];
-            ++entry.placed;
-            const std::string uses = entry.uses;
-            if (!uses.empty() && uses != "spice" && ws.library(i.lib).viewType(i.cell, uses) == "schematic") walk(i.lib, i.cell, uses);
+            info.cells.push_back(cellInfo);
         }
+        ConfigCell& entry = info.cells[slot->second];
+        entry.placed += count;
+        if (!entry.uses.empty() && entry.uses != "spice") walk(l, c, entry.uses);
+    };
+    walk = [&](const std::string& l, const std::string& c, const std::string& v) {
+        if (!walked.insert(l + "/" + c + "/" + v).second) return;
+        if (ws.library(l).viewType(c, v) == "extracted") {
+            for (const auto& p : parsed(ws.library(l).prop(c, v, "places").value_or("[]")).toArray()) meet(p.toObject()["library"].toString().toStdString(), p.toObject()["cell"].toString().toStdString(), 1);
+            return;
+        }
+        for (const auto& i : ws.library(l).instances(c, v)) meet(i.lib, i.cell, 1);
     };
     walk(tl, tc, tv);
     return info;

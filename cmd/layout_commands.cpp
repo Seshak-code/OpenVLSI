@@ -60,23 +60,25 @@ const char* kView = "layout";
 int exportGds(oadb::Workspace& ws, const std::string& libName, const std::string& cell, const std::string& view, const std::string& file) {
     layout::GdsLibrary gds;
     gds.name = libName;
-    std::set<std::string> seen;
-    std::function<void(const std::string&, const std::string&)> add = [&](const std::string& name, const std::string& v) {
-        if (!seen.insert(name).second) return;
-        oadb::Library& l = ws.library(libName);
-        if (l.viewType(name, v) != "layout") throw std::runtime_error(name + "/" + v + " is not a layout view");
+    // A GDS file has one namespace of structures: a cell is written once, and two libraries' cells of one name cannot both be
+    std::map<std::string, std::string> seen;  // structure -> its library
+    std::function<void(const std::string&, const std::string&, const std::string&)> add = [&](const std::string& lib, const std::string& name, const std::string& v) {
+        const auto [at, fresh] = seen.emplace(name, lib);
+        if (!fresh) {
+            if (at->second != lib) throw std::runtime_error("cells named " + name + " come from libraries " + at->second + " and " + lib + ": one GDS file cannot hold both");
+            return;
+        }
+        oadb::Library& l = ws.library(lib);
+        if (l.viewType(name, v) != "layout") throw std::runtime_error(lib + "/" + name + "/" + v + " is not a layout view");
         layout::GdsCell g;
         g.name = name;
         g.shapes = l.layoutShapes(name, v);
         g.instances = l.layoutInstances(name, v);
         if (const auto u = l.prop(name, v, "metersPerDbu")) gds.metersPerDbu = std::stod(*u);
-        for (const auto& i : g.instances) {
-            if (!i.lib.empty() && i.lib != libName) throw std::runtime_error(name + " places a master of library " + i.lib + ": GDS export follows one library");
-            add(i.cell, i.view.empty() ? kView : i.view);
-        }
+        for (const auto& i : g.instances) add(i.lib.empty() ? lib : i.lib, i.cell, i.view.empty() ? kView : i.view);
         gds.cells.push_back(std::move(g));
     };
-    add(cell, view);
+    add(libName, cell, view);
     gds.userPerDbu = gds.metersPerDbu / 1e-6;
     layout::writeGds(file, gds);
     return (int)gds.cells.size();
