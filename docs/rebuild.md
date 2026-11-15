@@ -327,6 +327,12 @@ first, then the GUI, with a check that runs.
    netlist, driven by a recording or a hand-written stimulus; mixed RTL and transistor-level runs for the parts that are
    too big for SPICE.
 
+**By hand in the window (`tools/ui_build_test.py`):** the same steps with the mouse and keyboard alone (real macOS events with
+`--backend os`): a library with the process attached, an AND2's schematic from the cell library's NAND2 and inverter (I, wires,
+labels, pins), its symbol, its layout (Instance… from `sg13g2_stdcell`, abutted, a via and Metal2 jog, pins), DRC and LVS from the
+Verify stage; then a top of two AND2 blocks, schematic and layout, DRC clean and LVS matched level by level. Placement snaps
+an instance to a neighbour's boundary within 8 pixels (abutment) and a drawn edge to a same-layer edge within 6.
+
 **Gate (`tools/m7_gate.py`):** a small SoC built by hand through MCP alone: a standard-cell counter, an analog block, an SRAM
 macro and a flow-built block under a pad ring; DRC and LVS clean; a test that runs the chip.
 

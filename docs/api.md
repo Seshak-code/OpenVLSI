@@ -77,7 +77,7 @@ Opens the Library Manager.
 
 ### `ui_locate`
 
-Where a control is on the screen, in global points, with its centre: kind rail (text a stage), console, menu (a menu bar title), menu_item (in the open menu), button, tab, tab_close, tree_item (any visible list's row holding text), field (an input by its name: a text field, a selection box), option (an entry of the selection list that is open), layout_point (x, y database units in the active layout), or editor_point (in the active schematic or symbol).
+Where a control is on the screen, in global points, with its centre: kind rail (text a stage), console, menu (a menu bar title), menu_item (in the open menu), button, tab, tab_close, tree_item (any visible list's row: exactly the text first, else holding it; or a path, "cell > view"), field (an input by its name: a text field, a selection box), option (an entry of the selection list that is open), layout_point (x, y database units in the active layout), or editor_point (in the active schematic or symbol).
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -1586,7 +1586,7 @@ Attaches a process to a library: its layers, metals, vias and generators become 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
 | `library` | string | yes | library name |
-| `tech` | string | yes | the process (layout_tech_get lists them) |
+| `tech` | string | yes | the process |
 
 ### `layout_via_add`
 

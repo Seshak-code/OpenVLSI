@@ -4,6 +4,10 @@
 #include "app/theme.h"
 #include "app/ui_commands.h"
 
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QComboBox>
 #include <QAction>
 #include <QDockWidget>
 #include <QFile>
@@ -989,7 +993,68 @@ void LayoutViewer::reloadIfChanged() {
 
 oadb::Point LayoutViewer::snapped(QPointF w) const {
     const auto on = [&](double absolute) { return (int64_t)std::llround(absolute / (double)grid_) * grid_; };
-    return {on(w.x() + flat_.originX), on(w.y() + flat_.originY)};
+    oadb::Point p{on(w.x() + flat_.originX), on(w.y() + flat_.originY)};
+    // Gravity: drawing on a metal, a point within a few pixels of an edge of that metal (a placed cell's included) lands
+    // on it, so a shape meets what it joins with no sliver between
+    const bool drawing = tool_ == Tool::Rect || tool_ == Tool::Pin || tool_ == Tool::Path || tool_ == Tool::Polygon;
+    if (!drawing || !current_) return p;
+    const double reach = 6 / std::max(1e-12, canvas_->scale());
+    double bestX = reach, bestY = reach;
+    for (const auto& s : flat_.shapes) {
+        if (flat_.layers[s.layer].key.first != current_->first) continue;
+        if (w.y() >= s.y0 - reach && w.y() <= s.y1 + reach)
+            for (const double e : {(double)s.x0, (double)s.x1})
+                if (const double d = std::abs(w.x() - e); d < bestX) { bestX = d; p.x = std::llround(e + flat_.originX); }
+        if (w.x() >= s.x0 - reach && w.x() <= s.x1 + reach)
+            for (const double e : {(double)s.y0, (double)s.y1})
+                if (const double d = std::abs(w.y() - e); d < bestY) { bestY = d; p.y = std::llround(e + flat_.originY); }
+    }
+    return p;
+}
+
+// A cell's place-and-route boundary (prBoundary), else the box of its own shapes: what abuts its neighbours
+std::optional<layout::Rect> LayoutViewer::boundaryOf(const QString& lib, const QString& cell) const {
+    oadb::Library& l = session_.workspace().library((lib.isEmpty() ? lib_ : lib).toStdString());
+    std::optional<layout::Rect> all, pr;
+    for (const auto& s : l.layoutShapes(cell.toStdString(), "layout")) {
+        if (s.kind == "text" || s.points.empty()) continue;
+        layout::Rect r{INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN};
+        for (const auto& p : s.points) r = {std::min(r.x0, p.x), std::min(r.y0, p.y), std::max(r.x1, p.x), std::max(r.y1, p.y)};
+        auto& into = s.layer == 189 && s.datatype == 4 ? pr : all;
+        into = into ? layout::Rect{std::min(into->x0, r.x0), std::min(into->y0, r.y0), std::max(into->x1, r.x1), std::max(into->y1, r.y1)} : r;
+    }
+    if (pr) return pr;
+    // A block of placed cells: its own boundary is its instances' (one level: enough to abut blocks of cells)
+    for (const auto& i : l.layoutInstances(cell.toStdString(), "layout")) {
+        if (i.angle != 0 || i.mirrorX) continue;
+        if (const auto b = boundaryOf(QString::fromStdString(i.lib.empty() ? (lib.isEmpty() ? lib_.toStdString() : lib.toStdString()) : i.lib), QString::fromStdString(i.cell))) {
+            const layout::Rect r{b->x0 + i.at.x, b->y0 + i.at.y, b->x1 + i.at.x, b->y1 + i.at.y};
+            all = all ? layout::Rect{std::min(all->x0, r.x0), std::min(all->y0, r.y0), std::max(all->x1, r.x1), std::max(all->y1, r.y1)} : r;
+        }
+    }
+    return all;
+}
+
+// Where an instance placed at `at` goes: a boundary within a few pixels of a neighbour's lines up with it (abutment), so
+// cells join their rails without a zoom that resolves every database unit
+oadb::Point LayoutViewer::abutted(oadb::Point at) const {
+    const auto mine = boundaryOf(instanceLib_, instanceMaster_);
+    if (!mine) return at;
+    const double reach = 8 / std::max(1e-12, canvas_->scale());
+    double bestX = reach, bestY = reach;
+    oadb::Point out = at;
+    for (const auto& i : session_.workspace().library(lib_.toStdString()).layoutInstances(cell_.toStdString(), view_.toStdString())) {
+        if (i.angle != 0 || i.mirrorX) continue;
+        const auto b = boundaryOf(QString::fromStdString(i.lib), QString::fromStdString(i.cell));
+        if (!b) continue;
+        const layout::Rect them{b->x0 + i.at.x, b->y0 + i.at.y, b->x1 + i.at.x, b->y1 + i.at.y};
+        // my left on their right, my right on their left; bottoms and tops in line, or stacked
+        for (const auto [mineX, theirsX] : {std::pair{mine->x0, them.x1}, {mine->x1, them.x0}, {mine->x0, them.x0}})
+            if (const double d = std::abs((double)(at.x + mineX - theirsX)); d < bestX) { bestX = d; out.x = theirsX - mineX; }
+        for (const auto [mineY, theirsY] : {std::pair{mine->y0, them.y0}, {mine->y0, them.y1}, {mine->y1, them.y0}})
+            if (const double d = std::abs((double)(at.y + mineY - theirsY)); d < bestY) { bestY = d; out.y = theirsY - mineY; }
+    }
+    return out;
 }
 
 QPointF LayoutViewer::worldOf(oadb::Point p) const { return {(double)p.x - flat_.originX, (double)p.y - flat_.originY}; }
@@ -1146,7 +1211,9 @@ void LayoutViewer::toolPoint(oadb::Point at) {
             run("layout_shape_add", {{"layer", currentLayerName()}, {"kind", "text"}, {"points", QJsonArray{pointJson(at)}}, {"text", toolText_}});
             return;
         case Tool::Instance:
-            run("layout_instance_add", {{"master", instanceMaster_}, {"at", pointJson(at)}});
+            at = abutted(at);
+            run("layout_instance_add", instanceLib_.isEmpty() ? QJsonObject{{"master", instanceMaster_}, {"at", pointJson(at)}}
+                                                               : QJsonObject{{"master", instanceMaster_}, {"masterLibrary", instanceLib_}, {"at", pointJson(at)}});
             return;
         case Tool::Move:
         case Tool::Copy: {
@@ -1256,16 +1323,42 @@ void LayoutViewer::askLabel(Tool t) {
     startTool(t);
 }
 
+// A master from any library with layouts: a standard cell, a pad, a block, or a cell of this one
 void LayoutViewer::askPlaceInstance() {
-    QStringList masters;
-    for (const auto& c : session_.workspace().library(lib_.toStdString()).cells())
-        for (const auto& w : session_.workspace().library(lib_.toStdString()).views(c))
-            if (w.type == "layout" && QString::fromStdString(c) != cell_) masters << QString::fromStdString(c);
-    if (masters.isEmpty()) return hint("No other layout in this library to place");
-    bool ok = false;
-    const QString cell = QInputDialog::getItem(this, "Place an instance", "Master", masters, 0, false, &ok);
-    if (!ok) return;
-    instanceMaster_ = cell;
+    QDialog d(this);
+    d.setWindowTitle("Place an instance");
+    auto* form = new QFormLayout(&d);
+    auto *libs = new QComboBox(&d), *cells = new QComboBox(&d);
+    libs->setAccessibleName("Library");
+    cells->setAccessibleName("Cell");
+    form->addRow("Library", libs);
+    form->addRow("Cell", cells);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &d);
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &d, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &d, &QDialog::reject);
+    const auto fill = [&] {
+        cells->clear();
+        const std::string l = libs->currentText().toStdString();
+        if (l.empty()) return;
+        oadb::Library& lib = session_.workspace().library(l);
+        for (const auto& c : lib.cells())
+            for (const auto& v : lib.views(c))
+                if (v.type == "layout" && !(libs->currentText() == lib_ && QString::fromStdString(c) == cell_)) cells->addItem(QString::fromStdString(c));
+    };
+    for (const auto& l : session_.workspace().libraries()) {
+        bool layouts = false;
+        for (const auto& c : session_.workspace().library(l).cells())
+            for (const auto& v : session_.workspace().library(l).views(c)) layouts = layouts || v.type == "layout";
+        if (layouts) libs->addItem(QString::fromStdString(l));
+    }
+    connect(libs, &QComboBox::currentTextChanged, &d, fill);
+    libs->setCurrentText(instanceLib_.isEmpty() ? lib_ : instanceLib_);
+    fill();
+    if (!instanceMaster_.isEmpty()) cells->setCurrentText(instanceMaster_);
+    if (d.exec() != QDialog::Accepted || cells->currentText().isEmpty()) return;
+    instanceLib_ = libs->currentText() == lib_ ? QString() : libs->currentText();
+    instanceMaster_ = cells->currentText();
     startTool(Tool::Instance);
 }
 
@@ -1281,6 +1374,7 @@ void LayoutViewer::askDevice(const QString& command, const QJsonObject& prefill)
     const cmd::Result r = session_.call(command, args);
     if (!r.ok) return hint(r.error);
     instanceMaster_ = r.value.toString();
+    instanceLib_.clear();  // a generated device is this library's
     startTool(Tool::Instance);
 }
 

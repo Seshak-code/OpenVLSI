@@ -1,5 +1,24 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — building by hand with the mouse, on `rebuild/gui-build` (after #60, merged)**
+
+- **Done:**
+  - `tools/ui_build_test.py`: a library, Attach Process…, an AND2 schematic (I dialog, wires, labels, pins), its symbol, its layout
+    (Instance… across libraries, a via, a Metal2 jog, pins), DRC and LVS from the Verify stage, then a top of two AND2 blocks: by mouse
+    and keyboard alone. 22/22 with real macOS events on screen (watched by the owner) and 22/22 offscreen.
+  - Layout editor: Instance… is a dialog (library and cell boxes); placement abuts a neighbour within 8 px; drawn edges snap to a
+    same-layer edge within 6 px. Library menu: Attach Process…; `layout_tech_set`'s `tech` is an enum.
+  - `ui_locate`: `tree_item` exact match first and `a > b` paths; options scrolled to the centre; clicks after a dialog closes find the
+    visible window. Forms' fields carry their parameter names.
+  - **Rendering fix:** on the real screen the QRhiWidget canvases showed only their text (the GPU texture was not composited; `grab()`
+    saw it, so pixel checks passed). `QT_WIDGETS_RHI=1` before QApplication: the owner confirmed geometry now shows.
+- **Note:** `ui_test.py --backend os` failed after the screen locked mid-session (10:10): a locked screen takes no events.
+  Rerun it unlocked.
+- **Next:** the GUI test grows into an RV32I SoC by hand (RTL → Implement → Make Block → top with SRAM, IO, analog → DRC/LVS →
+  firmware test); then Tcl and Python consoles in the app; M7 slices 4 and 5.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — M7 slice 3, a flow run as a hard macro, on `rebuild/hard-macro`**
 
 - **Done:**

@@ -24,7 +24,8 @@ PASSES = 0
 
 # macOS virtual key codes
 KEYCODES = {"a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35,
-            "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "Return": 36, "Esc": 53, "Backspace": 51}
+            "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "7": 26, "8": 28, "9": 25, "0": 29,
+            "-": 27, ".": 47, "/": 44, " ": 49, "[": 33, "]": 30, "Return": 36, "Esc": 53, "Backspace": 51, "Tab": 48, "Down": 125, "Up": 126}
 
 
 def check(ok, what):
@@ -93,6 +94,18 @@ class Hands:
             self._os("key", KEYCODES[parts[-1].lower() if len(parts[-1]) == 1 else parts[-1]], *mods)
         else:
             self.ov.ui_input(action="key", key=name)
+        self.settle()
+
+    def type(self, text):
+        """Text into what has the keyboard: each character as its keys (Shift for capitals and _)."""
+        if self.backend != "os":
+            self.ov.ui_input(action="type", text=text)
+            self.settle()
+            return
+        for ch in text:
+            shift = ch.isupper() or ch == "_"
+            code = KEYCODES["-" if ch == "_" else ch.lower()]
+            self._os("key", code, *(["shift"] if shift else []))
         self.settle()
 
     def at(self, kind, **where):
