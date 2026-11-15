@@ -1079,6 +1079,14 @@ Creates the libraries analogLib (ideal sources and passives) and a PDK's device 
 | `pdk` | string | yes | the PDK |
 | `root` | string | yes | the PDK's directory: ihp-sg13g2 (holding libs.tech), asap7_pdk_r1p7 or asap5PDK_r0p4 (holding models/hspice) |
 
+### `pdk_install_cells`
+
+Brings a set of the PDK's cells into the workspace as a library: the standard cells (sg13g2_stdcell), the IO cells (sg13g2_io) or the SRAM macros (sg13g2_sram). Each cell gets its layout from the PDK's GDS, a symbol from its CDL ports (inputs left, outputs right, supplies top and bottom), its CDL as LVS's reference, and, when its devices are the device library's MOS, a netlist for simulation. pdk_install's sg13g2 must be in the workspace. Returns the library, its cells and those that simulate.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `set` | string | yes | which cells |
+
 ## Layout viewer (*app*)
 
 ### `layout_view_cancel`

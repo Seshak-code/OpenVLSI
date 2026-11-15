@@ -1,5 +1,21 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — M7 slice 2, the PDK's cells as libraries, on `rebuild/pdk-cells`**
+
+- **Done:**
+  - `pdk_install_cells {set}`: `sg13g2_stdcell`, `sg13g2_io`, `sg13g2_sram` from ORFS's ihp-sg13g2 platform (cdl/, gds/). Per cell: layout
+    (GDS import; a set's files that share via cells skip them, `importGds(..., keepExisting)`), symbol from CDL ports and `*.PININFO`,
+    `cdl` property (its .SUBCKT and those it places), `spice` (template on its ports, models: `<set>.sp` the cells' netlist with M as X
+    through the device library, ties through ptap1/ntap1, antenna and ESD diodes dropped; plus the MOS and resistor models).
+  - Extraction takes a PDK cell's port order from its CDL; the netlister loads a placed cell's models when it resolves to its own netlist.
+  - File > Install PDK Cells…
+- **Gate:** `tools/m7_gate.py` (new) 14/14: 84/84 standard cells simulate, 33 of 45 IO, ten SRAM macros; an AND2 by hand from
+  `sg13g2_nand2_1` and `sg13g2_inv_1`, abutted, one Metal2 jog: DRC clean, LVS matched (not without the jog), extracted, truth table
+  0 0 0 1 from schematic and extraction (b to y 59.1 / 60.8 ps).
+- **Next:** M7 slice 3, a flow run as a hard macro.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — M7 (a SoC by hand) planned; slice 1, hierarchy through verification, on `rebuild/hier-lvs`**
 
 - **Owner (2026-11-15):** the suite must work for building a SoC by hand from cells and libraries, through testing. Plan: `docs/rebuild.md`,
