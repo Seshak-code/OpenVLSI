@@ -7,6 +7,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QApplication>
 #include <QComboBox>
 #include <QAction>
 #include <QDockWidget>
@@ -626,6 +627,36 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     act(create, "Transistor…", QKeySequence("Shift+I"), [this] { askDevice("layout_pcell_mos", {{"library", lib_}, {"type", "nmos"}, {"w", 1000}, {"l", 130}, {"ng", 1}}); });
     act(create, "Resistor…", QKeySequence("Shift+R"), [this] { askDevice("layout_pcell_res", {{"library", lib_}, {"type", "rsil"}, {"w", 500}, {"l", 2000}}); });
     act(create, "Capacitor…", QKeySequence("Shift+C"), [this] { askDevice("layout_pcell_cap", {{"library", lib_}, {"w", 7000}, {"l", 7000}}); });
+    create->addSeparator();
+    // A form on a command that changes this layout, then the layout again
+    const auto chipForm = [this](const char* command, QJsonObject prefill) {
+        const cmd::Command* c = session_.registry().find(command);
+        prefill["library"] = lib_;
+        prefill["cell"] = cell_;
+        prefill["view"] = view_;
+        CommandForm form(*c, prefill, this);
+        if (form.exec() != QDialog::Accepted) return;
+        QJsonObject args;
+        QString error;
+        if (!form.arguments(&args, &error)) return hint(error);
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        const cmd::Result r = session_.call(command, args);
+        QApplication::restoreOverrideCursor();
+        if (!r.ok) return hint(r.error);
+        reload();
+        canvas_->fit();
+    };
+    // ponytail: the pads are edited as the form's JSON lists; a pad-list table is the upgrade
+    act(create, "Pad Ring…", QKeySequence(), [chipForm] {
+        const auto pad = [](const char* name, const char* master) { return QJsonObject{{"name", name}, {"master", master}}; };
+        chipForm("layout_pad_ring", {{"die", QJsonArray{1400, 1400}},
+                                     {"south", QJsonArray{pad("clk", "sg13g2_IOPadIn"), pad("reset", "sg13g2_IOPadIn")}},
+                                     {"east", QJsonArray{pad("vdd", "sg13g2_IOPadVdd"), pad("vss", "sg13g2_IOPadVss")}},
+                                     {"north", QJsonArray{pad("out", "sg13g2_IOPadOut4mA")}},
+                                     {"west", QJsonArray{pad("iovdd", "sg13g2_IOPadIOVdd"), pad("iovss", "sg13g2_IOPadIOVss")}}});
+    });
+    act(create, "Seal Ring…", QKeySequence(), [chipForm] { chipForm("layout_seal_ring", {{"die", QJsonArray{1400, 1400}}}); });
+    act(create, "Fill…", QKeySequence(), [chipForm] { chipForm("layout_fill", {}); });
     QMenu* viewMenu = menuBar()->addMenu("&View");
     QAction* flight = viewMenu->addAction("Flight Lines", this, [this](bool on) { setFlightLinesShown(on); });
     flight->setCheckable(true);
@@ -646,7 +677,7 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     bindActions(this, {{"Undo", "edit_undo"}, {"Redo", "edit_redo"}, {"Move", "layout_view_tool"}, {"Copy", "layout_view_tool"}, {"Stretch", "layout_view_tool"},
                        {"Delete", "layout_view_delete"}, {"Finish", "layout_view_finish"}, {"Cancel", "layout_view_cancel"}, {"Rectangle", "layout_view_tool"}, {"Path", "layout_view_tool"},
                        {"Polygon", "layout_view_tool"}, {"Via", "layout_view_tool"}, {"Label…", "layout_view_tool"}, {"Pin…", "layout_view_tool"}, {"Instance…", "layout_view_tool"},
-                       {"Transistor…", "layout_pcell_mos"}, {"Resistor…", "layout_pcell_res"}, {"Capacitor…", "layout_pcell_cap"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
+                       {"Transistor…", "layout_pcell_mos"}, {"Resistor…", "layout_pcell_res"}, {"Capacitor…", "layout_pcell_cap"}, {"Pad Ring…", "layout_pad_ring"}, {"Seal Ring…", "layout_seal_ring"}, {"Fill…", "layout_fill"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
                        {"Show Top Level Only", "layout_view_levels"}, {"Zoom In", "layout_view_zoom"}, {"Zoom Out", "layout_view_zoom"}, {"Ruler", "layout_view_ruler"},
                        {"Clear Rulers", "layout_view_rulers_clear"}, {"Show All", "layout_view_layers_all"}, {"Hide All", "layout_view_layers_all"},
                        {"Show in Schematic", "editor_select_net"}});

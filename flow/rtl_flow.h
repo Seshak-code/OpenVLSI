@@ -170,6 +170,10 @@ struct TestbenchResult {
     std::string output, vcd;
     double seconds = 0.0;
 };
+// IHP's cell models clock their flops on delayed_* copies of their pins, which only timing checks drive (Icarus runs none): the models
+// with those copies assigned from the pins, for a functional run
+std::string functionalCellModels(const std::string& cells);
+
 TestbenchResult runTestbench(const TestbenchConfig& cfg, const RtlFlowTools& tools, FlowLog log = nullptr,
                              const std::atomic<bool>* cancel = nullptr);
 

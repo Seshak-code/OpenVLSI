@@ -1,5 +1,27 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — M7 slices 4 and 5 and the RISC-V chip, on `rebuild/pad-ring` (after #61, merged)**
+
+- **Done:**
+  - `layout_pad_ring` (sg13g2_io corners, pads, fillers, bond pads, a pin per bond pad), `layout_seal_ring` (IHP's seal ring for any die,
+    XOR-identical at 1050 um but its Metal1 filler cut to 5 um), `layout_fill` (IHP's filler scripts inside the seal ring; one fill cell
+    LVS leaves out). Create > Pad Ring…, Seal Ring…, Fill….
+  - Top-level LVS with IO cells and SRAM macros as black boxes: their LEF pins as abstracts (named as their CDL), joined by name, no
+    substrate pin, blanked before align, pins kept through simplification; dead taps dropped; blocks with antenna cells flat in the chip.
+  - `verify_drc {recommended}`; ERC keeps black boxes' pins; via arrays past 3 x 3 use V*.b1.
+  - `netlist_verilog` (a schematic hierarchy as structural Verilog; cell property `verilog` set by pdk_install_cells and Make Block).
+  - Flow: settings may hold paths; ADDITIONAL_CDL; a run's macros black-boxed in its LVS; DIE_AREA/CORE_AREA replace the utilization.
+    Make Block places SRAM and IO cells from their libraries and makes no SPICE netlist when a macro has none.
+  - `tools/rv32i` + `m7_gate` step 5: an RV32I core with firmware ROM and IHP's 64x64 SRAM through the flow, a block in 16 pads by hand,
+    DRC clean but Seal.m (IHP's own seal ring gets it too), LVS matched, ERC 0, "Hello, world!" at the pads.
+- **Learned:** IHP's pdn.tcl does not connect SRAM macros (VDD!/VDDARRAY!/VSS!): the block needs its own grid script. IHP's deck reads
+  Activ/GatPoly fill as transistors, puts antenna diodes at the chip's top, and reports Seal.m on its own seal ring.
+- **Owner's decision pending:** download IHP-Open-PDK's `RM_IHPSG13_1P_core_behavioral_bm_bist.v` (3,951 bytes) to `~/eda/ihp-verilog`
+  so the RISC-V test uses IHP's SRAM model rather than ours.
+- **Next:** the RISC-V chip built on screen by mouse (ui test); then Tcl and Python consoles in the app.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — building by hand with the mouse, on `rebuild/gui-build` (after #60, merged)**
 
 - **Done:**

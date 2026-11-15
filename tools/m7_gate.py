@@ -8,7 +8,14 @@ It grows with the milestone's slices. Now:
    from the PDK's GDS and its CDL for LVS; those whose devices the device library has also simulate.
 2. A block by hand from standard cells: an AND2 of a NAND2 and an inverter, abutted and joined on Metal2. DRC clean, LVS
    matched against the cells' own CDL (and not with the wiring wrong), extracted, and simulated through its truth table.
-3. A flow-built block as a hard macro: gcd through the flow, made a cell (its standard cells placed from sg13g2_stdcell); LVS
+3. A chip by hand: the AND2 in a pad ring (layout_pad_ring), each pad wired to the block on Metal2 and Metal3, the supplies
+   strapped to the ring's rails, IHP's seal ring around it and IHP's fill inside. DRC clean with density and latch-up (not the
+   recommended rules, which IHP's own pads break), LVS matched with the pads compared as black boxes by their LEF pins, and not
+   when a wire is missing or two pads trade places. The seal ring is IHP's own, XORed against ORFS's example. Its test: the top
+   schematic as Verilog (netlist_verilog), run through the pads' and standard cells' models (test_run): its truth table at the pads.
+4. A RISC-V chip by hand: an RV32I core (ORFS's riscv32i), its firmware ROM and an SRAM macro (tools/rv32i) through the flow, made
+   a block; 16 pads wired by hand, seal ring, fill; DRC and LVS over the whole chip; its firmware's "Hello, world!" at the pads.
+5. A flow-built block as a hard macro: gcd through the flow, made a cell (its standard cells placed from sg13g2_stdcell); LVS
    against its own netlist; a top in a third library placing it and a standard cell, LVS matched as one hierarchy; the block
    simulated at transistor level out of reset.
 
@@ -102,6 +109,9 @@ def step_cells(m):
     cdl = m("cell_prop_get", library="sg13g2_stdcell", cell="sg13g2_nand2_1", key="cdl")
     check(".SUBCKT sg13g2_nand2_1 Y A B VDD VSS" in cdl and "sg13_lv_nmos" in cdl, "and its CDL, for LVS")
     check("already has" in m.refused("pdk_install_cells", set="stdcell"), "a set is installed once")
+    abstract = m("cell_prop_get", library="sg13g2_io", cell="sg13g2_IOPadIn", key="abstract")
+    check(sorted({p["name"] for p in abstract}) == ["iovdd", "iovss", "p2c", "pad", "vdd", "vss"] and "bondpad_70x70" in m("cell_list", library="sg13g2_io"),
+          "an IO cell's abstract for LVS, its LEF pins; the bond pad is a cell of the library")
 
 
 def step_and2(m, work):
@@ -183,6 +193,310 @@ def step_and2(m, work):
         edge = m("wave_eval", run=run, expression='cross(VT(y), 0.6, 1, "rising")') - m("wave_eval", run=run, expression='cross(VT(b), 0.6, 2, "rising")')
         print(f"    {view}: y at ab = 00, 01, 10, 11: {[round(v, 2) for v in ys]}; b to y {edge * 1e12:.1f} ps", flush=True)
         check([v > 1.0 for v in ys] == [False, False, False, True] and 10e-12 < edge < 500e-12, f"simulated from its {view}, the AND2's truth table, at transistor level")
+
+
+def step_chip(m, work):
+    print("A chip by hand: the AND2 block in a pad ring, wired to its pads", flush=True)
+    m("library_create", library="die", path=os.path.join(work, "die.oalib"))
+    m("layout_tech_set", library="die", tech="sg13g2")
+    top = dict(library="die", cell="and2chip")
+    m("cell_create", **top)
+    m("view_create", **top, view="layout", type="layout")
+    P = lambda n, k: {"name": n, "master": k}  # noqa: E731
+    D = 1400  # um: the core big enough against the pad ring for IHP's global GatPoly density once filled
+    ring = m("layout_pad_ring", **top, die=[D, D], south=[P("a", "sg13g2_IOPadIn"), P("b", "sg13g2_IOPadIn")], north=[P("y", "sg13g2_IOPadOut4mA")],
+             east=[P("vdd", "sg13g2_IOPadVdd"), P("vss", "sg13g2_IOPadVss")], west=[P("iovdd", "sg13g2_IOPadIOVdd"), P("iovss", "sg13g2_IOPadIOVss")])
+    check(ring["pads"] == 7 and ring["core"] == [320000, 320000, D * 1000 - 320000, D * 1000 - 320000], f"layout_pad_ring: seven pads, corners and {ring['fillers']} fillers around a {D - 640} um core")
+    pads = sorted((i["at"], i["angle"]) for i in m("layout_objects_get", **top)["instances"] if i["cell"].startswith("sg13g2_IOPad"))
+    south = [at for at, angle in pads if angle == 0]   # a, b, left to right
+    north = [at for at, angle in pads if angle == 180]  # y
+    blk = m("layout_objects_get", library="blocks", cell="and2")
+    pins = {}
+    for t in (s for s in blk["shapes"] if s["kind"] == "text"):
+        x, y = t["points"][0]
+        pins[t["text"]] = next(box(s) for s in blk["shapes"] if s["layer"] == 8 and s["datatype"] == 2 and box(s)[0] <= x <= box(s)[2] and box(s)[1] <= y <= box(s)[3])
+    total = max(b[2] for b in pins.values())
+    O = (D * 500 - 20000, D * 500 - 20000)
+    m("layout_instance_add", **top, master="and2", masterLibrary="blocks", at=list(O))
+
+    def rect(layer, x0, y0, x1, y1):
+        return m("layout_shape_add", **top, layer=layer, kind="rect", points=[[min(x0, x1), min(y0, y1)], [max(x0, x1), max(y0, y1)]])
+
+    def via(metal, x, y):
+        return m("layout_via_add", **top, **{"from": metal}, at=[x, y])
+
+    def via1(x, y):  # onto a cell's Metal1 pin: its Metal1 endcaps along the pin
+        rect("Via1", x - 95, y - 95, x + 95, y + 95)
+        rect("Metal1", x - 105, y - 145, x + 105, y + 145)
+        rect("Metal2", x - 200, y - 200, x + 200, y + 200)
+
+    def wire_in(pad_x, pin, below):  # from an input pad's p2c (Metal2, 39.83 to 40.12 um in), across on Metal3 below the block, up onto the pin
+        x = pad_x + 39975
+        X, Y = O[0] + (pin[0] + pin[2]) // 2 // 5 * 5, O[1] + (pin[1] + pin[3]) // 2 // 5 * 5
+        R = O[1] - below
+        rect("Metal2", pad_x + 39830, 318000, pad_x + 40120, R + 145)
+        via("Metal2", x, R)
+        across = rect("Metal3", x, R - 200, X, R + 200)
+        via("Metal2", X, R)
+        rect("Metal2", X - 100, R, X + 100, Y)
+        via1(X, Y)
+        return across
+
+    wire_in(south[0][0], pins["a"], 2000)
+    b_across = wire_in(south[1][0], pins["b"], 3000)
+    # y: from the output pad's c2p (Metal2, 38.145 to 41.855 um in, R180) down, across above the block, onto the inverter's Y below the
+    # block's own Metal2
+    yp = pins["y"]
+    cx = north[0][0] - 40000
+    X, Y, Yr = O[0] + (yp[0] + yp[2]) // 2 // 5 * 5, O[1] + yp[1] + 300, O[1] + 8000
+    rect("Metal2", cx - 500, D * 1000 - 318000, cx + 500, Yr - 145)
+    rect("Metal2", cx - 145, Yr - 300, cx + 145, Yr + 145)
+    via("Metal2", cx, Yr)
+    rect("Metal3", cx, Yr - 200, X, Yr + 200)
+    via("Metal2", X, Yr)
+    rect("Metal2", X - 100, Y, X + 100, Yr)
+    via1(X, Y)
+    # Supplies: each Metal1 rail carried past the block, stacked up and strapped east to the ring's innermost rail on that metal
+    # (Metal3's is vdd, Metal4's vss: 160 to 178 um in from the ring's outer edge)
+    for name, metal in (("vdd", "Metal3"), ("vss", "Metal4")):
+        r = pins[name]
+        yc = O[1] + (r[1] + r[3]) // 2 // 5 * 5
+        xs = O[0] + total + 1500
+        rect("Metal1", O[0] + total - 200, O[1] + r[1], xs + 400, O[1] + r[3])
+        for lower in ("Metal1", "Metal2", "Metal3")[: 2 if metal == "Metal3" else 3]:
+            via(lower, xs, yc)
+            if lower != "Metal1":
+                rect(lower, xs - 250, yc - 250, xs + 250, yc + 250)  # the stack's landing, at least the metal's minimum area
+        rect(metal, xs - 500, yc - 500, D * 1000 - 310000, yc + 500)
+    # The die's frame: IHP's seal ring, and fill inside it
+    seal = m("layout_seal_ring", **top, die=[D, D])
+    fill = m("layout_fill", **top)
+    check(seal == f"sealring_{D}x{D}" and fill["instances"] > 1000, f"layout_seal_ring and layout_fill: {fill['instances']} fill cells placed inside the seal ring")
+    drc = m("verify_drc", **top, recommended=False, density=True)
+    rules = [(r["rule"], r["count"]) for r in m("verify_markers", run=drc["run"])["rules"]] if not drc.get("clean") else []
+    # Seal.m ("only one sealring per chip") fires on IHP's own sealring cell alone with this deck, as on ours (XORed identical): the
+    # deck's count, not the ring
+    check(drc.get("density") is True and not drc.get("error") and all(r == "Seal.m" for r, _ in rules),
+          f"IHP's DRC deck over the whole chip, pads, seal ring and fill: clean, density and latch-up rules included (not the recommended "
+          f"ones), but for Seal.m, which IHP's own seal ring also gets from this deck {rules} {drc.get('error', '')}")
+    # Its schematic: the pads, the block, and the core's nets between them
+    m("view_create", **top, view="schematic", type="schematic")
+    supplies = {"vdd": "vdd", "vss": "vss", "iovdd": "iovdd", "iovss": "iovss"}
+    order = (("a", "sg13g2_IOPadIn", "a_core"), ("b", "sg13g2_IOPadIn", "b_core"), ("y", "sg13g2_IOPadOut4mA", "y_core"), ("vdd", "sg13g2_IOPadVdd", None),
+             ("vss", "sg13g2_IOPadVss", None), ("iovdd", "sg13g2_IOPadIOVdd", None), ("iovss", "sg13g2_IOPadIOVss", None))
+    for k, (name, cell, core) in enumerate(order):
+        place(m, "die", "and2chip", "P_" + name, "sg13g2_io", cell, 1000 * k, 0, dict(supplies, pad=name, p2c=core, c2p=core))
+        m("pin_add", **top, view="schematic", name=name, direction={"a": "input", "b": "input", "y": "output"}.get(name, "inputOutput"), x=-3000, y=100 * k)
+    place(m, "die", "and2chip", "U1", "blocks", "and2", 0, 3000, {"a": "a_core", "b": "b_core", "y": "y_core", "vdd": "vdd", "vss": "vss"})
+    lvs = m("verify_lvs", **top)
+    circuits = {c["schematic"]: c["status"] for c in m("verify_lvs_report", run=lvs["run"], all=True)["circuits"]}
+    check(lvs.get("matched") is True and lvs.get("devices_layout") == 6 and circuits.get("SG13G2_IOPADIN") == "match",
+          f"IHP's LVS deck over the whole chip: matched, the block's six transistors and each pad by its pins {lvs.get('error', '')}")
+    m("layout_objects_delete", **top, shapes=[b_across])
+    check(m("verify_lvs", **top).get("matched") is False, "with b's wire cut, LVS no longer matches")
+    m("edit_undo", library="die")
+    # A schematic with the a and y pads' core nets traded (a and b would not do: the NAND's inputs are interchangeable, so LVS rightly
+    # takes them either way)
+    swapped = dict(top, view="swapped")
+    m("view_create", **swapped, type="schematic")
+    for k, (name, cell, core) in enumerate(order):
+        core = {"a_core": "y_core", "y_core": "a_core"}.get(core, core)
+        m("instance_add", **swapped, master_library="sg13g2_io", master_cell=cell, name="P_" + name, x=1000 * k, y=0, params={})
+        for p in m("view_get", library="sg13g2_io", cell=cell, view="symbol")["pins"]:
+            net = dict(supplies, pad=name, p2c=core, c2p=core).get(p["name"])
+            if net:
+                m("label_add", **swapped, name=net, x=1000 * k + p["at"][0], y=p["at"][1])
+        m("pin_add", **swapped, name=name, direction={"a": "input", "b": "input", "y": "output"}.get(name, "inputOutput"), x=-3000, y=100 * k)
+    m("instance_add", **swapped, master_library="blocks", master_cell="and2", name="U1", x=0, y=3000, params={})
+    for p in m("view_get", library="blocks", cell="and2", view="symbol")["pins"]:
+        m("label_add", **swapped, name={"a": "a_core", "b": "b_core", "y": "y_core"}.get(p["name"], p["name"]), x=p["at"][0], y=3000 + p["at"][1])
+    check(m("verify_lvs", **top, schematic="swapped").get("matched") is False,
+          "with the a and y pads' core nets traded in the schematic, LVS no longer matches: a black box keeps its pad and its core pin together")
+
+
+def step_chip_test(m, work):
+    print("Testing the chip built by hand: its schematic as Verilog, through the pads' and cells' models", flush=True)
+    got = m("netlist_verilog", library="die", cell="and2chip")
+    text = open(got["file"]).read()
+    check("module and2chip" in text and "module and2" in text and "sg13g2_IOPadIn P_a" in text and any(f.endswith("sg13g2_io.v") for f in got["models"]),
+          f"netlist_verilog: the top and the AND2 block as modules, the pads and standard cells by their models: {[os.path.basename(f) for f in got['models']]}")
+    tb = os.path.join(work, "and2chip_tb.v")
+    with open(tb, "w") as f:
+        f.write("`timescale 1ns/1ps\nmodule tb;\n  reg a = 0, b = 0;\n  wire y;\n"
+                "  and2chip dut (.a(a), .b(b), .y(y), .vdd(), .vss(), .iovdd(), .iovss());\n  integer k, bad = 0;\n"
+                "  initial begin\n    for (k = 0; k < 4; k = k + 1) begin\n      {a, b} = k; #10;\n"
+                "      if (y !== (a & b)) begin bad = bad + 1; $display(\"FAIL a=%b b=%b y=%b\", a, b, y); end\n    end\n"
+                "    if (bad == 0) $display(\"PASS\");\n    $finish;\n  end\nendmodule\n")
+    run = m("test_run", name="and2chip", testbench=[tb], top="tb", level="rtl", verilog=[got["file"]] + got["models"])
+    check(run.get("passed") is True, f"the chip's truth table at its pads, from pad a and b through the NAND2 and the inverter to pad y {run.get('error', '')}")
+
+
+def step_rv32i(m, work, flowdir):
+    print("A RISC-V chip by hand: an RV32I core with an SRAM macro through the flow, a block in a pad ring, run with its firmware", flush=True)
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rv32i")
+    platform = os.path.join(flowdir, "platforms/ihp-sg13g2")
+    sram = "RM_IHPSG13_1P_64x64_c2_bm_bist"
+    design = os.path.join(work, "rv32i")
+    os.makedirs(design, exist_ok=True)
+    subprocess.run([sys.executable, os.path.join(here, "firmware.py"), design], check=True)
+    for f in ("pdn.tcl", "io.tcl"):  # into the work directory: ORFS's make takes no path with a space, and the repository's may have one
+        shutil.copy(os.path.join(here, f), design)
+    src = os.path.join(flowdir, "designs/src/riscv32i")
+    rtl = [os.path.join(src, f) for f in sorted(os.listdir(src)) if f.endswith(".v") and f not in ("top.v", "rom.v", "dmem.v")]
+    rtl += [os.path.join(here, "soc_core.v"), os.path.join(design, "firmware_rom.v"), os.path.join(here, "sram_blackbox.v")]
+    st = m("flow_run", design="soc_core", verilog=rtl, top="soc_core", platform="ihp-sg13g2", clock_period_ns=40.0, settings={
+        "ADDITIONAL_LEFS": f"{platform}/lef/{sram}.lef", "ADDITIONAL_LIBS": f"{platform}/lib/{sram}_typ_1p20V_25C.lib",
+        "ADDITIONAL_GDS": f"{platform}/gds/{sram}.gds", "ADDITIONAL_CDL": f"{platform}/cdl/{sram}.cdl", "DIE_AREA": "0 0 860 580",
+        "CORE_AREA": "20 20 840 560", "MACRO_PLACE_HALO": "10 10", "PDN_TCL": os.path.join(design, "pdn.tcl"), "IO_CONSTRAINTS": os.path.join(design, "io.tcl")})
+    report = m("flow_report", run=st["run"])
+    check(st["state"] == "done" and report.get("clean") is True,
+          f"flow_run: the core, its firmware ROM and the SRAM macro from Verilog to GDS at 40 ns, DRC clean, LVS matched (the macro by its pins), no ERC finding {report.get('not_clean')} {st.get('error', '')}")
+    made = m("flow_make_macro", run=st["run"], library="rv", cell="soc_core")
+    placed = {(i["library"], i["cell"]) for i in m("layout_objects_get", library="rv", cell="soc_core")["instances"]}
+    check(("sg13g2_sram", sram) in placed and made["netlist"] is None and len(made["pins"]) == 14,
+          f"Make Block: the core with {made['standard_cells']} standard cells and the SRAM macro placed from sg13g2_sram; no transistor netlist (the macro has none)")
+    alone = m("verify_lvs", library="rv", cell="soc_core")
+    check(alone.get("matched") is True and alone.get("erc_violations") == 0, f"the block alone: LVS matched against its netlist {alone.get('error', '')}")
+
+    # The chip: 16 pads around a 1.6 x 1.4 mm die, the block in the middle
+    W, H = 1600, 1400
+    top = dict(library="die", cell="rv32i_chip")
+    m("cell_create", **top)
+    m("view_create", **top, view="layout", type="layout")
+    P = lambda n, k: {"name": n, "master": k}  # noqa: E731
+    ring = m("layout_pad_ring", **top, die=[W, H], south=[P("clk", "sg13g2_IOPadIn"), P("reset", "sg13g2_IOPadIn")],
+             north=[P("uart_d%d" % k, "sg13g2_IOPadOut4mA") for k in range(8)],
+             east=[P("uart_valid", "sg13g2_IOPadOut4mA"), P("halted", "sg13g2_IOPadOut4mA"), P("vdd", "sg13g2_IOPadVdd"), P("vss", "sg13g2_IOPadVss")],
+             west=[P("iovdd", "sg13g2_IOPadIOVdd"), P("iovss", "sg13g2_IOPadIOVss")])
+    pads = sorted((i["at"], i["angle"]) for i in m("layout_objects_get", **top)["instances"] if i["cell"].startswith("sg13g2_IOPad"))
+    south_x = [at[0] for at, a in pads if a == 0]
+    north_x = sorted(at[0] - 80000 for at, a in pads if a == 180)  # each pad's left edge
+    east_y = sorted(at[1] for at, a in pads if a == 90)
+    blk = m("layout_objects_get", library="rv", cell="soc_core")
+    pins = {}
+    for t in (s for s in blk["shapes"] if s["kind"] == "text"):
+        x, y = t["points"][0]
+        b = [box(s) for s in blk["shapes"] if s["datatype"] == 2 and s["layer"] == t["layer"] and box(s)[0] <= x <= box(s)[2] and box(s)[1] <= y <= box(s)[3]]
+        pins.setdefault(t["text"], []).append((t["layer"], b[0]))
+    O = (370000, 400000)
+    m("layout_instance_add", **top, master="soc_core", masterLibrary="rv", at=list(O))
+
+    def rect(layer, x0, y0, x1, y1):
+        return m("layout_shape_add", **top, layer=layer, kind="rect", points=[[min(x0, x1), min(y0, y1)], [max(x0, x1), max(y0, y1)]])
+
+    def via(metal, x, y, cols=1, rows=1):
+        m("layout_via_add", **top, **{"from": metal}, at=[x, y], cols=cols, rows=rows)
+
+    def pin(name, layer=None):  # its box, absolute
+        b = next(b for ly, b in pins[name] if layer is None or ly == layer)
+        return (O[0] + b[0], O[1] + b[1], O[0] + b[2], O[1] + b[3])
+    mid = lambda a, b: (a + b) // 2 // 10 * 10  # noqa: E731
+
+    # South: an input pad's p2c (Metal2, 39.83 to 40.12 um in) up to its own Metal3 track, across, up onto the block's bottom pin
+    for name, px, track in (("clk", south_x[0], 340000), ("reset", south_x[1], 350000)):
+        x, b = px + 39975, pin(name)
+        X = mid(b[0], b[2])
+        rect("Metal2", px + 39830, 318000, px + 40120, track + 200)
+        via("Metal2", x, track)
+        rect("Metal3", x, track - 200, X, track + 200)
+        via("Metal2", X, track)
+        rect("Metal2", X - 100, track, X + 100, b[1] + 300)
+    # North: an output pad's c2p (Metal2, 38.145 to 41.855 um in; R180) down to its track, across, down onto the block's top pin. The pad
+    # nearest the pins' cluster takes the highest track, so no pin's drop passes beside its pad's
+    order = sorted(range(8), key=lambda k: abs(north_x[k] + 40000 - (O[0] + 830000)), reverse=True)
+    for rank, k in enumerate(order):
+        track, x, b = 985000 + 2000 * rank, north_x[k] + 40000, pin("uart_data[%d]" % k)
+        X = mid(b[0], b[2])
+        rect("Metal2", x - 200, track - 200, x + 200, H * 1000 - 318000)
+        via("Metal2", x, track)
+        rect("Metal3", x, track - 200, X, track + 200)
+        via("Metal2", X, track)
+        rect("Metal2", X - 100, b[3] - 300, X + 100, track)
+    # East: an output pad's c2p (R90: a stub at the ring's inner edge) along Metal2 to the pin's height, across on Metal3 onto it
+    for name, py, xc in (("uart_valid", east_y[0], 1255000), ("halted", east_y[1], 1265000)):
+        y, b = py + 40000, pin(name)
+        Y = mid(b[1], b[3])
+        rect("Metal2", xc - 200, y - 200, W * 1000 - 318000, y + 200)
+        rect("Metal2", xc - 200, min(y, Y) - 200, xc + 200, max(y, Y) + 200)
+        via("Metal2", xc, Y)
+        rect("Metal3", b[0] + 300, Y - 200, xc, Y + 200)
+    # vdd: from the west side's innermost Metal3 rail (vdd, 300 to 318 um in), stacked to TopMetal1 in the channel beside the block (on the
+    # block's ring its own stacks reach every row), then onto its outer ring (VDD, TopMetal1)
+    vddb, vssb = pin("VDD", 126), pin("VSS", 126)
+    y, Xv = O[1] + 290000, 350000
+    rect("Metal3", 305000, y - 5000, Xv + 2000, y + 5000)
+    for lower in ("Metal3", "Metal4", "Metal5"):
+        via(lower, Xv, y, cols=4, rows=8)
+        rect(lower, Xv - 2000, y - 5000, Xv + 2000, y + 5000)
+    rect("TopMetal1", Xv - 2000, y - 5000, mid(vddb[0], vddb[2]) + 2000, y + 5000)
+    # vss: the block's inner ring lies inside its VDD ring: from the ring's innermost TopMetal1 rail (vss), up to TopMetal2 over the VDD ring
+    # and down onto the VSS ring (TopVia2: 0.9 um cuts 2 um apart, 0.5 um inside both metals)
+    def topvia2(x0, y0, cols, rows):
+        for i in range(cols):
+            for j in range(rows):
+                rect("TopVia2", x0 + 2000 * i, y0 + 2000 * j, x0 + 2000 * i + 900, y0 + 2000 * j + 900)
+    y = O[1] + 250000
+    rect("TopMetal1", 305000, y - 5000, vddb[0] - 3000, y + 5000)
+    topvia2(vddb[0] - 9500, y - 3900, 3, 4)
+    rect("TopMetal2", vddb[0] - 10000, y - 5000, vssb[2], y + 5000)
+    topvia2(mid(vssb[0], vssb[2]) - 1450, y - 3900, 2, 4)
+    # Its schematic: the pads, the block, the core's nets
+    m("view_create", **top, view="schematic", type="schematic")
+    sup = {"vdd": "vdd", "vss": "vss", "iovdd": "iovdd", "iovss": "iovss"}
+    order = [("clk", "sg13g2_IOPadIn", "clk_core"), ("reset", "sg13g2_IOPadIn", "reset_core")] + \
+            [("uart_d%d" % k, "sg13g2_IOPadOut4mA", "ud%d" % k) for k in range(8)] + \
+            [("uart_valid", "sg13g2_IOPadOut4mA", "valid_core"), ("halted", "sg13g2_IOPadOut4mA", "halted_core"), ("vdd", "sg13g2_IOPadVdd", None),
+             ("vss", "sg13g2_IOPadVss", None), ("iovdd", "sg13g2_IOPadIOVdd", None), ("iovss", "sg13g2_IOPadIOVss", None)]
+    for k, (name, cell, core) in enumerate(order):
+        place(m, "die", "rv32i_chip", "P_" + name, "sg13g2_io", cell, 1000 * k, 0, dict(sup, pad=name, p2c=core, c2p=core))
+        m("pin_add", **top, view="schematic", name=name, direction="input" if name in ("clk", "reset") else "output" if core else "inputOutput", x=-3000, y=100 * k)
+    nets = {"clk": "clk_core", "reset": "reset_core", "uart_valid": "valid_core", "halted": "halted_core", "VDD": "vdd", "VSS": "vss"}
+    nets.update({"uart_data[%d]" % k: "ud%d" % k for k in range(8)})
+    place(m, "die", "rv32i_chip", "U1", "rv", "soc_core", 0, 5000, nets)
+    lvs = m("verify_lvs", **top)
+    check(lvs.get("matched") is True and lvs.get("erc_violations") == 0 and lvs.get("devices_layout") == lvs.get("devices_schematic"),
+          f"IHP's LVS deck over the RISC-V chip: matched, the core flat in it ({lvs.get('devices_layout')} devices a side beside its standard cells), "
+          f"the pads and the SRAM by their pins, no ERC finding {lvs.get('error', '')}")
+    m("layout_seal_ring", **top, die=[W, H])
+    fill = m("layout_fill", **top)
+    drc = m("verify_drc", **top, recommended=False, density=True)
+    rules = [(r["rule"], r["count"]) for r in m("verify_markers", run=drc["run"])["rules"]] if not drc.get("clean") else []
+    check(not drc.get("error") and all(r == "Seal.m" for r, _ in rules),
+          f"IHP's DRC deck over the RISC-V chip with its seal ring and {fill['instances']} fill cells: clean with density and latch-up rules, "
+          f"but for Seal.m (as on IHP's own seal ring) {rules} {drc.get('error', '')}")
+    # Its test: the firmware at the pads, from the chip's schematic as Verilog through the pads', standard cells' and SRAM's models
+    got = m("netlist_verilog", library="die", cell="rv32i_chip")
+    ihp = os.path.expanduser("~/eda/ihp-verilog/RM_IHPSG13_1P_core_behavioral_bm_bist.v")
+    core = ihp if os.path.isfile(ihp) else os.path.join(here, "sram_core_model.v")
+    models = got["models"] + ([] if core in got["models"] else [core])
+    run = m("test_run", name="rv32i_hello", testbench=[os.path.join(here, "tb_chip.v")], top="tb", level="rtl", verilog=[got["file"]] + models,
+            defines=["FUNCTIONAL"], time_limit_ns=400000)
+    check(run.get("passed") is True,
+          f"the RISC-V chip at its pads, from its schematic, the routed core's netlist and the SRAM ({'IHP' if core == ihp else 'our'} model of its core): "
+          f"Hello, world! and then halted {run.get('error', '')}")
+
+
+def seal_ring_is_ihps(m, work, flowdir):
+    """A seal ring for the 1050 um die of ORFS's IHP example, XORed with that example's sealring.gds.gz, layer by layer."""
+    m("cell_create", library="die", cell="sr1050")
+    m("view_create", library="die", cell="sr1050", view="layout", type="layout")
+    m("layout_seal_ring", library="die", cell="sr1050", die=[1050, 1050])
+    ours = os.path.join(work, "sr1050.gds")
+    m("layout_export_gds", library="die", cell="sr1050", file=ours)
+    script = os.path.join(work, "xor.py")
+    with open(script, "w") as f:
+        f.write("import pya\na = pya.Layout(); a.read(theirs); b = pya.Layout(); b.read(ours)\n"
+                "for li in a.layer_indexes():\n"
+                "    i = a.get_info(li); lb = b.find_layer(i.layer, i.datatype)\n"
+                "    ra = pya.Region(a.top_cell().begin_shapes_rec(li)).merged()\n"
+                "    rb = pya.Region(b.top_cell().begin_shapes_rec(lb)).merged() if lb is not None else pya.Region()\n"
+                "    print(i, 'same' if (ra ^ rb).is_empty() else 'differs')\n")
+    out = subprocess.run([shutil.which("klayout", path=os.path.expanduser("~/eda/bin") + os.pathsep + os.environ.get("PATH", "")), "-b", "-r", script,
+                          "-rd", "theirs=" + os.path.join(flowdir, "designs/ihp-sg13g2/i2c-gpio-expander/sealring.gds.gz"), "-rd", "ours=" + ours],
+                         capture_output=True, text=True).stdout.split("\n")
+    differ = [line for line in out if line.endswith("differs")]
+    check(len([line for line in out if line.endswith("same")]) >= 20 and differ == ["8/22 differs"],
+          f"layout_seal_ring at 1050 um is IHP's own seal ring on every layer but its Metal1 filler, cut into pieces of 5 um: {differ}")
 
 
 def step_macro(m, work, flowdir):
@@ -288,6 +602,10 @@ def main():
     m("pdk_install", pdk="ihp-sg13g2", root=os.path.abspath(a.pdk), osdi=os.path.abspath(a.osdi))
     step_cells(m)
     step_and2(m, work)
+    step_chip(m, work)
+    step_chip_test(m, work)
+    step_rv32i(m, work, os.path.expanduser("~/eda/orfs/flow"))
+    seal_ring_is_ihps(m, work, os.path.expanduser("~/eda/orfs/flow"))
     step_macro(m, work, os.path.expanduser("~/eda/orfs/flow"))
     m.p.stdin.close()
     m.p.wait()

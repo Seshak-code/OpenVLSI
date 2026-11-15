@@ -662,6 +662,15 @@ Returns a schematic's (or a config view's) hierarchy as SPICE for TreeSPICE.
 | `library` | string | yes | library name |
 | `view` | string | yes | view name: a schematic, or a config naming one |
 
+### `netlist_verilog`
+
+A schematic's hierarchy as structural Verilog, for a test of a chip built by hand (test_run, level rtl): a module per schematic, the PDK's cells and flow-built blocks by their Verilog models (their ports only: a standard cell's model has no supply pins), bus pins as vectors. Writes verilog/<library>_<cell>.v; returns it and the model files a simulation of it needs.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | the top cell, whose schematic it writes |
+| `library` | string | yes | the library |
+
 ### `results_get`
 
 Returns a run's vectors for one analysis (by index): real values, or {re, im} for an AC analysis.
@@ -1377,6 +1386,16 @@ Writes a layout view and everything it places to a GDSII file; returns the struc
 | `library` | string | yes | library name |
 | `view` | string |  | the layout view |
 
+### `layout_fill`
+
+Fills a chip's layout with IHP's metal, Activ and GatPoly fill inside its seal ring (layout_seal_ring), by IHP's own filler scripts, so whole-chip DRC can apply the density rules (verify_drc with density). The fill becomes the cell <cell>__fill (LVS leaves it out), placed at the origin; a fill run again replaces it. Takes about a minute for a millimetre die. Returns its instance count.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | cell name |
+| `library` | string | yes | library name |
+| `view` | string |  | the layout view (default "layout") |
+
 ### `layout_generate`
 
 Generates a layout view from a schematic: a master per transistor, poly resistor or MIM capacitor size, n-devices, resistors and capacitors in one row and p-devices above, a tie per transistor body net, a labelled pin per schematic pin, and each terminal's net recorded. The wiring is left to route; layout_connectivity tells what remains.
@@ -1486,6 +1505,21 @@ Moves shapes and instances of a layout view by dx, dy (one undo step).
 | `shapes` | array |  | object ids (layout_objects_get) |
 | `view` | string |  | the layout view (default "layout") |
 
+### `layout_pad_ring`
+
+Places a pad ring of sg13g2_io's cells in a layout: a corner at each corner of the die, the pads of each side spread evenly (their bond pad side out), fillers in every gap so the ring's supply rails run unbroken, a bond pad on each pad, and a pin on each bond pad named as its pad. The ring sits 140 um inside the die's edge (a 70 um bond pad and 70 um for a seal ring), as ORFS's pad.tcl places it. Sides run left to right (south, north) and bottom to top (east, west). Returns the core's box.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | the cell |
+| `die` | array | yes | the die's width and height, [w, h] in microns (whole microns) |
+| `east` | array |  | pads up the right side |
+| `library` | string | yes | the library |
+| `north` | array |  | pads along the top |
+| `south` | array |  | pads along the bottom: [{name, master}], master a pad cell of sg13g2_io such as sg13g2_IOPadIn |
+| `view` | string |  | the layout view (default layout) |
+| `west` | array |  | pads up the left side |
+
 ### `layout_pcell_cap`
 
 Generates a MIM capacitor master (cap_cmim) from the process's rules (once per size) and returns its cell's name: the MIM w by l, Metal5 under it as MINUS, TopMetal1 over it as PLUS.
@@ -1540,6 +1574,17 @@ Adds a pin: a metal rectangle with its pin shape and a label naming the net. Ret
 | `metal` | string | yes | the metal, as Metal1 |
 | `name` | string | yes | the net |
 | `view` | string |  | the layout view (default "layout") |
+
+### `layout_seal_ring`
+
+Places IHP SG13G2's seal ring around a die: on each of its layers a ring stepped at the corners (four 4.2 um steps), as IHP's sealring cell draws it: passivation from 25 um in, Activ, pSD, EdgeSeal and every metal from 32.2 um, 4.2 um wide, contacts and vias as trenches inside them, Metal1 filler outside (in pieces of at most 5 um), and the die's boundary. Metal fill goes inside it. Makes the cell sealring_<w>x<h> in the library and places it at the origin; returns its name.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | the cell |
+| `die` | array | yes | the die's width and height, [w, h] in microns (whole microns) |
+| `library` | string | yes | the library |
+| `view` | string |  | the layout view (default layout) |
 
 ### `layout_shape_add`
 
@@ -1743,6 +1788,7 @@ Runs the process's DRC deck over a layout view; returns the run with its violati
 | `cell` | string | yes | cell name |
 | `density` | boolean |  | apply the deck's density rules |
 | `library` | string | yes | library name |
+| `recommended` | boolean |  | apply the deck's recommended rules (default true); IHP's own pad and bond pad cells break two of them |
 | `view` | string |  | the layout view (default "layout") |
 | `wait` | boolean |  | wait for it (default true) |
 

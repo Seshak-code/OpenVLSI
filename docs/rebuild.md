@@ -321,11 +321,31 @@ first, then the GUI, with a check that runs.
    .SUBCKT once (a block's CDL and the cell library's both hold the standard cells) and strips what IHP's reader strips from
    element lines (`[ ] $ \ /`) from its .SUBCKT lines, so a bus port meets its net. `m7_gate`: gcd as a block, LVS'd alone and
    under a top in a third library, simulated out of reset. Still to come: its timing as a Liberty abstract.
-4. **Top-level assembly.** A pad ring, supply rails and a seal ring around the core; whole-chip DRC (density and
-   latch-up included) and LVS.
-5. **Testing the hand-built chip.** `test_spice` for any cell, not only a flow run: its schematic, extraction or layout
-   netlist, driven by a recording or a hand-written stimulus; mixed RTL and transistor-level runs for the parts that are
-   too big for SPICE.
+4. **Top-level assembly (done).** `layout_pad_ring` places sg13g2_io's corners, pads, fillers and bond pads around a die as
+   ORFS's pad.tcl does; `layout_seal_ring` draws IHP's seal ring for any die (XOR-identical to IHP's cell at 1050 um, its Metal1
+   filler cut to 5 um pieces); `layout_fill` runs IHP's filler inside it. Top-level LVS compares the IO cells and SRAM macros as
+   black boxes: IHP's deck does not extract the pads' ESD structures as their CDL says, and their labels name the pad metal
+   iovss, so a black box the schematic places is written as its LEF abstract (pins joined by name, no substrate pin) and blanked
+   on both sides; taps that tie nothing (the ring's corners and fillers, with the pads abstracted) are dropped. `verify_drc`
+   takes `recommended`: IHP's own pad and bond pad cells break two recommended rules. Layout editor: Create > Pad Ring…,
+   Seal Ring…, Fill…. `m7_gate`: the AND2 in a 1.4 mm pad ring, wired by hand: DRC clean with density and latch-up but for Seal.m,
+   which this deck also reports on IHP's own seal ring cell alone; LVS matched, not when a wire is cut or two pads' core nets trade
+   places.
+5. **Testing the hand-built chip (begun).** `netlist_verilog` writes a schematic's hierarchy as structural Verilog: PDK cells and
+   flow-built blocks by their models (cell property `verilog`: the standard cells' with their `delayed_*` pins assigned, the IO
+   cells', an SRAM macro's wrapper; a block's routed netlist), only the ports a model declares, bus pins as vectors; `test_run`
+   at level rtl runs it. Still to come: `test_spice` for any cell (schematic, extraction or layout netlist) and mixed RTL and
+   transistor-level runs.
+
+**The RISC-V chip (`m7_gate`, step 5; `tools/rv32i`).** An RV32I core (ORFS's riscv32i) with its firmware in a two-port ROM and its
+data in IHP's 64 x 64 SRAM macro on the falling clock edge, through the flow at 40 ns (its own power grid, as IHP's does not reach
+the macro's `VDD!`/`VDDARRAY!`/`VSS!` pins; its pins on the sides that face their pads); made a block; 16 pads on a 1.6 x 1.4 mm die,
+each wired by hand on Metal2 and Metal3, vdd strapped from the ring's Metal3 rail and vss over TopMetal2 onto the block's inner ring;
+seal ring and fill. DRC clean with density (but Seal.m), LVS matched with no ERC finding (the block flat in the chip: IHP's deck
+extracts its antenna diodes at the chip's top), and its firmware prints "Hello, world!" at the pads. The SRAM core's behavioural
+model is IHP's when it is in `~/eda/ihp-verilog`, else `tools/rv32i/sram_core_model.v`.
+Fixed on the way: flow settings may hold paths; DIE_AREA/CORE_AREA replace the utilization; a run's macros (ADDITIONAL_LEFS) are
+black boxes in its LVS (ADDITIONAL_CDL their netlists); ERC keeps black boxes' pins; vias past 3 x 3 cuts take V*.b1's spacing.
 
 **By hand in the window (`tools/ui_build_test.py`):** the same steps with the mouse and keyboard alone (real macOS events with
 `--backend os`): a library with the process attached, an AND2's schematic from the cell library's NAND2 and inverter (I, wires,

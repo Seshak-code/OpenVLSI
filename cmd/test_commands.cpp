@@ -4,6 +4,7 @@
 #include "flow/rtl_flow.h"
 #include "flow/vcd.h"
 #include "oadb/oadb.h"
+#include "sch/schematic.h"
 #include "sim/ade.h"
 #include "sim/chip_deck.h"
 #include "sim/netlist.h"
@@ -23,7 +24,10 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <regex>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 
 namespace cmd {
@@ -115,9 +119,190 @@ std::string tailOf(const fs::path& file, size_t bytes = 64 * 1024) {
     return out;
 }
 
+
+// A Verilog model's ports: name -> [msb, lsb] (a scalar is [-1, -1]), in their order. Its declarations, in the header (ANSI) or the
+// body, as IHP's cell models and ORFS's netlists write them.
+struct VPort { std::string name; int msb = -1, lsb = -1; };
+std::vector<VPort> modelPorts(const std::string& file, const std::string& module) {
+    std::ifstream in(file);
+    if (!in) throw std::runtime_error("cannot read the Verilog model " + file);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    text = std::regex_replace(text, std::regex(R"(//[^\n]*|/\*[\s\S]*?\*/)"), " ");
+    std::smatch m;
+    if (!std::regex_search(text, m, std::regex("\\bmodule\\s+" + module + "\\s*[(#;]"))) throw std::runtime_error(file + " has no module " + module);
+    const size_t at = (size_t)m.position(0), end = text.find("endmodule", at);
+    const std::string body = text.substr(at, end == std::string::npos ? std::string::npos : end - at);
+    static const std::regex token(R"(\\\S+|[A-Za-z_][\w$]*|\d+|[\[\]:;,()])");
+    std::vector<std::string> t;
+    for (auto it = std::sregex_iterator(body.begin(), body.end(), token); it != std::sregex_iterator(); ++it) t.push_back(it->str());
+    std::vector<VPort> out;
+    for (size_t k = 0; k < t.size(); ++k) {
+        if (t[k] != "input" && t[k] != "output" && t[k] != "inout") continue;
+        int msb = -1, lsb = -1;
+        size_t j = k + 1;
+        while (j < t.size() && (t[j] == "wire" || t[j] == "reg" || t[j] == "signed" || t[j] == "logic")) ++j;
+        if (j + 4 < t.size() && t[j] == "[" && t[j + 2] == ":" && t[j + 4] == "]") {
+            msb = std::stoi(t[j + 1]);
+            lsb = std::stoi(t[j + 3]);
+            j += 5;
+        }
+        for (; j < t.size() && t[j] != ";" && t[j] != ")" && t[j] != "input" && t[j] != "output" && t[j] != "inout"; ++j)
+            if (t[j] != ",") out.push_back({t[j], msb, lsb});
+        k = j - 1;
+    }
+    if (out.empty()) throw std::runtime_error(file + ": module " + module + " declares no ports");
+    return out;
+}
+
+// A name as Verilog takes it: escaped when it is no plain identifier
+std::string vname(const std::string& n) {
+    static const std::regex plain(R"([A-Za-z_][A-Za-z0-9_$]*)");
+    return std::regex_match(n, plain) ? n : "\\" + n + " ";
+}
+
+// "base[3]" -> base, 3
+bool busBit(const std::string& n, std::string* base, int* bit) {
+    static const std::regex b(R"((.+)\[(\d+)\])");
+    std::smatch m;
+    if (!std::regex_match(n, m, b)) return false;
+    *base = m[1];
+    *bit = std::stoi(m[2]);
+    return true;
+}
+
+// A schematic hierarchy as structural Verilog: a module per schematic, the PDK's cells and flow-built blocks by their models (cell
+// property verilog: the files), their ports only (a standard cell's model has no supply pins)
+struct VerilogNetlister {
+    oadb::Workspace& ws;
+    std::ostringstream out;
+    std::set<std::string> done;
+    std::vector<std::string> models;
+
+    std::vector<std::string> modelFiles(const std::string& lib, const std::string& cell) {
+        const auto prop = ws.library(lib).cellProp(cell, "verilog");
+        if (!prop) throw std::invalid_argument(lib + "/" + cell + " has no schematic and no Verilog model (its verilog cell property)");
+        std::vector<std::string> files;
+        for (const auto& f : QJsonDocument::fromJson(QByteArray::fromStdString("[" + *prop + "]")).array()[0].toArray()) files.push_back(f.toString().toStdString());
+        if (files.empty()) throw std::invalid_argument(lib + "/" + cell + ": its verilog property names no file");
+        for (const auto& f : files)
+            if (std::find(models.begin(), models.end(), f) == models.end()) models.push_back(f);
+        return files;
+    }
+    bool hasSchematic(const std::string& lib, const std::string& cell) {
+        for (const auto& v : ws.library(lib).views(cell))
+            if (v.name == "schematic") return true;
+        return false;
+    }
+    // A schematic's ports, its bus pins grouped
+    std::vector<VPort> schematicPorts(const std::string& lib, const std::string& cell, std::map<std::string, std::string>* dirs = nullptr) {
+        std::map<std::string, VPort> bus;
+        std::vector<std::string> order;
+        for (const auto& p : ws.library(lib).pins(cell, "schematic")) {
+            std::string base;
+            int bit = -1;
+            if (!busBit(p.name, &base, &bit)) base = p.name;
+            if (!bus.count(base)) {
+                order.push_back(base);
+                bus[base] = {base, bit, bit};
+            } else {
+                bus[base].msb = std::max(bus[base].msb, bit);
+                bus[base].lsb = std::min(bus[base].lsb, bit);
+            }
+            if (dirs) (*dirs)[base] = p.direction;
+        }
+        std::vector<VPort> ports;
+        for (const auto& b : order) ports.push_back(bus[b]);
+        return ports;
+    }
+    void module(const std::string& lib, const std::string& cell) {
+        if (!done.insert(cell).second) return;
+        const sch::Connectivity k = sch::extract(ws, lib, cell, "schematic");
+        if (!k.ok()) throw std::invalid_argument(lib + "/" + cell + "/schematic does not check: " + k.errors.front());
+        std::map<std::string, std::string> dirs;
+        const std::vector<VPort> ports = schematicPorts(lib, cell, &dirs);
+        std::set<std::string> busPorts, portNames;
+        for (const auto& p : ports) {
+            portNames.insert(p.name);
+            if (p.msb >= 0) busPorts.insert(p.name);
+        }
+        const auto net = [&](const std::string& n) {
+            std::string base;
+            int bit;
+            if (busBit(n, &base, &bit) && busPorts.count(base)) return vname(base) + "[" + std::to_string(bit) + "]";
+            return vname(n);
+        };
+        std::ostringstream body;
+        for (const auto& i : ws.library(lib).instances(cell, "schematic")) {
+            const auto conn = k.instanceNets.count(i.name) ? k.instanceNets.at(i.name) : std::map<std::string, std::string>{};
+            std::vector<VPort> mports;
+            if (hasSchematic(i.lib, i.cell)) {
+                module(i.lib, i.cell);
+                mports = schematicPorts(i.lib, i.cell);
+            } else {
+                const auto files = modelFiles(i.lib, i.cell);
+                std::string err;
+                for (const auto& f : files) {
+                    try { mports = modelPorts(f, i.cell); break; } catch (const std::exception& e) { err = e.what(); }
+                }
+                if (mports.empty()) throw std::invalid_argument(i.lib + "/" + i.cell + ": " + err);
+            }
+            body << "  " << vname(i.cell) << " " << vname(i.name) << " (";
+            bool first = true;
+            for (const auto& p : mports) {
+                std::string expr;
+                if (p.msb < 0) {
+                    if (const auto it = conn.find(p.name); it != conn.end()) expr = net(it->second);
+                } else {
+                    std::string bits;
+                    bool any = false;
+                    const int step = p.msb >= p.lsb ? -1 : 1;
+                    for (int b = p.msb;; b += step) {
+                        const auto it = conn.find(p.name + "[" + std::to_string(b) + "]");
+                        any = any || it != conn.end();
+                        bits += (bits.empty() ? "" : ", ") + (it != conn.end() ? net(it->second) : std::string("1'bz"));
+                        if (b == p.lsb) break;
+                    }
+                    if (any) expr = "{" + bits + "}";
+                }
+                body << (first ? "" : ",") << "\n    ." << vname(p.name) << "(" << expr << ")";
+                first = false;
+            }
+            body << ");\n";
+        }
+        out << "module " << vname(cell) << " (";
+        for (size_t n = 0; n < ports.size(); ++n) out << (n ? ", " : "") << vname(ports[n].name);
+        out << ");\n";
+        for (const auto& p : ports) {
+            const std::string d = dirs[p.name] == "input" ? "input" : dirs[p.name] == "output" ? "output" : "inout";
+            out << "  " << d << (p.msb >= 0 ? " [" + std::to_string(p.msb) + ":" + std::to_string(p.lsb) + "]" : "") << " " << vname(p.name) << ";\n";
+        }
+        for (const auto& n : k.nets) {
+            std::string base;
+            int bit;
+            if (portNames.count(n.name) || (busBit(n.name, &base, &bit) && busPorts.count(base))) continue;
+            out << "  wire " << vname(n.name) << ";\n";
+        }
+        out << body.str() << "endmodule\n\n";
+    }
+};
 }  // namespace
 
 void addTestCommands(Registry& r) {
+    r.add({"netlist_verilog", "A schematic's hierarchy as structural Verilog, for a test of a chip built by hand (test_run, level rtl): a module per schematic, "
+                              "the PDK's cells and flow-built blocks by their Verilog models (their ports only: a standard cell's model has no supply "
+                              "pins), bus pins as vectors. Writes verilog/<library>_<cell>.v; returns it and the model files a simulation of it needs.",
+           object({{"library", param("string", "the library")}, {"cell", param("string", "the top cell, whose schematic it writes")}}),
+           [](Context& c, const QJsonObject& a) {
+               VerilogNetlister v{c.workspace, {}, {}, {}};
+               v.module(s(a, "library"), s(a, "cell"));
+               const fs::path file = base(c) / "verilog" / (s(a, "library") + "_" + s(a, "cell") + ".v");
+               fs::create_directories(file.parent_path());
+               std::ofstream(file) << "// " << s(a, "library") << "/" << s(a, "cell") << " as structural Verilog (netlist_verilog)\n\n" << v.out.str();
+               QJsonArray models;
+               for (const auto& f : v.models) models.append(q(f));
+               return QJsonValue(QJsonObject{{"file", q(file.string())}, {"models", models}, {"modules", (double)v.done.size()}});
+           },
+           true});
     r.add({"test_run", "Runs a testbench of yours on the design: level rtl on its Verilog (given, or a flow run's), level gate on a flow run's routed netlist with the delays "
                        "of its layout. It passes only if it finishes by itself, prints pass_pattern (default PASS) and reports no line starting FAIL, ERROR or FATAL. Every signal is "
                        "recorded. Waits and returns the result, or with wait false starts it in the background (poll test_status).",

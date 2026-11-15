@@ -24,6 +24,7 @@ struct TechVia {
     int64_t cut, space;                   // the cut's size and spacing
     int64_t enclosureLower, endcapLower;  // the lower metal's minimum enclosure, and on the two sides that are its endcap
     int64_t enclosureUpper, endcapUpper;
+    int64_t arraySpace = 0;               // the space one way in an array of more than 3 by 3 cuts (0: space)
 };
 
 struct Tech {

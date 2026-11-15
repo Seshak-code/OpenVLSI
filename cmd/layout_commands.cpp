@@ -2,6 +2,7 @@
 #include "cmd/registry.h"
 #include "layout/flatten.h"
 #include "layout/gds.h"
+#include "layout/pcell.h"
 #include "layout/tech.h"
 #include "oadb/oadb.h"
 
@@ -9,6 +10,7 @@
 #include <QJsonDocument>
 #include <QXmlStreamReader>
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <set>
@@ -57,7 +59,7 @@ const char* kView = "layout";
 
 }  // namespace
 
-int exportGds(oadb::Workspace& ws, const std::string& libName, const std::string& cell, const std::string& view, const std::string& file) {
+int exportGds(oadb::Workspace& ws, const std::string& libName, const std::string& cell, const std::string& view, const std::string& file, const std::set<std::string>& abstracts, bool withoutFill) {
     layout::GdsLibrary gds;
     gds.name = libName;
     // A GDS file has one namespace of structures: a cell is written once, and two libraries' cells of one name cannot both be
@@ -72,8 +74,50 @@ int exportGds(oadb::Workspace& ws, const std::string& libName, const std::string
         if (l.viewType(name, v) != "layout") throw std::runtime_error(lib + "/" + name + "/" + v + " is not a layout view");
         layout::GdsCell g;
         g.name = name;
-        g.shapes = l.layoutShapes(name, v);
-        g.instances = l.layoutInstances(name, v);
+        // For LVS, a black box below the top is its abstract: each pin's metal and a label naming it on every piece
+        const auto abstract = abstracts.count(name) && name != cell ? l.cellProp(name, "abstract") : std::nullopt;
+        if (abstract) {
+            // The metal stack, to join a pin's pieces where they overlap on adjacent metals, as the cell's own vias do
+            std::map<std::pair<int, int>, int> cut;  // (lower, upper) metal layer -> cut layer
+            if (const auto t = l.libraryProp("tech"); t && layout::findTech(QJsonDocument::fromJson(QByteArray::fromStdString("[" + *t + "]")).array()[0].toString().toStdString())) {
+                const layout::Tech& tech = *layout::findTech(QJsonDocument::fromJson(QByteArray::fromStdString("[" + *t + "]")).array()[0].toString().toStdString());
+                for (const auto& v : tech.vias) cut[{tech.metals[v.lower].layer, tech.metals[v.upper].layer}] = v.cutLayer;
+                const auto named = [&](const char* n) { for (const auto& ly : tech.layers) if (ly.name == n && ly.datatype == 0) return ly.layer; return -1; };
+                if (named("TopMetal1") >= 0 && named("TopVia2") >= 0 && named("TopMetal2") >= 0) cut[{named("TopMetal1"), named("TopMetal2")}] = named("TopVia2");
+            }
+            std::map<std::string, std::vector<std::pair<int, layout::Rect>>> pieces;
+            for (const auto& pv : QJsonDocument::fromJson(QByteArray::fromStdString(*abstract)).array()) {
+                const QJsonObject p = pv.toObject();
+                const int layer = p["layer"].toInt();
+                for (const auto& rv : p["rects"].toArray()) {
+                    const QJsonArray r = rv.toArray();
+                    const layout::Rect box{(int64_t)r[0].toDouble(), (int64_t)r[1].toDouble(), (int64_t)r[2].toDouble(), (int64_t)r[3].toDouble()};
+                    pieces[p["name"].toString().toStdString()].push_back({layer, box});
+                    g.shapes.push_back(layout::rectShape({layer, 0}, box));
+                    oadb::LayoutShape text;
+                    text.layer = layer;
+                    text.datatype = 25;  // ponytail: IHP's label datatype; a second process would read its tech's textDatatype
+                    text.kind = "text";
+                    text.points = {{(box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2}};
+                    text.text = p["name"].toString().toStdString();
+                    g.shapes.push_back(text);
+                }
+            }
+            for (const auto& [pin, rs] : pieces)
+                for (const auto& [la, a] : rs)
+                    for (const auto& [lb, b] : rs)
+                        if (const auto c = cut.find({la, lb}); c != cut.end()) {
+                            const layout::Rect o{std::max(a.x0, b.x0), std::max(a.y0, b.y0), std::min(a.x1, b.x1), std::min(a.y1, b.y1)};
+                            if (o.x0 < o.x1 && o.y0 < o.y1) g.shapes.push_back(layout::rectShape({c->second, 0}, o));
+                        }
+        } else {
+            g.shapes = l.layoutShapes(name, v);
+            g.instances = l.layoutInstances(name, v);
+            if (withoutFill)
+                g.instances.erase(std::remove_if(g.instances.begin(), g.instances.end(), [&](const oadb::LayoutInstance& i) {
+                                      return ws.library(i.lib.empty() ? lib : i.lib).cellProp(i.cell, "fill").has_value();
+                                  }), g.instances.end());
+        }
         if (const auto u = l.prop(name, v, "metersPerDbu")) gds.metersPerDbu = std::stod(*u);
         for (const auto& i : g.instances) add(i.lib.empty() ? lib : i.lib, i.cell, i.view.empty() ? kView : i.view);
         gds.cells.push_back(std::move(g));
