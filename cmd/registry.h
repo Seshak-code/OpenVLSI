@@ -71,7 +71,8 @@ void addSimulationCommands(Registry& r);  // netlist, simulate, results_get
 void addAdeCommands(Registry& r);         // ade_setup_get/set, ade_run, ade_stop, ade_history_list/get
 void addPdkCommands(Registry& r);         // pdk_install
 // A GDS file into a library (layout_import_gds, flow_import_layout); lyp "" for none. Refused whole, or done in one undo step.
-QJsonObject importGds(oadb::Library& l, const std::string& file, const std::string& lyp);
+// keepExisting: a structure whose cell already has a layout is skipped (files of one set that share their via cells), not refused.
+QJsonObject importGds(oadb::Library& l, const std::string& file, const std::string& lyp, bool keepExisting = false);
 // A layout view and all it places to a GDS file (layout_export_gds, verify_*); returns the structures written.
 int exportGds(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view, const std::string& file);
 // How many electrical rule violations an LVS report's two netlists have (verify_erc; cached beside the report)

@@ -221,7 +221,17 @@ struct Netlister {
             for (const auto& p : parsed(l.prop(cell, view, "places").value_or("[]")).toArray()) {
                 const std::string pl = p.toObject()["library"].toString().toStdString(), pc = p.toObject()["cell"].toString().toStdString();
                 const std::string sw = switchView(pl, pc);
-                if (sw == "spice") throw Error("netlist: " + key + " places " + pl + "/" + pc + " as a subcircuit, and the config makes it a primitive");
+                if (sw == "spice") {
+                    // A cell whose netlist is its own (a PDK cell): the subcircuit its model files define, under its own name
+                    const QJsonObject spice = parsed(*ws.library(pl).cellProp(pc, "spice")).toObject();
+                    for (const auto& m : spice["models"].toArray()) {
+                        const Model md{m.toObject()["file"].toString().toStdString(), m.toObject()["section"].toString().toStdString()};
+                        if (std::none_of(models.begin(), models.end(), [&](const Model& x) { return x.file == md.file; })) models.push_back(md);
+                    }
+                    const QJsonObject g = spice["globals"].toObject();
+                    for (auto it = g.begin(); it != g.end(); ++it) params[it.key().toStdString()] = str(it.value());
+                    continue;
+                }
                 define(pl, pc, sw);
             }
             stack.pop_back();

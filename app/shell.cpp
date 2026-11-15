@@ -257,6 +257,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     fileMenu_ = new QMenu("&File", this);
     fileMenu_->addAction("New Library…", this, [this] { runForm("library_create"); });
     fileMenu_->addAction("Install PDK…", this, [this] { runForm("pdk_install"); });
+    fileMenu_->addAction("Install PDK Cells…", this, [this] { runForm("pdk_install_cells"); });
     fileMenu_->addSeparator();
     fileMenu_->addAction("Close Tab", QKeySequence::Close, this, [this] { closeTab(tabs_->currentIndex()); });
     fileMenu_->addAction("Quit", QKeySequence::Quit, qApp, &QApplication::quit);
@@ -288,7 +289,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     addUiCommands(session_, *this);
     api_ = new ApiServer(session_, this);
     if (!api_->listening()) qWarning("OpenVLSI API: %s", qPrintable(api_->error()));
-    bindActions(this, {{"New Library…", "library_create"}, {"Install PDK…", "pdk_install"}, {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"},
+    bindActions(this, {{"New Library…", "library_create"}, {"Install PDK…", "pdk_install"}, {"Install PDK Cells…", "pdk_install_cells"}, {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"},
                        {"Command Window", "ui_console"}, {"Side Panel", "ui_panel"}, {"Design", "ui_stage"}, {"RTL", "ui_stage"}, {"Simulate", "ui_stage"}, {"Implement", "ui_stage"}, {"Verify", "ui_stage"}, {"Test", "ui_stage"}, {"Library Manager", "ui_library_manager"}, {"Match the system", "ui_theme"}, {"Light", "ui_theme"}, {"Dark", "ui_theme"}});
     session_.addCommand({"ui_theme", "Sets the app's appearance: auto follows the system, or light or dark; returns the mode now in effect.",
                          cmd::object({{"mode", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"auto", "light", "dark"}}, {"description", "the appearance"}}}}),

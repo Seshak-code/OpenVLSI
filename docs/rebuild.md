@@ -310,9 +310,11 @@ first, then the GUI, with a check that runs.
    hierarchical schematic: each schematic cell a `.SUBCKT`, a cell with a netlist of its own (a `cdl` cell property, as a
    standard cell will have) taken as it is. Extraction cell by cell: a parent's view holds its own wiring and a line per
    cell it places, which the netlist resolves through its config. `m3_gate`: a buffer of two inverters by hand.
-2. **The PDK's cells as libraries.** `pdk_install` brings in the standard cells, IO cells and SRAM macros: each with a
-   symbol (pins and directions from its Liberty or LEF), its layout (from the PDK's GDS), its CDL for LVS and its netlist for
-   simulation.
+2. **The PDK's cells as libraries (done).** `pdk_install_cells {set: stdcell | io | sram}` makes `sg13g2_stdcell` (84
+   cells), `sg13g2_io` (45) and `sg13g2_sram` (the ten macros and their subcells): each cell's layout from the PDK's GDS, a
+   symbol from its CDL's ports and `*.PININFO` directions, its CDL for LVS, and a netlist for simulation when its devices are
+   the device library's (every standard cell, 33 IO cells; not the pads' poly-resistor clamps, nor the SRAM macros, which
+   want a behavioural model). `m7_gate`: an AND2 by hand from a NAND2 and an inverter.
 3. **A flow run as a hard macro.** A design the flow built becomes a cell: its GDS as layout, its CDL as reference, a
    symbol from its ports, its timing from its Liberty abstract.
 4. **Top-level assembly.** A pad ring, supply rails and a seal ring around the core; whole-chip DRC (density and

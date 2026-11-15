@@ -1075,16 +1075,23 @@ void addVerifyCommands(Registry& r) {
                                           i.cell == "vdc" || i.cell == "vsin" || i.cell == "vpulse" || i.cell == "gnd" || i.cell == "idc";
                    if (primitive) continue;
                    oadb::Library& ml = c.workspace.library(i.lib);
-                   std::string sv;
-                   for (const auto& v : ml.views(i.cell))
-                       if (v.type == "schematic" && (sv.empty() || v.name == "schematic")) sv = v.name;
-                   if (sv.empty()) throw std::runtime_error(i.name + " places " + i.lib + "/" + i.cell + ", which has no schematic to extract against");
+                   // Its ports in order: its own netlist's (a PDK cell's CDL), else its schematic's
+                   std::vector<std::string> ports;
+                   if (const auto cdl = ml.cellProp(i.cell, "cdl")) {
+                       ports = cdlPorts(QJsonDocument::fromJson(QByteArray::fromStdString("[" + *cdl + "]")).array()[0].toString().toStdString(), i.cell);
+                   } else {
+                       std::string sv;
+                       for (const auto& v : ml.views(i.cell))
+                           if (v.type == "schematic" && (sv.empty() || v.name == "schematic")) sv = v.name;
+                       if (sv.empty()) throw std::runtime_error(i.name + " places " + i.lib + "/" + i.cell + ", which has no schematic and no cdl to extract against");
+                       for (const auto& p : ml.pins(i.cell, sv)) ports.push_back(p.name);
+                   }
                    const auto own = con.instanceNets.find(i.name);
                    if (own == con.instanceNets.end()) throw std::runtime_error(i.name + " has no connections");
                    body << (i.name.rfind('X', 0) == 0 || i.name.rfind('x', 0) == 0 ? i.name : "X" + i.name);
-                   for (const auto& p : ml.pins(i.cell, sv)) {
-                       const auto n = own->second.find(p.name);
-                       if (n == own->second.end()) throw std::runtime_error(i.name + " has no net on " + p.name);
+                   for (const auto& p : ports) {
+                       const auto n = own->second.find(p);
+                       if (n == own->second.end()) throw std::runtime_error(i.name + " has no net on " + p);
                        body << " " << n->second;
                    }
                    body << " " << i.cell << "\n";

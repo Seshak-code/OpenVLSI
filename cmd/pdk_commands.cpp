@@ -1,6 +1,7 @@
 // PDK setup: analogLib (ideal sources and passives) and a PDK's device library, as primitives with symbols, spice
 // templates, parameter defaults and the model files they need (sim/netlist.h)
 #include "cmd/registry.h"
+#include "flow/rtl_flow.h"
 #include "oadb/oadb.h"
 
 #include <QJsonDocument>
@@ -8,6 +9,9 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <set>
+#include <sstream>
 #include <stdexcept>
 
 namespace cmd {
@@ -240,9 +244,261 @@ QJsonArray withAnalogLib(Context& c) {
     return {install(c, "analogLib", analogLib(), {})};
 }
 
+// A CDL file's subcircuits: name, ports in order, the directions its *.PININFO gives, and its element lines
+struct CdlCell {
+    std::string name, text;
+    std::vector<std::string> ports;
+    std::map<std::string, char> dirs;          // I, O, B
+    std::vector<std::vector<std::string>> lines;  // each element, in words
+};
+
+std::vector<CdlCell> readCdl(const fs::path& file) {
+    std::ifstream in(file);
+    if (!in) throw std::invalid_argument("pdk_install_cells: cannot read " + file.string());
+    std::vector<std::string> logical;
+    for (std::string line; std::getline(in, line);) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (!line.empty() && line[0] == '+' && !logical.empty()) logical.back() += " " + line.substr(1);
+        else logical.push_back(line);
+    }
+    std::vector<CdlCell> out;
+    CdlCell* at = nullptr;
+    for (const auto& line : logical) {
+        std::istringstream w(line);
+        std::vector<std::string> words;
+        for (std::string x; w >> x;) words.push_back(x);
+        if (words.empty()) continue;
+        std::string head = words[0];
+        for (auto& ch : head) ch = (char)std::toupper((unsigned char)ch);
+        if (head == ".SUBCKT" && words.size() >= 2) {
+            out.push_back({words[1], "", {}, {}, {}});
+            at = &out.back();
+            for (size_t k = 2; k < words.size(); ++k)
+                if (words[k].find('=') == std::string::npos) at->ports.push_back(words[k]);
+        }
+        if (!at) continue;
+        at->text += line + "\n";
+        if (head == "*.PININFO") {
+            for (size_t k = 1; k < words.size(); ++k) {
+                const auto colon = words[k].rfind(':');
+                if (colon != std::string::npos && colon + 1 < words[k].size()) at->dirs[words[k].substr(0, colon)] = (char)std::toupper((unsigned char)words[k][colon + 1]);
+            }
+        } else if (head == ".ENDS") {
+            at = nullptr;
+        } else if (head[0] != '*' && head[0] != '.') {
+            at->lines.push_back(words);
+        }
+    }
+    return out;
+}
+
+// A cell's symbol from its ports: inputs on the left, outputs on the right, its supplies (B ports named like one) on top and
+// below, other bidirectional ports on the right under the outputs
+Cell portSymbol(const CdlCell& cdl) {
+    std::vector<std::string> left, right, top, bottom;
+    for (const auto& p : cdl.ports) {
+        std::string up = p;
+        for (auto& ch : up) ch = (char)std::toupper((unsigned char)ch);
+        const auto d = cdl.dirs.find(p);
+        const char dir = d == cdl.dirs.end() ? 'B' : d->second;
+        const bool ground = up.find("VSS") != std::string::npos || up.find("GND") != std::string::npos;
+        const bool power = !ground && (up.find("VDD") != std::string::npos || up.find("VCC") != std::string::npos);
+        if (dir == 'I') left.push_back(p);
+        else if (dir == 'O') right.push_back(p);
+        else if (power) top.push_back(p);
+        else if (ground) bottom.push_back(p);
+        else right.push_back(p);
+    }
+    const int64_t rows = (int64_t)std::max<size_t>({left.size(), right.size(), 1});
+    const int64_t half = std::max<int64_t>(100, rows * 50), w = std::max<int64_t>(200, (int64_t)std::max(top.size(), bottom.size()) * 100 + 100);
+    Cell c{cdl.name, "X", "", "X", {}, {}, {}, {}};
+    c.shapes.push_back({0, "rect", "device", {{-w / 2, -half}, {w / 2, half}}, "", ""});
+    const auto side = [&](const std::vector<std::string>& ps, int64_t x, int64_t lead) {
+        for (size_t k = 0; k < ps.size(); ++k) {
+            const int64_t y = half - 50 - (int64_t)k * 100 + (rows - (int64_t)ps.size()) * 0;
+            const char* dir = cdl.dirs.count(ps[k]) && cdl.dirs.at(ps[k]) == 'I' ? "input" : cdl.dirs.count(ps[k]) && cdl.dirs.at(ps[k]) == 'O' ? "output" : "inputOutput";
+            c.pins.push_back({0, ps[k], dir, {x + lead, y}});
+            c.shapes.push_back(line({{x, y}, {x + lead, y}}, "pin"));
+            c.shapes.push_back(label({x + (lead < 0 ? 10 : -10), y}, ps[k].c_str(), lead < 0 ? "centerLeft" : "centerRight"));
+        }
+    };
+    side(left, -w / 2, -100);
+    side(right, w / 2, 100);
+    const auto rail = [&](const std::vector<std::string>& ps, int64_t y, int64_t lead) {
+        for (size_t k = 0; k < ps.size(); ++k) {
+            const int64_t x = -w / 2 + 100 + (int64_t)k * 100;
+            c.pins.push_back({0, ps[k], "inputOutput", {x, y + lead}});
+            c.shapes.push_back(line({{x, y}, {x, y + lead}}, "pin"));
+        }
+    };
+    rail(top, half, 100);
+    rail(bottom, -half, -100);
+    c.shapes.push_back(label({-w / 2, half + 20}, "[@instanceName]"));
+    c.shapes.push_back(label({-w / 2, -half - 20}, "[@cellName]", "upperLeft"));
+    return c;
+}
+
+// The cells' netlist for simulation: each transistor through the device library's subcircuit (as a schematic's would be), a
+// tie through the PDK's own (ptap1, ntap1), an antenna or ESD diode left out (reverse biased: its capacitance alone).
+// ponytail: an IO cell's ESD diodes are left out too, so a pad simulates without its protection's leakage and capacitance.
+// A cell whose devices are anything else gets no netlist.
+// Returns the cells it could write.
+std::set<std::string> writeSimNetlist(const std::vector<CdlCell>& cells, const fs::path& out) {
+    std::set<std::string> defined;
+    for (const auto& c : cells) defined.insert(c.name);
+    std::map<std::string, bool> ok;
+    std::function<bool(const CdlCell&)> simulable = [&](const CdlCell& c) {
+        if (const auto it = ok.find(c.name); it != ok.end()) return it->second;
+        ok[c.name] = false;  // a loop is not simulable
+        bool good = true;
+        for (const auto& w : c.lines) {
+            const char e = (char)std::toupper((unsigned char)w[0][0]);
+            if (e == 'M') good = good && w.size() >= 6 && w[5].rfind("sg13_", 0) == 0;
+            else if (e == 'D') good = good && w.size() >= 4 && (w[3] == "dantenna" || w[3] == "dpantenna");
+            else if (e == 'X') {
+                std::string sub;
+                for (size_t k = w.size(); k-- > 1;)
+                    if (w[k].find('=') == std::string::npos) { sub = w[k]; break; }
+                if (sub == "ptap1" || sub == "ntap1") continue;  // the PDK's substrate and well ties: its resistor models define them
+                const auto child = std::find_if(cells.begin(), cells.end(), [&](const CdlCell& x) { return x.name == sub; });
+                good = good && child != cells.end() && simulable(*child);
+            } else good = false;
+        }
+        return ok[c.name] = good;
+    };
+    std::ofstream o(out);
+    o << "* OpenVLSI: " << out.filename().string() << ", the cells' transistors through the device library's subcircuits\n";
+    o << ".global sub!\n";  // the substrate, which the IO cells' ties and diodes name
+    std::set<std::string> written;
+    for (const auto& c : cells) {
+        if (!simulable(c)) continue;
+        o << ".subckt " << c.name;
+        for (const auto& p : c.ports) o << " " << p;
+        o << "\n";
+        for (const auto& w : c.lines) {
+            const char e = (char)std::toupper((unsigned char)w[0][0]);
+            if (e == 'D') continue;
+            o << (e == 'M' ? "X" + w[0] : w[0]);
+            for (size_t k = 1; k < w.size(); ++k) {
+                std::string word = w[k];
+                for (auto& ch : word) ch = (char)std::tolower((unsigned char)ch);
+                o << " " << (e == 'M' && k >= 6 ? word : w[k]);
+            }
+            if (e == 'M') o << " mm_ok={mc_mismatch}";
+            o << "\n";
+        }
+        o << ".ends " << c.name << "\n";
+        written.insert(c.name);
+    }
+    if (!o.flush()) throw std::runtime_error("pdk_install_cells: cannot write " + out.string());
+    return written;
+}
+
 }  // namespace
 
 void addPdkCommands(Registry& r) {
+    r.add({"pdk_install_cells", "Brings a set of the PDK's cells into the workspace as a library: the standard cells (sg13g2_stdcell), the IO cells (sg13g2_io) "
+                                "or the SRAM macros (sg13g2_sram). Each cell gets its layout from the PDK's GDS, a symbol from its CDL ports (inputs left, outputs "
+                                "right, supplies top and bottom), its CDL as LVS's reference, and, when its devices are the device library's MOS, a netlist for "
+                                "simulation. pdk_install's sg13g2 must be in the workspace. Returns the library, its cells and those that simulate.",
+           object({{"set", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"stdcell", "io", "sram"}}, {"description", "which cells"}}}}),
+           [](Context& c, const QJsonObject& a) {
+               const flow::Platform* pdk = flow::findPlatform("ihp-sg13g2");
+               const auto tools = acutesim::compute::orchestration::RtlFlowTools::detect();
+               if (!pdk || tools.flowDir.empty()) throw std::runtime_error("pdk_install_cells reads the PDK's cells from OpenROAD-flow-scripts' ihp-sg13g2 platform: " + tools.missing());
+               const auto known = c.workspace.libraries();
+               if (std::find(known.begin(), known.end(), "sg13g2") == known.end()) throw std::invalid_argument("pdk_install_cells needs the device library: run pdk_install for ihp-sg13g2 first");
+               const std::string set = a["set"].toString().toStdString(), name = "sg13g2_" + set;
+               if (std::find(known.begin(), known.end(), name) != known.end()) throw std::invalid_argument("the workspace already has " + name);
+               const fs::path platform = fs::path(flow::platformFile(*pdk, tools.flowDir, "cdl")).parent_path();
+               std::vector<std::pair<fs::path, fs::path>> files;  // cdl, gds
+               if (set == "sram") {
+                   for (const auto& e : fs::directory_iterator(platform / "cdl"))
+                       if (e.path().filename().string().rfind("RM_IHPSG13", 0) == 0 && e.path().extension() == ".cdl")
+                           files.push_back({e.path(), platform / "gds" / (e.path().stem().string() + ".gds")});
+                   std::sort(files.begin(), files.end());
+               } else {
+                   files.push_back({platform / "cdl" / ("sg13g2_" + set + ".cdl"), platform / "gds" / ("sg13g2_" + set + ".gds")});
+               }
+               for (const auto& [cdl, gds] : files)
+                   for (const auto& f : {cdl, gds})
+                       if (!fs::is_regular_file(f)) throw std::runtime_error("pdk_install_cells: the platform has no " + f.string());
+               // The SRAM macros' files each carry their shared subcells: one of each is kept, and two that differ are refused
+               std::vector<CdlCell> cells;
+               std::map<std::string, std::string> first;
+               for (const auto& [cdl, gds] : files)
+                   for (auto& cell : readCdl(cdl)) {
+                       const auto [at, fresh] = first.emplace(cell.name, cell.text);
+                       if (!fresh) {
+                           if (at->second != cell.text) throw std::runtime_error("pdk_install_cells: two files define " + cell.name + " differently");
+                           continue;
+                       }
+                       cells.push_back(std::move(cell));
+                   }
+               const fs::path dir = fs::absolute(fs::path(c.workspace.file()).parent_path());
+               const fs::path sim = dir / (name + ".sp");
+               const std::set<std::string> simulates = writeSimNetlist(cells, sim);
+               // What a transistor needs when it simulates, as the device library's own cells say
+               oadb::Library& devices = c.workspace.library("sg13g2");
+               QJsonArray models{QJsonObject{{"file", QString::fromStdString(sim.string())}}};
+               QJsonObject globals;
+               for (const char* mos : {"sg13_lv_nmos", "sg13_hv_nmos", "rsil"}) {  // rsil's: the resistor models, which define the ties
+                   const QJsonObject spice = QJsonDocument::fromJson(QByteArray::fromStdString("[" + devices.cellProp(mos, "spice").value_or("{}") + "]")).array()[0].toObject();
+                   for (const auto& m : spice["models"].toArray())
+                       if (!models.contains(m)) models.append(m);
+                   const QJsonObject g = spice["globals"].toObject();
+                   for (auto it = g.begin(); it != g.end(); ++it) globals[it.key()] = it.value();
+               }
+               oadb::Library& l = c.workspace.createLibrary(name, (dir / (name + ".oalib")).string());
+               l.setLibraryProp("tech", "\"sg13g2\"");
+               QJsonArray imported;
+               for (const auto& [cdl, gds] : files) imported.append(importGds(l, gds.string(), flow::platformFile(*pdk, tools.flowDir, pdk->layerProperties), true));
+               const auto json = [](const QJsonValue& v) {
+                   const QByteArray b = QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact);
+                   return b.mid(1, b.size() - 2).toStdString();
+               };
+               std::set<std::string> have;
+               for (const auto& cl : l.cells()) have.insert(cl);
+               std::map<std::string, const CdlCell*> byName;
+               for (const auto& cell : cells) byName[cell.name] = &cell;
+               // A cell's LVS netlist: its .SUBCKT and those it places
+               std::function<void(const CdlCell&, std::set<std::string>&, std::string&)> withChildren = [&](const CdlCell& cell, std::set<std::string>& seen, std::string& text) {
+                   if (!seen.insert(cell.name).second) return;
+                   for (const auto& w : cell.lines)
+                       if (std::toupper((unsigned char)w[0][0]) == 'X')
+                           for (size_t k = w.size(); k-- > 1;)
+                               if (w[k].find('=') == std::string::npos) {
+                                   if (const auto child = byName.find(w[k]); child != byName.end()) withChildren(*child->second, seen, text);
+                                   break;
+                               }
+                   text += cell.text;
+               };
+               QJsonArray names, simulated;
+               l.change("install " + name, [&] {
+                   for (const auto& cell : cells) {
+                       if (!have.count(cell.name)) l.createCell(cell.name);
+                       const Cell sym = portSymbol(cell);
+                       l.createView(cell.name, "symbol", "symbol");
+                       for (const auto& p : sym.pins) l.addPin(cell.name, "symbol", p);
+                       for (const auto& s : sym.shapes) l.addShape(cell.name, "symbol", s);
+                       std::set<std::string> seen;
+                       std::string text;
+                       withChildren(cell, seen, text);
+                       l.setCellProp(cell.name, "cdl", json(QString::fromStdString(text)));
+                       l.setCellProp(cell.name, "params", "{}");
+                       l.setCellProp(cell.name, "instNamePrefix", json(QString("X")));
+                       if (simulates.count(cell.name)) {
+                           std::string tmpl;
+                           for (const auto& p : cell.ports) tmpl += "[|" + p + "] ";
+                           l.setCellProp(cell.name, "spice", json(QJsonObject{{"prefix", "X"}, {"template", QString::fromStdString(tmpl + cell.name)}, {"models", models}, {"globals", globals}}));
+                           simulated.append(QString::fromStdString(cell.name));
+                       }
+                       names.append(QString::fromStdString(cell.name));
+                   }
+               });
+               c.workspace.save();
+               return QJsonValue(QJsonObject{{"library", QString::fromStdString(name)}, {"cells", names}, {"simulate", simulated}, {"layouts", imported}, {"netlist", QString::fromStdString(sim.string())}});
+           }});
     r.add({"pdk_install", "Creates the libraries analogLib (ideal sources and passives) and a PDK's device library (sg13g2 for "
                           "IHP SG13G2: lv/hv MOS, MIM cap, poly resistors; asap7 / asap5 for the FinFET and nanowire PDKs: "
                           "nmos/pmos x slvt/lvt/rvt/sram), each cell a symbol with its spice template, defaults and model files; "
