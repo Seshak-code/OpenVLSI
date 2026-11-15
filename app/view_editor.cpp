@@ -463,6 +463,14 @@ int ViewEditor::selectNet(const QString& net) {
     return (int)selection_.size();
 }
 
+bool ViewEditor::selectInstance(const QString& name) {
+    selection_.clear();
+    for (const auto& i : scene_.view()["instances"].toArray())
+        if (i.toObject()["name"].toString().compare(name, Qt::CaseInsensitive) == 0) selection_.insert({"instance", i.toObject()["name"].toString()});  // as LVS names devices
+    redraw();
+    return !selection_.empty();
+}
+
 QStringList ViewEditor::plotSelectedNets() {
     const QJsonObject k = check();
     QStringList nets;

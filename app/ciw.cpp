@@ -122,6 +122,20 @@ Ciw::Ciw(Session& session, QWidget* parent) : QMainWindow(parent), session_(sess
                          },
                          true});
 
+    session_.addCommand({"editor_select_instance", "Selects an instance in a schematic's editor (opened if need be), its name matched in any case, as LVS reports devices; "
+                                                   "returns its name.",
+                         cmd::object({{"library", cmd::param("string", "library name")}, {"cell", cmd::param("string", "cell name")},
+                                      {"view", cmd::param("string", "the schematic view")}, {"instance", cmd::param("string", "instance name")}}),
+                         [this](cmd::Context&, const QJsonObject& a) {
+                             const cmd::Result r = session_.call("editor_open", {{"library", a["library"]}, {"cell", a["cell"]}, {"view", a["view"]}});
+                             ViewEditor* e = editor(a["library"].toString(), a["cell"].toString(), a["view"].toString());
+                             if (!r.ok || !e || !e->isSchematic()) throw std::runtime_error(r.ok ? "not a schematic" : r.error.toStdString());
+                             if (!e->selectInstance(a["instance"].toString()))
+                                 throw std::runtime_error("no instance " + a["instance"].toString().toStdString() + " in " + a["cell"].toString().toStdString());
+                             return QJsonValue(e->selection().begin()->second);
+                         },
+                         true});
+
     session_.addCommand({"flow_view", "Opens an implementation run as a tab (the GUI's command).", cmd::object({{"run", cmd::param("string", "a run: <design>/run.N")}}),
                          [this](cmd::Context&, const QJsonObject& a) {
                              const QString run = a["run"].toString();

@@ -137,6 +137,10 @@ int main(int argc, char** argv) {
         check(error("waveform_probe", {{"library", "l"}, {"cell", "res"}, {"view", "symbol"}, {"net", "x"}}).contains("no waveform viewer") &&
                   error("editor_select_net", {{"library", "l"}, {"cell", "rc"}, {"view", "schematic"}, {"net", "nope"}}).contains("no wire or label"),
               "probing a design no viewer shows, or a net the schematic lacks, is an error");
+        // a device, as LVS names it (in capitals): its instance alone
+        const QJsonValue picked = must("editor_select_instance", {{"library", "l"}, {"cell", "rc"}, {"view", "schematic"}, {"instance", "r0"}});
+        check(picked == "R0" && e->selection() == std::set<std::pair<QString, QString>>{{"instance", "R0"}}, "editor_select_instance selects R0 named r0, and nothing else");
+        check(error("editor_select_instance", {{"library", "l"}, {"cell", "rc"}, {"view", "schematic"}, {"instance", "R9"}}).contains("no instance"), "and refuses one the schematic lacks");
         // a PSS run: Plot Net reads its period (VPSS), or its harmonics once the plot shows frequency (VH)
         const QString prun = must("simulate", {{"library", "l"}, {"cell", "rc"}, {"view", "schematic"}, {"cards", QJsonArray{".pss 1meg 30u 0 100 5"}}})
                                  .toObject()["run"].toString();

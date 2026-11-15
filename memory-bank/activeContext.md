@@ -1,5 +1,15 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — LVS cross-probe of devices, on `rebuild/xprobe-devices` (after #56, merged)**
+
+- **Done:** LVS's device markers carry `schematic_instance` (a schematic-side ERC finding names its first device too). New app command
+  `editor_select_instance` (any case, as LVS names devices). The markers panel's Show in Schematic selects a device's instance, or a net.
+- **Checked:** `test_waveforms` (the command offscreen), M3 65/65 (the broken inverter's PMOS marker names MP), and the real window with macOS
+  events: lvs.3 opened, devices that differ, right-click $1 / MP, Show in Schematic: MP selected.
+- **Next:** serpentine resistors; FinFET Pcells, an ASAP7 LVS deck, ASAP7's DRC violations; cross-probe of a flow run's LVS to its Verilog.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — corners at transistor level, on `rebuild/spice-corners` (after #55, merged)**
 
 - **Done:**

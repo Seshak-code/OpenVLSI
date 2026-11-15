@@ -612,6 +612,8 @@ QJsonArray ercMarkers(const QJsonObject& erc) {
             const QString net = v["net"].toString();
             QJsonObject marker{{"cell", QString()}, {"label", (net.isEmpty() ? QString() : net + ", ") + v["side"].toString()}, {"description", v["detail"]},
                                {"schematic_net", net.isEmpty() || net.startsWith('$') ? QJsonValue() : QJsonValue(net)}, {"points", QJsonArray{}}};
+            // A schematic-side finding names its devices by their schematic instances: the first is where to look
+            if (v["side"] == "schematic" && !v["devices"].toArray().isEmpty()) marker["schematic_instance"] = v["devices"].toArray()[0];
             if (v["boxes"].toArray().isEmpty()) markers.append(marker);
             for (const auto& bv : v["boxes"].toArray()) {
                 const QJsonArray b = bv.toArray();
@@ -657,6 +659,7 @@ QJsonObject lvsMarkers(const QJsonObject& xref) {
             }
             const QString label = (it["layout"].isNull() ? "(none)" : it["layout"].toString()) + " / " + (it["schematic"].isNull() ? "(none)" : it["schematic"].toString());
             QJsonObject marker{{"cell", circuit["top"].toBool() ? QString() : circuit["layout"].toString()}, {"label", label}, {"schematic_net", kind == "net" ? it["schematic"] : QJsonValue()},
+                               {"schematic_instance", kind == "device" ? it["schematic"] : QJsonValue()},
                                {"description", joins.isEmpty() ? QString("layout / schematic") : "joins, layout / schematic: " + joins.join(", ")}};
             if (it.contains("box")) {
                 const QJsonArray b = it["box"].toArray();
@@ -1025,8 +1028,8 @@ void addVerifyCommands(Registry& r) {
                out["netlist"] = q(body.str());
                return QJsonValue(out);
            }});
-    r.add({"verify_markers", "What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic) and then its "
-                             "electrical rule violations (rules named ERC: ...). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker "
+    r.add({"verify_markers", "What a check found, as markers: a DRC's rule by rule, or an LVS's differences kind by kind (each named layout / schematic, with the "
+                             "schematic's net or instance to cross-probe to) and then its electrical rule violations (rules named ERC: ...). run, or flow_run with check drc (default) or lvs for an implementation run's. Each marker "
                              "gives its cell and points, in microns in that cell.",
            object({}, {{"run", kRun}, {"flow_run", param("string", "an implementation run: <design>/run.N")},
                        {"check", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"drc", "lvs"}}, {"description", "for flow_run: which check's (default drc)"}}}}),

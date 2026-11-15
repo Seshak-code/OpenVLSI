@@ -317,6 +317,9 @@ def step_inverter(m, a, work):
     groups = {r["rule"]: r for r in markers["rules"]}
     check({"nets only in the layout", "nets only in the schematic"} <= set(groups) and groups["nets only in the layout"]["count"] == 2,
           f"verify_markers groups LVS's differences: {sorted(groups)}")
+    pmos_marker = groups.get("devices that differ", {}).get("markers", [{}])[0]
+    check(pmos_marker.get("schematic_instance") == "MP" and len(pmos_marker.get("points", [])) == 2,
+          f"the PMOS that differs is marked at its place in the layout and names its schematic instance, MP: {pmos_marker.get('schematic_instance')}")
     probe = next(mk for mk in groups["nets only in the schematic"]["markers"])
     check(probe["schematic_net"].lower() == "vdd" and probe["points"] == [], "its vdd marker names the schematic's net to cross-probe to, and has no place in the layout")
     erc = m("verify_erc", run=lvs["run"])
