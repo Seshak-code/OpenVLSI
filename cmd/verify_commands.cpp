@@ -141,13 +141,53 @@ std::vector<std::string> cdlPorts(const std::string& cdl, const std::string& cel
     return ports;
 }
 
+// A netlist's .SUBCKT blocks, each with its words outside comments (to compare two copies whatever their line breaks)
+std::vector<std::tuple<std::string, std::string, std::string>> subcktBlocks(const std::string& text) {
+    std::vector<std::tuple<std::string, std::string, std::string>> out;  // name, text, words
+    std::istringstream in(text);
+    std::string line;
+    bool inside = false;
+    for (std::string l; std::getline(in, l);) {
+        std::istringstream w(l);
+        std::string head, name;
+        w >> head >> name;
+        std::string up = head;
+        for (auto& ch : up) ch = (char)std::toupper((unsigned char)ch);
+        if (up == ".SUBCKT") {
+            out.push_back({name, "", ""});
+            inside = true;
+        }
+        if (!inside) continue;
+        std::get<1>(out.back()) += l + "\n";
+        if (!head.empty() && head[0] != '*') {
+            std::istringstream words(head[0] == '+' ? l.substr(1) : l);
+            for (std::string x; words >> x;) std::get<2>(out.back()) += x + " ";
+        }
+        if (up == ".ENDS") inside = false;
+    }
+    return out;
+}
+
 // The schematic as LVS's reference, its hierarchy as .SUBCKTs (each cell once, after the cells it places): transistors,
 // poly resistors and MIM capacitors on the deck's model names; a cell with a "cdl" property as that netlist; any other cell
 // through its schematic view. Fails closed on anything else with a mask.
 std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std::string& cell, const std::string& view) {
     std::ostringstream out;
     std::map<std::string, std::string> defined;  // .SUBCKT name -> lib/cell/view it came from
+    std::map<std::string, std::string> included;  // a .SUBCKT from a cell's own netlist -> its words: a cell's CDL and a block's may both hold it
     std::vector<std::string> stack;
+    // A cell's own netlist, each .SUBCKT in it once: a second copy must say the same
+    const auto include = [&](const std::string& text, const std::string& from) {
+        for (const auto& [name, block, words] : subcktBlocks(text)) {
+            if (defined.count(name)) throw std::invalid_argument(from + " defines .SUBCKT " + name + ", and a schematic is that cell too");
+            const auto [it, fresh] = included.emplace(name, words);
+            if (!fresh) {
+                if (it->second != words) throw std::invalid_argument("two netlists define .SUBCKT " + name + " differently (" + from + ")");
+                continue;
+            }
+            out << block;
+        }
+    };
     const auto plain = [](std::string n) {
         if (!n.empty() && n.back() == '!') n.pop_back();
         return n;
@@ -159,6 +199,7 @@ std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std:
             if (it->second != key) throw std::invalid_argument("two cells would both be .SUBCKT " + dc + ": " + it->second + " and " + key);
             return;
         }
+        if (included.count(dc)) throw std::invalid_argument(key + " is a schematic of " + dc + ", which a cell's own netlist also defines");
         stack.push_back(key);
         oadb::Library& l = ws.library(dl);
         const sch::Connectivity con = sch::extract(ws, dl, dc, dv);
@@ -187,8 +228,7 @@ std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std:
                 if (const auto cdl = ml.cellProp(i.cell, "cdl")) {
                     const std::string text = QJsonDocument::fromJson(QByteArray::fromStdString("[" + *cdl + "]")).array()[0].toString().toStdString();
                     ports = cdlPorts(text, i.cell);
-                    if (const auto [it, fresh] = defined.emplace(i.cell, i.lib + "/" + i.cell + "/cdl"); fresh) out << text << "\n";
-                    else if (it->second != i.lib + "/" + i.cell + "/cdl") throw std::invalid_argument("two cells would both be .SUBCKT " + i.cell + ": " + it->second + " and " + i.lib + "/" + i.cell);
+                    include(text, i.lib + "/" + i.cell);
                 } else {
                     std::string sv;
                     for (const auto& v : ml.views(i.cell))
@@ -224,7 +264,19 @@ std::string schematicCdl(oadb::Workspace& ws, const std::string& lib, const std:
         stack.pop_back();
     };
     define(lib, cell, view, true);
-    return out.str();
+    // A bus bit (req_msg[3]): IHP's netlist reader deletes [ ] $ \ / from every element line, and not from .SUBCKT lines, so
+    // a port would never meet its own net. The same characters go from the .SUBCKT lines here: ports and nets agree, and LVS
+    // pairs them with the layout's pins through the nets they join.
+    // ponytail: two names that differ only in those characters (a[1] and a1) become one net; the deck's reader already merges them in bodies.
+    std::istringstream in(out.str());
+    std::string text;
+    for (std::string line; std::getline(in, line);) {
+        std::string head = line.substr(0, 7);
+        for (auto& ch : head) ch = (char)std::toupper((unsigned char)ch);
+        if (head == ".SUBCKT") line.erase(std::remove_if(line.begin(), line.end(), [](char ch) { return ch == '[' || ch == ']' || ch == '$' || ch == '\\' || ch == '/'; }), line.end());
+        text += line + "\n";
+    }
+    return text;
 }
 
 // A KLayout report database as rules and their markers: {rules: [{rule, description, count, markers: [{cell, points: [[x, y], ...]}]}]}, microns in the marker's cell.
@@ -795,7 +847,7 @@ void addVerifyCommands(Registry& r) {
                return QJsonValue(rec);
            },
            true});
-    r.add({"verify_lvs", "Compares a layout view with its schematic through the process's LVS deck; returns whether they match, with device and net counts on each side, "
+    r.add({"verify_lvs", "Compares a layout view with its schematic (or, for a cell with none, its own netlist: a hard macro's, a PDK cell's) through the process's LVS deck; returns whether they match, with device and net counts on each side, "
                          "and how many electrical rule violations the two netlists have (verify_erc lists them). Waits, or with wait false starts it in the background.",
            object({{"library", kLib}, {"cell", kCell}}, {{"view", kView}, {"schematic", param("string", "the schematic view (default \"schematic\")")}, {"wait", param("boolean", "wait for it (default true)")}}),
            [](Context& c, const QJsonObject& a) {
@@ -804,7 +856,13 @@ void addVerifyCommands(Registry& r) {
                if (pdk.lvsDeck.empty()) throw std::invalid_argument(pdk.noLvs);
                const RtlFlowTools tools = RtlFlowTools::detect();
                if (tools.klayout.empty() || tools.flowDir.empty()) throw std::runtime_error("KLayout and the platform's decks are needed: " + tools.missing());
-               const std::string cdl = schematicCdl(c.workspace, s(a, "library"), s(a, "cell"), a.contains("schematic") ? s(a, "schematic") : "schematic");
+               const std::string schematicView = a.contains("schematic") ? s(a, "schematic") : "schematic";
+               bool hasSchematic = false;
+               for (const auto& v : l.views(s(a, "cell"))) hasSchematic = hasSchematic || v.name == schematicView;
+               const auto own = l.cellProp(s(a, "cell"), "cdl");
+               // A cell with a netlist of its own and no schematic (a hard macro, a PDK cell) is checked against that netlist
+               const std::string cdl = !hasSchematic && own && !a.contains("schematic") ? QJsonDocument::fromJson(QByteArray::fromStdString("[" + *own + "]")).array()[0].toString().toStdString()
+                                                                                        : schematicCdl(c.workspace, s(a, "library"), s(a, "cell"), schematicView);
                std::string run;
                const fs::path dir = newRun(c, s(a, "library"), s(a, "cell"), "lvs", &run);
                exportGds(c.workspace, s(a, "library"), s(a, "cell"), viewOf(a), (dir / "layout.gds").string());
@@ -823,7 +881,7 @@ void addVerifyCommands(Registry& r) {
                    std::ofstream(dir / "deck.lvs") << text;
                }
                QJsonObject rec{{"run", q(run)}, {"kind", "lvs"}, {"library", a["library"]}, {"cell", a["cell"]}, {"view", q(viewOf(a))},
-                               {"schematic", a.contains("schematic") ? a["schematic"] : QJsonValue("schematic")}, {"state", "running"}, {"started", now()}};
+                               {"schematic", !hasSchematic && own && !a.contains("schematic") ? QJsonValue("cdl") : QJsonValue(q(schematicView))}, {"state", "running"}, {"started", now()}};
                writeRecord(dir, rec);
                const std::vector<std::string> args{"-b", "-rd", "input=" + (dir / "layout.gds").string(), "-rd", "schematic=" + (dir / "schematic.cdl").string(), "-rd", "topcell=" + s(a, "cell"),
                                                    "-rd", "report=" + (dir / "report.lvsdb").string(), "-rd", "target_netlist=" + (dir / "extracted.cir").string(), "-rd", "run_mode=deep",

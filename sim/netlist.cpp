@@ -86,7 +86,12 @@ struct Netlister {
                        const QJsonObject& defaults, const std::string& where) {
         std::string out;
         for (size_t k = 0; k < tmpl.size(); ++k) {
-            const size_t close = tmpl[k] == '[' ? tmpl.find(']', k) : std::string::npos;
+            // its matching ']': a pin of a bus ([|req_msg[3]]) holds a pair of its own
+            size_t close = std::string::npos;
+            for (size_t at = k, depth = 0; tmpl[k] == '[' && at < tmpl.size(); ++at) {
+                if (tmpl[at] == '[') ++depth;
+                else if (tmpl[at] == ']' && --depth == 0) { close = at; break; }
+            }
             if (close == std::string::npos || close == k + 1 || (tmpl[k + 1] != '|' && tmpl[k + 1] != '@')) {
                 out += tmpl[k];
                 continue;

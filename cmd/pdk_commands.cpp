@@ -2,7 +2,10 @@
 // templates, parameter defaults and the model files they need (sim/netlist.h)
 #include "cmd/registry.h"
 #include "flow/rtl_flow.h"
+#include "layout/gds.h"
 #include "oadb/oadb.h"
+
+#include <QRegularExpression>
 
 #include <QJsonDocument>
 
@@ -343,7 +346,7 @@ Cell portSymbol(const CdlCell& cdl) {
 // ponytail: an IO cell's ESD diodes are left out too, so a pad simulates without its protection's leakage and capacitance.
 // A cell whose devices are anything else gets no netlist.
 // Returns the cells it could write.
-std::set<std::string> writeSimNetlist(const std::vector<CdlCell>& cells, const fs::path& out) {
+std::set<std::string> writeSimNetlist(const std::vector<CdlCell>& cells, const fs::path& out, const std::set<std::string>* only = nullptr) {
     std::set<std::string> defined;
     for (const auto& c : cells) defined.insert(c.name);
     std::map<std::string, bool> ok;
@@ -368,10 +371,10 @@ std::set<std::string> writeSimNetlist(const std::vector<CdlCell>& cells, const f
     };
     std::ofstream o(out);
     o << "* OpenVLSI: " << out.filename().string() << ", the cells' transistors through the device library's subcircuits\n";
-    o << ".global sub!\n";  // the substrate, which the IO cells' ties and diodes name
+    if (!only) o << ".global sub!\n";  // the substrate, which the IO cells' ties and diodes name
     std::set<std::string> written;
     for (const auto& c : cells) {
-        if (!simulable(c)) continue;
+        if (!simulable(c) || (only && !only->count(c.name))) continue;
         o << ".subckt " << c.name;
         for (const auto& p : c.ports) o << " " << p;
         o << "\n";
@@ -396,7 +399,156 @@ std::set<std::string> writeSimNetlist(const std::vector<CdlCell>& cells, const f
 
 }  // namespace
 
+QString q(const std::string& text) { return QString::fromStdString(text); }
+
+// A JSON value as a cell property holds it
+std::string propText(const QJsonValue& v) {
+    const QByteArray b = QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact);
+    return b.mid(1, b.size() - 2).toStdString();
+}
+
+// A Verilog netlist's ports of a module, bit by bit as CDL names them (req_msg[3]): I, O or B
+std::map<std::string, char> verilogDirections(const fs::path& file) {
+    std::ifstream in(file);
+    if (!in) throw std::runtime_error("cannot read " + file.string());
+    static const QRegularExpression decl(R"(^\s*(input|output|inout)\s*(?:\[\s*(\d+)\s*:\s*(\d+)\s*\])?\s*([A-Za-z_][\w$]*)\s*;)");
+    std::map<std::string, char> out;
+    for (std::string line; std::getline(in, line);) {
+        const auto m = decl.match(QString::fromStdString(line));
+        if (!m.hasMatch()) continue;
+        const char d = m.captured(1) == "input" ? 'I' : m.captured(1) == "output" ? 'O' : 'B';
+        const std::string name = m.captured(4).toStdString();
+        if (m.captured(2).isEmpty()) {
+            out[name] = d;
+            continue;
+        }
+        const int hi = m.captured(2).toInt(), lo = m.captured(3).toInt();
+        for (int b = std::min(hi, lo); b <= std::max(hi, lo); ++b) out[name + "[" + std::to_string(b) + "]"] = d;
+    }
+    return out;
+}
+
 void addPdkCommands(Registry& r) {
+    r.add({"flow_make_macro", "Makes a design the flow built into a cell to place by hand (a hard macro): its layout from the run's final GDS, placing the "
+                              "standard cells of sg13g2_stdcell (pdk_install_cells) rather than copies, its own via and fill cells named <cell>__<name>; a "
+                              "symbol from its Verilog ports; its CDL as LVS's reference; a netlist on the standard cells' for simulation. Returns the "
+                              "library and cell, its pins and how many standard cells it places.",
+           object({{"run", param("string", "an implementation run: <design>/run.N")}},
+                  {{"library", param("string", "the library to put it in, made if need be (default: the design's name)")},
+                   {"cell", param("string", "the cell's name (default: the design's)")}}),
+           [](Context& c, const QJsonObject& a) {
+               static const QRegularExpression runName("^[A-Za-z0-9_]+/run\\.[0-9]+$");
+               if (!runName.match(a["run"].toString()).hasMatch()) throw std::invalid_argument("an implementation run is named <design>/run.N");
+               const fs::path work = fs::absolute(fs::path(c.workspace.file()).parent_path());
+               const fs::path dir = work / "implementation" / a["run"].toString().toStdString();
+               std::ifstream recFile(dir / "run.json");
+               if (!recFile) throw std::invalid_argument("no implementation run " + a["run"].toString().toStdString());
+               const QJsonObject rec = QJsonDocument::fromJson(QByteArray::fromStdString(std::string((std::istreambuf_iterator<char>(recFile)), std::istreambuf_iterator<char>()))).object();
+               const std::string design = rec["design"].toString().toStdString(), top = rec["top"].toString().toStdString(), platform = rec["platform"].toString().toStdString();
+               if (platform != "ihp-sg13g2") throw std::invalid_argument("a hard macro is made on ihp-sg13g2, whose standard cells pdk_install_cells brings in; this run is " + platform + "'s");
+               const std::string cells = "sg13g2_stdcell";
+               const auto known = c.workspace.libraries();
+               if (std::find(known.begin(), known.end(), cells) == known.end()) throw std::invalid_argument("flow_make_macro places the standard cells of " + cells + ": run pdk_install_cells for stdcell first");
+               const fs::path results = dir / "results" / platform / design / "base";
+               const fs::path gds = results / "6_final.gds", cdlFile = results / "6_lvs.cdl", verilog = results / "6_final.v";
+               for (const auto& f : {gds, cdlFile, verilog})
+                   if (!fs::exists(f)) throw std::runtime_error("this run has no " + f.filename().string() + ": it did not finish (flow_status)");
+               const std::string library = a.contains("library") ? a["library"].toString().toStdString() : design;
+               const std::string cell = a.contains("cell") ? a["cell"].toString().toStdString() : design;
+               if (!oadb::validName(cell) || !oadb::validName(library)) throw std::invalid_argument("a library's and a cell's names are letters, digits and _");
+
+               // The layout: the standard cells by reference, the rest renamed under the cell
+               oadb::Library& std = c.workspace.library(cells);
+               std::set<std::string> standard;
+               for (const auto& name : std.cells())
+                   for (const auto& v : std.views(name))
+                       if (v.name == "layout") standard.insert(name);
+               layout::GdsLibrary g = layout::readGds(gds.string());
+               std::map<std::string, std::string> renamed;
+               bool hasTop = false;
+               for (const auto& gc : g.cells) {
+                   hasTop = hasTop || gc.name == top;
+                   if (!standard.count(gc.name)) renamed[gc.name] = gc.name == top ? cell : cell + "__" + gc.name;
+               }
+               if (!hasTop) throw std::runtime_error("the run's GDS has no structure " + top);
+               if (std::find(known.begin(), known.end(), library) == known.end()) {
+                   oadb::Library& made = c.workspace.createLibrary(library, (work / (library + ".oalib")).string());
+                   made.setLibraryProp("tech", "\"sg13g2\"");
+               }
+               oadb::Library& l = c.workspace.library(library);
+               for (const auto& existing : l.cells())
+                   for (const auto& [from, to] : renamed)
+                       if (existing == to) throw std::invalid_argument(library + " already has a cell " + to);
+               long placedStandard = 0;
+               for (auto& gc : g.cells) {
+                   if (!renamed.count(gc.name)) continue;
+                   gc.name = renamed[gc.name];
+                   for (auto& i : gc.instances) {
+                       if (standard.count(i.cell)) {
+                           i.lib = cells;
+                           ++placedStandard;
+                       } else {
+                           i.cell = renamed.at(i.cell);
+                       }
+                   }
+               }
+
+               // The netlists: LVS's reference, and the simulation's
+               std::vector<CdlCell> netlist = readCdl(cdlFile);
+               const auto topCdl = std::find_if(netlist.begin(), netlist.end(), [&](const CdlCell& x) { return x.name == top; });
+               if (topCdl == netlist.end()) throw std::runtime_error("the run's CDL has no .SUBCKT " + top);
+               CdlCell me = *topCdl;
+               me.dirs.clear();
+               for (const auto& [port, d] : verilogDirections(verilog)) me.dirs[port] = d;
+               for (const auto& p : me.ports)
+                   if (!me.dirs.count(p) && p != "VDD" && p != "VSS") throw std::runtime_error("port " + p + " of the CDL is not in the routed Verilog");
+               std::string text;
+               for (const auto& x : netlist) {
+                   if (x.name == top) continue;
+                   text += x.text;
+               }
+               // The top under the cell's name
+               std::string own = me.text;
+               own.replace(own.find(top), top.size(), cell);
+               text += own;
+               me.name = cell;
+               const fs::path sim = work / (cell + ".sp");
+               std::vector<CdlCell> simCells = netlist;
+               for (auto& x : simCells)
+                   if (x.name == top) x.name = cell;
+               const std::set<std::string> only{cell};
+               if (!writeSimNetlist(simCells, sim, &only).count(cell)) throw std::runtime_error("the run's CDL has devices this cannot simulate");
+               QJsonArray models{QJsonObject{{"file", QString::fromStdString(sim.string())}}};
+               const QJsonObject stdSpice = QJsonDocument::fromJson(QByteArray::fromStdString("[" + std.cellProp("sg13g2_inv_1", "spice").value_or("{}") + "]")).array()[0].toObject();
+               for (const auto& m : stdSpice["models"].toArray())
+                   if (!models.contains(m)) models.append(m);
+               std::string tmpl;
+               for (const auto& p : me.ports) tmpl += "[|" + p + "] ";
+               const Cell sym = portSymbol(me);
+
+               l.change("macro " + cell, [&] {
+                   for (const auto& gc : g.cells) {
+                       if (!renamed.count(gc.name) && gc.name != cell && gc.name.rfind(cell + "__", 0) != 0) continue;
+                       l.createCell(gc.name);
+                       l.createView(gc.name, "layout", "layout");
+                       l.setProp(gc.name, "layout", "metersPerDbu", QString::number(g.metersPerDbu, 'g', 17).toStdString());
+                       l.addLayoutObjects(gc.name, "layout", gc.shapes, gc.instances);
+                   }
+                   l.createView(cell, "symbol", "symbol");
+                   for (const auto& p : sym.pins) l.addPin(cell, "symbol", p);
+                   for (const auto& s : sym.shapes) l.addShape(cell, "symbol", s);
+                   l.setCellProp(cell, "cdl", propText(QString::fromStdString(text)));
+                   l.setCellProp(cell, "spice", propText(QJsonObject{{"prefix", "X"}, {"template", QString::fromStdString(tmpl + cell)}, {"models", models}, {"globals", stdSpice["globals"]}}));
+                   l.setCellProp(cell, "params", "{}");
+                   l.setCellProp(cell, "instNamePrefix", propText(QString("X")));
+                   l.setCellProp(cell, "macro", propText(QJsonObject{{"run", a["run"]}, {"design", q(design)}, {"top", q(top)}}));
+               });
+               c.workspace.save();
+               QJsonArray pins;
+               for (const auto& p : me.ports) pins.append(q(p));
+               return QJsonValue(QJsonObject{{"library", q(library)}, {"cell", q(cell)}, {"pins", pins}, {"standard_cells", (double)placedStandard},
+                                             {"structures", (int)renamed.size()}, {"netlist", q(sim.string())}});
+           }});
     r.add({"pdk_install_cells", "Brings a set of the PDK's cells into the workspace as a library: the standard cells (sg13g2_stdcell), the IO cells (sg13g2_io) "
                                 "or the SRAM macros (sg13g2_sram). Each cell gets its layout from the PDK's GDS, a symbol from its CDL ports (inputs left, outputs "
                                 "right, supplies top and bottom), its CDL as LVS's reference, and, when its devices are the device library's MOS, a netlist for "

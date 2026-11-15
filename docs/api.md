@@ -1654,6 +1654,16 @@ Lists the runs on disk, per design oldest first: each one's run, design, platfor
 |---|---|---|---|
 | `design` | string |  | only this design's runs |
 
+### `flow_make_macro`
+
+Makes a design the flow built into a cell to place by hand (a hard macro): its layout from the run's final GDS, placing the standard cells of sg13g2_stdcell (pdk_install_cells) rather than copies, its own via and fill cells named <cell>__<name>; a symbol from its Verilog ports; its CDL as LVS's reference; a netlist on the standard cells' for simulation. Returns the library and cell, its pins and how many standard cells it places.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string |  | the cell's name (default: the design's) |
+| `library` | string |  | the library to put it in, made if need be (default: the design's name) |
+| `run` | string | yes | an implementation run: <design>/run.N |
+
 ### `flow_platforms`
 
 Returns the known flow platforms: for each whether it can run here, what is missing, its decks, time unit and timing corners.
@@ -1765,7 +1775,7 @@ The verification runs on disk, per layout oldest first.
 
 ### `verify_lvs`
 
-Compares a layout view with its schematic through the process's LVS deck; returns whether they match, with device and net counts on each side, and how many electrical rule violations the two netlists have (verify_erc lists them). Waits, or with wait false starts it in the background.
+Compares a layout view with its schematic (or, for a cell with none, its own netlist: a hard macro's, a PDK cell's) through the process's LVS deck; returns whether they match, with device and net counts on each side, and how many electrical rule violations the two netlists have (verify_erc lists them). Waits, or with wait false starts it in the background.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
