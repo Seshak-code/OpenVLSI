@@ -49,12 +49,14 @@ std::vector<oadb::LayoutShape> viaShapes(const Tech& t, int via, int64_t x, int6
     if (via < 0 || via >= (int)t.vias.size()) throw std::invalid_argument("no such via in " + t.name);
     if (cols < 1 || rows < 1) throw std::invalid_argument("a via needs at least one cut each way");
     const TechVia& v = t.vias[via];
-    const int64_t w = cols * v.cut + (cols - 1) * v.space, h = rows * v.cut + (rows - 1) * v.space;
+    // Past 3 by 3 cuts, the rows take the array's space (V3.b1 and its kind need it one way only)
+    const int64_t rowSpace = cols > 3 && rows > 3 && v.arraySpace ? std::max(v.space, v.arraySpace) : v.space;
+    const int64_t w = cols * v.cut + (cols - 1) * v.space, h = rows * v.cut + (rows - 1) * rowSpace;
     const int64_t x0 = floorToGrid(x - w / 2, t.grid), y0 = floorToGrid(y - h / 2, t.grid);
     std::vector<oadb::LayoutShape> out;
     for (int c = 0; c < cols; ++c)
         for (int r = 0; r < rows; ++r) {
-            const int64_t cx = x0 + c * (v.cut + v.space), cy = y0 + r * (v.cut + v.space);
+            const int64_t cx = x0 + c * (v.cut + v.space), cy = y0 + r * (v.cut + rowSpace);
             out.push_back(rectShape({v.cutLayer, 0}, {cx, cy, cx + v.cut, cy + v.cut}));
         }
     // The lower metal's endcaps along x, the upper's along y: as routes usually run on alternating directions. Grown to

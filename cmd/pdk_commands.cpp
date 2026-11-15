@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <regex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -563,7 +564,9 @@ void addPdkCommands(Registry& r) {
                for (auto& x : simCells)
                    if (x.name == top) x.name = cell;
                const std::set<std::string> only{cell};
-               if (!writeSimNetlist(simCells, sim, &only).count(cell)) throw std::runtime_error("the run's CDL has devices this cannot simulate");
+               // A block holding a macro with no transistor-level model (an SRAM's) has no SPICE netlist: it is tested through its Verilog
+               const bool simulates = writeSimNetlist(simCells, sim, &only).count(cell) > 0;
+               if (!simulates) fs::remove(sim);
                QJsonArray models{QJsonObject{{"file", QString::fromStdString(sim.string())}}};
                const QJsonObject stdSpice = QJsonDocument::fromJson(QByteArray::fromStdString("[" + std.cellProp("sg13g2_inv_1", "spice").value_or("{}") + "]")).array()[0].toObject();
                for (const auto& m : stdSpice["models"].toArray())
@@ -584,7 +587,8 @@ void addPdkCommands(Registry& r) {
                    for (const auto& p : sym.pins) l.addPin(cell, "symbol", p);
                    for (const auto& s : sym.shapes) l.addShape(cell, "symbol", s);
                    l.setCellProp(cell, "cdl", propText(QString::fromStdString(text)));
-                   l.setCellProp(cell, "spice", propText(QJsonObject{{"prefix", "X"}, {"template", QString::fromStdString(tmpl + cell)}, {"models", models}, {"globals", stdSpice["globals"]}}));
+                   if (simulates)
+                       l.setCellProp(cell, "spice", propText(QJsonObject{{"prefix", "X"}, {"template", QString::fromStdString(tmpl + cell)}, {"models", models}, {"globals", stdSpice["globals"]}}));
                    l.setCellProp(cell, "params", "{}");
                    l.setCellProp(cell, "instNamePrefix", propText(QString("X")));
                    l.setCellProp(cell, "macro", propText(QJsonObject{{"run", a["run"]}, {"design", q(design)}, {"top", q(top)}}));
@@ -603,7 +607,7 @@ void addPdkCommands(Registry& r) {
                QJsonArray pins;
                for (const auto& p : me.ports) pins.append(q(p));
                return QJsonValue(QJsonObject{{"library", q(library)}, {"cell", q(cell)}, {"pins", pins}, {"standard_cells", (double)placedStandard},
-                                             {"structures", (int)renamed.size()}, {"netlist", q(sim.string())}});
+                                             {"structures", (int)renamed.size()}, {"netlist", simulates ? QJsonValue(q(sim.string())) : QJsonValue()}});
            }});
     r.add({"pdk_install_cells", "Brings a set of the PDK's cells into the workspace as a library: the standard cells (sg13g2_stdcell), the IO cells (sg13g2_io) "
                                 "or the SRAM macros (sg13g2_sram). Each cell gets its layout from the PDK's GDS, a symbol from its CDL ports (inputs left, outputs "
@@ -706,8 +710,22 @@ void addPdkCommands(Registry& r) {
                    const char* home = std::getenv("HOME");
                    const auto expand = [&](const std::string& f) { return f.rfind("~/", 0) == 0 ? std::string(home ? home : "") + f.substr(1) : f; };
                    QJsonArray files;
-                   if (set == "stdcell")
-                       for (const auto& f : pdk->cellVerilog) files.append(q(expand(f)));
+                   if (set == "stdcell") {
+                       // The gate models with their delayed_* pins assigned (functionalCellModels), beside the workspace; the rest as they are
+                       for (size_t k = 0; k < pdk->cellVerilog.size(); ++k) {
+                           const std::string f = expand(pdk->cellVerilog[k]);
+                           if (k == 0) {
+                               std::ifstream in(f);
+                               if (!in) throw std::runtime_error("pdk_install_cells: cannot read the cells' Verilog " + f);
+                               const fs::path out = dir / (name + "_functional.v");
+                               std::ofstream(out) << acutesim::compute::orchestration::functionalCellModels(
+                                   std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()));
+                               files.append(q(out.string()));
+                           } else {
+                               files.append(q(f));
+                           }
+                       }
+                   }
                    if (set == "io") files.append(q((platform / "verilog" / "sg13g2_io.v").string()));
                    for (const auto& cell : cells) {
                        QJsonArray mine = files;
@@ -736,7 +754,20 @@ void addPdkCommands(Registry& r) {
                        if (const auto vf = verilogOf.find(cell.name); vf != verilogOf.end()) l.setCellProp(cell.name, "verilog", json(vf->second));
                        if (set != "stdcell") {  // compared by its pins in a top's LVS: its abstract stands for it there
                            l.setCellProp(cell.name, "lvs", json(QString("blackbox")));
-                           if (const auto ab = abstracts.find(cell.name); ab != abstracts.end()) l.setCellProp(cell.name, "abstract", json(ab->second));
+                           if (const auto ab = abstracts.find(cell.name); ab != abstracts.end()) {
+                               // Each pin as the cell's CDL names it (LVS pairs a black box's pins by name): IHP's SRAM LEFs write A_ADDR[0], its
+                               // CDL A_ADDR<0>
+                               const std::set<std::string> ports(cell.ports.begin(), cell.ports.end());
+                               QJsonArray pins;
+                               for (auto pv : ab->second) {
+                                   QJsonObject p = pv.toObject();
+                                   const std::string n = p["name"].toString().toStdString();
+                                   std::string angled = std::regex_replace(n, std::regex(R"(\[(\d+)\])"), "<$1>");
+                                   if (!ports.count(n) && ports.count(angled)) p["name"] = q(angled);
+                                   pins.append(p);
+                               }
+                               l.setCellProp(cell.name, "abstract", json(pins));
+                           }
                        }
                        if (simulates.count(cell.name)) {
                            std::string tmpl;

@@ -194,6 +194,8 @@ std::string aliasDelayed(const std::string& cells) {
 
 }  // namespace
 
+std::string functionalCellModels(const std::string& cells) { return aliasDelayed(cells); }
+
 RtlFlowTools RtlFlowTools::detect() {
     RtlFlowTools t;
     const std::string eda = std::string(std::getenv("HOME") ? std::getenv("HOME") : "") + "/eda";

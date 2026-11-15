@@ -17,6 +17,8 @@ For transistor-level work, install the device library once: File > Install PDK (
 
 A whole chip by hand: in its top layout, Create > Pad Ring… (`layout_pad_ring`: the pads of each side, a die size), Seal Ring… (`layout_seal_ring`) and, once the core is placed and wired, Fill… (`layout_fill`, about a minute). Wire each pad's core pin (`p2c` of an input pad, `c2p` of an output pad, on Metal2 at its inner edge) to your blocks, and strap the core supplies to the ring's innermost rails (vdd on Metal3, vss on Metal4). Whole-chip DRC is `verify_drc` with `density` (after fill) and `recommended` off (IHP's own pads break two recommended rules); LVS compares the pads and SRAM macros by their pins.
 
+To test a chip built by hand, write its top schematic as Verilog (`netlist_verilog`: it returns the file and the models it needs) and run your testbench on them with Test > Run (`test_run`, level rtl, `verilog` the file and models). `tools/rv32i` holds a worked RISC-V chip: its core, firmware, power grid and testbench.
+
 A design the flow built becomes a block to place by hand: **Make Block** in its run's tab (`flow_make_macro`). It gets the run's layout (on the standard-cell library's cells, so a chip holds one copy of each), a symbol from its Verilog ports, its netlist for LVS and one for simulation. A cell with no schematic, as a block, is checked by LVS against its own netlist.
 
 LVS on IHP's deck joins grounds through the substrate, but not supplies: each NWell is its own, so a cell's VDD must be wired to the supply it shares, or be a pin of its own.

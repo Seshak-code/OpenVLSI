@@ -1013,6 +1013,26 @@ void addVerifyCommands(Registry& r) {
                    // too), their substrate is no pin, and no side purges a black box's pins as floating
                    std::string black;
                    for (const auto& cl : blackBoxes) black += (black.empty() ? "\"" : ", \"") + cl + "\"";
+                   // The platform's cells whose devices its deck extracts in the parent (IHP's antenna cells), flat on both sides, as the flow's LVS.
+                   // And a flow-built block below the top that places them: IHP's deck extracts their diodes where the substrate is, the chip's top,
+                   // so such a block is compared flat in the chip (alone, it matches level by level)
+                   std::string flat;
+                   if (!pdk.lvsFlatten.empty()) flat += "netlist.flatten_circuit(\"" + pdk.lvsFlatten + "\")\nschematic.flatten_circuit(\"" + pdk.lvsFlatten + "\")\n";
+                   for (const auto& name : c.workspace.libraries())
+                       for (const auto& cl : c.workspace.library(name).cells())
+                           if (cl != s(a, "cell") && c.workspace.library(name).cellProp(cl, "macro") && cdl.find(".SUBCKT " + cl + " ") != std::string::npos &&
+                               !pdk.lvsFlatten.empty() && [&] {
+                                   const std::string prefix = pdk.lvsFlatten.substr(0, pdk.lvsFlatten.find('*'));
+                                   for (const auto& i : c.workspace.library(name).layoutInstances(cl, "layout"))
+                                       if (i.cell.rfind(prefix, 0) == 0) return true;
+                                   return false;
+                               }())
+                               flat += "[netlist, schematic].each { |nl| nl.each_circuit.map(&:name).select { |n| n.casecmp?(\"" + cl + "\") }.each { |n| nl.flatten_circuit(n) } }\n";
+                   if (!flat.empty()) {
+                       const std::string align = "\nalign\n";
+                       if (text.find(align) == std::string::npos) throw std::runtime_error("the LVS deck changed (no align): update verify_lvs");
+                       text.replace(text.find(align), align.size(), "\n" + flat + "align\n");
+                   }
                    if (!black.empty()) {
                        const std::string align = "\nalign\n", simplify = "netlist.simplify if SIMPLIFY\nschematic.simplify if SIMPLIFY\n";
                        if (text.find(align) == std::string::npos || text.find(simplify) == std::string::npos)
