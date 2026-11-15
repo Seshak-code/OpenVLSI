@@ -315,8 +315,12 @@ first, then the GUI, with a check that runs.
    symbol from its CDL's ports and `*.PININFO` directions, its CDL for LVS, and a netlist for simulation when its devices are
    the device library's (every standard cell, 33 IO cells; not the pads' poly-resistor clamps, nor the SRAM macros, which
    want a behavioural model). `m7_gate`: an AND2 by hand from a NAND2 and an inverter.
-3. **A flow run as a hard macro.** A design the flow built becomes a cell: its GDS as layout, its CDL as reference, a
-   symbol from its ports, its timing from its Liberty abstract.
+3. **A flow run as a hard macro (done, but its timing).** `flow_make_macro {run}` (the Implement tab's **Make Block**): its
+   layout from the run's GDS placing `sg13g2_stdcell`'s cells, its own via and fill cells named `<cell>__<name>`; a symbol
+   from its Verilog ports; its CDL for LVS; a netlist on the standard cells' for simulation. LVS's reference writes each
+   .SUBCKT once (a block's CDL and the cell library's both hold the standard cells) and strips what IHP's reader strips from
+   element lines (`[ ] $ \ /`) from its .SUBCKT lines, so a bus port meets its net. `m7_gate`: gcd as a block, LVS'd alone and
+   under a top in a third library, simulated out of reset. Still to come: its timing as a Liberty abstract.
 4. **Top-level assembly.** A pad ring, supply rails and a seal ring around the core; whole-chip DRC (density and
    latch-up included) and LVS.
 5. **Testing the hand-built chip.** `test_spice` for any cell, not only a flow run: its schematic, extraction or layout

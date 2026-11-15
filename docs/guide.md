@@ -15,6 +15,10 @@ Implement, Verify and Test use those tools. **Keep the workspace in a path witho
 
 For transistor-level work, install the device library once: File > Install PDK (`pdk_install`). To build from the PDK's own cells, then File > Install PDK Cells (`pdk_install_cells`): `stdcell` (84 standard cells), `io` (pads and their parts) or `sram` (the SRAM macros). Each cell has the PDK's layout, a symbol, its CDL for LVS and, for the standard cells, a netlist that simulates. Place them in a schematic and in a layout like your own cells; LVS compares against their CDL.
 
+A design the flow built becomes a block to place by hand: **Make Block** in its run's tab (`flow_make_macro`). It gets the run's layout (on the standard-cell library's cells, so a chip holds one copy of each), a symbol from its Verilog ports, its netlist for LVS and one for simulation. A cell with no schematic, as a block, is checked by LVS against its own netlist.
+
+LVS on IHP's deck joins grounds through the substrate, but not supplies: each NWell is its own, so a cell's VDD must be wired to the supply it shares, or be a pin of its own.
+
 ## From Verilog to a tested chip
 
 ### 1. RTL

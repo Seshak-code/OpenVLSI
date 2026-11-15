@@ -206,6 +206,8 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     lvs_ = new QPushButton("Show LVS and ERC findings", central);
     timing_ = new QPushButton("Timing", central);
     power_ = new QPushButton("IR drop", central);
+    macro_ = new QPushButton("Make Block", central);
+    macro_->setToolTip("This run's design as a cell to place by hand: its layout on the standard cells of sg13g2_stdcell, a symbol, its netlist for LVS and simulation");
     top->addWidget(title_);
     top->addSpacing(14);
     top->addWidget(verdict_);
@@ -215,6 +217,7 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     top->addWidget(lvs_);
     top->addWidget(timing_);
     top->addWidget(power_);
+    top->addWidget(macro_);
     top->addWidget(layout_);
     layout->addLayout(top);
 
@@ -254,7 +257,14 @@ FlowRunView::FlowRunView(Session& session, const QString& run, QWidget* parent)
     connect(pipeline_, &StagePipeline::stageClicked, this, [this](const QString& stage) { emit stageRequested(run_, stage); });
     connect(timing_, &QPushButton::clicked, this, [this] { emit signoffRequested(run_, true); });
     connect(power_, &QPushButton::clicked, this, [this] { emit signoffRequested(run_, false); });
-    bindActions(this, {{"Stop", "flow_stop"}, {"Open layout", "flow_open_layout"}, {"Show DRC markers", "layout_view_markers"}, {"Show LVS and ERC findings", "layout_view_markers"}, {"Timing", "timing_view"}, {"IR drop", "power_view"}});
+    connect(macro_, &QPushButton::clicked, this, [this] {
+        const cmd::Result r = session_.call("flow_make_macro", {{"run", run_}});
+        if (!r.ok) return reasons_->setText(r.error);
+        const QJsonObject o = r.value.toObject();
+        reasons_->setText(QString("Made %1/%2: %3 pins, %4 standard cells. Place it from the library like any cell.").arg(o["library"].toString(), o["cell"].toString()).arg(o["pins"].toArray().size()).arg(o["standard_cells"].toDouble()));
+        session_.call("editor_open", {{"library", o["library"]}, {"cell", o["cell"]}, {"view", "layout"}});
+    });
+    bindActions(this, {{"Stop", "flow_stop"}, {"Open layout", "flow_open_layout"}, {"Show DRC markers", "layout_view_markers"}, {"Show LVS and ERC findings", "layout_view_markers"}, {"Timing", "timing_view"}, {"IR drop", "power_view"}, {"Make Block", "flow_make_macro"}});
 
     poll_ = new QTimer(this);
     poll_->setInterval(1000);
@@ -362,6 +372,7 @@ void FlowRunView::fillReport(const QJsonObject& report) {
     lvs_->setVisible(hasGds && lvsDiffers);
     timing_->setEnabled(hasGds);
     power_->setEnabled(hasGds);
+    macro_->setEnabled(hasGds);
     if (state == "running") return;
     const bool clean = report["clean"].toBool();
     verdict_->setText(clean ? "Clean: timing met, DRC clean, LVS matched" : state == "done" ? "Finished, not clean" : "Run " + state);

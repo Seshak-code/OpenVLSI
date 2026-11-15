@@ -1,5 +1,23 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — M7 slice 3, a flow run as a hard macro, on `rebuild/hard-macro`**
+
+- **Done:**
+  - `flow_make_macro {run, library?, cell?}` (Implement tab: Make Block): layout from 6_final.gds with standard cells placed from
+    `sg13g2_stdcell`, own via/fill cells renamed `<cell>__<name>`; symbol from 6_final.v ports; `cdl` (6_lvs.cdl, top renamed); `spice` on
+    `<cell>.sp` (top only) plus the cell library's models.
+  - `verify_lvs` of a cell with no schematic and a `cdl`: against that netlist (record `schematic: cdl`).
+  - `schematicCdl`: each included .SUBCKT once (two copies must agree, compared word by word); `.SUBCKT` lines stripped of `[ ] $ \ /`
+    as IHP's reader strips element lines (else bus ports are dropped and a block below the top cannot pair its pins).
+  - The netlister's spice templates take bus pins (`[|req_msg[3]]`).
+- **Learned:** IHP's deck joins grounds through the substrate but not supplies (NWell): a cell not wired to VDD is on its own supply.
+- **Gate:** M7 23/23: gcd → block (1,402 standard cells, 56 pins), LVS alone (248 devices), a top in library `chip` with the block and
+  a standard cell LVS matched across three libraries, the block at transistor level out of reset (req_rdy rises 0.44 ns after the first
+  edge, 74 s). M3 76/76, ctest 25/25. Make Block pressed in the real window.
+- **Next:** M7 slice 4, top-level assembly: a pad ring, supplies, whole-chip DRC and LVS.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — M7 slice 2, the PDK's cells as libraries, on `rebuild/pdk-cells`**
 
 - **Done:**

@@ -73,6 +73,7 @@ private:
     QPushButton* lvs_;
     QPushButton* timing_;
     QPushButton* power_;
+    QPushButton* macro_;
     QTimer* poll_;
 };
 
