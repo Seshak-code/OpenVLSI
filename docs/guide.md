@@ -4,6 +4,12 @@ One window takes a digital design from Verilog to GDS, signs it off and tests it
 
 Everything here is also a command: [api.md](api.md) lists them all, and the last section shows how to drive the app from a script.
 
+## Menus and forms
+
+The menu bar follows a Cadence tool's: **File** (new library, cell or view, Open Cellview, GDS import and export, the PDK's installs), the active tool's own menus, **Tools** (Library Manager, the command palette and window, DRC, LVS, a schematic as Verilog), **Options** (Appearance, EDA Tools, Keyboard Shortcuts), **Window** (the side panel, the stages) and **Help** (this guide, the command reference, About). Every item names the command it runs (`ui_actions`).
+
+Every form is its command's parameters. Right-click a field for the values it can take (the workspace's libraries, a library's cells, a cell's views, runs, platforms, layers) or Browse… for a file or folder; typing completes from the same list. A yes/no field left blank takes the command's default.
+
 ## Before you start
 
 ```bash

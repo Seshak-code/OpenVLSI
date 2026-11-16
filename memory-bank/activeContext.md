@@ -1,5 +1,16 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — menus and form choices, on `rebuild/menus-forms` (after #63, merged)**
+
+- **Done:** menu bar File / tool's own / Tools / Options / Window / Help, every item bound to a command; `ui_help` (guide from a Qt
+  resource, the command reference generated live, About, EDA tools) and `ui_shortcuts`; form fields offer the workspace's values on a
+  right click and as completion (`CommandForm::setChoiceSource`, set by the shell), Browse… for files and folders. ui_test.py 61/61.
+- **Owner (2026-11-15):** next, build a circuit on SkyWater 130 nm. This ORFS checkout is sparse (asap7, ihp-sg13g2): the sky130hd platform
+  is 22 files, ~21 MB from ORFS's GitHub; SPICE models and KLayout decks come from the SkyWater PDK (open_pdks/volare). Ask before downloading.
+- **Next:** SkyWater 130; Tcl and Python consoles in the app.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — the RISC-V chip built in the window, on `rebuild/rv32i-screen` (after #62, merged)**
 
 - **Done:** `tools/ui_rv32i_test.py`: the RV32I chip by mouse and keyboard from New run… to its firmware test, 12/12 on screen with real

@@ -46,6 +46,14 @@ Saves a picture of the window to a PNG file; returns its size in pixels.
 |---|---|---|---|
 | `path` | string | yes | the PNG file to write |
 
+### `ui_help`
+
+Shows a document in a tab: the user guide, the command reference (every command and its parameters), about (the version and the EDA tools it found) or tools (the tools alone, where each was found). Returns its title.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `topic` | string | yes | which |
+
 ### `ui_input`
 
 Delivers input through the window system's queue, as the platform does, at global points (ui_locate): action move, press, release, click, double_click, drag (to x2, y2), wheel (delta) or key (key as in a shortcut, \"Ctrl+K\" or \"Esc\"; text types). It returns at once: poll ui_input_pending.
@@ -120,6 +128,14 @@ Selects a library, cell or view in the design panel, as a click there does; retu
 | `cell` | string |  | cell name |
 | `library` | string | yes | library name |
 | `view` | string |  | the view |
+
+### `ui_shortcuts`
+
+Every menu item with a keyboard shortcut in the menus now shown (the shared ones and the active tool's): menu, item, keys. show puts them in a tab too.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `show` | boolean |  | show them in a tab (default false) |
 
 ### `ui_show`
 
