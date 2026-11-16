@@ -14,6 +14,10 @@
 #include <QJsonArray>
 #include <QKeySequence>
 #include <QMenu>
+#include <QAbstractSpinBox>
+#include <QLabel>
+#include <QComboBox>
+#include <QLineEdit>
 #include <QMenuBar>
 #include <QPushButton>
 #include <QTabBar>
@@ -94,15 +98,23 @@ int g_dropped = 0;  // input with no window to go to: a test reads this, or it w
 QWindow* keyWindow() {
     if (QWidget* popup = QApplication::activePopupWidget())
         if (popup->windowHandle()) return popup->windowHandle();
+    // An open dialog takes the keys: a platform with no window manager leaves the focus on the window behind when a list closes
+    if (QWidget* modal = QApplication::activeModalWidget())
+        if (modal->isVisible() && modal->windowHandle() && QGuiApplication::focusWindow() != modal->windowHandle()) {
+            QWindowSystemInterface::handleFocusWindowChanged(modal->windowHandle(), Qt::ActiveWindowFocusReason);
+            QWindowSystemInterface::flushWindowSystemEvents();
+            return modal->windowHandle();
+        }
     if (QWindow* w = QGuiApplication::focusWindow()) return w;
     // A platform with no window manager (offscreen) does not give focus back when a menu closes: the main window has it
-    if (QGuiApplication::platformName() == QLatin1String("offscreen"))
+    if (QGuiApplication::platformName() == QLatin1String("offscreen")) {
         for (QWidget* top : QApplication::topLevelWidgets())
             if (top->isVisible() && top->windowHandle() && qobject_cast<Shell*>(top)) {
                 QWindowSystemInterface::handleFocusWindowChanged(top->windowHandle(), Qt::ActiveWindowFocusReason);
                 QWindowSystemInterface::flushWindowSystemEvents();
                 return top->windowHandle();
             }
+    }
     ++g_dropped;
     return nullptr;
 }
@@ -111,8 +123,11 @@ QWindow* keyWindow() {
 void deliver(std::function<void()> send) {
     ++g_pending;
     QTimer::singleShot(0, qApp, [send = std::move(send)] {
+        // Handled two turns of the event loop later, set before it is sent: an event that opens a dialog runs that dialog's loop inside
+        // send, and the turns with it. Not the window system's queue: it can hold other events for good (an offscreen window's), and
+        // pending counts only ours.
+        QTimer::singleShot(0, qApp, [] { QTimer::singleShot(0, qApp, [] { --g_pending; }); });
         send();
-        --g_pending;
     });
 }
 
@@ -251,7 +266,15 @@ void addInputCommands(Session& session, Shell& shell) {
              }
              if (kind == "field") {
                  for (QWidget* w : top->findChildren<QWidget*>())
-                     if (w->isVisible() && !w->accessibleName().isEmpty() && w->accessibleName() == text) return QJsonValue(globalRect(w, w->rect()));
+                     if (w->isVisible() && !w->accessibleName().isEmpty() && w->accessibleName() == text) {
+                         QJsonObject r = globalRect(w, w->rect());
+                         // What it shows, for a test to read back: a line, a list's choice, a label (a form's error)
+                         if (auto* line = qobject_cast<QLineEdit*>(w)) r["text"] = line->text();
+                         else if (auto* combo = qobject_cast<QComboBox*>(w)) r["text"] = combo->currentText();
+                         else if (auto* label = qobject_cast<QLabel*>(w)) r["text"] = label->text();
+                         else if (auto* spin = qobject_cast<QAbstractSpinBox*>(w)) r["text"] = spin->text();
+                         return QJsonValue(r);
+                     }
                  refuse("no visible field named '" + text + "'");
              }
              if (kind == "option") {
@@ -337,7 +360,7 @@ void addInputCommands(Session& session, Shell& shell) {
              return QJsonValue(g_pending);
          }});
     add({"ui_input_pending", "How much input has not been delivered yet: 0 when everything sent has been handled.", cmd::object({}),
-         [](cmd::Context&, const QJsonObject&) { return QJsonValue(g_pending + (QWindowSystemInterface::windowSystemEventsQueued() ? 1 : 0)); }});
+         [](cmd::Context&, const QJsonObject&) { return QJsonValue(g_pending); }});
     add({"ui_input_dropped", "How many inputs found no window to go to since the app started.", cmd::object({}),
          [](cmd::Context&, const QJsonObject&) { return QJsonValue(g_dropped); }});
     add({"ui_pixel", "The colour on screen at a global point of the window, as #rrggbb: what was really drawn. offscreen platforms have no GPU canvas to read.", cmd::object({{"x", cmd::param("number", "global x")}, {"y", cmd::param("number", "global y")}}),

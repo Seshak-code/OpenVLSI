@@ -9,12 +9,15 @@
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QRegularExpression>
+#include <QDir>
 #include <QFontDatabase>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -419,9 +422,29 @@ public:
             if (top_->text().isEmpty() && files_->count()) top_->setText(QFileInfo(files_->item(0)->text()).baseName());
             if (design_->text().isEmpty() && files_->count()) design_->setText(QFileInfo(files_->item(0)->text()).baseName());
         });
+        // A path typed or pasted: a file, or a folder's Verilog files
+        path_ = new QLineEdit(this);
+        path_->setPlaceholderText("or a file or folder's path, then Return");
+        path_->setAccessibleName("Source path");
+        connect(path_, &QLineEdit::returnPressed, this, [this] {
+            const QFileInfo f(path_->text().trimmed());
+            if (f.isDir()) {
+                for (const QFileInfo& v : QDir(f.absoluteFilePath()).entryInfoList({"*.v", "*.sv"}, QDir::Files, QDir::Name)) files_->addItem(v.absoluteFilePath());
+            } else if (f.isFile()) {
+                files_->addItem(f.absoluteFilePath());
+            } else {
+                error_->setText("No file or folder " + path_->text());
+                return;
+            }
+            error_->clear();
+            path_->clear();
+        });
+        auto* sources = new QHBoxLayout;
+        sources->addWidget(add);
+        sources->addWidget(path_, 1);
         form->addRow("Design", design_);
         form->addRow("Sources", files_);
-        form->addRow("", add);
+        form->addRow("", sources);
         form->addRow("Top module", top_);
         form->addRow("Platform", platform_);
         form->addRow("Clock period", clock_);
@@ -430,9 +453,13 @@ public:
         settings_ = new QLineEdit(this);
         settings_->setPlaceholderText("more ORFS settings: PLACE_DENSITY=0.6 CORE_ASPECT_RATIO=1");
         form->addRow("Settings", settings_);
+        for (auto [w, n] : std::initializer_list<std::pair<QWidget*, const char*>>{{design_, "Design"}, {top_, "Top module"}, {platform_, "Platform"}, {clock_, "Clock period"},
+                                                                                {port_, "Clock port"}, {util_, "Core utilization"}, {settings_, "Settings"}})
+            w->setAccessibleName(n);
         error_ = new QLabel(this);
         error_->setWordWrap(true);
         error_->setStyleSheet(QString("color: %1;").arg(Theme::current().fail.name()));
+        error_->setAccessibleName("Error");
         form->addRow(error_);
         auto* buttons = new QDialogButtonBox(this);
         buttons->addButton("Run", QDialogButtonBox::AcceptRole);
@@ -443,17 +470,30 @@ public:
     }
     QString started;
 
+protected:
+    // Return adds a typed path (its field's returnPressed); running is Run's click, not a key that also ends a field
+    void keyPressEvent(QKeyEvent* e) override {
+        if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) return;
+        QDialog::keyPressEvent(e);
+    }
+
 private:
     void start() {
         QJsonArray verilog;
         for (int k = 0; k < files_->count(); ++k) verilog.append(files_->item(k)->text());
         QJsonObject settings;
-        for (const QString& word : settings_->text().split(' ', Qt::SkipEmptyParts)) {
-            if (!word.contains('=')) {
-                error_->setText("Settings are NAME=value: " + word);
+        // NAME=value, a value with spaces in double quotes (DIE_AREA="0 0 860 580")
+        static const QRegularExpression setting(R"re(\s*([A-Za-z_][A-Za-z0-9_]*)=("([^"]*)"|(\S*))\s*)re");
+        const QString text = settings_->text();
+        for (int at = 0; at < text.size();) {
+            const auto m = setting.match(text, at, QRegularExpression::NormalMatch, QRegularExpression::AnchorAtOffsetMatchOption);
+            if (!m.hasMatch()) {
+                if (text.mid(at).trimmed().isEmpty()) break;
+                error_->setText("Settings are NAME=value (in double quotes when it has spaces): " + text.mid(at).trimmed());
                 return;
             }
-            settings[word.section('=', 0, 0)] = word.section('=', 1);
+            settings[m.captured(1)] = m.captured(3).isNull() ? m.captured(4) : m.captured(3);
+            at = m.capturedEnd();
         }
         QJsonObject args{{"design", design_->text()}, {"verilog", verilog}, {"top", top_->text()}, {"platform", platform_->currentData().toString()}, {"clock_period_ns", clock_->value()},
                          {"clock_port", port_->text()}, {"core_utilization", util_->value()}, {"wait", false}};
@@ -471,6 +511,7 @@ private:
     QLineEdit* top_;
     QLineEdit* port_;
     QLineEdit* settings_;
+    QLineEdit* path_;
     QComboBox* platform_;
     QDoubleSpinBox* clock_;
     QDoubleSpinBox* util_;

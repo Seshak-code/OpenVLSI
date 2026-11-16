@@ -12,6 +12,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -418,11 +419,32 @@ public:
             if (top_->text().isEmpty() && files_->count()) top_->setText(QFileInfo(files_->item(0)->text()).baseName());
             if (name_->text().isEmpty() && files_->count()) name_->setText(QFileInfo(files_->item(0)->text()).baseName());
         });
+        path_ = new QLineEdit(this);
+        path_->setPlaceholderText("or a testbench's path, then Return");
+        connect(path_, &QLineEdit::returnPressed, this, [this] {
+            const QFileInfo f(path_->text().trimmed());
+            if (!f.isFile()) {
+                error_->setText("No file " + path_->text());
+                return;
+            }
+            files_->addItem(f.absoluteFilePath());
+            if (top_->text().isEmpty()) top_->setText(f.baseName());
+            if (name_->text().isEmpty()) name_->setText(f.baseName());
+            error_->clear();
+            path_->clear();
+        });
         top_ = new QLineEdit(this);
         top_->setPlaceholderText("the testbench's module");
         level_ = new QComboBox(this);
         level_->addItem("The routed netlist, with its layout's delays", "gate");
         level_->addItem("The RTL", "rtl");
+        level_->addItem("A chip, from its schematic", "chip");
+        chip_ = new QLineEdit(this);
+        chip_->setPlaceholderText("library/cell: its schematic as Verilog, with its cells' models");
+        extra_ = new QLineEdit(this);
+        extra_->setPlaceholderText("more Verilog files, space-separated (a model the cells lack)");
+        defines_ = new QLineEdit(this);
+        defines_->setPlaceholderText("NAME or NAME=VALUE, space-separated");
         run_ = new QComboBox(this);
         for (const auto& v : session_.call("flow_list").value.toArray())
             if (v.toObject()["state"] == "done") run_->addItem(v.toObject()["run"].toString() + "  " + v.toObject()["platform"].toString(), v.toObject()["run"].toString());
@@ -435,16 +457,27 @@ public:
         limit_->setSuffix(" ns");
         form->addRow("Name", name_);
         form->addRow("Testbench", files_);
-        form->addRow("", add);
+        auto* sources = new QHBoxLayout;
+        sources->addWidget(add);
+        sources->addWidget(path_, 1);
+        form->addRow("", sources);
         form->addRow("Its top module", top_);
         form->addRow("What runs", level_);
+        form->addRow("Chip", chip_);
+        form->addRow("More Verilog", extra_);
+        form->addRow("Defines", defines_);
         form->addRow("Implementation run", run_);
         form->addRow("Design's instance", dut_);
         form->addRow("Passes when it prints", pattern_);
         form->addRow("Time limit", limit_);
+        for (auto [w, n] : std::initializer_list<std::pair<QWidget*, const char*>>{{name_, "Name"}, {path_, "Testbench path"}, {top_, "Its top module"}, {level_, "What runs"},
+                                                                                {chip_, "Chip"}, {extra_, "More Verilog"}, {defines_, "Defines"}, {run_, "Implementation run"},
+                                                                                {dut_, "Design's instance"}, {pattern_, "Passes when it prints"}, {limit_, "Time limit"}})
+            w->setAccessibleName(n);
         error_ = new QLabel(this);
         error_->setWordWrap(true);
         error_->setStyleSheet(QString("color: %1;").arg(Theme::current().fail.name()));
+        error_->setAccessibleName("Error");
         form->addRow(error_);
         auto* buttons = new QDialogButtonBox(this);
         buttons->addButton("Run", QDialogButtonBox::AcceptRole);
@@ -455,13 +488,36 @@ public:
     }
     QString started;
 
+protected:
+    // Return adds a typed path (its field's returnPressed); running is Run's click, not a key that also ends a field
+    void keyPressEvent(QKeyEvent* e) override {
+        if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) return;
+        QDialog::keyPressEvent(e);
+    }
+
 private:
     void start() {
         QJsonArray bench;
         for (int k = 0; k < files_->count(); ++k) bench.append(files_->item(k)->text());
-        QJsonObject args{{"name", name_->text()}, {"testbench", bench}, {"top", top_->text()}, {"level", level_->currentData().toString()},
+        const bool chip = level_->currentData() == "chip";
+        QJsonObject args{{"name", name_->text()}, {"testbench", bench}, {"top", top_->text()}, {"level", chip ? QString("rtl") : level_->currentData().toString()},
                          {"pass_pattern", pattern_->text()}, {"time_limit_ns", limit_->value()}, {"wait", false}};
-        if (run_->count()) args["flow_run"] = run_->currentData().toString();
+        if (chip) {  // a chip built by hand: its schematic, and what its cells' models lack
+            if (chip_->text().count('/') != 1) {
+                error_->setText("The chip is library/cell");
+                return;
+            }
+            args["library"] = chip_->text().section('/', 0, 0);
+            args["cell"] = chip_->text().section('/', 1);
+            QJsonArray more;
+            for (const QString& f : extra_->text().split(' ', Qt::SkipEmptyParts)) more.append(f);
+            if (!more.isEmpty()) args["verilog"] = more;
+        } else if (run_->count()) {
+            args["flow_run"] = run_->currentData().toString();
+        }
+        QJsonArray defines;
+        for (const QString& d : defines_->text().split(' ', Qt::SkipEmptyParts)) defines.append(d);
+        if (!defines.isEmpty()) args["defines"] = defines;
         if (level_->currentData() == "gate") args["dut"] = dut_->text();
         const cmd::Result r = session_.call("test_run", args);
         if (!r.ok) {
@@ -473,6 +529,10 @@ private:
     }
     Session& session_;
     QLineEdit* name_;
+    QLineEdit* path_;
+    QLineEdit* chip_;
+    QLineEdit* extra_;
+    QLineEdit* defines_;
     QLineEdit* top_;
     QLineEdit* dut_;
     QLineEdit* pattern_;

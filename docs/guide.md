@@ -124,7 +124,7 @@ python3 tools/ui_test.py --app build/OpenVLSI.app/Contents/MacOS/OpenVLSI --mcp 
 python3 tools/ui_test.py --app build/OpenVLSI.app/Contents/MacOS/OpenVLSI --mcp build/openvlsi-mcp --backend os  # real macOS events; takes over the mouse
 ```
 
-`tools/ui_build_test.py` (same arguments, plus `--pdk` and `--osdi`) builds a block and a top of two blocks with the mouse alone, through DRC and LVS. A run with `--backend os` shows on screen; leave the mouse and keyboard alone, and keep the screen unlocked (macOS does not deliver events to a locked screen).
+`tools/ui_rv32i_test.py` (same arguments as the next) builds the RISC-V chip of `tools/rv32i` in the window, from New run… to its firmware's test, in about 25 minutes. `tools/ui_build_test.py` (same arguments, plus `--pdk` and `--osdi`) builds a block and a top of two blocks with the mouse alone, through DRC and LVS. A run with `--backend os` shows on screen; leave the mouse and keyboard alone, and keep the screen unlocked (macOS does not deliver events to a locked screen).
 
 `--backend os` needs Accessibility permission for your terminal: System Settings > Privacy & Security > Accessibility. `ui_locate` and `ui_input` are there for your own tests.
 

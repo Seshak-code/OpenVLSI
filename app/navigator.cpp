@@ -107,10 +107,12 @@ void Navigator::refresh() {
     for (const auto& l : session_.call("workspace_libraries").value.toArray()) {
         const QString lib = l.toString();
         QTreeWidgetItem* libItem = mode_ == Mode::Design ? node(nullptr, tree_, lib, "library", lib) : nullptr;
-        for (const auto& c : session_.call("cell_list", {{"library", lib}}).value.toArray()) {
-            const QString cell = c.toString();
+        // One call a library: a navigator refreshes after every write, and the PDK's libraries hold a thousand cells
+        const QJsonObject all = session_.call("library_views", {{"library", lib}}).value.toObject();
+        for (auto c = all.begin(); c != all.end(); ++c) {
+            const QString cell = c.key();
             QTreeWidgetItem* cellItem = mode_ == Mode::Design ? node(libItem, tree_, cell, "cell", lib, cell) : nullptr;
-            for (const auto& v : session_.call("view_list", {{"library", lib}, {"cell", cell}}).value.toArray()) {
+            for (const auto& v : c.value().toArray()) {
                 const QString view = v.toObject()["view"].toString(), type = v.toObject()["type"].toString();
                 if (mode_ == Mode::Design) {
                     node(cellItem, tree_, view, type, lib, cell, view);

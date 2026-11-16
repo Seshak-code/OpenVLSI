@@ -206,6 +206,14 @@ Removes a library from the workspace (its file stays).
 |---|---|---|---|
 | `library` | string | yes | library name |
 
+### `library_views`
+
+Every cell of a library with its views and their types, in one call: {cell: [{view, type}]} (a navigator's whole tree).
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `library` | string | yes | library name |
+
 ## Cells
 
 ### `cell_create`
@@ -1575,6 +1583,16 @@ Adds a pin: a metal rectangle with its pin shape and a label naming the net. Ret
 | `name` | string | yes | the net |
 | `view` | string |  | the layout view (default "layout") |
 
+### `layout_route_chip`
+
+Routes a chip's top from its schematic: each pad's core pin (p2c, c2p) to the pin of the block its net reaches, on one track a net in the channel between the block and the pads (Metal2 across it, Metal3 along it), and the supplies from the pad ring's innermost rails onto the block's rings (the inner one over TopMetal2). For a chip of layout_pad_ring's pads around one flow-built block whose pins face their pads. Returns the nets routed.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | the chip's top cell: its schematic says what joins what |
+| `library` | string | yes | the library |
+| `view` | string |  | the layout view (default layout) |
+
 ### `layout_seal_ring`
 
 Places IHP SG13G2's seal ring around a die: on each of its layers a ring stepped at the corners (four 4.2 um steps), as IHP's sealring cell draws it: passivation from 25 um in, Activ, pSD, EdgeSeal and every metal from 32.2 um, 4.2 um wide, contacts and vias as trenches inside them, Metal1 filler outside (in pieces of at most 5 um), and the die's boundary. Metal fill goes inside it. Makes the cell sealring_<w>x<h> in the library and places it at the origin; returns its name.
@@ -1931,11 +1949,13 @@ Runs a testbench of yours on the design: level rtl on its Verilog (given, or a f
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
+| `cell` | string |  | level rtl: that chip's cell |
 | `corner` | string |  | level gate: the timing corner whose delays it runs with, as slow (default the flow's own) |
 | `defines` | array |  | Verilog defines: NAME or NAME=VALUE |
 | `dut` | string |  | level gate: the design's instance, as tb.dut |
 | `flow_run` | string |  | an implementation run: <design>/run.N |
 | `level` | string | yes | rtl or gate |
+| `library` | string |  | level rtl: a chip's library, with cell: its schematic as Verilog and the models it needs (netlist_verilog) |
 | `name` | string | yes | the test's name: letters, digits, _ |
 | `pass_pattern` | string |  | the text that means it passed (default PASS) |
 | `testbench` | array | yes | the testbench's Verilog files: absolute paths |

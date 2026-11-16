@@ -312,6 +312,8 @@ void addTestCommands(Registry& r) {
                    {"level", param("string", "rtl or gate")}},
                   {{"flow_run", kFlowRun},
                    {"verilog", QJsonObject{{"type", "array"}, {"description", "level rtl without a flow run: the design's Verilog"}, {"items", QJsonObject{{"type", "string"}}}}},
+                   {"library", param("string", "level rtl: a chip's library, with cell: its schematic as Verilog and the models it needs (netlist_verilog)")},
+                   {"cell", param("string", "level rtl: that chip's cell")},
                    {"dut", param("string", "level gate: the design's instance, as tb.dut")},
                    {"corner", param("string", "level gate: the timing corner whose delays it runs with, as slow (default the flow's own)")},
                    {"defines", QJsonObject{{"type", "array"}, {"description", "Verilog defines: NAME or NAME=VALUE"}, {"items", QJsonObject{{"type", "string"}}}}},
@@ -338,9 +340,21 @@ void addTestCommands(Registry& r) {
                    if (level == "rtl")
                        for (const auto& v : impl.record["verilog"].toArray()) cfg.rtl.push_back(v.toString().toStdString());
                }
+               if (a.contains("library") != a.contains("cell")) throw std::invalid_argument("a chip to test is a library and a cell");
+               if (a.contains("library")) {
+                   if (level != "rtl") throw std::invalid_argument("a chip's schematic runs at level rtl (its blocks' routed netlists are inside it)");
+                   VerilogNetlister v{c.workspace, {}, {}, {}};
+                   v.module(s(a, "library"), s(a, "cell"));
+                   const fs::path file = base(c) / "verilog" / (s(a, "library") + "_" + s(a, "cell") + ".v");
+                   fs::create_directories(file.parent_path());
+                   std::ofstream(file) << "// " << s(a, "library") << "/" << s(a, "cell") << " as structural Verilog (netlist_verilog)\n\n" << v.out.str();
+                   cfg.rtl.push_back(file.string());
+                   cfg.rtl.insert(cfg.rtl.end(), v.models.begin(), v.models.end());
+               }
                if (level == "rtl") {
-                   for (const auto& v : a["verilog"].toArray()) cfg.rtl.push_back(v.toString().toStdString());
-                   if (cfg.rtl.empty()) throw std::invalid_argument("level rtl needs verilog, or a flow_run to take it from");
+                   for (const auto& v : a["verilog"].toArray())
+                       if (std::find(cfg.rtl.begin(), cfg.rtl.end(), v.toString().toStdString()) == cfg.rtl.end()) cfg.rtl.push_back(v.toString().toStdString());
+                   if (cfg.rtl.empty()) throw std::invalid_argument("level rtl needs verilog, a chip's library and cell, or a flow_run to take it from");
                    for (const auto& f : cfg.rtl)
                        if (!fs::exists(f)) throw std::invalid_argument("no source file " + f);
                } else {

@@ -344,6 +344,11 @@ each wired by hand on Metal2 and Metal3, vdd strapped from the ring's Metal3 rai
 seal ring and fill. DRC clean with density (but Seal.m), LVS matched with no ERC finding (the block flat in the chip: IHP's deck
 extracts its antenna diodes at the chip's top), and its firmware prints "Hello, world!" at the pads. The SRAM core's behavioural
 model is IHP's when it is in `~/eda/ihp-verilog`, else `tools/rv32i/sram_core_model.v`.
+**By hand in the window (`tools/ui_rv32i_test.py`):** the same chip with the mouse and keyboard alone, 12/12 with real macOS events on
+screen: Implement's New run… (sources typed as paths, the macro's settings), Make Block, the top's schematic (16 pads and the block by
+I, their nets by L, the chip's pins by P, zoomed in to click each pin), Create > Pad Ring…, the block placed by Instance…, Route > Pads
+and Supplies (`layout_route_chip`: each pad to the block pin its schematic names, one track a net, the supplies onto the block's rings),
+Seal Ring…, Fill…, Run DRC… and Run LVS… from Verify, and New test… on the chip's schematic: "Hello, world!".
 Fixed on the way: flow settings may hold paths; DIE_AREA/CORE_AREA replace the utilization; a run's macros (ADDITIONAL_LEFS) are
 black boxes in its LVS (ADDITIONAL_CDL their netlists); ERC keeps black boxes' pins; vias past 3 x 3 cuts take V*.b1's spacing.
 

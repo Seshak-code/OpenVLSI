@@ -657,6 +657,15 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     });
     act(create, "Seal Ring…", QKeySequence(), [chipForm] { chipForm("layout_seal_ring", {{"die", QJsonArray{1400, 1400}}}); });
     act(create, "Fill…", QKeySequence(), [chipForm] { chipForm("layout_fill", {}); });
+    QMenu* route = menuBar()->addMenu("&Route");
+    act(route, "Pads and Supplies", QKeySequence(), [this] {
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        const cmd::Result r = session_.call("layout_route_chip", {{"library", lib_}, {"cell", cell_}, {"view", view_}});
+        QApplication::restoreOverrideCursor();
+        if (!r.ok) return hint(r.error);
+        reload();
+        hint(QString("Routed %1 nets").arg(r.value.toObject()["routed"].toArray().size()));
+    });
     QMenu* viewMenu = menuBar()->addMenu("&View");
     QAction* flight = viewMenu->addAction("Flight Lines", this, [this](bool on) { setFlightLinesShown(on); });
     flight->setCheckable(true);
@@ -677,7 +686,7 @@ LayoutViewer::LayoutViewer(Session& session, const QString& lib, const QString& 
     bindActions(this, {{"Undo", "edit_undo"}, {"Redo", "edit_redo"}, {"Move", "layout_view_tool"}, {"Copy", "layout_view_tool"}, {"Stretch", "layout_view_tool"},
                        {"Delete", "layout_view_delete"}, {"Finish", "layout_view_finish"}, {"Cancel", "layout_view_cancel"}, {"Rectangle", "layout_view_tool"}, {"Path", "layout_view_tool"},
                        {"Polygon", "layout_view_tool"}, {"Via", "layout_view_tool"}, {"Label…", "layout_view_tool"}, {"Pin…", "layout_view_tool"}, {"Instance…", "layout_view_tool"},
-                       {"Transistor…", "layout_pcell_mos"}, {"Resistor…", "layout_pcell_res"}, {"Capacitor…", "layout_pcell_cap"}, {"Pad Ring…", "layout_pad_ring"}, {"Seal Ring…", "layout_seal_ring"}, {"Fill…", "layout_fill"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
+                       {"Transistor…", "layout_pcell_mos"}, {"Resistor…", "layout_pcell_res"}, {"Capacitor…", "layout_pcell_cap"}, {"Pad Ring…", "layout_pad_ring"}, {"Seal Ring…", "layout_seal_ring"}, {"Fill…", "layout_fill"}, {"Pads and Supplies", "layout_route_chip"}, {"Flight Lines", "layout_view_flight_lines"}, {"Fit", "layout_view_fit"}, {"Show All Levels", "layout_view_levels"},
                        {"Show Top Level Only", "layout_view_levels"}, {"Zoom In", "layout_view_zoom"}, {"Zoom Out", "layout_view_zoom"}, {"Ruler", "layout_view_ruler"},
                        {"Clear Rulers", "layout_view_rulers_clear"}, {"Show All", "layout_view_layers_all"}, {"Hide All", "layout_view_layers_all"},
                        {"Show in Schematic", "editor_select_net"}});
