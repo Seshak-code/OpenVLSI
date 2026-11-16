@@ -90,7 +90,7 @@ private:
     QLabel *crumb_, *startWorkspace_;
     std::vector<QToolButton*> stages_;
     QToolButton *consoleButton_, *search_;
-    QMenu *fileMenu_, *viewMenu_, *goMenu_, *themeMenu_;
+    QMenu *fileMenu_, *viewMenu_, *goMenu_, *themeMenu_, *toolsMenu_, *optionsMenu_, *helpMenu_;
 };
 
 }  // namespace app

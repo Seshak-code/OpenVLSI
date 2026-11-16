@@ -3,6 +3,10 @@
 #include "app/icons.h"
 
 #include <QComboBox>
+#include <QStringListModel>
+#include <QMenu>
+#include <QFileDialog>
+#include <QCompleter>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QFrame>
@@ -33,6 +37,49 @@ int fuzzyScore(const QString& query, const QString& text) {
         at = hit + 1;
     }
     return score;
+}
+
+namespace {
+ChoiceSource& choiceSource() {
+    static ChoiceSource source;
+    return source;
+}
+}  // namespace
+
+void CommandForm::setChoiceSource(ChoiceSource source) { choiceSource() = std::move(source); }
+
+QJsonObject CommandForm::current() const {
+    QJsonObject out;
+    for (const auto& f : fields_) {
+        if (auto* combo = qobject_cast<QComboBox*>(f.widget)) out[f.name] = combo->currentText();
+        else if (auto* line = qobject_cast<QLineEdit*>(f.widget)) out[f.name] = line->text().trimmed();
+    }
+    return out;
+}
+
+// A field's right-click menu: its edits, then the workspace's values for it (a list field adds one; another field takes it), and
+// Browse… for a file or folder
+void CommandForm::offer(QLineEdit* line, const QString& name, const QString& type, const QJsonObject& schema, const QPoint& at) {
+    QMenu* menu = line->createStandardContextMenu();
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    const FieldChoices choices = choiceSource() ? choiceSource()(command_.name, name, schema, current()) : FieldChoices{};
+    const bool list = type == "array";
+    const auto put = [line, list](const QString& value) {
+        if (!list) return line->setText(value);
+        QJsonArray items = QJsonDocument::fromJson(line->text().toUtf8()).array();
+        items.append(value);
+        line->setText(QString::fromUtf8(QJsonDocument(items).toJson(QJsonDocument::Compact)));
+    };
+    if (!choices.values.isEmpty() || choices.file || choices.folder) menu->addSeparator();
+    if (choices.file || choices.folder)
+        menu->addAction(list ? "Add File…" : "Browse…", this, [this, put, choices, name] {
+            const QString got = choices.folder ? QFileDialog::getExistingDirectory(this, name) : QFileDialog::getOpenFileName(this, name);
+            if (!got.isEmpty()) put(got);
+        });
+    // ponytail: the first 300 values; a long list (a PDK library's cells) is typed with completion instead
+    QMenu* into = choices.values.size() > 25 ? menu->addMenu(list ? "Add" : "Choose") : menu;
+    for (const QString& v : choices.values.mid(0, 300)) into->addAction(v, this, [put, v] { put(v); });
+    menu->popup(line->mapToGlobal(at));
 }
 
 CommandForm::CommandForm(const cmd::Command& c, const QJsonObject& prefill, QWidget* parent) : QDialog(parent), command_(c) {
@@ -73,6 +120,19 @@ CommandForm::CommandForm(const cmd::Command& c, const QJsonObject& prefill, QWid
             else if (prefill[name].isArray()) line->setText(QString::fromUtf8(QJsonDocument(prefill[name].toArray()).toJson(QJsonDocument::Compact)));
             else if (prefill[name].isObject()) line->setText(QString::fromUtf8(QJsonDocument(prefill[name].toObject()).toJson(QJsonDocument::Compact)));
             line->setPlaceholderText(required.contains(name) ? QString() : "optional");
+            // Its choices on a right click, and as completion while typing
+            line->setContextMenuPolicy(Qt::CustomContextMenu);
+            connect(line, &QWidget::customContextMenuRequested, this, [this, line, name, type, schema](const QPoint& at) { offer(line, name, type, schema, at); });
+            auto* complete = new QCompleter(this);
+            complete->setCaseSensitivity(Qt::CaseInsensitive);
+            complete->setFilterMode(Qt::MatchContains);
+            line->setCompleter(complete);
+            connect(line, &QLineEdit::textEdited, this, [this, complete, name, type, schema] {
+                if (type == "array" || type == "object" || !choiceSource()) return;
+                const QStringList values = choiceSource()(command_.name, name, schema, current()).values;
+                if (auto* m = qobject_cast<QStringListModel*>(complete->model())) m->setStringList(values);
+                else complete->setModel(new QStringListModel(values, complete));
+            });
             w = line;
         }
         w->setToolTip(schema["description"].toString());
