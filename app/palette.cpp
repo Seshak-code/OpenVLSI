@@ -2,7 +2,6 @@
 
 #include "app/icons.h"
 
-#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -61,8 +60,11 @@ CommandForm::CommandForm(const cmd::Command& c, const QJsonObject& prefill, QWid
             if (prefill.contains(name)) box->setCurrentText(prefill[name].toString());
             w = box;
         } else if (type == "boolean") {
-            auto* box = new QCheckBox(this);
-            box->setChecked(prefill[name].toBool());
+            // Blank: the command's own default (a box that sends nothing unchecked could never say false to a default of true)
+            auto* box = new QComboBox(this);
+            box->addItems({QString(), "true", "false"});
+            if (prefill[name].isBool()) box->setCurrentText(prefill[name].toBool() ? "true" : "false");
+            box->setProperty("boolean", true);
             w = box;
         } else {
             auto* line = new QLineEdit(this);
@@ -106,12 +108,12 @@ QWidget* CommandForm::field(const QString& name) const {
 bool CommandForm::arguments(QJsonObject* out, QString* error) const {
     QJsonObject args;
     for (const auto& f : fields_) {
-        if (auto* box = qobject_cast<QCheckBox*>(f.widget)) {
-            if (box->isChecked()) args[f.name] = true;
-            continue;
-        }
         if (auto* combo = qobject_cast<QComboBox*>(f.widget)) {
-            if (!combo->currentText().isEmpty()) args[f.name] = combo->currentText();
+            if (combo->property("boolean").toBool()) {
+                if (!combo->currentText().isEmpty()) args[f.name] = combo->currentText() == "true";
+            } else if (!combo->currentText().isEmpty()) {
+                args[f.name] = combo->currentText();
+            }
             continue;
         }
         const QString text = static_cast<QLineEdit*>(f.widget)->text().trimmed();

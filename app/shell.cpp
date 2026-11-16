@@ -557,9 +557,10 @@ CommandPalette* Shell::newPalette() {
     std::vector<CommandPalette::Entry> entries;
     for (const auto& l : session_.call("workspace_libraries").value.toArray()) {
         const QString lib = l.toString();
-        for (const auto& c : session_.call("cell_list", {{"library", lib}}).value.toArray()) {
-            const QString cell = c.toString();
-            for (const auto& v : session_.call("view_list", {{"library", lib}, {"cell", cell}}).value.toArray()) {
+        const QJsonObject all = session_.call("library_views", {{"library", lib}}).value.toObject();
+        for (auto c = all.begin(); c != all.end(); ++c) {
+            const QString cell = c.key();
+            for (const auto& v : c.value().toArray()) {
                 const QString view = v.toObject()["view"].toString(), type = v.toObject()["type"].toString();
                 if (type != "schematic" && type != "symbol" && type != "maestro" && type != "layout" && type != "verifier" && type != "config" && type != "extracted") continue;
                 entries.push_back({cell + " " + view, lib + "/" + cell + "/" + view + " (" + type + ")", type, [this, lib, cell, view] {

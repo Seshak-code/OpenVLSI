@@ -92,6 +92,18 @@ void addCoreCommands(Registry& r) {
                for (const auto& v : lib(c, a).views(s(a, "cell"))) out.append(QJsonObject{{"view", q(v.name)}, {"type", q(v.type)}});
                return QJsonValue(out);
            }, true});
+    r.add({"library_views", "Every cell of a library with its views and their types, in one call: {cell: [{view, type}]} (a navigator's whole tree).",
+           params({{"library", kLib}}),
+           [](Context& c, const QJsonObject& a) {
+               QJsonObject out;
+               oadb::Library& l = lib(c, a);
+               for (const auto& cell : l.cells()) {
+                   QJsonArray views;
+                   for (const auto& v : l.views(cell)) views.append(QJsonObject{{"view", q(v.name)}, {"type", q(v.type)}});
+                   out[q(cell)] = views;
+               }
+               return QJsonValue(out);
+           }, true});
     r.add({"view_create", "Creates an empty view of a cell.",
            params({{"library", kLib}, {"cell", kCell}, {"view", kView}, {"type", str("view type: schematic, symbol, layout, ...")}}),
            [](Context& c, const QJsonObject& a) {

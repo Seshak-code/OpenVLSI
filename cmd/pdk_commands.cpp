@@ -6,6 +6,7 @@
 #include "layout/pcell.h"
 #include "layout/tech.h"
 #include "oadb/oadb.h"
+#include "sch/schematic.h"
 
 #include <QRegularExpression>
 
@@ -470,6 +471,247 @@ std::map<std::string, char> verilogDirections(const fs::path& file) {
     return out;
 }
 
+
+// ---- A chip's top routed from its schematic: each pad's core pin to the block pin it joins, the supplies to the block's rings
+// ponytail: the shape of a chip layout_pad_ring makes around one flow-built block (IHP's pads and ORFS's grid: rings on TopMetal1 and
+// TopMetal2, VDD outside VSS), each pad facing the block side its pin is on; one track a net in each side's channel. A general
+// top-level router (Innovus's, OpenROAD's with the block's abstract) is the upgrade.
+struct RBox { int64_t x0 = 0, y0 = 0, x1 = 0, y1 = 0; };
+RBox placed(const RBox& r, double angle, Point at) {
+    const auto t = [&](int64_t x, int64_t y) -> Point {
+        if (angle == 90) return {at.x - y, at.y + x};
+        if (angle == 180) return {at.x - x, at.y - y};
+        if (angle == 270) return {at.x + y, at.y - x};
+        return {at.x + x, at.y + y};
+    };
+    const Point a = t(r.x0, r.y0), b = t(r.x1, r.y1);
+    return {std::min(a.x, b.x), std::min(a.y, b.y), std::max(a.x, b.x), std::max(a.y, b.y)};
+}
+
+QJsonObject routeChip(Context& c, const std::string& lib, const std::string& cell, const std::string& view) {
+    oadb::Library& l = c.workspace.library(lib);
+    if (l.viewType(cell, view) != "layout") throw std::invalid_argument(lib + "/" + cell + "/" + view + " is no layout view");
+    const sch::Connectivity k = sch::extract(c.workspace, lib, cell, "schematic");
+    if (!k.ok()) throw std::invalid_argument(lib + "/" + cell + "/schematic does not check: " + k.errors.front());
+    const auto parsed = [](const std::optional<std::string>& t) -> QJsonValue { return QJsonDocument::fromJson(QByteArray::fromStdString("[" + t.value_or("null") + "]")).array().at(0); };
+    // The schematic: pads (cells with an abstract and a core pin) and the block (one cell with a layout)
+    struct SPad { std::string name, master, pad, core, corePin; };
+    std::vector<SPad> pads;
+    std::string blockLib, blockCell, blockInst;
+    for (const auto& i : l.instances(cell, "schematic")) {
+        const auto nets = k.instanceNets.count(i.name) ? k.instanceNets.at(i.name) : std::map<std::string, std::string>{};
+        oadb::Library& m = c.workspace.library(i.lib);
+        if (m.cellProp(i.cell, "abstract")) {
+            for (const char* pin : {"p2c", "c2p"})
+                if (nets.count(pin) && nets.count("pad")) pads.push_back({i.name, i.cell, nets.at("pad"), nets.at(pin), pin});
+            continue;
+        }
+        bool laid = false;
+        for (const auto& v : m.views(i.cell)) laid = laid || v.name == "layout";
+        if (!laid) continue;
+        if (!blockCell.empty()) throw std::invalid_argument("layout_route_chip routes one block's pins; the schematic places " + blockCell + " and " + i.cell);
+        blockLib = i.lib, blockCell = i.cell, blockInst = i.name;
+    }
+    if (blockCell.empty()) throw std::invalid_argument(cell + "'s schematic places no block with a layout");
+    const auto blockNets = k.instanceNets.count(blockInst) ? k.instanceNets.at(blockInst) : std::map<std::string, std::string>{};
+    // The layout: the pads (by their bond pads' labels), the block's instance
+    const auto shapes = l.layoutShapes(cell, view);
+    const auto insts = l.layoutInstances(cell, view);
+    const oadb::LayoutInstance* blockAt = nullptr;
+    for (const auto& i : insts)
+        if (i.cell == blockCell && (i.lib.empty() ? lib : i.lib) == blockLib) {
+            if (blockAt) throw std::invalid_argument("the layout places " + blockCell + " twice");
+            blockAt = &i;
+        }
+    if (!blockAt) throw std::invalid_argument("the layout does not place " + blockCell + ": place it first");
+    if (blockAt->angle != 0 || blockAt->mirrorX) throw std::invalid_argument("layout_route_chip takes the block unrotated");
+    // The block's pins and extent, from its own layout
+    oadb::Library& bl = c.workspace.library(blockLib);
+    std::map<std::string, std::vector<std::pair<int, RBox>>> bpins;
+    RBox bb{INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN};
+    const auto bshapes = bl.layoutShapes(blockCell, "layout");
+    for (const auto& sh : bshapes) {
+        for (const auto& p : sh.points) bb = {std::min(bb.x0, p.x), std::min(bb.y0, p.y), std::max(bb.x1, p.x), std::max(bb.y1, p.y)};
+        if (sh.kind != "text") continue;
+        for (const auto& pin : bshapes) {
+            if (pin.datatype != 2 || pin.layer != sh.layer || pin.points.size() < 2) continue;
+            RBox r{INT64_MAX, INT64_MAX, INT64_MIN, INT64_MIN};
+            for (const auto& p : pin.points) r = {std::min(r.x0, p.x), std::min(r.y0, p.y), std::max(r.x1, p.x), std::max(r.y1, p.y)};
+            const Point t = sh.points[0];
+            if (t.x >= r.x0 && t.x <= r.x1 && t.y >= r.y0 && t.y <= r.y1)
+                bpins[sh.text].push_back({sh.layer, {r.x0 + blockAt->at.x, r.y0 + blockAt->at.y, r.x1 + blockAt->at.x, r.y1 + blockAt->at.y}});
+        }
+    }
+    bb = {bb.x0 + blockAt->at.x, bb.y0 + blockAt->at.y, bb.x1 + blockAt->at.x, bb.y1 + blockAt->at.y};
+    const layout::Tech& tech = *layout::findTech("sg13g2");
+    const auto metal = [&](int layer) {
+        for (const auto& m : tech.layers)
+            if (m.layer == layer && m.datatype == 0) return m.name;
+        throw std::runtime_error("no metal on layer " + std::to_string(layer));
+    };
+    QJsonArray routed;
+    int shapesAdded = 0;
+    l.change("route " + cell, [&] {
+        const auto rect = [&](const char* name, int64_t x0, int64_t y0, int64_t x1, int64_t y1) {
+            const int layer = std::find_if(tech.layers.begin(), tech.layers.end(), [&](const layout::TechLayer& t) { return t.name == name && t.datatype == 0; })->layer;
+            l.addLayoutShape(cell, view, layout::rectShape({layer, 0}, {std::min(x0, x1), std::min(y0, y1), std::max(x0, x1), std::max(y0, y1)}));
+            ++shapesAdded;
+        };
+        const auto via = [&](int lower, int64_t x, int64_t y, int cols = 1, int rows = 1) {  // lower: an index into the metals
+            for (const auto& sh : layout::viaShapes(tech, lower, x / 5 * 5, y / 5 * 5, cols, rows)) { l.addLayoutShape(cell, view, sh); ++shapesAdded; }
+        };
+        // Each signal: its pad's core pin and the block pin its net reaches, on the block side the pad faces
+        struct Net { std::string name; int side; RBox pad, pin; int pinLayer; int64_t padC, pinC; };
+        std::map<int, std::vector<Net>> bySide;  // 0 south, 1 east, 2 north, 3 west
+        for (const auto& sp : pads) {
+            std::string pinName;
+            for (const auto& [pn, net] : blockNets)
+                if (net == sp.core) pinName = pn;
+            if (pinName.empty()) continue;  // a pad whose core pin reaches no block pin
+            if (!bpins.count(pinName)) throw std::invalid_argument("the block's layout has no pin " + pinName);
+            // The layout's pad: the one beside its bond pad's label
+            const oadb::LayoutShape* label = nullptr;
+            for (const auto& sh : shapes)
+                if (sh.kind == "text" && sh.text == sp.pad) label = &sh;
+            if (!label) throw std::invalid_argument("no bond pad is labelled " + sp.pad + " (layout_pad_ring names them as their pads)");
+            const oadb::LayoutInstance* best = nullptr;
+            int64_t bestD = INT64_MAX;
+            for (const auto& i : insts) {
+                if (i.cell != sp.master) continue;
+                const RBox r = placed({0, 0, 80000, 180000}, i.angle, i.at);
+                const int64_t dx = std::max<int64_t>({r.x0 - label->points[0].x, 0, label->points[0].x - r.x1}), dy = std::max<int64_t>({r.y0 - label->points[0].y, 0, label->points[0].y - r.y1});
+                if (dx + dy < bestD) bestD = dx + dy, best = &i;
+            }
+            if (!best) throw std::invalid_argument("the layout has no " + sp.master + " for pad " + sp.pad);
+            RBox core{};
+            bool found = false;
+            for (const auto& pv : parsed(c.workspace.library("sg13g2_io").cellProp(sp.master, "abstract")).toArray()) {
+                const QJsonObject p = pv.toObject();
+                if (p["name"].toString().toStdString() != sp.corePin || p["layer"].toInt() != 10) continue;
+                for (const auto& rv : p["rects"].toArray()) {
+                    const QJsonArray r = rv.toArray();
+                    core = placed({(int64_t)r[0].toDouble(), (int64_t)r[1].toDouble(), (int64_t)r[2].toDouble(), (int64_t)r[3].toDouble()}, best->angle, best->at);
+                    found = true;
+                }
+            }
+            if (!found) throw std::runtime_error(sp.master + "'s abstract has no Metal2 " + sp.corePin);
+            const int side = best->angle == 0 ? 0 : best->angle == 90 ? 1 : best->angle == 180 ? 2 : 3;
+            const auto& [pinLayer, pr] = bpins.at(pinName).front();
+            const int pinSide = pr.y0 <= bb.y0 ? 0 : pr.x1 >= bb.x1 ? 1 : pr.y1 >= bb.y1 ? 2 : pr.x0 <= bb.x0 ? 3 : -1;
+            if (pinSide != side)
+                throw std::invalid_argument("pad " + sp.pad + " faces the block's " + std::string(side % 2 ? (side == 1 ? "east" : "west") : (side ? "north" : "south")) +
+                                            " side, but its pin " + pinName + " is not on it (place the block's pins facing their pads)");
+            const bool vertical = side % 2 == 0;
+            bySide[side].push_back({sp.pad, side, core, pr, pinLayer, vertical ? (core.x0 + core.x1) / 2 : (core.y0 + core.y1) / 2,
+                                    vertical ? (pr.x0 + pr.x1) / 2 : (pr.y0 + pr.y1) / 2});
+        }
+        for (auto& [side, nets] : bySide) {
+            // Order: a net whose pin's drop runs beside another's pad drop takes the track nearer the block (Kahn's order on those pairs)
+            const size_t n = nets.size();
+            std::vector<std::set<size_t>> nearer(n);  // nearer[b]: those that must be farther than b
+            std::vector<int> indeg(n, 0);
+            for (size_t a = 0; a < n; ++a)
+                for (size_t b = 0; b < n; ++b)
+                    if (a != b && std::llabs(nets[a].padC - nets[b].pinC) < 1500 && nearer[b].insert(a).second) ++indeg[a];
+            std::vector<size_t> order, ready;
+            for (size_t i = 0; i < n; ++i)
+                if (!indeg[i]) ready.push_back(i);
+            while (!ready.empty()) {
+                const size_t b = ready.back();
+                ready.pop_back();
+                order.push_back(b);
+                for (const size_t a : nearer[b])
+                    if (!--indeg[a]) ready.push_back(a);
+            }
+            if (order.size() != n) throw std::invalid_argument("the pads and pins of one side cross each other both ways: no track order routes them");
+            // The channel between the block and the ring's inner edge (the pads' core pins end there)
+            const int64_t edge = side == 0 ? bb.y0 : side == 1 ? bb.x1 : side == 2 ? bb.y1 : bb.x0;
+            const int64_t ring = side == 0 ? nets[0].pad.y1 : side == 1 ? nets[0].pad.x0 : side == 2 ? nets[0].pad.y0 : nets[0].pad.x1;
+            const int64_t dir = side == 0 || side == 3 ? -1 : 1;  // from the block toward the ring
+            if ((int64_t)n * 2000 + 10000 > std::llabs(ring - edge)) throw std::invalid_argument("the channel between the block and the pads is too narrow for its tracks");
+            for (size_t rank = 0; rank < n; ++rank) {
+                const Net& w = nets[order[rank]];
+                const int64_t t = edge + dir * (5000 + 2000 * (int64_t)rank);  // its track
+                if (side % 2 == 0) {
+                    // The pad's Metal2 pin down (or up) to the track, Metal3 along it, Metal2 onto the block's pin
+                    const int64_t px = w.padC / 10 * 10, X = w.pinC / 10 * 10;
+                    rect("Metal2", w.pad.x0 + (w.pad.x1 - w.pad.x0 > 400 ? (w.pad.x1 - w.pad.x0 - 400) / 2 : 0), side == 0 ? w.pad.y1 - 2000 : t - 200,
+                         w.pad.x1 - (w.pad.x1 - w.pad.x0 > 400 ? (w.pad.x1 - w.pad.x0 - 400) / 2 : 0), side == 0 ? t + 200 : w.pad.y0 + 2000);
+                    via(1, px, t);
+                    rect("Metal3", px, t - 200, X, t + 200);
+                    via(1, X, t);
+                    rect("Metal2", X - 100, side == 0 ? t : w.pin.y1 - 300, X + 100, side == 0 ? w.pin.y0 + 300 : t);
+                } else {
+                    // The pad's Metal2 stub out of the ring, Metal3 to the track's column, Metal2 along it, Metal3 onto the block's pin
+                    if (metal(w.pinLayer) != "Metal3") throw std::invalid_argument("pin " + w.name + "'s block pin is on " + metal(w.pinLayer) + "; a side pin is routed on Metal3");
+                    const int64_t py = w.padC / 10 * 10, Y = w.pinC / 10 * 10, out = ring - dir * 1500;
+                    rect("Metal2", side == 1 ? out - 300 : w.pad.x1 - 2000, py - 200, side == 1 ? w.pad.x0 + 2000 : out + 300, py + 200);
+                    via(1, out, py);
+                    rect("Metal3", out, py - 200, t, py + 200);
+                    via(1, t, py);
+                    rect("Metal2", t - 200, std::min(py, Y) - 200, t + 200, std::max(py, Y) + 200);
+                    via(1, t, Y);
+                    rect("Metal3", side == 1 ? w.pin.x0 + 300 : t, Y - 200, side == 1 ? t : w.pin.x1 - 300, Y + 200);
+                }
+                routed.append(q(w.name));
+            }
+        }
+        // The supplies: on the west, from the ring's innermost rail of each net onto the block's ring of it (TopMetal1, its left side). The
+        // outer ring is reached on TopMetal1 from a stack in the channel; the inner one over TopMetal2 across the outer.
+        std::map<std::string, RBox> rings;  // block supply pin -> its TopMetal1 ring on the left
+        for (const auto& [pn, list] : bpins)
+            for (const auto& [ly, r] : list)
+                if (ly == 126 && r.y1 - r.y0 > r.x1 - r.x0 && r.x0 < bb.x0 + 30000) rings[pn] = r;
+        if (rings.size() == 2) {
+            const auto inner = std::max_element(rings.begin(), rings.end(), [](auto& a, auto& b) { return a.second.x0 < b.second.x0; });
+            const auto outer = std::min_element(rings.begin(), rings.end(), [](auto& a, auto& b) { return a.second.x0 < b.second.x0; });
+            // The ring's innermost rail per metal: from a supply pad's abstract, the pin whose rect lies 160 to 178 um in
+            std::map<int, std::string> innermost;
+            for (const auto& pv : parsed(c.workspace.library("sg13g2_io").cellProp("sg13g2_IOPadVdd", "abstract")).toArray()) {
+                const QJsonObject p = pv.toObject();
+                for (const auto& rv : p["rects"].toArray())
+                    if (rv.toArray()[1].toDouble() >= 159000 && rv.toArray()[3].toDouble() <= 179000 && rv.toArray()[2].toDouble() - rv.toArray()[0].toDouble() >= 79000)
+                        innermost[p["layer"].toInt()] = p["name"].toString().toStdString();
+            }
+            const int64_t railX = 305000, mid = (bb.y0 + bb.y1) / 2;  // the west rails sit 300 to 318 um in
+            const auto netOf = [&](const std::string& pin) { return blockNets.count(pin) ? blockNets.at(pin) : std::string(); };
+            const auto tv2 = [&](int64_t x0, int64_t y0, int cols, int rows) {  // TopVia2: 0.9 um cuts 2 um apart
+                for (int i = 0; i < cols; ++i)
+                    for (int j = 0; j < rows; ++j) rect("TopVia2", x0 + 2000 * i, y0 + 2000 * j, x0 + 2000 * i + 900, y0 + 2000 * j + 900);
+            };
+            {  // the outer ring
+                const std::string net = netOf(outer->first);
+                int railMetal = -1;
+                for (const auto& [ly, nm] : innermost)
+                    if (nm == net && railMetal < 0 && ly != 126) railMetal = ly;
+                if (railMetal < 0) throw std::invalid_argument("no rail of the pad ring carries " + net);
+                const int64_t y = mid + 40000, xs = railX + 45000;
+                int mi = 0;
+                while (tech.metals[mi].layer != railMetal) ++mi;
+                rect(metal(railMetal).c_str(), railX, y - 5000, xs + 2000, y + 5000);
+                for (int up = mi; up < (int)tech.metals.size() - 1; ++up) {
+                    via(up, xs, y, 4, 8);
+                    rect(tech.metals[up].name.c_str(), xs - 2000, y - 5000, xs + 2000, y + 5000);
+                }
+                rect("TopMetal1", xs - 2000, y - 5000, (outer->second.x0 + outer->second.x1) / 2 + 2000, y + 5000);
+            }
+            {  // the inner ring: from the ring's innermost TopMetal1 rail, over TopMetal2
+                const std::string net = netOf(inner->first);
+                if (!innermost.count(126) || innermost.at(126) != net) throw std::invalid_argument("the pad ring's innermost TopMetal1 rail does not carry " + net);
+                const int64_t y = mid;
+                const RBox o = outer->second, i = inner->second;
+                rect("TopMetal1", railX, y - 5000, o.x0 - 3000, y + 5000);
+                tv2(o.x0 - 9500, y - 3900, 3, 4);
+                rect("TopMetal2", o.x0 - 10000, y - 5000, i.x1, y + 5000);
+                tv2((i.x0 + i.x1) / 2 - 1450, y - 3900, 2, 4);
+            }
+            routed.append(q(netOf(outer->first)));
+            routed.append(q(netOf(inner->first)));
+        }
+    });
+    return QJsonObject{{"routed", routed}, {"shapes", shapesAdded}};
+}
+
 void addPdkCommands(Registry& r) {
     r.add({"flow_make_macro", "Makes a design the flow built into a cell to place by hand (a hard macro): its layout from the run's final GDS, placing the "
                               "standard cells of sg13g2_stdcell (pdk_install_cells) rather than copies, its own via and fill cells named <cell>__<name>; a "
@@ -891,6 +1133,16 @@ void addPdkCommands(Registry& r) {
                const int64_t core = offset + depth;
                return QJsonValue(QJsonObject{{"pads", placed}, {"fillers", filled},
                                              {"core", QJsonArray{(double)core, (double)core, (double)(w - core), (double)(h - core)}}});
+           }});
+    r.add({"layout_route_chip", "Routes a chip's top from its schematic: each pad's core pin (p2c, c2p) to the pin of the block its net reaches, on one track a net "
+                                "in the channel between the block and the pads (Metal2 across it, Metal3 along it), and the supplies from the pad ring's "
+                                "innermost rails onto the block's rings (the inner one over TopMetal2). For a chip of layout_pad_ring's pads around one "
+                                "flow-built block whose pins face their pads. Returns the nets routed.",
+           object({{"library", param("string", "the library")}, {"cell", param("string", "the chip's top cell: its schematic says what joins what")}},
+                  {{"view", param("string", "the layout view (default layout)")}}),
+           [](Context& c, const QJsonObject& a) {
+               return QJsonValue(routeChip(c, a["library"].toString().toStdString(), a["cell"].toString().toStdString(),
+                                           a.contains("view") ? a["view"].toString().toStdString() : "layout"));
            }});
     r.add({"layout_seal_ring", "Places IHP SG13G2's seal ring around a die: on each of its layers a ring stepped at the corners (four 4.2 um steps), "
                               "as IHP's sealring cell draws it: passivation from 25 um in, Activ, pSD, EdgeSeal and every metal from 32.2 um, 4.2 um wide, "
