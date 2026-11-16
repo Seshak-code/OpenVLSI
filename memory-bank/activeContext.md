@@ -1,5 +1,18 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-15 — the RISC-V chip built in the window, on `rebuild/rv32i-screen` (after #62, merged)**
+
+- **Done:** `tools/ui_rv32i_test.py`: the RV32I chip by mouse and keyboard from New run… to its firmware test, 12/12 on screen with real
+  macOS events (the owner watched). New: `layout_route_chip` (Route > Pads and Supplies); New run… path field and quoted settings; New test…
+  runs a chip from its schematic (`test_run` takes library and cell); forms' yes/no fields are blank/true/false; dialogs ignore Return;
+  `library_views` (the navigator read 1,300 cells one call each after every edit); ui_input pending counts only its own events, an open
+  dialog takes the keys, `ui_locate` returns a field's text.
+- **Learned:** a test harness that waits on Qt's window-system queue waits forever when any window keeps an event queued; offscreen,
+  focus stays on the main window after a list closes.
+- **Next:** Tcl and Python consoles in the app; then `test_spice` for any cell and mixed RTL/transistor runs (M7 slice 5).
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — M7 slices 4 and 5 and the RISC-V chip, on `rebuild/pad-ring` (after #61, merged)**
 
 - **Done:**
