@@ -1,5 +1,18 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-21 — Tcl and Python consoles, on `rebuild/consoles` (after #64, #65, merged)**
+
+- **Done:** `app/console`: Tools > Tcl Console (Tcl 9.1 embedded from Homebrew's tcl-tk, its script library zipped inside libtcl; every
+  command a Tcl command `name -param value`, converted by its schema; results as dicts and lists; `help`; puts to the console) and
+  Tools > Python Console (the user's python3, `ov` = `openvlsi.Client(endpoint=...)` on the app's socket; the client is a Qt resource
+  copied to $TMPDIR/openvlsi-client). `console_open`, `console_eval` (REPL-like: the last expression's value; an error is the command's
+  error). Up/Down history. `ui_locate` field returns a console's output. ui_test "Script consoles" 66/66 offscreen; ctest 25/25.
+- **Learned:** CMake on macOS finds the SDK's Tcl.framework (8.5) headers first: look in Homebrew's first. A bundle run headless with
+  Homebrew's QT_PLUGIN_PATH loads two Qt copies: not a test of the bundle.
+- **Next:** Liberate on TreeSPICE (a cell's Liberty from its netlist, against the PDK's own); menus added by a script.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-21 — SkyWater 130, on `rebuild/sky130` (menus are PR #64, open)**
 
 - **Done:** platform `sky130hd` (ORFS's, fetched with the owner's permission: 20 MB sparse checkout, plus sky130hs's rcx_patterns.rules its

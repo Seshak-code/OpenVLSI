@@ -47,8 +47,8 @@ app/ (Qt 6: the shell: stages rail, navigators, palette, themes; CIW, schematic/
   grant Accessibility permission). Handlers called directly miss focus, shortcuts and double clicks: it has found bugs they could not.
 - **Every action is a command** (`cmd/registry.h`): a name (`[a-z][a-z0-9_]*`), a description, a JSON-schema
   parameter object, a handler. Calls are validated fail-closed (an unknown key, a wrong type, a missing parameter is
-  an error result), logged, and undoable through the database. The GUI, the scripting console (embedded Python, a
-  venv per tool) and `openvlsi-mcp` all call `Registry::call`. A new GUI feature without a command is incomplete.
+  an error result), logged, and undoable through the database. The GUI, the script consoles (`app/console`: Tcl
+  embedded, every command a Tcl command; Python as the user's python3 on the app's socket) and `openvlsi-mcp` all call `Registry::call`. A new GUI feature without a command is incomplete.
 - **Simulation** (`sim/`): the netlister writes a schematic's hierarchy (a config view's view list and bindings
   switch cells between `spice` primitives and schematics) as SPICE; `simulate` runs the `treespice` beside the
   executable (copied there at build) in a worker process and reads its raw file. Cards are one analysis or control

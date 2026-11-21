@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QMenuBar>
 #include <QPushButton>
 #include <QTabBar>
@@ -273,6 +274,7 @@ void addInputCommands(Session& session, Shell& shell) {
                          else if (auto* combo = qobject_cast<QComboBox*>(w)) r["text"] = combo->currentText();
                          else if (auto* label = qobject_cast<QLabel*>(w)) r["text"] = label->text();
                          else if (auto* spin = qobject_cast<QAbstractSpinBox*>(w)) r["text"] = spin->text();
+                         else if (auto* log = qobject_cast<QPlainTextEdit*>(w)) r["text"] = log->toPlainText();  // a console's output
                          return QJsonValue(r);
                      }
                  refuse("no visible field named '" + text + "'");

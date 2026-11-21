@@ -2076,6 +2076,23 @@ Writes a config view, creating it when the cell has none of that name: its top (
 | `view` | string | yes | view name: a schematic, or a config naming one |
 | `viewList` | array |  | view names in the order tried, as ["extracted", "schematic", "spice"] |
 
+### `console_eval`
+
+Runs code in a script console (opened if need be), as if typed: returns what it printed and, in Tcl, its result; an error is the command's error.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `code` | string | yes | the code; it may span lines |
+| `language` | string | yes | tcl or python |
+
+### `console_open`
+
+Opens a script console as a tab: Tcl (every command as `name -param value`, results as dicts and lists) or Python (`ov`, this app, every command a method). Returns the language.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `language` | string | yes | tcl or python |
+
 ### `power_analyze`
 
 IR drop and electromigration of a run's power grid through OpenROAD's PSM, net by net: worst and average drop, where it is worst, the largest current in a grid resistor. supply_v defaults to the platform's. Waits and returns it, or with wait false starts it in the background (poll power_report).

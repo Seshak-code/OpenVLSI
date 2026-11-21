@@ -90,13 +90,22 @@ treespice_beside(openvlsi-mcp)
 set(CMAKE_AUTOMOC ON)
 add_library(openvlsi_app STATIC app/session.cpp app/ciw.cpp app/library_manager.cpp app/scene.cpp app/canvas.cpp
             app/view_editor.cpp app/ade_explorer.cpp app/plot.cpp app/waveform_viewer.cpp app/theme.cpp app/icons.cpp
-            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp app/implement.cpp app/test_stage.cpp app/verify_stage.cpp app/ui_commands.cpp app/ui_input.cpp app/api_server.cpp app/signoff.cpp app/rtl_stage.cpp app/netlist_view.cpp)
+            app/palette.cpp app/navigator.cpp app/shell.cpp app/layout_viewer.cpp app/verifier.cpp app/implement.cpp app/test_stage.cpp app/verify_stage.cpp app/ui_commands.cpp app/ui_input.cpp app/api_server.cpp app/signoff.cpp app/rtl_stage.cpp app/netlist_view.cpp app/console.cpp)
+# Tcl for the Tcl console, embedded (Tcl 9 carries its own script library zipped into libtcl)
+# (Homebrew's first: the macOS SDK's Tcl.framework is 8.5)
+find_path(TCL_INCLUDE_DIR tcl.h PATHS /opt/homebrew/opt/tcl-tk/include/tcl-tk /usr/local/opt/tcl-tk/include/tcl-tk NO_DEFAULT_PATH)
+find_path(TCL_INCLUDE_DIR tcl.h PATH_SUFFIXES tcl9.1 tcl9.0 REQUIRED)
+find_library(TCL_LIBRARY NAMES tcl9.1 tcl9.0 tcl91 tcl90 HINTS /opt/homebrew/opt/tcl-tk/lib /usr/local/opt/tcl-tk/lib REQUIRED)
 target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd openvlsi_mcp Qt6::Widgets Qt6::Network PRIVATE Qt6::GuiPrivate)  # QRhi: <rhi/qrhi.h>
+target_include_directories(openvlsi_app PRIVATE ${TCL_INCLUDE_DIR})
+target_link_libraries(openvlsi_app PRIVATE ${TCL_LIBRARY})
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag app/shaders/layout.vert app/shaders/layout.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
 target_link_libraries(OpenVLSI PRIVATE openvlsi_app)
 # The user guide, for Help > User Guide (ui_help)
 qt_add_resources(OpenVLSI "docs" PREFIX "/docs" BASE "${CMAKE_CURRENT_SOURCE_DIR}/docs" FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/guide.md")
+# The Python client, for the Python console (it places a copy where python3 finds it)
+qt_add_resources(OpenVLSI "python" PREFIX "/python" BASE "${CMAKE_CURRENT_SOURCE_DIR}/tools" FILES "${CMAKE_CURRENT_SOURCE_DIR}/tools/openvlsi.py")
 treespice_beside(OpenVLSI)
 set_target_properties(OpenVLSI PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER org.openvlsi.OpenVLSI
                       MACOSX_BUNDLE_BUNDLE_NAME OpenVLSI MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})

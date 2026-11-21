@@ -385,12 +385,12 @@ The owner's map of the suite, domain by domain: what is here, what is not, and t
 | Pegasus | KLayout DRC, LVS, ERC, antenna and density; IHP, SkyWater 130 | DFM: litho hotspots, CMP, critical area |
 | Integrity 3D-IC, Clarity, Celsius, Sigrity | — | Out of scope for now: multi-die, field solvers, thermal |
 | Cerebrus | — | Settings sweeps of `flow_run` in parallel, PPA compared (ORFS ships autotuner settings per design) |
-| Platform | One database, every control a command, MCP, Python client; GDS, LEF/DEF, Liberty, SDC, SPEF, SPICE/CDL, Verilog, Verilog-A (OSDI) | Tcl and Python consoles, menus added by scripts, OASIS, DSPF, UPF, Spectre syntax; job farms (LSF, Slurm) |
+| Platform | One database, every control a command, MCP, Python client; Tcl and Python consoles (every command in each); GDS, LEF/DEF, Liberty, SDC, SPEF, SPICE/CDL, Verilog, Verilog-A (OSDI) | Menus added by scripts, OASIS, DSPF, UPF, Spectre syntax; job farms (LSF, Slurm) |
 | PDKs | IHP SG13G2 (cells, IO, SRAM), ASAP7, ASAP5, SkyWater 130 (sky130hd) | Foundry PDKs (licensed; encrypted models cannot be read) |
 
 **Order** (what a designer meets first, and what TreeSPICE makes ours):
 1. SkyWater 130 through testing (its SPICE models need the owner's download).
-2. Tcl and Python consoles; menus and forms added by a script.
+2. Tcl and Python consoles (done 2026-11-21); menus and forms added by a script.
 3. Liberate on TreeSPICE: a cell's Liberty from its netlist, checked against the PDK's own.
 4. Formal and equivalence (open tools: SymbiYosys, eqy; a download to ask for).
 5. Flow exploration: `flow_run` settings swept in parallel, PPA side by side.

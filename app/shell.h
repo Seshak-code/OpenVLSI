@@ -7,6 +7,9 @@
 #include "app/theme.h"
 
 #include <QMainWindow>
+#include <QPointer>
+
+#include <map>
 
 class QLabel;
 class QMenu;
@@ -19,6 +22,7 @@ class QVBoxLayout;
 namespace app {
 
 class CommandForm;
+class Console;
 class CommandPalette;
 class ImplementPanel;
 class TestPanel;
@@ -63,6 +67,7 @@ protected:
     void closeEvent(QCloseEvent* e) override;
 
 private:
+    std::map<QString, QPointer<Console>> consoles_;  // "tcl", "python"
     void host(QWidget* tool);
     void adopt(QWidget* tool);
     void closeTab(int index);
