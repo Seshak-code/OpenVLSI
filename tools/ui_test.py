@@ -236,11 +236,11 @@ def run(ov, hands, gpu, work):
     hands.press("console")
     check(ov.ui_state()["console"] is True, "the rail's button opens the command window")
     hands.press("console")
-    hands.menu("Window", "Appearance", "Light")
-    check(ov.ui_state()["appearance"] == "light", "Window > Appearance > Light, through a submenu")
+    hands.menu("Options", "Appearance", "Light")
+    check(ov.ui_state()["appearance"] == "light", "Options > Appearance > Light, through a submenu")
     if gpu:
         canvas_light = ov.ui_pixel(x=hands.at("layout_point", x=9500, y=500)[0], y=hands.at("layout_point", x=9500, y=500)[1])
-    hands.menu("Window", "Appearance", "Dark")
+    hands.menu("Options", "Appearance", "Dark")
     check(ov.ui_state()["appearance"] == "dark", "and back to Dark")
     if gpu:
         canvas_dark = ov.ui_pixel(x=hands.at("layout_point", x=9500, y=500)[0], y=hands.at("layout_point", x=9500, y=500)[1])
@@ -343,6 +343,30 @@ def run(ov, hands, gpu, work):
     hands.press("tab_close", text="bench config")
     unbound = [x["text"] for x in ov.ui_actions() if not x["command"]]
     check(unbound == [], f"and every control there names its command {unbound}")
+
+    print("Menus and a form's choices", flush=True)
+    hands.press("tab", text="Start")
+    hands.menu("File", "New View…")
+    check(ov.ui_state()["modal"] == "view_create", f"File > New View… opens its form: {ov.ui_state()['modal']!r}")
+
+    def right(field):
+        x, y = hands.at("field", text=field)
+        if hands.backend == "os":
+            hands._os("click", x, y, "right")
+        else:
+            ov.ui_input(action="click", x=x, y=y, button="right")
+        hands.settle()
+    right("library")
+    hands.press("menu_item", text="d")
+    check(ov.ui_locate(kind="field", text="library").get("text") == "d", "a right click on a field offers the workspace's libraries; one chosen fills it")
+    right("cell")
+    hands.press("menu_item", text="c")
+    check(ov.ui_locate(kind="field", text="cell").get("text") == "c", "and the cell field then offers that library's cells")
+    hands.press("button", text="Cancel")
+    for menu, item, title in (("Help", "Command Reference", "Command Reference"), ("Help", "User Guide", "User Guide"), ("Options", "Keyboard Shortcuts…", "Keyboard Shortcuts")):
+        hands.menu(menu, item)
+        check(ov.ui_state()["active_title"] == title, f"{menu} > {item} shows it in a tab: {ov.ui_state()['active_title']!r}")
+        hands.press("tab_close", text=title)
     check(ov.ui_input_dropped() == 0, f"no input went nowhere: {ov.ui_input_dropped()} dropped")
 
 

@@ -95,6 +95,8 @@ target_link_libraries(openvlsi_app PUBLIC openvlsi_cmd openvlsi_mcp Qt6::Widgets
 qt_add_shaders(openvlsi_app "canvas_shaders" PREFIX "/" BASE app FILES app/shaders/canvas.vert app/shaders/canvas.frag app/shaders/layout.vert app/shaders/layout.frag)
 add_executable(OpenVLSI MACOSX_BUNDLE app/main.cpp)
 target_link_libraries(OpenVLSI PRIVATE openvlsi_app)
+# The user guide, for Help > User Guide (ui_help)
+qt_add_resources(OpenVLSI "docs" PREFIX "/docs" BASE "${CMAKE_CURRENT_SOURCE_DIR}/docs" FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/guide.md")
 treespice_beside(OpenVLSI)
 set_target_properties(OpenVLSI PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER org.openvlsi.OpenVLSI
                       MACOSX_BUNDLE_BUNDLE_NAME OpenVLSI MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
