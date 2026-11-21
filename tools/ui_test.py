@@ -27,7 +27,7 @@ KEYCODES = {"a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c":
             "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "7": 26, "8": 28, "9": 25, "0": 29,
             "-": 27, ".": 47, "/": 44, " ": 49, "[": 33, "]": 30, "=": 24, "'": 39, ";": 41, ",": 43, "\\": 42,
             "Return": 36, "Esc": 53, "Backspace": 51, "Tab": 48, "Down": 125, "Up": 126}
-SHIFTED = {"_": "-", "+": "=", '"': "'", ":": ";", "{": "[", "}": "]", "|": "\\"}  # a US keyboard's shifted characters
+SHIFTED = {"_": "-", "+": "=", '"': "'", ":": ";", "{": "[", "}": "]", "|": "\\", "(": "9", ")": "0", "$": "4"}  # a US keyboard's shifted characters
 
 
 def check(ok, what):
@@ -368,6 +368,40 @@ def run(ov, hands, gpu, work):
         check(ov.ui_state()["active_title"] == title, f"{menu} > {item} shows it in a tab: {ov.ui_state()['active_title']!r}")
         hands.press("tab_close", text=title)
     check(ov.ui_input_dropped() == 0, f"no input went nowhere: {ov.ui_input_dropped()} dropped")
+
+    print("Script consoles", flush=True)
+    hands.menu("Tools", "Tcl Console")
+    check(ov.ui_state()["active_title"] == "Tcl", f"Tools > Tcl Console opens a tab: {ov.ui_state()['active_title']!r}")
+    hands.press("field", text="Tcl input")
+    cells = len(ov.cell_list(library="d"))
+    hands.type("set n [llength [cell_list -library d]]")
+    hands.key("Return")
+    hands.type("cell_create -library d -cell from_tcl")
+    hands.key("Return")
+    log = ov.ui_locate(kind="field", text="Tcl output").get("text", "")
+    check("from_tcl" in ov.cell_list(library="d") and f"\n{cells}\n" in log, f"typed Tcl runs the app's commands and shows their results: {log[-120:]!r}")
+    hands.key("Up")
+    check(ov.ui_locate(kind="field", text="Tcl input")["text"] == "cell_create -library d -cell from_tcl", "Up brings back the last line")
+    hands.menu("Tools", "Python Console")
+    for _ in range(100):  # python3 starts and connects first
+        if ov.ui_state()["active_title"] == "Python":
+            break
+        time.sleep(0.1)
+    check(ov.ui_state()["active_title"] == "Python", f"Tools > Python Console opens a tab: {ov.ui_state()['active_title']!r}")
+    hands.press("field", text="Python input")
+    hands.type('for c in ov.cell_list(library="d"):')
+    hands.key("Return")
+    hands.type('    print("cell", c)')
+    hands.key("Return")
+    hands.key("Return")  # the block ends on an empty line, as in python's own prompt
+    for _ in range(50):  # python answers on its own time
+        log = ov.ui_locate(kind="field", text="Python output").get("text", "")
+        if "cell from_tcl" in log:
+            break
+        time.sleep(0.1)
+    check("cell c" in log and "cell from_tcl" in log, f"a typed Python block runs against the app: {log[-120:]!r}")
+    for title in ("Python", "Tcl"):
+        hands.press("tab_close", text=title)
 
 
 def main():

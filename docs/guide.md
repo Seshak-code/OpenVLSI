@@ -10,6 +10,27 @@ The menu bar follows a Cadence tool's: **File** (new library, cell or view, Open
 
 Every form is its command's parameters. Right-click a field for the values it can take (the workspace's libraries, a library's cells, a cell's views, runs, platforms, layers) or Browse… for a file or folder; typing completes from the same list. A yes/no field left blank takes the command's default.
 
+## Tcl and Python consoles
+
+**Tools > Tcl Console** is a Tcl 9 interpreter inside the app, as in Innovus: every command is a Tcl command taking `-param value`, and
+returns dicts and lists. `help` lists the commands, `help cell_list` describes one.
+
+```tcl
+foreach c [cell_list -library analog] { puts "$c: [view_list -library analog -cell $c]" }
+set run [dict get [flow_run -design gcd -verilog [list /abs/gcd.v] -top gcd -platform sky130hd -clock_period_ns 5] run]
+```
+
+**Tools > Python Console** is your own `python3`, its `ov` this app (every command a method; `ov.commands()` lists them). Your
+installed packages are there, and blocks continue on `...` as in python's own prompt.
+
+```python
+for c in ov.cell_list(library="analog"):
+    print(c, ov.view_list(library="analog", cell=c))
+```
+
+Either way the windows follow each call, and Up recalls the last lines. `console_eval {language, code}` runs code in either from a script
+or an agent. Set `OPENVLSI_PYTHON` for another interpreter.
+
 ## Before you start
 
 ```bash

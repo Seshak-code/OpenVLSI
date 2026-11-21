@@ -1,5 +1,7 @@
 #include "app/shell.h"
 
+#include "app/console.h"
+
 #include "app/ade_explorer.h"
 #include "app/icons.h"
 #include "app/implement.h"
@@ -275,6 +277,8 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     toolsMenu_->addAction("Library Manager", this, [this] { showLibraryManager(); });
     toolsMenu_->addAction("Command Palette", QKeySequence("Ctrl+K"), this, &Shell::openPalette);
     toolsMenu_->addAction("Command Window", QKeySequence("Ctrl+J"), this, [this] { showConsole(!consoleVisible()); });
+    toolsMenu_->addAction("Tcl Console", this, [this] { session_.call("console_open", {{"language", "tcl"}}); });
+    toolsMenu_->addAction("Python Console", this, [this] { session_.call("console_open", {{"language", "python"}}); });
     toolsMenu_->addSeparator();
     toolsMenu_->addAction("Run DRC…", this, [this] { runForm("verify_drc", context()); });
     toolsMenu_->addAction("Run LVS…", this, [this] { runForm("verify_lvs", context()); });
@@ -312,7 +316,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     if (!api_->listening()) qWarning("OpenVLSI API: %s", qPrintable(api_->error()));
     bindActions(this, {{"New Library…", "library_create"}, {"New Cell…", "cell_create"}, {"New View…", "view_create"}, {"Open Cellview…", "editor_open"},
                        {"Import GDS…", "layout_import_gds"}, {"Export GDS…", "layout_export_gds"}, {"Install PDK…", "pdk_install"}, {"Install PDK Cells…", "pdk_install_cells"},
-                       {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"}, {"Command Window", "ui_console"}, {"Run DRC…", "verify_drc"},
+                       {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"}, {"Command Window", "ui_console"}, {"Tcl Console", "console_open"}, {"Python Console", "console_open"}, {"Run DRC…", "verify_drc"},
                        {"Run LVS…", "verify_lvs"}, {"Netlist as Verilog…", "netlist_verilog"}, {"EDA Tools…", "ui_help"}, {"Keyboard Shortcuts…", "ui_shortcuts"},
                        {"User Guide", "ui_help"}, {"Command Reference", "ui_help"}, {"About OpenVLSI", "ui_help"}, {"Side Panel", "ui_panel"}, {"Design", "ui_stage"},
                        {"RTL", "ui_stage"}, {"Simulate", "ui_stage"}, {"Implement", "ui_stage"}, {"Verify", "ui_stage"}, {"Test", "ui_stage"}, {"Library Manager", "ui_library_manager"},
@@ -381,6 +385,28 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
                              return QJsonValue(out);
                          },
                          true});
+    // Script consoles, a tab each: Tcl inside the app, Python as the user's python3 on the app's socket
+    const auto console = [this](const QString& language) {
+        QPointer<Console>& c = consoles_[language];
+        if (!c) c = new Console(session_, language, this);  // throws when it cannot start
+        host(c);
+        return c.data();
+    };
+    const QJsonObject kLanguage{{"type", "string"}, {"enum", QJsonArray{"tcl", "python"}}, {"description", "tcl or python"}};
+    session_.addCommand({"console_open", "Opens a script console as a tab: Tcl (every command as `name -param value`, results as dicts and lists) or "
+                                         "Python (`ov`, this app, every command a method). Returns the language.",
+                         QJsonObject{{"type", "object"}, {"properties", QJsonObject{{"language", kLanguage}}}, {"required", QJsonArray{"language"}}},
+                         [console](cmd::Context&, const QJsonObject& a) {
+                             console(a["language"].toString());
+                             return a["language"];
+                         },
+                         true});
+    session_.addCommand({"console_eval", "Runs code in a script console (opened if need be), as if typed: returns what it printed and, in Tcl, its result; "
+                                         "an error is the command's error.",
+                         QJsonObject{{"type", "object"},
+                                     {"properties", QJsonObject{{"language", kLanguage}, {"code", cmd::param("string", "the code; it may span lines")}}},
+                                     {"required", QJsonArray{"language", "code"}}},
+                         [console](cmd::Context&, const QJsonObject& a) { return QJsonValue(console(a["language"].toString())->evaluate(a["code"].toString())); }});
     // Every form's fields offer the workspace's values for them (a right click, completion): by the parameter's name, and its description
     // for files and folders
     CommandForm::setChoiceSource([this](const QString& command, const QString& param, const QJsonObject& schema, const QJsonObject& cur) {
