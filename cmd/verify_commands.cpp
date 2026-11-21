@@ -484,7 +484,8 @@ else:
     sides = [("schematic", nl)]
 given = {"power": [n.lower() for n in power.split(",") if n], "ground": [n.lower() for n in ground.split(",") if n]}
 usual = {"power": re.compile(r"^(a|d|io)?(vdd|vcc|vpwr)", re.I), "ground": re.compile(r"^((a|d|io)?(vss|gnd|vgnd)|0$)", re.I)}
-def supply(kind, name): return name.lower() in given[kind] if given[kind] else bool(usual[kind].match(name))
+def supply(kind, name):  # a net joined from several labels is named "a,b" (SkyWater's VNB,VSS): a supply if any of them is
+    return any(n.lower() in given[kind] if given[kind] else bool(usual[kind].match(n)) for n in name.split(","))
 def roles(dc):
     names = {t.name for t in dc.terminal_definitions()}
     if {"S", "G", "D"} <= names: return {"S": "path", "D": "path", "G": "gate", "B": "bulk"}
@@ -874,7 +875,7 @@ void addVerifyCommands(Registry& r) {
                for (const auto& d : pdk.drcDefines)
                    if (d.rfind("densityRules", 0) != 0) { args.push_back("-rd"); args.push_back(d); }
                args.push_back("-r");
-               args.push_back(flow::platformFile(pdk, tools.flowDir, pdk.drcDeck));
+               args.push_back(flow::drcDeck(pdk, tools.flowDir, dir.string()));
                const auto execute = [dir, rec, args, tools](const std::atomic<bool>* cancel) {
                    QJsonObject done = rec;
                    std::string why;

@@ -157,10 +157,10 @@ int main() {
         check(tools.ok && openroadMissing && orfsMissing && yosysFound,
               "flow_tools: an override naming nothing leaves that tool missing, never another; others have path and version");
         const cmd::Result plats = call("flow_platforms", {});
-        bool allUnusable = plats.ok && plats.value.toArray().size() == 2;
+        bool allUnusable = plats.ok && plats.value.toArray().size() == 3;
         for (const auto& v : plats.value.toArray())
             allUnusable = allUnusable && !v.toObject()["usable"].toBool() && v.toObject()["missing"].toArray().contains(QJsonValue("openroad"));
-        check(allUnusable, "flow_platforms: both known platforms unusable, naming what is missing");
+        check(allUnusable, "flow_platforms: every known platform unusable, naming what is missing");
         const cmd::Result run = call("flow_run", good);
         check(!run.ok && run.error.contains("openroad") && run.error.contains("OpenROAD-flow-scripts"), "flow_run refuses, naming the missing tools");
         setenv("OPENROAD_EXE", (bin / "tool").c_str(), 1);

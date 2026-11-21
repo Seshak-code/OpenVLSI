@@ -1,13 +1,15 @@
 # Active Context
 
-**Last session: Claude Code (dev), 2026-11-15 — menus and form choices, on `rebuild/menus-forms` (after #63, merged)**
+**Last session: Claude Code (dev), 2026-11-21 — SkyWater 130, on `rebuild/sky130` (menus are PR #64, open)**
 
-- **Done:** menu bar File / tool's own / Tools / Options / Window / Help, every item bound to a command; `ui_help` (guide from a Qt
-  resource, the command reference generated live, About, EDA tools) and `ui_shortcuts`; form fields offer the workspace's values on a
-  right click and as completion (`CommandForm::setChoiceSource`, set by the shell), Browse… for files and folders. ui_test.py 61/61.
-- **Owner (2026-11-15):** next, build a circuit on SkyWater 130 nm. This ORFS checkout is sparse (asap7, ihp-sg13g2): the sky130hd platform
-  is 22 files, ~21 MB from ORFS's GitHub; SPICE models and KLayout decks come from the SkyWater PDK (open_pdks/volare). Ask before downloading.
-- **Next:** SkyWater 130; Tcl and Python consoles in the app.
+- **Done:** platform `sky130hd` (ORFS's, fetched with the owner's permission: 20 MB sparse checkout, plus sky130hs's rcx_patterns.rules its
+  link points to). gcd at 5 ns: slack +1.08 ns, DRC 0 with the deck's FEOL rules on (ORFS's copy turns them off: `Platform::drcEdits`,
+  `flow::drcDeck`, also used by verify_drc), LVS matched (426 devices), ERC 0. LVS passes both decks' -rd names; a .lylvs deck's inserted
+  Ruby is XML-escaped. ERC: a net named "VNB,VSS" (several labels) is a supply if any part is. m7_gate step `sky130`.
+- **Plan:** docs/rebuild.md "Against the whole Cadence suite" maps the owner's blueprint (2026-11-21) to what is here, with an order.
+- **Not yet:** sky130 transistor level (its SPICE models: the owner chose the platform only), layout tech for hand-drawn sky130, gate-level
+  firmware runs (no cell Verilog in the platform).
+- **Next:** Tcl and Python consoles; Liberate on TreeSPICE.
 
 ---
 

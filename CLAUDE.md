@@ -70,7 +70,7 @@ app/ (Qt 6: the shell: stages rail, navigators, palette, themes; CIW, schematic/
   over one run; `wave_eval` is the calculator as a command; it cross-probes with the schematic both ways
   (`waveform_probe`, `editor_select_net`).
 - **Digital flow** (`flow/rtl_flow.h`, `cmd/flow_commands.cpp`): `flow::Platform` says what a platform needs (decks, Liberty,
-  time unit, ORFS config); `ihp-sg13g2` and `asap7`, whose LVS step says no open deck exists, so its runs are never clean.
+  time unit, ORFS config); `ihp-sg13g2`, `sky130hd` (SkyWater 130: KLayout DRC with its front-end rules on, LVS; one Liberty corner, no layout tech) and `asap7`, whose LVS step says no open deck exists, so its runs are never clean.
   `flow_run` (`wait: false` for the background) takes ORFS from Verilog to GDS, then DRC and LVS; runs are directories
   (`implementation/<design>/run.N`: `run.json`, `flow.log`, ORFS's tree), read by `flow_status`, `flow_list` and `flow_report`
   (per stage from ORFS's metrics files and the decks' reports; a missing report is that stage's error), so they survive the

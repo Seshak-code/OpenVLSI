@@ -361,6 +361,44 @@ an instance to a neighbour's boundary within 8 pixels (abutment) and a drawn edg
 **Gate (`tools/m7_gate.py`):** a small SoC built by hand through MCP alone: a standard-cell counter, an analog block, an SRAM
 macro and a flow-built block under a pad ring; DRC and LVS clean; a test that runs the chip.
 
+## Against the whole Cadence suite (owner's blueprint, 2026-11-21)
+
+The owner's map of the suite, domain by domain: what is here, what is not, and the order to close it. "Here" means a command with a gate.
+
+| Domain (Cadence) | Here | Missing |
+|---|---|---|
+| Schematic, config views, ERC (Virtuoso) | Editors, hierarchy editor, ERC, CDL and Verilog netlists | Buses, CDF callbacks, behavioral (Verilog-A) views in a config, EDIF/CDL import |
+| ADE, Spectre X/FX | DC, AC, tran, noise, sens, tf, pz, stb, PSS, PAC, PNoise, HB; corners, temperature, Monte Carlo, yield, Assembler, Verifier | `sp` (S-parameters), accuracy presets (cx…vx), LHS/Sobol sampling, high-sigma, aging (HCI, BTI), EM |
+| AMS Designer | Firmware and digital co-simulation with SPICE (lockstep) | Verilog-AMS, connect modules, `wreal` |
+| Layout (Virtuoso XL/GXL) | Editing, Pcells (MOS, resistors, MIM), layout from schematic, flight lines, pad and seal rings, fill | Guard rings, stretch/chop, constraint manager (symmetry, matching), analog router, multi-patterning, in-layout RC/EM |
+| Liberate | — | Characterizing cells on TreeSPICE into Liberty (NLDM first, then CCS, LVF) |
+| Xcelium | Icarus with SDF | SystemVerilog/UVM, coverage, X-propagation, UPF power-aware simulation |
+| Jasper, Conformal | — | Property checking (BMC, k-induction, PDR), equivalence (RTL to netlist), CDC/RDC |
+| Verisium, SimVision | Waveforms, cross-probe | Driver/load tracing, schematic from RTL |
+| Palladium, Protium | — | Out of scope: emulation hardware |
+| Genus, Joules | Yosys through ORFS, any ORFS setting; OpenSTA power at every stage | Clock gating and retiming knobs, power from activity (VCD/SAIF) |
+| Innovus | OpenROAD through ORFS, every stage's layout, MMMC modes and corners in timing, hard macros, pad ring | Interactive floorplan and power planning, ECO |
+| Modus | — | Scan insertion, ATPG, BIST |
+| Tempus | OpenSTA at every corner and mode, RC derates | OCV/AOCV/POCV, SI (crosstalk), path-based analysis, timing ECO |
+| Voltus | Static IR | Dynamic IR, EM limits, package models |
+| Quantus | OpenRCX SPEF; extraction of hand-drawn layout (C to ground) | Coupling as coupling, field-solver modes, wire R of hand-drawn layout |
+| Pegasus | KLayout DRC, LVS, ERC, antenna and density; IHP, SkyWater 130 | DFM: litho hotspots, CMP, critical area |
+| Integrity 3D-IC, Clarity, Celsius, Sigrity | — | Out of scope for now: multi-die, field solvers, thermal |
+| Cerebrus | — | Settings sweeps of `flow_run` in parallel, PPA compared (ORFS ships autotuner settings per design) |
+| Platform | One database, every control a command, MCP, Python client; GDS, LEF/DEF, Liberty, SDC, SPEF, SPICE/CDL, Verilog, Verilog-A (OSDI) | Tcl and Python consoles, menus added by scripts, OASIS, DSPF, UPF, Spectre syntax; job farms (LSF, Slurm) |
+| PDKs | IHP SG13G2 (cells, IO, SRAM), ASAP7, ASAP5, SkyWater 130 (sky130hd) | Foundry PDKs (licensed; encrypted models cannot be read) |
+
+**Order** (what a designer meets first, and what TreeSPICE makes ours):
+1. SkyWater 130 through testing (its SPICE models need the owner's download).
+2. Tcl and Python consoles; menus and forms added by a script.
+3. Liberate on TreeSPICE: a cell's Liberty from its netlist, checked against the PDK's own.
+4. Formal and equivalence (open tools: SymbiYosys, eqy; a download to ask for).
+5. Flow exploration: `flow_run` settings swept in parallel, PPA side by side.
+6. `sp` and accuracy presets in TreeSPICE.
+7. Layout: guard rings, stretch and chop, symmetry and matching constraints.
+8. DFT: scan insertion (OpenROAD) and ATPG.
+9. Sign-off depth: OCV derates, SI, dynamic IR.
+
 ## What runs today, tool by tool (2026-11-05)
 
 Honest parity: each row is what a designer gets now, checked by the gate named, and what the Cadence tool has that this does not.
@@ -373,7 +411,7 @@ Honest parity: each row is what a designer gets now, checked by the gate named, 
 | Place and route | Innovus | OpenROAD through ORFS: pipeline, metrics, any ORFS setting (`settings`), the layout at each stage (`m5_gate`) | Editing mid-flow, interactive floorplan and power-grid editing, ECO, MMMC |
 | Timing | Tempus | OpenSTA with SPEF at every corner in parallel: WNS, TNS, paths worst-first across modes and corners, cross-probe (`m5_gate`: each corner agrees with its own simulation); modes (an SDC each) and a per-corner derate of the extracted R and C | An RC corner per extraction rule file (the open PDKs ship one), derates in the chip tests' SDF, SI, OCV/AOCV/POCV |
 | Power grid | Voltus | PSM static IR and grid currents, map on layout (`m5_gate`) | Dynamic IR, EM against process limits, vectors from activity |
-| Physical verification | Pegasus | KLayout's DRC and LVS decks, marker browser; LVS differences by kind, named on both sides, marked on the layout, cross-probed to the schematic (`m3_gate`, flow); ERC with every LVS, on both netlists flat, and on a schematic alone (`verify_erc`: floating gates and wells, wrong-supply bulks, dangling terminals, unpowered islands) | ERC from the PDK's own rules (soft connections, antenna, voltage classes), LVS cross-probe of flow runs to their Verilog, ASAP7 LVS (no open deck) |
+| Physical verification | Pegasus | KLayout's DRC and LVS decks (IHP; SkyWater 130 with its front-end rules on), marker browser; LVS differences by kind, named on both sides, marked on the layout, cross-probed to the schematic (`m3_gate`, flow); ERC with every LVS, on both netlists flat, and on a schematic alone (`verify_erc`: floating gates and wells, wrong-supply bulks, dangling terminals, unpowered islands) | ERC from the PDK's own rules (soft connections, antenna, voltage classes), LVS cross-probe of flow runs to their Verilog, ASAP7 LVS (no open deck) |
 | Extraction | Quantus | OpenRCX's SPEF in timing; each net's RC network in the transistor-level test, a node per pin (gcd: 2,034 wire resistors on 533 nets) and of hand-drawn layout an `extracted` view: LVS's devices as drawn and each net's wiring capacitance from the tech LEF, simulated through a config view (`verify_extract`; `m3_gate`: inverter 13.5 ps as a schematic, 15.1 ps extracted) | Coupling as coupling (it is grounded); for hand-drawn layout wire resistance, coupling, hierarchy, devices other than MOS |
 | Custom layout | Virtuoso Layout | Viewer, editing tools, transistor, poly resistor and MIM capacitor generators, layout from schematic, flight lines (`m3_gate`, `ui_test`) | Serpentine resistors, MOM and RF MIM capacitors, FinFET cells, abutment, edit-in-place, constraint-driven routing, guard rings |
 | Schematic, ADE, RF | Virtuoso, ADE, Spectre, Spectre RF | Editors, ADE L/XL/Verifier, the hierarchy editor on config views (view list, a binding per cell, its netlist; `test_shell`, `ui_test`), TreeSPICE with PSS, PAC, PNoise, HB (`m1_gate`, `m2_gate`, `test_verifier`) | Buses, inherited nets, CDF callbacks, Library Manager copy and locks; bindings per instance in a config |
