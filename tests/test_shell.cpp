@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
         auto* amp = qobject_cast<app::ViewEditor*>(shell.current());
         check(amp && !amp->isWindow(), "the tool is not a window of its own");
         const QStringList ampMenus = shell.menuTitles();
-        check(ampMenus.first() == "&File" && ampMenus.contains("&Create") && ampMenus.last() == "&Window", "the active tool's menus join the bar");
+        check(ampMenus.first() == "&File" && ampMenus.contains("&Create") && ampMenus.contains("&Window") && ampMenus.last() == "&Help", "the active tool's menus join the bar");
         check(call("editor_open", {{"library", "analog"}, {"cell", "tb"}, {"view", "maestro"}}).ok, "editor_open tb maestro");
         check(shell.tabTitles().size() == 3 && !shell.menuTitles().contains("&Create"), "another tool's menus replace them");
         check(call("editor_open", {{"library", "analog"}, {"cell", "amp"}, {"view", "schematic"}}).ok && shell.current() == amp && shell.tabTitles().size() == 3,

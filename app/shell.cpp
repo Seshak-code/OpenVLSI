@@ -40,6 +40,9 @@
 #include <QTabWidget>
 #include <QToolBar>
 #include <QToolButton>
+#include <QRegularExpression>
+#include <QFile>
+#include <QTextBrowser>
 #include <QVBoxLayout>
 
 namespace app {
@@ -253,26 +256,31 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     connect(search_, &QToolButton::clicked, this, &Shell::openPalette);
     bar->addWidget(search_);
 
-    // The menus every tool shares
+    // The menus every tool shares, in the order a Cadence tool has them: File, the tool's own, Tools, Options, Window, Help
     fileMenu_ = new QMenu("&File", this);
     fileMenu_->addAction("New Library…", this, [this] { runForm("library_create"); });
+    fileMenu_->addAction("New Cell…", this, [this] { runForm("cell_create", context()); });
+    fileMenu_->addAction("New View…", this, [this] { runForm("view_create", context()); });
+    fileMenu_->addAction("Open Cellview…", QKeySequence::Open, this, [this] { runForm("editor_open", context()); });
+    fileMenu_->addSeparator();
+    fileMenu_->addAction("Import GDS…", this, [this] { runForm("layout_import_gds", context()); });
+    fileMenu_->addAction("Export GDS…", this, [this] { runForm("layout_export_gds", context()); });
+    fileMenu_->addSeparator();
     fileMenu_->addAction("Install PDK…", this, [this] { runForm("pdk_install"); });
     fileMenu_->addAction("Install PDK Cells…", this, [this] { runForm("pdk_install_cells"); });
     fileMenu_->addSeparator();
     fileMenu_->addAction("Close Tab", QKeySequence::Close, this, [this] { closeTab(tabs_->currentIndex()); });
     fileMenu_->addAction("Quit", QKeySequence::Quit, qApp, &QApplication::quit);
-    viewMenu_ = new QMenu("&Window", this);
-    viewMenu_->addAction("Command Palette", QKeySequence("Ctrl+K"), this, &Shell::openPalette);
-    viewMenu_->addAction("Command Window", QKeySequence("Ctrl+J"), this, [this] { showConsole(!consoleVisible()); });
-    viewMenu_->addAction("Side Panel", QKeySequence("Ctrl+B"), this, [this] { panels_->setVisible(!panels_->isVisible()); });
-    viewMenu_->addSeparator();
-    for (int k = 0; k < (int)kStageNames.size(); ++k) {
-        const QString name = kStageNames[k];
-        viewMenu_->addAction(k == 1 ? QString("RTL") : name.left(1).toUpper() + name.mid(1), QKeySequence(QString("Ctrl+%1").arg(k + 1)), this, [this, k] { showStage(k); });
-    }
-    viewMenu_->addSeparator();
-    viewMenu_->addAction("Library Manager", this, [this] { showLibraryManager(); });
-    themeMenu_ = viewMenu_->addMenu("Appearance");
+    toolsMenu_ = new QMenu("&Tools", this);
+    toolsMenu_->addAction("Library Manager", this, [this] { showLibraryManager(); });
+    toolsMenu_->addAction("Command Palette", QKeySequence("Ctrl+K"), this, &Shell::openPalette);
+    toolsMenu_->addAction("Command Window", QKeySequence("Ctrl+J"), this, [this] { showConsole(!consoleVisible()); });
+    toolsMenu_->addSeparator();
+    toolsMenu_->addAction("Run DRC…", this, [this] { runForm("verify_drc", context()); });
+    toolsMenu_->addAction("Run LVS…", this, [this] { runForm("verify_lvs", context()); });
+    toolsMenu_->addAction("Netlist as Verilog…", this, [this] { runForm("netlist_verilog", context()); });
+    optionsMenu_ = new QMenu("&Options", this);
+    themeMenu_ = optionsMenu_->addMenu("Appearance");
     auto* group = new QActionGroup(this);
     for (Theme::Mode m : {Theme::Mode::Auto, Theme::Mode::Light, Theme::Mode::Dark}) {
         const QString name = Theme::modeName(m);
@@ -284,13 +292,139 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
         a->setChecked(m == Theme::mode());
         group->addAction(a);
     }
+    optionsMenu_->addAction("EDA Tools…", this, [this] { session_.call("ui_help", {{"topic", "tools"}}); });
+    optionsMenu_->addAction("Keyboard Shortcuts…", this, [this] { session_.call("ui_shortcuts", {{"show", true}}); });
+    viewMenu_ = new QMenu("&Window", this);
+    viewMenu_->addAction("Side Panel", QKeySequence("Ctrl+B"), this, [this] { panels_->setVisible(!panels_->isVisible()); });
+    viewMenu_->addSeparator();
+    for (int k = 0; k < (int)kStageNames.size(); ++k) {
+        const QString name = kStageNames[k];
+        viewMenu_->addAction(k == 1 ? QString("RTL") : name.left(1).toUpper() + name.mid(1), QKeySequence(QString("Ctrl+%1").arg(k + 1)), this, [this, k] { showStage(k); });
+    }
+    helpMenu_ = new QMenu("&Help", this);
+    helpMenu_->addAction("User Guide", this, [this] { session_.call("ui_help", {{"topic", "guide"}}); });
+    helpMenu_->addAction("Command Reference", this, [this] { session_.call("ui_help", {{"topic", "api"}}); });
+    helpMenu_->addAction("About OpenVLSI", this, [this] { session_.call("ui_help", {{"topic", "about"}}); });
     goMenu_ = nullptr;
 
     addUiCommands(session_, *this);
     api_ = new ApiServer(session_, this);
     if (!api_->listening()) qWarning("OpenVLSI API: %s", qPrintable(api_->error()));
-    bindActions(this, {{"New Library…", "library_create"}, {"Install PDK…", "pdk_install"}, {"Install PDK Cells…", "pdk_install_cells"}, {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"},
-                       {"Command Window", "ui_console"}, {"Side Panel", "ui_panel"}, {"Design", "ui_stage"}, {"RTL", "ui_stage"}, {"Simulate", "ui_stage"}, {"Implement", "ui_stage"}, {"Verify", "ui_stage"}, {"Test", "ui_stage"}, {"Library Manager", "ui_library_manager"}, {"Match the system", "ui_theme"}, {"Light", "ui_theme"}, {"Dark", "ui_theme"}});
+    bindActions(this, {{"New Library…", "library_create"}, {"New Cell…", "cell_create"}, {"New View…", "view_create"}, {"Open Cellview…", "editor_open"},
+                       {"Import GDS…", "layout_import_gds"}, {"Export GDS…", "layout_export_gds"}, {"Install PDK…", "pdk_install"}, {"Install PDK Cells…", "pdk_install_cells"},
+                       {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"}, {"Command Window", "ui_console"}, {"Run DRC…", "verify_drc"},
+                       {"Run LVS…", "verify_lvs"}, {"Netlist as Verilog…", "netlist_verilog"}, {"EDA Tools…", "ui_help"}, {"Keyboard Shortcuts…", "ui_shortcuts"},
+                       {"User Guide", "ui_help"}, {"Command Reference", "ui_help"}, {"About OpenVLSI", "ui_help"}, {"Side Panel", "ui_panel"}, {"Design", "ui_stage"},
+                       {"RTL", "ui_stage"}, {"Simulate", "ui_stage"}, {"Implement", "ui_stage"}, {"Verify", "ui_stage"}, {"Test", "ui_stage"}, {"Library Manager", "ui_library_manager"},
+                       {"Match the system", "ui_theme"}, {"Light", "ui_theme"}, {"Dark", "ui_theme"}});
+    // A document in a tab of its own (the guide, the command reference, ...): one tab a title, shown again when asked again
+    const auto showDocument = [this](const QString& title, const QString& markdown) {
+        for (int k = 0; k < tabs_->count(); ++k)
+            if (tabs_->widget(k)->objectName() == "document:" + title) {
+                static_cast<QTextBrowser*>(tabs_->widget(k))->setMarkdown(markdown);
+                tabs_->setCurrentIndex(k);
+                return;
+            }
+        auto* doc = new QTextBrowser(this);
+        doc->setObjectName("document:" + title);
+        doc->setOpenExternalLinks(true);
+        doc->setMarkdown(markdown);
+        tabs_->setCurrentIndex(tabs_->addTab(doc, title));
+    };
+    session_.addCommand({"ui_help", "Shows a document in a tab: the user guide, the command reference (every command and its parameters), about (the "
+                                    "version and the EDA tools it found) or tools (the tools alone, where each was found). Returns its title.",
+                         cmd::object({{"topic", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"guide", "api", "about", "tools"}}, {"description", "which"}}}}),
+                         [this, showDocument](cmd::Context&, const QJsonObject& a) {
+                             const QString topic = a["topic"].toString();
+                             QString title, text;
+                             if (topic == "guide") {
+                                 QFile f(":/docs/guide.md");
+                                 if (!f.open(QIODevice::ReadOnly)) throw std::runtime_error("this build carries no user guide (docs/guide.md)");
+                                 title = "User Guide", text = QString::fromUtf8(f.readAll());
+                             } else if (topic == "api") {
+                                 title = "Command Reference", text = apiReference(session_);
+                             } else {
+                                 QString tools = "| Tool | Found at |\n|---|---|\n";
+                                 for (const auto& t : session_.call("flow_tools").value.toArray()) {
+                                     const QJsonObject o = t.toObject();
+                                     tools += "| " + o["name"].toString() + " | " + (o["found"].toBool() ? "`" + o["path"].toString() + "`" : QString("not found")) + " |\n";
+                                 }
+                                 title = topic == "about" ? "About OpenVLSI" : "EDA Tools";
+                                 text = topic == "about" ? "# OpenVLSI\n\nChip design from RTL to a tested chip, macOS first: TreeSPICE simulates, and Yosys, OpenROAD, "
+                                                           "KLayout and Icarus are its backends.\n\nWorkspace: `" + QString::fromStdString(session_.workspace().file()) +
+                                                           "`\n\n## EDA tools\n\n" + tools
+                                                         : "# EDA tools\n\nWhere OpenVLSI found each tool (`scripts/setup_eda_tools.sh` installs them under ~/eda).\n\n" + tools;
+                             }
+                             showDocument(title, text);
+                             return QJsonValue(title);
+                         }});
+    session_.addCommand({"ui_shortcuts", "Every menu item with a keyboard shortcut in the menus now shown (the shared ones and the active tool's): menu, item, keys. "
+                                         "show puts them in a tab too.",
+                         cmd::object({}, {{"show", cmd::param("boolean", "show them in a tab (default false)")}}),
+                         [this, showDocument](cmd::Context&, const QJsonObject& a) {
+                             QJsonArray out;
+                             QString table = "# Keyboard shortcuts\n\n| Menu | Item | Keys |\n|---|---|---|\n";
+                             std::function<void(QMenu*, const QString&)> walk = [&](QMenu* m, const QString& path) {
+                                 for (QAction* act : m->actions()) {
+                                     if (act->menu()) {
+                                         walk(act->menu(), path + " > " + act->text().remove('&'));
+                                     } else if (!act->shortcut().isEmpty()) {
+                                         const QString keys = act->shortcut().toString(QKeySequence::NativeText);
+                                         out.append(QJsonObject{{"menu", path}, {"item", act->text()}, {"keys", keys}});
+                                         table += "| " + path + " | " + act->text() + " | " + keys + " |\n";
+                                     }
+                                 }
+                             };
+                             for (QAction* act : menuBar()->actions())
+                                 if (act->menu()) walk(act->menu(), act->text().remove('&'));
+                             if (a["show"].toBool(false)) showDocument("Keyboard Shortcuts", table);
+                             return QJsonValue(out);
+                         },
+                         true});
+    // Every form's fields offer the workspace's values for them (a right click, completion): by the parameter's name, and its description
+    // for files and folders
+    CommandForm::setChoiceSource([this](const QString& command, const QString& param, const QJsonObject& schema, const QJsonObject& cur) {
+        FieldChoices out;
+        const auto names = [](const cmd::Result& r, const char* key = nullptr) {
+            QStringList v;
+            if (r.value.isObject()) v = r.value.toObject().keys();
+            for (const auto& x : r.value.toArray()) v << (key ? x.toObject()[key].toString() : x.toString());
+            v.removeAll(QString());
+            v.removeDuplicates();
+            return v;
+        };
+        const auto lib = [&](std::initializer_list<const char*> keys) {
+            for (const char* k : keys)
+                if (!cur[k].toString().isEmpty()) return cur[k].toString();
+            return QString();
+        };
+        static const QStringList libraries = {"library", "masterLibrary", "master_library", "mapLibrary"};
+        if (libraries.contains(param)) {
+            out.values = names(session_.call("workspace_libraries"));
+        } else if (param == "cell" || param == "mapCell") {
+            if (const QString l = lib({param == "mapCell" ? "mapLibrary" : "library"}); !l.isEmpty()) out.values = names(session_.call("library_views", {{"library", l}}));
+        } else if (param == "master" || param == "master_cell") {
+            if (const QString l = lib({"masterLibrary", "master_library", "library"}); !l.isEmpty()) out.values = names(session_.call("library_views", {{"library", l}}));
+        } else if ((param == "view" || param == "masterView" || param == "master_view" || param == "schematic") && !cur["cell"].toString().isEmpty()) {
+            const QString l = param.startsWith("master") ? lib({"masterLibrary", "master_library", "library"}) : lib({"library"});
+            const QString c = param.startsWith("master") ? cur[param == "masterView" ? "master" : "master_cell"].toString() : cur["cell"].toString();
+            for (const auto& v : session_.call("library_views", {{"library", l}}).value.toObject()[c].toArray()) out.values << v.toObject()["view"].toString();
+        } else if (param == "flow_run") {
+            out.values = names(session_.call("flow_list"), "run");
+        } else if (param == "run") {
+            out.values = names(session_.call(command.startsWith("test_") ? "test_list" : "verify_list"), "run");
+        } else if (param == "platform") {
+            out.values = names(session_.call("flow_platforms"), "name");
+        } else if ((param == "layer" || param == "metal" || param == "from") && !cur["library"].toString().isEmpty()) {
+            out.values = names(session_.call("layout_layers", {{"library", cur["library"].toString()}}), "name");
+        }
+        static const QRegularExpression fileish(R"(\b(file|files|path|paths|directory|folder|gds|hex)\b)", QRegularExpression::CaseInsensitiveOption);
+        if (out.values.isEmpty() && fileish.match(schema["description"].toString()).hasMatch()) {
+            out.folder = schema["description"].toString().contains(QRegularExpression(R"(\b(directory|folder)\b)", QRegularExpression::CaseInsensitiveOption));
+            out.file = !out.folder;
+        }
+        return out;
+    });
     session_.addCommand({"ui_theme", "Sets the app's appearance: auto follows the system, or light or dark; returns the mode now in effect.",
                          cmd::object({{"mode", QJsonObject{{"type", "string"}, {"enum", QJsonArray{"auto", "light", "dark"}}, {"description", "the appearance"}}}}),
                          [this](cmd::Context&, const QJsonObject& a) {
@@ -424,7 +558,10 @@ void Shell::rebuildMenus() {
     menuBar()->addMenu(fileMenu_);
     if (auto* m = qobject_cast<QMainWindow*>(current()))
         for (QAction* a : m->menuBar()->actions()) menuBar()->addAction(a);
+    menuBar()->addMenu(toolsMenu_);
+    menuBar()->addMenu(optionsMenu_);
     menuBar()->addMenu(viewMenu_);
+    menuBar()->addMenu(helpMenu_);
 }
 
 void Shell::refreshIcons() {
