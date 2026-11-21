@@ -48,6 +48,8 @@ struct Platform {
     std::vector<std::pair<std::string, std::vector<std::string>>> corners;
     std::string techLef;      // its routing layers' area and edge capacitance, for extracting hand-drawn layout; "" none
     std::vector<SpiceCorner> spiceCorners;  // test_spice's corners; none: the device library's typical models at supplyVolts
+    // text replaced in a copy of the DRC deck, for switches it sets in its text rather than reading from -rd
+    std::vector<std::pair<std::string, std::string>> drcEdits;
 };
 
 const std::vector<Platform>& platforms();
@@ -56,6 +58,8 @@ const Platform* findPlatform(const std::string& name);  // nullptr: unknown
 const std::vector<std::string>& libertyFor(const Platform& p, const std::string& corner);
 std::string knownPlatforms();                           // their names, comma separated
 std::string platformFile(const Platform& p, const std::string& flowDir, const std::string& file);
+// The DRC deck to run: the platform's, or a copy in dir with its drcEdits made (throws when one no longer matches)
+std::string drcDeck(const Platform& p, const std::string& flowDir, const std::string& dir);
 std::vector<std::string> missingFiles(const Platform& p, const std::string& flowDir);  // what a flow run needs and is not there
 
 }  // namespace flow

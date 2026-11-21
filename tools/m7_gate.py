@@ -584,6 +584,20 @@ def step_macro(m, work, flowdir):
           "simulated at transistor level through the standard cells' netlists, the first clock edge in reset sets its state: req_rdy rises, and holds after reset falls")
 
 
+def step_sky130(m, flowdir):
+    if not os.path.isdir(os.path.join(flowdir, "platforms/sky130hd")):
+        print("SkyWater 130: SKIP (no ORFS sky130hd platform)", flush=True)
+        return
+    print("SkyWater 130: gcd on sky130hd", flush=True)
+    st = m("flow_run", design="gcd_sky130", verilog=[os.path.join(flowdir, "designs/src/gcd/gcd.v")], top="gcd", platform="sky130hd", clock_period_ns=5.0)
+    report = m("flow_report", run=st["run"])
+    lvs = next(x for x in report["stages"] if x["stage"] == "lvs").get("metrics", {})
+    drcLog = os.path.join(st["dir"], "logs/sky130hd/gcd_sky130/base/6_drc.log")
+    check(report["clean"] and lvs.get("matched") and lvs.get("erc_violations") == 0,
+          f"flow_run takes gcd to GDS on SkyWater 130: timing met, DRC clean, LVS matched ({lvs.get('devices_layout')} devices), no ERC finding {report.get('not_clean')}")
+    check(os.path.isfile(drcLog) and "FEOL section" in open(drcLog).read(), "its DRC runs the deck's front-end rules too (ORFS's copy turns them off)")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--mcp", required=True)
@@ -607,6 +621,7 @@ def main():
     step_rv32i(m, work, os.path.expanduser("~/eda/orfs/flow"))
     seal_ring_is_ihps(m, work, os.path.expanduser("~/eda/orfs/flow"))
     step_macro(m, work, os.path.expanduser("~/eda/orfs/flow"))
+    step_sky130(m, os.path.expanduser("~/eda/orfs/flow"))
     m.p.stdin.close()
     m.p.wait()
     print(("PASSED" if not G_FAIL else "FAILED") + f": {G_PASS} of {G_PASS + len(G_FAIL)} checks")

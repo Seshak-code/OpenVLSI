@@ -1,5 +1,18 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-21 — SkyWater 130, on `rebuild/sky130` (menus are PR #64, open)**
+
+- **Done:** platform `sky130hd` (ORFS's, fetched with the owner's permission: 20 MB sparse checkout, plus sky130hs's rcx_patterns.rules its
+  link points to). gcd at 5 ns: slack +1.08 ns, DRC 0 with the deck's FEOL rules on (ORFS's copy turns them off: `Platform::drcEdits`,
+  `flow::drcDeck`, also used by verify_drc), LVS matched (426 devices), ERC 0. LVS passes both decks' -rd names; a .lylvs deck's inserted
+  Ruby is XML-escaped. ERC: a net named "VNB,VSS" (several labels) is a supply if any part is. m7_gate step `sky130`.
+- **Plan:** docs/rebuild.md "Against the whole Cadence suite" maps the owner's blueprint (2026-11-21) to what is here, with an order.
+- **Not yet:** sky130 transistor level (its SPICE models: the owner chose the platform only), layout tech for hand-drawn sky130, gate-level
+  firmware runs (no cell Verilog in the platform).
+- **Next:** Tcl and Python consoles; Liberate on TreeSPICE.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-15 — the RISC-V chip built in the window, on `rebuild/rv32i-screen` (after #62, merged)**
 
 - **Done:** `tools/ui_rv32i_test.py`: the RV32I chip by mouse and keyboard from New run… to its firmware test, 12/12 on screen with real

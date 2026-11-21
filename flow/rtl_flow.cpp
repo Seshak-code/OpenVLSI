@@ -36,6 +36,13 @@ const std::vector<Platform>& platforms() {
          "lef/sg13g2_tech.lef",
          // its Liberty corners' conditions (sg13g2_stdcell_slow_1p08V_125C and so on) on the matching MOS sections
          {{"slow", "mos_ss", 1.08, 125}, {"typ", "mos_tt", 1.2, 25}, {"fast", "mos_ff", 1.32, -40}}},
+        // SkyWater 130 nm, high-density cells (ORFS's sky130hd: one Liberty corner, KLayout decks; no gate-level models, no layout tech yet)
+        {"sky130hd", "1ns", 1.0, "drc/sky130hd.lydrc", {},
+         "lvs/sky130hd.lylvs", "", "cdl/sky130hd.cdl", "", {"lib/sky130_fd_sc_hd__tt_025C_1v80.lib"}, "setRC.tcl",
+         {}, {}, false, "sky130hd.lyp", "", 1.8, {"gds/sky130_fd_sc_hd.gds"},
+         {{"typ", {"lib/sky130_fd_sc_hd__tt_025C_1v80.lib"}}}, "lef/sky130_fd_sc_hd.tlef", {},
+         // ORFS's copy turns its front-end rules off: every rule applies (gcd: 0 either way, 62 s against 4 s)
+         {{"\nFEOL    = false", "\nFEOL    = true"}}},
         {"asap7", "1ps", 1e-3, "drc/asap7.lydrc", {},
          "", "no open LVS deck exists for asap7 (ORFS, the PDK and lambdapdk have none; the PDK's own is Calibre)", "", "",
          {"lib/NLDM/asap7sc7p5t_AO_RVT_FF_nldm_211120.lib.gz", "lib/NLDM/asap7sc7p5t_INVBUF_RVT_FF_nldm_220122.lib.gz",
@@ -77,6 +84,21 @@ std::string knownPlatforms() {
 std::string platformFile(const Platform& p, const std::string& flowDir, const std::string& file) {
     if (file.rfind("~/", 0) == 0) return std::string(std::getenv("HOME") ? std::getenv("HOME") : "") + file.substr(1);
     return (fs::path(flowDir) / "platforms" / p.name / file).string();
+}
+
+std::string drcDeck(const Platform& p, const std::string& flowDir, const std::string& dir) {
+    const std::string deck = platformFile(p, flowDir, p.drcDeck);
+    if (p.drcEdits.empty()) return deck;
+    std::ifstream in(deck);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    for (const auto& [from, to] : p.drcEdits) {
+        const size_t at = text.find(from);
+        if (at == std::string::npos) throw std::runtime_error(p.name + "'s DRC deck changed (it has no '" + from.substr(1) + "'): update rtl_flow.cpp");
+        text.replace(at, from.size(), to);
+    }
+    const std::string copy = (fs::path(dir) / ("drc" + fs::path(deck).extension().string())).string();
+    std::ofstream(copy) << text;
+    return copy;
 }
 
 std::vector<std::string> missingFiles(const Platform& p, const std::string& flowDir) {
@@ -466,7 +488,11 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
         drcArgs.push_back(d);
     }
     drcArgs.push_back("-r");
-    drcArgs.push_back(file(pdk.drcDeck));
+    try {
+        drcArgs.push_back(flow::drcDeck(pdk, tools.flowDir, reports.string()));
+    } catch (const std::exception& e) {
+        return fail(std::string("RTL flow: ") + e.what());
+    }
     if (!runTool(tools.klayout, drcArgs, &drcLog)) return fail("RTL flow: DRC " + res.error);
     std::ofstream(logs / "6_drc.log") << drcLog;
     res.drc = readDrcReport(drcReport.string());
@@ -505,11 +531,11 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
     // flattens the antenna cells on both sides before align: their diodes are still compared,
     // one level up.
     // ponytail: the -rd names and this patching are the shape of IHP's deck, the only one; M3's asap7 deck shows what generalizes
-    const fs::path lvsDeck = file(pdk.lvsDeck), lvsDir = lvsDeck.parent_path(), deck = results / "6_lvs.lvs";
+    const fs::path lvsDeck = file(pdk.lvsDeck), lvsDir = lvsDeck.parent_path(),
+                   deck = results / ("6_lvs" + lvsDeck.extension().string());
     std::string deckText = slurp(lvsDeck);
     const std::string inc = "# %include rule_decks/", align = "\nalign\n";
-    if (deckText.find(inc) == std::string::npos || deckText.find(align) == std::string::npos)
-        return fail("RTL flow: the LVS deck changed (no rule_decks includes or align): update rtl_flow.cpp");
+    if (deckText.find(align) == std::string::npos) return fail("RTL flow: the LVS deck changed (no align): update rtl_flow.cpp");
     for (size_t at = 0; (at = deckText.find(inc, at)) != std::string::npos; at += inc.size())
         deckText.replace(at, inc.size(), "# %include " + (lvsDir / "rule_decks").string() + "/");
     // A macro of the run's (ADDITIONAL_LEFS: an SRAM, say) is compared by its pins: IHP's deck does not match an SRAM macro's own cells to
@@ -534,12 +560,19 @@ RtlFlowResult runRtlToGds(const RtlFlowConfig& cfg, const RtlFlowTools& tools, F
                          "  loop { gone = nl.each_circuit.select { |cc| !cc.has_refs? && cc.name.downcase != $topcell.to_s.downcase }; break if gone.empty?; "
                          "gone.each { |cc| nl.purge_circuit(cc) } } } if SIMPLIFY\n");
     }
-    deckText.replace(deckText.find(align), align.size(),
-                     "\nnetlist.flatten_circuit(\"" + pdk.lvsFlatten + "\")\nschematic.flatten_circuit(\"" + pdk.lvsFlatten + "\")\n" + blank + "align\n");
-    std::ofstream(deck) << deckText;
+    std::string before = blank;
+    if (!pdk.lvsFlatten.empty())
+        before = "netlist.flatten_circuit(\"" + pdk.lvsFlatten + "\")\nschematic.flatten_circuit(\"" + pdk.lvsFlatten + "\")\n" + before;
+    // a .lylvs deck is a KLayout macro: its script is XML text
+    if (lvsDeck.extension() == ".lylvs") before = std::regex_replace(std::regex_replace(before, std::regex("&"), "&amp;"), std::regex("<"), "&lt;");
+    deckText.replace(deckText.find(align), align.size(), "\n" + before + "align\n");
     std::string lvsLog;
+    // IHP's deck reads input/topcell/schematic/report, SkyWater's in_gds/top_cell/cdl_file/report_file: each ignores the other's
+    std::ofstream(deck) << deckText;
+    const std::string lvsdb = (results / "6_lvs.lvsdb").string();
     if (!runTool(tools.klayout, {"-b", "-rd", "input=" + res.gds, "-rd", "topcell=" + cfg.top, "-rd", "schematic=" + cdl.string(),
-                                 "-rd", "report=" + (results / "6_lvs.lvsdb").string(), "-rd",
+                                 "-rd", "report=" + lvsdb, "-rd", "in_gds=" + res.gds, "-rd", "top_cell=" + cfg.top, "-rd",
+                                 "cdl_file=" + cdl.string(), "-rd", "report_file=" + lvsdb, "-rd",
                                  "target_netlist=" + (results / "6_lvs_extracted.cir").string(), "-rd", "run_mode=deep", "-r",
                                  deck.string()},
                  &lvsLog))
