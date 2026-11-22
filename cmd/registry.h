@@ -18,6 +18,8 @@
 namespace oadb { class Workspace; class Library; }
 namespace sim { class Jobs; }
 
+namespace flow { struct Platform; }
+
 namespace cmd {
 
 // What a command acts on: the session's workspace, the simulator it runs (TreeSPICE's treespice; "" when it has none,
@@ -89,6 +91,10 @@ void addSignoffCommands(Registry& r);     // timing_analyze, timing_report, powe
 void addVerifyCommands(Registry& r);      // verify_drc, verify_lvs, verify_status, verify_list, verify_markers
 void addTestCommands(Registry& r);        // test_run, test_firmware, test_spice, test_shmoo, test_status, test_stop, test_list, test_signals, test_value
 void addFlowCommands(Registry& r);        // flow_tools, flow_platforms, flow_run, flow_status, flow_stop, flow_list, flow_report
+void addCharCommands(Registry& r);        // lib_characterize
+
+// The ORFS platform of a library's attached process (layout_tech_set); throws when it has none or no decks
+const flow::Platform& platformOf(const oadb::Library& l);
 
 // A run directory a caller names (simulate's, an ADE point's): one under the workspace's simulation/ with results,
 // else an error

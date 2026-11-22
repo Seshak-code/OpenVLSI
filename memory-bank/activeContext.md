@@ -1,5 +1,20 @@
 # Active Context
 
+**Last session: Claude Code (dev), 2026-11-21 — Liberate on TreeSPICE, on `rebuild/liberate` (after #66, merged)**
+
+- **Done:** `lib_characterize` (`cmd/char_commands.cpp`; Tools > Characterize Cell…): a combinational cell's function from a DC truth table,
+  every arc (an XOR gets both senses, with `when`), one transient per arc holding a copy of the cell per (slew, load, edge); inputs from
+  a predriver (two of the library's inv_4, the second's load calibrated per transition to 0.2 %) through an ideal buffer; pin capacitance
+  as the charge between 20 and 80 %; NLDM Liberty written, compared with the PDK's Liberty at its own indices. m7_gate step `liberate`.
+- **Against IHP's typ Liberty:** tables within 0.4–1.6 % on average; worst points 4–10 %, all at the 1 fF column; inverter pin capacitance
+  within 0.1 %, multi-input pins 3–13 % low. OpenSTA times inv → nand2 → xor2 at 0.2896 ns against IHP's 0.2981 ns.
+- **Learned:** a linear ramp is 10–20 % off along the table's diagonal: IHP's tables are a predriver's. A PWL copy of a waveform per copy
+  puts thousands of breakpoints in a run; buffer one predriver per edge instead. This Mac on battery sleeps mid-run (keep awake), and with
+  the machine loaded TreeSPICE's threads halve a small deck's speed: run arcs in parallel, one thread each.
+- **Next:** sequential cells and power in characterization; menus added by a script.
+
+---
+
 **Last session: Claude Code (dev), 2026-11-21 — Tcl and Python consoles, on `rebuild/consoles` (after #64, #65, merged)**
 
 - **Done:** `app/console`: Tools > Tcl Console (Tcl 9.1 embedded from Homebrew's tcl-tk, its script library zipped inside libtcl; every

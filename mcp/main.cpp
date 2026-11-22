@@ -56,6 +56,7 @@ int main(int argc, char** argv) {
         cmd::addVerifierCommands(registry);
         cmd::addFlowCommands(registry);
         cmd::addTestCommands(registry);
+        cmd::addCharCommands(registry);
         cmd::addVerifyCommands(registry);
         cmd::addSignoffCommands(registry);
         cmd::addRtlCommands(registry);

@@ -66,7 +66,7 @@ add_library(openvlsi_sim STATIC sim/netlist.cpp sim/run.cpp sim/calc.cpp sim/ade
 target_link_libraries(openvlsi_sim PUBLIC openvlsi_sch openvlsi_proc Qt6::Core)
 
 add_library(openvlsi_cmd STATIC cmd/registry.cpp cmd/core_commands.cpp cmd/schematic_commands.cpp cmd/sim_commands.cpp
-            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp cmd/test_commands.cpp cmd/verify_commands.cpp cmd/signoff_commands.cpp cmd/rtl_commands.cpp)
+            cmd/ade_commands.cpp cmd/pdk_commands.cpp cmd/layout_commands.cpp cmd/layout_edit_commands.cpp cmd/verifier_commands.cpp cmd/flow_commands.cpp cmd/test_commands.cpp cmd/verify_commands.cpp cmd/signoff_commands.cpp cmd/rtl_commands.cpp cmd/char_commands.cpp)
 target_include_directories(openvlsi_cmd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(openvlsi_layout PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(openvlsi_layout PUBLIC oadb Qt6::Core)

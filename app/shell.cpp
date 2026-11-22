@@ -283,6 +283,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     toolsMenu_->addAction("Run DRC…", this, [this] { runForm("verify_drc", context()); });
     toolsMenu_->addAction("Run LVS…", this, [this] { runForm("verify_lvs", context()); });
     toolsMenu_->addAction("Netlist as Verilog…", this, [this] { runForm("netlist_verilog", context()); });
+    toolsMenu_->addAction("Characterize Cell…", this, [this] { runForm("lib_characterize", context()); });
     optionsMenu_ = new QMenu("&Options", this);
     themeMenu_ = optionsMenu_->addMenu("Appearance");
     auto* group = new QActionGroup(this);
@@ -317,7 +318,7 @@ Shell::Shell(Session& session, QWidget* parent) : QMainWindow(parent), session_(
     bindActions(this, {{"New Library…", "library_create"}, {"New Cell…", "cell_create"}, {"New View…", "view_create"}, {"Open Cellview…", "editor_open"},
                        {"Import GDS…", "layout_import_gds"}, {"Export GDS…", "layout_export_gds"}, {"Install PDK…", "pdk_install"}, {"Install PDK Cells…", "pdk_install_cells"},
                        {"Close Tab", "ui_tab_close"}, {"Quit", "ui_quit"}, {"Command Palette", "api_list"}, {"Command Window", "ui_console"}, {"Tcl Console", "console_open"}, {"Python Console", "console_open"}, {"Run DRC…", "verify_drc"},
-                       {"Run LVS…", "verify_lvs"}, {"Netlist as Verilog…", "netlist_verilog"}, {"EDA Tools…", "ui_help"}, {"Keyboard Shortcuts…", "ui_shortcuts"},
+                       {"Run LVS…", "verify_lvs"}, {"Netlist as Verilog…", "netlist_verilog"}, {"Characterize Cell…", "lib_characterize"}, {"EDA Tools…", "ui_help"}, {"Keyboard Shortcuts…", "ui_shortcuts"},
                        {"User Guide", "ui_help"}, {"Command Reference", "ui_help"}, {"About OpenVLSI", "ui_help"}, {"Side Panel", "ui_panel"}, {"Design", "ui_stage"},
                        {"RTL", "ui_stage"}, {"Simulate", "ui_stage"}, {"Implement", "ui_stage"}, {"Verify", "ui_stage"}, {"Test", "ui_stage"}, {"Library Manager", "ui_library_manager"},
                        {"Match the system", "ui_theme"}, {"Light", "ui_theme"}, {"Dark", "ui_theme"}});

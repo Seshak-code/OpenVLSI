@@ -10,6 +10,20 @@ The menu bar follows a Cadence tool's: **File** (new library, cell or view, Open
 
 Every form is its command's parameters. Right-click a field for the values it can take (the workspace's libraries, a library's cells, a cell's views, runs, platforms, layers) or Browse… for a file or folder; typing completes from the same list. A yes/no field left blank takes the command's default.
 
+## Characterizing a cell
+
+**Tools > Characterize Cell…** (`lib_characterize`) makes a standard cell's Liberty file on TreeSPICE, as Liberate does: its function from a
+truth table, then every timing arc's delay and output transition over input transitions and output loads, with inputs driven through a
+predriver as characterization tools drive them, and each input's capacitance. The indices are the PDK's Liberty's for the cell at the
+corner (`slow`, `typ`, `fast`), and every value is compared with it: the result lists each table's mean and worst difference.
+
+```tcl
+set r [lib_characterize -library sg13g2_stdcell -cell sg13g2_nand2_1 -corner typ]
+dict get $r liberty
+```
+
+Combinational cells only, for now; give `slews` and `loads` for other indices, `predriver ramp` for a linear input.
+
 ## Tcl and Python consoles
 
 **Tools > Tcl Console** is a Tcl 9 interpreter inside the app, as in Innovus: every command is a Tcl command taking `-param value`, and

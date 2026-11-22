@@ -16,6 +16,7 @@ Session::Session(const QString& workspaceFile, QObject* parent)
     cmd::addVerifierCommands(registry_);
     cmd::addFlowCommands(registry_);
     cmd::addTestCommands(registry_);
+    cmd::addCharCommands(registry_);
     cmd::addVerifyCommands(registry_);
     cmd::addSignoffCommands(registry_);
     cmd::addRtlCommands(registry_);

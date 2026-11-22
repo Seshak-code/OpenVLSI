@@ -83,15 +83,6 @@ fs::path newRun(Context& c, const std::string& library, const std::string& cell,
     return dir / (kind + "." + std::to_string(n));
 }
 
-const flow::Platform& platformOf(const oadb::Library& l) {
-    const auto tech = l.libraryProp("tech");
-    if (!tech) throw std::invalid_argument("library " + l.name() + " has no process attached (layout_tech_set)");
-    const std::string name = QJsonDocument::fromJson(QByteArray::fromStdString("[" + *tech + "]")).array()[0].toString().toStdString();
-    for (const auto& p : flow::platforms())
-        if (p.tech == name) return p;
-    throw std::invalid_argument("process " + name + " has no decks here");
-}
-
 // A process run from a deck: its log into deck.log. False with the reason.
 bool runDeck(const RtlFlowTools& tools, const fs::path& dir, const std::vector<std::string>& args, const std::atomic<bool>* cancel, std::string* why) {
     acutesim::orchestration::Subprocess p(tools.klayout, args);
@@ -347,6 +338,16 @@ QJsonObject readMarkers(const fs::path& lyrdb) {
 }
 
 }  // namespace
+
+const flow::Platform& platformOf(const oadb::Library& l) {
+    const auto tech = l.libraryProp("tech");
+    if (!tech) throw std::invalid_argument("library " + l.name() + " has no process attached (layout_tech_set)");
+    const std::string name = QJsonDocument::fromJson(QByteArray::fromStdString("[" + *tech + "]")).array()[0].toString().toStdString();
+    for (const auto& p : flow::platforms())
+        if (p.tech == name) return p;
+    throw std::invalid_argument("process " + name + " has no decks here");
+}
+
 
 // LVS's cross-reference, read by KLayout's own API from its database: every circuit, net, device, pin and subcircuit paired
 // layout to schematic with its status, a net's connections on each side, and where each item that differs lies in the layout.
