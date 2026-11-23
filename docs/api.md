@@ -2093,6 +2093,21 @@ Opens a script console as a tab: Tcl (every command as `name -param value`, resu
 |---|---|---|---|
 | `language` | string | yes | tcl or python |
 
+### `lib_characterize`
+
+Characterizes a combinational standard cell on TreeSPICE (Liberate's job): its function from a DC truth table, then each timing arc's delay and output transition over input transitions and output loads, as an NLDM Liberty file. The indices are the reference Liberty's for the cell (the platform's at the corner, by default), and every value is compared with it. Returns the file, the function, the arcs with their tables and their differences from the reference, and the pins' capacitance.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `cell` | string | yes | a combinational cell with a spice property |
+| `corner` | string |  | the platform's transistor-level corner (slow, typ, fast); default typ |
+| `library` | string | yes | the cell's library (pdk_install_cells) |
+| `loads` | array |  | output loads, pF, instead of the reference's |
+| `predriver` | string |  | the inverter of the library that drives inputs, as characterization tools do (default its *inv_4); ramp: a linear ramp |
+| `reference` | string |  | a Liberty file to take the indices from and compare with (default: the platform's at the corner) |
+| `slews` | array |  | input transitions, ns (20-80 %), instead of the reference's |
+| `timeout_s` | integer |  | per simulation (default 600) |
+
 ### `power_analyze`
 
 IR drop and electromigration of a run's power grid through OpenROAD's PSM, net by net: worst and average drop, where it is worst, the largest current in a grid resistor. supply_v defaults to the platform's. Waits and returns it, or with wait false starts it in the background (poll power_report).

@@ -33,6 +33,11 @@ G_FAIL = []
 G_PASS = 0
 
 
+# Characterization against IHP's Liberty: each table's mean, its worst point (always at the 1 fF column, 3 to 10 % high there, within
+# 1 to 3 % elsewhere), input pins (an inverter's within 0.1 %; a multi-input cell's 3 to 13 % low: IHP's averaging is not ours), a path
+LIB_MEAN, LIB_WORST, LIB_CAP, LIB_PATH = 0.03, 0.12, 0.15, 0.03
+
+
 def check(ok, what):
     global G_PASS
     print(f"  [{'PASS' if ok else 'FAIL'}] {what}", flush=True)
@@ -584,6 +589,41 @@ def step_macro(m, work, flowdir):
           "simulated at transistor level through the standard cells' netlists, the first clock edge in reset sets its state: req_rdy rises, and holds after reset falls")
 
 
+def step_liberate(m, work, flowdir):
+    print("Liberate on TreeSPICE: standard cells characterized against IHP's Liberty", flush=True)
+    libs, fn = {}, {}
+    for cell in ("sg13g2_inv_1", "sg13g2_nand2_1", "sg13g2_xor2_1"):
+        r = m("lib_characterize", library="sg13g2_stdcell", cell=cell)
+        libs[cell], fn[cell] = r["liberty"], r["function"]
+        tables = [v for a in r["arcs"] for v in a["compare"].values() if isinstance(v, dict)]
+        mean = max(t["mean_relative"] for t in tables)
+        caps = [abs(p["capacitance_pf"] / p["reference_pf"] - 1) for p in r["pins"].values()]
+        check(len(tables) == 4 * len(r["arcs"]) and mean < LIB_MEAN and r["worst_relative"] < LIB_WORST and max(caps) < LIB_CAP,
+              f"{cell}: {r['function']}, {len(r['arcs'])} arcs of {r['points']:.0f} points in {r['seconds']:.0f} s; each table within {mean:.1%} of IHP's on average, "
+              f"{r['worst_relative']:.1%} at worst; pin capacitance within {max(caps):.1%}")
+    check(fn["sg13g2_nand2_1"] == {"Y": "!(A*B)"} and fn["sg13g2_inv_1"] == {"Y": "!A"} and set(fn["sg13g2_xor2_1"].values()) and len(m("lib_characterize", library="sg13g2_stdcell", cell="sg13g2_xor2_1",
+          slews=[0.05, 0.2], loads=[0.005, 0.05])["arcs"]) == 4, f"functions from the truth table, an XOR's two senses per input: {fn}")
+    # OpenSTA reads them, and times a path through them as through IHP's own
+    ihp = os.path.join(flowdir, "platforms/ihp-sg13g2/lib/sg13g2_stdcell_typ_1p20V_25C.lib")
+    xor_out = next(iter(fn["sg13g2_xor2_1"]))
+    with open(os.path.join(work, "path.v"), "w") as f:
+        f.write("module path (a, b, y); input a, b; output y; wire n1, n2;\n  sg13g2_inv_1 u1 (.A(a), .Y(n1));\n  sg13g2_nand2_1 u2 (.A(n1), .B(b), .Y(n2));\n"
+                f"  sg13g2_xor2_1 u3 (.A(n2), .B(b), .{xor_out}(y));\nendmodule\n")
+    def arrival(liberties):
+        lef = os.path.join(flowdir, "platforms/ihp-sg13g2/lef")
+        tcl = f"read_lef {lef}/sg13g2_tech.lef\nread_lef {lef}/sg13g2_stdcell.lef\n" + "".join(f"read_liberty {l}\n" for l in liberties) + (f"read_verilog {work}/path.v\nlink_design path\nset_input_transition 0.1 [all_inputs]\n"
+              "set_load 0.02 [all_outputs]\nreport_checks -unconstrained -from [get_ports a] -to [get_ports y] -digits 4\nexit\n")
+        with open(os.path.join(work, "path.tcl"), "w") as f:
+            f.write(tcl)
+        out = subprocess.run([os.path.expanduser("~/eda/bin/openroad"), "-no_init", "-exit", os.path.join(work, "path.tcl")], capture_output=True, text=True).stdout
+        times = [float(l.split()[0]) for l in out.splitlines() if "data arrival time" in l]
+        return (times[0] if times else None), out
+    ours, log = arrival(libs.values())
+    theirs, _ = arrival([ihp])
+    check(ours is not None and theirs is not None and abs(ours / theirs - 1) < LIB_PATH,
+          f"OpenSTA reads the three and times a -> y through them: {ours} ns, against {theirs} ns with IHP's Liberty {'' if ours else log[-300:]}")
+
+
 def step_sky130(m, flowdir):
     if not os.path.isdir(os.path.join(flowdir, "platforms/sky130hd")):
         print("SkyWater 130: SKIP (no ORFS sky130hd platform)", flush=True)
@@ -621,6 +661,7 @@ def main():
     step_rv32i(m, work, os.path.expanduser("~/eda/orfs/flow"))
     seal_ring_is_ihps(m, work, os.path.expanduser("~/eda/orfs/flow"))
     step_macro(m, work, os.path.expanduser("~/eda/orfs/flow"))
+    step_liberate(m, work, os.path.expanduser("~/eda/orfs/flow"))
     step_sky130(m, os.path.expanduser("~/eda/orfs/flow"))
     m.p.stdin.close()
     m.p.wait()

@@ -371,7 +371,7 @@ The owner's map of the suite, domain by domain: what is here, what is not, and t
 | ADE, Spectre X/FX | DC, AC, tran, noise, sens, tf, pz, stb, PSS, PAC, PNoise, HB; corners, temperature, Monte Carlo, yield, Assembler, Verifier | `sp` (S-parameters), accuracy presets (cx…vx), LHS/Sobol sampling, high-sigma, aging (HCI, BTI), EM |
 | AMS Designer | Firmware and digital co-simulation with SPICE (lockstep) | Verilog-AMS, connect modules, `wreal` |
 | Layout (Virtuoso XL/GXL) | Editing, Pcells (MOS, resistors, MIM), layout from schematic, flight lines, pad and seal rings, fill | Guard rings, stretch/chop, constraint manager (symmetry, matching), analog router, multi-patterning, in-layout RC/EM |
-| Liberate | — | Characterizing cells on TreeSPICE into Liberty (NLDM first, then CCS, LVF) |
+| Liberate | `lib_characterize`: a combinational cell's NLDM Liberty on TreeSPICE (function from its truth table, every arc, predriver-shaped inputs, pin capacitance), compared point by point with the PDK's own: IHP's within 0.4 to 1.6 % on average | Sequential cells, power, CCS, LVF, several sensitizing states per arc |
 | Xcelium | Icarus with SDF | SystemVerilog/UVM, coverage, X-propagation, UPF power-aware simulation |
 | Jasper, Conformal | — | Property checking (BMC, k-induction, PDR), equivalence (RTL to netlist), CDC/RDC |
 | Verisium, SimVision | Waveforms, cross-probe | Driver/load tracing, schematic from RTL |
@@ -391,7 +391,7 @@ The owner's map of the suite, domain by domain: what is here, what is not, and t
 **Order** (what a designer meets first, and what TreeSPICE makes ours):
 1. SkyWater 130 through testing (its SPICE models need the owner's download).
 2. Tcl and Python consoles (done 2026-11-21); menus and forms added by a script.
-3. Liberate on TreeSPICE: a cell's Liberty from its netlist, checked against the PDK's own.
+3. Liberate on TreeSPICE: a cell's Liberty from its netlist, checked against the PDK's own (combinational NLDM done 2026-11-21; sequential cells and power next).
 4. Formal and equivalence (open tools: SymbiYosys, eqy; a download to ask for).
 5. Flow exploration: `flow_run` settings swept in parallel, PPA side by side.
 6. `sp` and accuracy presets in TreeSPICE.
